@@ -16,8 +16,10 @@ def admin_keyboard():
     builder.button(text='📄 Последние заявки', callback_data='admin_list')
     builder.button(text='📊 Статистика', callback_data='admin_stats')
     builder.button(text='⬇️ Export CSV', callback_data='admin_export_csv')
-    builder.button(text='➕ Добавить ученика', callback_data='add_student')  #
+    builder.button(text='➕ Добавить ученика', callback_data='add_student')
     builder.button(text='➖ Удалить ученика', callback_data='delete_student')
+    builder.button(text='🗑️ Очистить заявки', callback_data='clear_applications')
+    builder.button(text='💌 Сообщение для ❤️', callback_data='send_cute_message')
     builder.adjust(1)
     return builder.as_markup()
 

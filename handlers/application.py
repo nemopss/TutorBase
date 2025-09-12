@@ -4,6 +4,7 @@ from datetime import datetime
 from zoneinfo import ZoneInfo
 
 from aiogram import F, Router, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery
@@ -13,6 +14,7 @@ from config import config
 from database.db import insert_application
 from keyboards.common import start_keyboard, reglament_keyboard, back_keyboard
 from utils.formatters import format_application
+from utils import texts
 
 router = Router()
 
@@ -20,24 +22,18 @@ router = Router()
 async def cb_to_menu(query: CallbackQuery, state: FSMContext):
     logging.info(f"User {query.from_user.id} (@{query.from_user.username}) cancelled application process.")
     await state.clear()  # Сбрасываем анкету
-    text = (
-        'Привет! Я бот для приёма заявок на занятия по английскому и корейскому у Ксюшки!).\n\n'
-        'Выбери, что хочешь сделать ниже.'
-    )
-    await query.message.edit_text(text, reply_markup=start_keyboard())
-    await query.answer()
+    try:
+        await query.message.edit_text(texts.TO_MENU_MESSAGE, reply_markup=start_keyboard())
+    except TelegramBadRequest:
+        await query.message.delete()
+        await query.message.answer(texts.TO_MENU_MESSAGE, reply_markup=start_keyboard())
+    finally:
+        await query.answer()
 
 
 @router.callback_query(F.data == "reglament_reply")
 async def cb_reglament_reply(query: CallbackQuery):
-    text = """
-        ❗️❗️каждому ученику обязательно нужно ознакомиться повторно с обновленными регламентами работы и написать мне после ознакомления🤲🏻
-        это сайт, для того, чтобы прочитать пункты нужно нажать на треугольник рядом с каждым из них 
-        в некоторых пунктах есть ещё и подпункты — обращайте внимание 
-        *если не открывается, попробуйте отключиться от вай фая, переключиться на LTE и либо выключить впн, либо наоборот его включить
-        приятного прочтения! ✨
-        """
-    await query.message.answer(text=text, reply_markup=reglament_keyboard())
+    await query.message.answer(text=texts.REGLAMENT_REPLY_TEXT, reply_markup=reglament_keyboard())
     await query.answer()
 
 class ApplyStates(StatesGroup):
@@ -55,7 +51,7 @@ async def cb_back(query: CallbackQuery, state: FSMContext):
 
     if current_state_str == ApplyStates.language.state:
         await state.set_state(ApplyStates.name)
-        new_msg = await query.message.edit_text("Хорошо! Как к тебе обращаться? (имя)")
+        new_msg = await query.message.edit_text(texts.PROMPT_FOR_NAME)
 
     elif current_state_str == ApplyStates.level.state:
         await state.set_state(ApplyStates.language)
@@ -64,12 +60,12 @@ async def cb_back(query: CallbackQuery, state: FSMContext):
         builder.button(text="Корейский", callback_data="lang_kr")
         builder.button(text="⬅️ Назад", callback_data="back")
         builder.adjust(2, 1)
-        new_msg = await query.message.edit_text("Выбери язык занятия:", reply_markup=builder.as_markup())
+        new_msg = await query.message.edit_text(texts.PROMPT_FOR_LANGUAGE, reply_markup=builder.as_markup())
 
     elif current_state_str == ApplyStates.preferred_time.state:
         await state.set_state(ApplyStates.level)
         new_msg = await query.message.edit_text(
-            "Какой у тебя уровень? (например: A1, A2, B1, Intermediate, Beginner и т.д.)",
+            texts.PROMPT_FOR_LEVEL,
             reply_markup=back_keyboard()
         )
 
@@ -89,7 +85,7 @@ async def cb_start_apply(query: CallbackQuery, state: FSMContext):
 
     # Редактируем сообщение, убирая кнопки, и задаем первый вопрос с кнопкой "Меню"
     prompt_msg = await query.message.edit_text(
-        "Хорошо! Как к тебе обращаться? (имя)",
+        texts.PROMPT_FOR_NAME,
         reply_markup=menu_button_builder.as_markup()
     )
     await state.set_data({'last_bot_msg_id': prompt_msg.message_id})
@@ -111,7 +107,7 @@ async def state_name(message: types.Message, state: FSMContext):
     builder.adjust(2, 1)
 
     prompt_msg = await message.bot.edit_message_text(
-        text="Выбери язык занятия:",
+        text=texts.PROMPT_FOR_LANGUAGE,
         chat_id=message.chat.id,
         message_id=last_bot_msg_id,
         reply_markup=builder.as_markup()
@@ -124,7 +120,7 @@ async def cb_language(query: CallbackQuery, state: FSMContext):
     lang = "English" if query.data == "lang_en" else "Korean"
 
     prompt_msg = await query.message.edit_text(
-        "Какой у тебя уровень? (например: A1, A2, B1, Intermediate, Beginner и т.д.)",
+        texts.PROMPT_FOR_LEVEL,
         reply_markup=back_keyboard()
     )
     await state.update_data(language=lang, last_bot_msg_id=prompt_msg.message_id)
@@ -139,7 +135,7 @@ async def state_level(message: types.Message, state: FSMContext):
     last_bot_msg_id = data.get("last_bot_msg_id")
 
     prompt_msg = await message.bot.edit_message_text(
-        text="Удобное время для занятий (например: пн/ср 18:00-20:00 или утро/вечер):",
+        text=texts.PROMPT_FOR_TIME,
         chat_id=message.chat.id,
         message_id=last_bot_msg_id,
         reply_markup=back_keyboard()
@@ -182,6 +178,6 @@ async def state_time(message: types.Message, state: FSMContext):
         logging.error(f"Failed to send notification to admin {config.ADMIN_CHAT_ID}: {e}")
 
     await message.answer(
-        "Спасибо! Твоя заявка принята. Мы свяжемся с тобой в ближайшее время.",
+        texts.APPLICATION_SUBMITTED,
     )
     await state.clear()

@@ -13,6 +13,7 @@ from handlers import application as app_h
 from handlers import start as start_h
 from handlers import funnel as funnel_h
 from handlers import cases as cases_h
+from middlewares.logging import LoggingMiddleware, LoggingFilter
 
 
 async def main():
@@ -22,6 +23,8 @@ async def main():
     # storage = MemoryStorage()
     storage = RedisStorage.from_url(config.REDIS_URL)
     dp = Dispatcher(storage=storage)
+
+    dp.update.middleware(LoggingMiddleware())
 
     await set_bot_commands(bot)
 
@@ -39,7 +42,15 @@ async def main():
 
 
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, stream=sys.stdout)
+    formatter = logging.Formatter("[%(asctime)s] [%(update_id)s] %(levelname)s - %(name)s - (%(filename)s).%(funcName)s(%(lineno)d) - %(message)s")
+    handler = logging.StreamHandler(sys.stdout)
+    handler.setFormatter(formatter)
+    handler.addFilter(LoggingFilter())
+
+    logger = logging.getLogger()
+    logger.setLevel(logging.INFO)
+    logger.addHandler(handler)
+
     try:
         asyncio.run(main())
     except (KeyboardInterrupt, SystemExit):

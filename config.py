@@ -15,6 +15,7 @@ class Settings(BaseSettings):
     DB_PATH: str = "database/bot.db"
     GOOGLE_FORM_URL: str = ""
     ADMIN_CHAT_ID: int
+    LOGS_CHAT_ID: int
     ADMINS: list[int]
     REGULATIONS_URL: str
     REDIS_URL: str

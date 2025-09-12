@@ -2,3 +2,5 @@ aiogram==3.1.0
 aiosqlite==0.18.0
 pydantic-settings==2.3.4
 redis
+pandas
+openpyxl

@@ -7,6 +7,7 @@ from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import config
+from utils import texts
 
 router = Router()
 
@@ -20,14 +21,8 @@ async def cb_get_prices(query: CallbackQuery):
     builder.button(text="⬅️ В меню", callback_data="to_menu")
     builder.adjust(1)
 
-    text = (
-        "Цена зависит от формата обучения и других факторов, "
-        "которые мы как раз подробно обсудим на диагностике ☺️\n\n"
-        "Она будет бесплатная. Готов записаться?"
-    )
-
     # Заменяем текущее сообщение на новое, с предложением диагностики
-    await query.message.edit_text(text, reply_markup=builder.as_markup())
+    await query.message.edit_text(texts.GET_PRICES_TEXT, reply_markup=builder.as_markup())
     await query.answer()
 
 
@@ -37,10 +32,11 @@ async def cb_start_diagnostic(query: CallbackQuery, state: FSMContext):
     builder = InlineKeyboardBuilder()
     builder.button(text="⬅️ Назад", callback_data="get_prices") # Возвращает к предыдущему шагу
 
-    await query.message.edit_text(
-        "Отлично! Напишите удобный день и время для созвона (например: 'завтра после 15:00' или 'сб/вс в любое время').",
+    prompt_msg = await query.message.edit_text(
+        texts.PROMPT_FOR_DIAGNOSTIC_TIME,
         reply_markup=builder.as_markup()
     )
+    await state.set_data({'last_bot_msg_id': prompt_msg.message_id})
     await state.set_state(DiagnosticStates.convenient_time)
     await query.answer()
 
@@ -62,12 +58,11 @@ async def state_diagnostic_time(message: types.Message, state: FSMContext):
 
     # Отправляем уведомление в админ-чат
     try:
-        # Редактируем прошлое сообщение бота, чтобы убрать кнопки
         data = await state.get_data()
-        last_bot_msg_id = data.get("last_bot_msg_id") # Мы не сохраняли ID, так что это не сработает
+        last_bot_msg_id = data.get("last_bot_msg_id")
+        if last_bot_msg_id:
+            await message.bot.delete_message(message.chat.id, last_bot_msg_id)
 
-        # Вместо редактирования, просто отправим новое сообщение и удалим старое, если нужно
-        # Но для простоты, пока просто отправим новое.
         await message.bot.send_message(config.ADMIN_CHAT_ID, admin_text, parse_mode="Markdown")
     except Exception as e:
         logging.error(f"Failed to send diagnostic notification to admin {config.ADMIN_CHAT_ID}: {e}")
@@ -75,8 +70,9 @@ async def state_diagnostic_time(message: types.Message, state: FSMContext):
     # Завершаем анкету и благодарим пользователя
     await state.clear()
     await message.answer(
-        "Спасибо! Я передал вашу заявку, скоро с вами свяжутся для подтверждения времени ☺️"
+        texts.DIAGNOSTIC_SUBMITTED
     )
+
 
 
 
