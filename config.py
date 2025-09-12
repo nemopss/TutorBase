@@ -1,0 +1,39 @@
+from typing import List
+from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic import field_validator
+import json
+
+
+class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        env_file_encoding="utf-8",
+        extra="ignore",  # Optional: Ignore extra env vars
+    )
+
+    BOT_TOKEN: str
+    DB_PATH: str = "database/bot.db"
+    GOOGLE_FORM_URL: str = ""
+    ADMIN_CHAT_ID: int
+    ADMINS: list[int]
+    REGULATIONS_URL: str
+
+    @field_validator("ADMINS", mode="before")
+    @classmethod
+    def parse_admins(cls, v):
+        if isinstance(v, str):
+            v = v.strip()
+            try:
+                parsed = json.loads(v)
+                if isinstance(parsed, list):
+                    return [int(x) for x in parsed]
+            except json.JSONDecodeError:
+                if v:
+                    return [int(x.strip()) for x in v.split(",") if x.strip().isdigit()]
+                return []
+        if isinstance(v, list):
+            return [int(x) for x in v]
+        return []
+
+
+config = Settings()
