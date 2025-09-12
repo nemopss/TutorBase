@@ -22,9 +22,31 @@ CREATE TABLE IF NOT EXISTS applications (
 );
 '''
 
+CREATE_STUDENTS_TABLE_SQL = '''
+CREATE TABLE IF NOT EXISTS students (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL,
+    story TEXT NOT NULL
+);
+'''
+
+
 async def init_db():
     async with aiosqlite.connect(DB_FILE) as db:
         await db.execute(CREATE_TABLE_SQL)
+        await db.execute(CREATE_STUDENTS_TABLE_SQL)
+        # --- Временный код для добавления тестовых учеников ---
+        cur = await db.execute("SELECT COUNT(*) FROM students")
+        row = await cur.fetchone()
+        if row and row[0] == 0:
+            await db.execute("INSERT INTO students (name, story) VALUES (?, ?)",
+                             ("Ульяна",
+                              "Это история успеха Ульяны. Она пришла с уровнем A0, а теперь свободно смотрит дорамы в оригинале!"))
+
+            await db.execute("INSERT INTO students (name, story) VALUES (?, ?)",
+                              ("Лиза", "А это история успеха Лизы. Она смогла сдать TOPIK на 5-й гып после года занятий."))
+            # --- Конец временного кода ---
+
         await db.commit()
 
 async def insert_application(app: Dict[str, Any]):
@@ -60,3 +82,30 @@ async def fetch_count() -> int:
         row = await cur.fetchone()
         await cur.close()
     return row[0] if row else 0
+
+
+async def add_student(name: str, story: str):
+    async with aiosqlite.connect(DB_FILE) as db:
+        await db.execute("INSERT INTO students (name, story) VALUES (?, ?)", (name, story))
+        await db.commit()
+
+async def get_all_students() -> List[Dict[str, Any]]:
+    async with aiosqlite.connect(DB_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT id, name, story FROM students ORDER BY name")
+        rows = await cur.fetchall()
+        await cur.close()
+        return [dict(row) for row in rows]
+
+async def get_student(student_id: int) -> Dict[str, Any] | None:
+    async with aiosqlite.connect(DB_FILE) as db:
+        db.row_factory = aiosqlite.Row
+        cur = await db.execute("SELECT id, name, story FROM students WHERE id = ?", (student_id,))
+        row = await cur.fetchone()
+        await cur.close()
+        return dict(row) if row else None
+
+async def delete_student(student_id: int):
+    async with aiosqlite.connect(DB_FILE) as db:
+        await db.execute("DELETE FROM students WHERE id = ?", (student_id,))
+        await db.commit()

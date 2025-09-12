@@ -1,8 +1,14 @@
 import logging
+
+from aiogram.utils.keyboard import InlineKeyboardBuilder
+
+from database import db
 from filters.admin import IsAdmin
 from aiogram import F, Router, types
+from aiogram.fsm.context import FSMContext
+from aiogram.fsm.state import State, StatesGroup
 from aiogram.filters import Command
-from aiogram.types import CallbackQuery, BufferedInputFile
+from aiogram.types import CallbackQuery, BufferedInputFile, InlineKeyboardButton
 from keyboards.common import admin_keyboard
 from database.db import fetch_last_n, fetch_count
 from config import config
@@ -73,4 +79,99 @@ async def cb_admin_export(query: CallbackQuery):
     document = BufferedInputFile(file=csv_bytes, filename='applications.csv')
     
     await query.message.answer_document(document)
+    await query.answer()
+
+class AddStudentStates(StatesGroup):
+    name = State()
+    story = State()
+
+
+@router.callback_query(F.data == 'add_student', IsAdmin())
+async def cb_add_student(query: CallbackQuery, state: FSMContext):
+    await state.set_state(AddStudentStates.name)
+    await query.message.edit_text("Введите имя ученика (оно будет на кнопке):")
+    await query.answer()
+
+# Шаг 2: Админ вводит имя, бот просит историю
+@router.message(AddStudentStates.name, F.text, IsAdmin())
+async def state_add_student_name(message: types.Message, state: FSMContext):
+    await state.update_data(name=message.text.strip())
+    await state.set_state(AddStudentStates.story)
+    await message.answer("Теперь введите историю успеха ученика (можно длинным текстом):")
+
+# Шаг 3: Админ вводит историю, бот сохраняет в БД
+@router.message(AddStudentStates.story, F.text, IsAdmin())
+async def state_add_student_story(message: types.Message, state: FSMContext):
+    user_data = await state.get_data()
+    name = user_data.get("name")
+    story = message.text.strip()
+
+    await db.add_student(name, story) # Используем нашу функцию из db.py
+
+    await state.clear()
+    await message.answer(f"Ученик '{name}' успешно добавлен!", reply_markup=admin_keyboard())
+
+
+# --- Логика для удаления ученика ---
+
+# Шаг 1: Показываем список учеников для удаления
+@router.callback_query(F.data == 'delete_student', IsAdmin())
+async def cb_delete_student_list(query: CallbackQuery):
+    students = await db.get_all_students()
+
+    builder = InlineKeyboardBuilder()
+    text = "В базе пока нет учеников."
+
+    if students:
+        text = "Выберите ученика, которого хотите удалить:"
+        for student in students:
+            # Добавляем эмодзи для наглядности
+            builder.button(text=f"❌ {student['name']}", callback_data=f"delete_confirm_{student['id']}")
+        builder.adjust(1)
+
+    # Кнопка для возврата в главное меню админки
+    builder.row(InlineKeyboardButton(text="⬅️ Назад в админ-панель", callback_data="back_to_admin_panel"))
+
+    await query.message.edit_text(text, reply_markup=builder.as_markup())
+    await query.answer()
+
+
+# Шаг 2: Просим подтверждение на удаление
+@router.callback_query(F.data.startswith("delete_confirm_"), IsAdmin())
+async def cb_delete_confirm(query: CallbackQuery):
+    # query.data будет в формате "delete_confirm_123"
+    student_id = int(query.data.split("_")[2])
+    student = await db.get_student(student_id)
+
+    if not student:
+        await query.answer("Ученик не найден!", show_alert=True)
+        return
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text="Да, удалить", callback_data=f"delete_execute_{student_id}")
+    builder.button(text="Нет, назад к списку", callback_data="delete_student")
+    builder.adjust(1)
+
+    await query.message.edit_text(
+        f"Вы уверены, что хотите удалить ученика '{student['name']}'? Это действие необратимо.",
+        reply_markup=builder.as_markup()
+    )
+    await query.answer()
+
+
+# Шаг 3: Окончательное удаление
+@router.callback_query(F.data.startswith("delete_execute_"), IsAdmin())
+async def cb_delete_execute(query: CallbackQuery):
+    student_id = int(query.data.split("_")[2])
+
+    await db.delete_student(student_id)
+
+    await query.message.edit_text("Ученик успешно удален.", reply_markup=admin_keyboard())
+    await query.answer("Удалено!")
+
+
+# Обработчик для кнопки "Назад в админ-панель"
+@router.callback_query(F.data == 'back_to_admin_panel', IsAdmin())
+async def cb_back_to_admin_panel(query: CallbackQuery):
+    await query.message.edit_text('Панель администратора:', reply_markup=admin_keyboard())
     await query.answer()

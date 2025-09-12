@@ -5,6 +5,8 @@ def start_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text='📝 Оставить заявку', callback_data='start_apply')
     # builder.button(text='🔗 Заполнить форму (Google Forms)', url=config.GOOGLE_FORM_URL)
+    builder.button(text='💰 Узнать цены', callback_data='get_prices')
+    builder.button(text='💬 Результаты учеников', callback_data='show_cases')
     builder.button(text='🫶🏻 Регламенты работы', callback_data='reglament_reply')
     builder.adjust(1)
     return builder.as_markup()
@@ -14,6 +16,8 @@ def admin_keyboard():
     builder.button(text='📄 Последние заявки', callback_data='admin_list')
     builder.button(text='📊 Статистика', callback_data='admin_stats')
     builder.button(text='⬇️ Export CSV', callback_data='admin_export_csv')
+    builder.button(text='➕ Добавить ученика', callback_data='add_student')  #
+    builder.button(text='➖ Удалить ученика', callback_data='delete_student')
     builder.adjust(1)
     return builder.as_markup()
 

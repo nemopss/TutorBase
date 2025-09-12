@@ -3,7 +3,6 @@ import logging
 import sys
 
 from aiogram import Bot, Dispatcher
-from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.storage.redis import RedisStorage
 
 from utils.commands import set_bot_commands
@@ -12,6 +11,8 @@ from database.db import init_db
 from handlers import admin as admin_h
 from handlers import application as app_h
 from handlers import start as start_h
+from handlers import funnel as funnel_h
+from handlers import cases as cases_h
 
 
 async def main():
@@ -27,6 +28,8 @@ async def main():
     dp.include_router(start_h.router)
     dp.include_router(app_h.router)
     dp.include_router(admin_h.router)
+    dp.include_router(funnel_h.router)
+    dp.include_router(cases_h.router)
 
     logging.info("Bot started...")
     try:
