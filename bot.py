@@ -4,7 +4,9 @@ import sys
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.memory import MemoryStorage
+from aiogram.fsm.storage.redis import RedisStorage
 
+from utils.commands import set_bot_commands
 from config import config
 from database.db import init_db
 from handlers import admin as admin_h
@@ -16,8 +18,11 @@ async def main():
     await init_db()
 
     bot = Bot(token=config.BOT_TOKEN, parse_mode="HTML")
-    storage = MemoryStorage()
+    # storage = MemoryStorage()
+    storage = RedisStorage.from_url(config.REDIS_URL)
     dp = Dispatcher(storage=storage)
+
+    await set_bot_commands(bot)
 
     dp.include_router(start_h.router)
     dp.include_router(app_h.router)

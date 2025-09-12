@@ -98,7 +98,7 @@ async def cb_start_apply(query: CallbackQuery, state: FSMContext):
 
 
 
-@router.message(ApplyStates.name)
+@router.message(ApplyStates.name, F.text)
 async def state_name(message: types.Message, state: FSMContext):
     await message.delete()
     data = await state.get_data()
@@ -132,7 +132,7 @@ async def cb_language(query: CallbackQuery, state: FSMContext):
     await query.answer()
 
 
-@router.message(ApplyStates.level)
+@router.message(ApplyStates.level, F.text)
 async def state_level(message: types.Message, state: FSMContext):
     await message.delete()
     data = await state.get_data()
@@ -148,7 +148,7 @@ async def state_level(message: types.Message, state: FSMContext):
     await state.set_state(ApplyStates.preferred_time)
 
 
-@router.message(ApplyStates.preferred_time)
+@router.message(ApplyStates.preferred_time, F.text)
 async def state_time(message: types.Message, state: FSMContext):
     await message.delete()
     user_data = await state.get_data()

@@ -17,6 +17,7 @@ class Settings(BaseSettings):
     ADMIN_CHAT_ID: int
     ADMINS: list[int]
     REGULATIONS_URL: str
+    REDIS_URL: str
 
     @field_validator("ADMINS", mode="before")
     @classmethod

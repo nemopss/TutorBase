@@ -1,9 +1,14 @@
 services:
-  bot:
+  redis:
+    image: redis:7-alpine
+    restart: always
+
+  applications_bot:
     build: .
-    container_name: telegram_bot
-    restart: unless-stopped
     env_file:
       - .env
-    volumes:
-      - .:/app
+    restart: always
+    depends_on:
+      - redis
+    environment:
+      REDIS_URL: redis://redis:6379/0
