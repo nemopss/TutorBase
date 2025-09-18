@@ -1,4 +1,25 @@
-.idea
-__pycache__
+# IDE & tooling
+.idea/
+.vscode/
+
+# Python cache & build
+__pycache__/
+*.py[cod]
+*.pyo
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+
+# Logs & OS cruft
+*.log
+.DS_Store
+
+# Local environment files
 .env
+.env.*
+!.env.example
+
+# Local SQLite DB
 database/bot.db
