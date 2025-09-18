@@ -8,6 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import config
 from utils import texts
+from keyboards.common import start_keyboard
 
 router = Router()
 
@@ -30,7 +31,9 @@ async def cb_get_prices(query: CallbackQuery):
 async def cb_start_diagnostic(query: CallbackQuery, state: FSMContext):
     # Создаем клавиатуру с кнопкой "Назад"
     builder = InlineKeyboardBuilder()
-    builder.button(text="⬅️ Назад", callback_data="get_prices") # Возвращает к предыдущему шагу
+    builder.button(text="⬅️ Назад", callback_data="get_prices")  # Возвращает к предыдущему шагу
+    builder.button(text="🏠 В меню", callback_data="to_menu")
+    builder.adjust(1)
 
     prompt_msg = await query.message.edit_text(
         texts.PROMPT_FOR_DIAGNOSTIC_TIME,
@@ -51,9 +54,9 @@ async def state_diagnostic_time(message: types.Message, state: FSMContext):
 
     # Формируем текст заявки для администратора
     admin_text = (
-        f"🔔 Новая запись на диагностику!\n\n"
-        f"👤 **Пользователь:** {contact_info}\n"
-        f"⏰ **Удобное время:** {message.text.strip()}"
+        "🔔 Новая запись на диагностику!\n\n"
+        f"👤 <b>Пользователь:</b> {contact_info}\n"
+        f"⏰ <b>Удобное время:</b> {message.text.strip()}"
     )
 
     # Отправляем уведомление в админ-чат
@@ -63,17 +66,16 @@ async def state_diagnostic_time(message: types.Message, state: FSMContext):
         if last_bot_msg_id:
             await message.bot.delete_message(message.chat.id, last_bot_msg_id)
 
-        await message.bot.send_message(config.ADMIN_CHAT_ID, admin_text, parse_mode="Markdown")
+        await message.bot.send_message(config.ADMIN_CHAT_ID, admin_text, parse_mode="HTML")
     except Exception as e:
         logging.error(f"Failed to send diagnostic notification to admin {config.ADMIN_CHAT_ID}: {e}")
 
     # Завершаем анкету и благодарим пользователя
     await state.clear()
     await message.answer(
-        texts.DIAGNOSTIC_SUBMITTED
+        texts.DIAGNOSTIC_SUBMITTED,
+        reply_markup=start_keyboard()
     )
-
-
 
 
 

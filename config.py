@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     ADMINS: list[int]
     REGULATIONS_URL: str
     REDIS_URL: str
+    REMINDER_NOTIFY_USERNAME: str = "nemopss"
 
     @field_validator("ADMINS", mode="before")
     @classmethod

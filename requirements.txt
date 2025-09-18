@@ -4,3 +4,6 @@ pydantic-settings==2.3.4
 redis
 pandas
 openpyxl
+sqlalchemy==2.0.29
+alembic==1.13.1
+greenlet==3.0.3

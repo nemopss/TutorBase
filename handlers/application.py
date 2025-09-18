@@ -1,7 +1,5 @@
 import logging
-from datetime import datetime
-
-from zoneinfo import ZoneInfo
+from datetime import datetime, timezone
 
 from aiogram import F, Router, types
 from aiogram.exceptions import TelegramBadRequest
@@ -9,10 +7,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import config
-from database.db import insert_application
-from keyboards.common import start_keyboard, reglament_keyboard, back_keyboard
+from database import crud
+from keyboards.common import start_keyboard, reglament_keyboard, back_with_menu_keyboard
 from utils.formatters import format_application
 from utils import texts
 
@@ -51,7 +50,9 @@ async def cb_back(query: CallbackQuery, state: FSMContext):
 
     if current_state_str == ApplyStates.language.state:
         await state.set_state(ApplyStates.name)
-        new_msg = await query.message.edit_text(texts.PROMPT_FOR_NAME)
+        menu_builder = InlineKeyboardBuilder()
+        menu_builder.button(text='⬅️ В меню', callback_data='to_menu')
+        new_msg = await query.message.edit_text(texts.PROMPT_FOR_NAME, reply_markup=menu_builder.as_markup())
 
     elif current_state_str == ApplyStates.level.state:
         await state.set_state(ApplyStates.language)
@@ -59,14 +60,15 @@ async def cb_back(query: CallbackQuery, state: FSMContext):
         builder.button(text="Английский", callback_data="lang_en")
         builder.button(text="Корейский", callback_data="lang_kr")
         builder.button(text="⬅️ Назад", callback_data="back")
-        builder.adjust(2, 1)
+        builder.button(text='🏠 В меню', callback_data='to_menu')
+        builder.adjust(2, 1, 1)
         new_msg = await query.message.edit_text(texts.PROMPT_FOR_LANGUAGE, reply_markup=builder.as_markup())
 
     elif current_state_str == ApplyStates.preferred_time.state:
         await state.set_state(ApplyStates.level)
         new_msg = await query.message.edit_text(
             texts.PROMPT_FOR_LEVEL,
-            reply_markup=back_keyboard()
+            reply_markup=back_with_menu_keyboard()
         )
 
     if new_msg:
@@ -104,7 +106,8 @@ async def state_name(message: types.Message, state: FSMContext):
     builder.button(text="Английский", callback_data="lang_en")
     builder.button(text="Корейский", callback_data="lang_kr")
     builder.button(text="⬅️ Назад", callback_data="back")
-    builder.adjust(2, 1)
+    builder.button(text='🏠 В меню', callback_data='to_menu')
+    builder.adjust(2, 1, 1)
 
     prompt_msg = await message.bot.edit_message_text(
         text=texts.PROMPT_FOR_LANGUAGE,
@@ -121,7 +124,7 @@ async def cb_language(query: CallbackQuery, state: FSMContext):
 
     prompt_msg = await query.message.edit_text(
         texts.PROMPT_FOR_LEVEL,
-        reply_markup=back_keyboard()
+        reply_markup=back_with_menu_keyboard()
     )
     await state.update_data(language=lang, last_bot_msg_id=prompt_msg.message_id)
     await state.set_state(ApplyStates.level)
@@ -138,29 +141,26 @@ async def state_level(message: types.Message, state: FSMContext):
         text=texts.PROMPT_FOR_TIME,
         chat_id=message.chat.id,
         message_id=last_bot_msg_id,
-        reply_markup=back_keyboard()
+        reply_markup=back_with_menu_keyboard()
     )
     await state.update_data(level=message.text.strip(), last_bot_msg_id=prompt_msg.message_id)
     await state.set_state(ApplyStates.preferred_time)
 
 
 @router.message(ApplyStates.preferred_time, F.text)
-async def state_time(message: types.Message, state: FSMContext):
+async def state_time(message: types.Message, state: FSMContext, session: AsyncSession):
     await message.delete()
     user_data = await state.get_data()
     last_bot_msg_id = user_data.get("last_bot_msg_id")
-
-    if last_bot_msg_id:
-        await message.bot.delete_message(message.chat.id, last_bot_msg_id)
 
     # --- Автоматическое получение контакта ---
     user = message.from_user
     contact_info = f"@{user.username}" if user.username else f"tg://user?id={user.id}"
     # ---
 
-    msk_now = datetime.now(ZoneInfo("Europe/Moscow"))
+    submitted_at = datetime.now(timezone.utc)
     app_data = {
-        "created_at": msk_now.strftime("%Y-%m-%d %H:%M:%S MSK"),
+        "created_at": submitted_at,  # Pass datetime object directly
         "name": user_data.get("name"),
         "language": user_data.get("language"),
         "level": user_data.get("level"),
@@ -168,10 +168,31 @@ async def state_time(message: types.Message, state: FSMContext):
         "contact": contact_info,
     }
 
-    await insert_application(app_data)
+    try:
+        await crud.add_application(session, app_data)
+        await session.commit()  # Commit the transaction
+    except Exception as exc:
+        await session.rollback()  # Rollback on error
+        logging.error(f"Database error when saving application for user {user.id}: {exc}")
+        await message.answer(texts.DATABASE_ERROR)
+        prompt_msg = await message.answer(texts.PROMPT_FOR_TIME, reply_markup=back_with_menu_keyboard())
+        await state.update_data(last_bot_msg_id=prompt_msg.message_id)
+        await state.set_state(ApplyStates.preferred_time)
+        return
+
+    if last_bot_msg_id:
+        try:
+            await message.bot.delete_message(message.chat.id, last_bot_msg_id)
+        except Exception as exc:
+            logging.warning(f"Failed to delete prompt message {last_bot_msg_id} after submission: {exc}")
+
     logging.info(f"User {user.id} successfully submitted application for language '{app_data['language']}'.")
 
-    text = format_application(app_data)
+    # Re-format the date for the notification message
+    app_data_formatted = app_data.copy()
+    app_data_formatted["created_at"] = submitted_at.isoformat()
+    text = format_application(app_data_formatted)
+
     try:
         await message.bot.send_message(config.ADMIN_CHAT_ID, text)
     except Exception as e:
@@ -179,5 +200,6 @@ async def state_time(message: types.Message, state: FSMContext):
 
     await message.answer(
         texts.APPLICATION_SUBMITTED,
+        reply_markup=start_keyboard(),
     )
     await state.clear()
