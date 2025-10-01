@@ -4,7 +4,7 @@ services:
     restart: always
 
   applications_bot:
-    build: ghct.io/nemopss/ksu-applications-bot:latest
+    build: ghcr.io/nemopss/ksu-applications-bot:latest
     env_file:
       - .env
     restart: always
