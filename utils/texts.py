@@ -7,6 +7,17 @@ START_MESSAGE = (
     'Выбери, что хочешь сделать ниже.'
 )
 
+STARTUP_DEPLOY_NOTIFICATION = "🚀 Бот обновлён и запущен.\n⏱ {time}"
+
+STATUS_REPORT = (
+    "<b>Статус бота</b>\n"
+    "Запуск: {started_at}\n"
+    "Активные напоминания: {active_reminders}\n"
+    "Всего напоминаний: {total_reminders}\n"
+    "Заявок за неделю: {recent_applications}\n"
+    "Всего пользователей: {total_users}"
+)
+
 # --- Application Handler ---
 TO_MENU_MESSAGE = START_MESSAGE
 

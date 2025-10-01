@@ -1,11 +1,14 @@
 import asyncio
 import logging
 import sys
+from datetime import datetime, timezone
 
 from aiogram import Bot, Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 
 from utils.commands import set_bot_commands
+from utils.formatters import escape_html_text, format_timestamp_msk
+from utils.state import set_bot_started_at
 from config import config
 from handlers import admin as admin_h
 from handlers import application as app_h
@@ -17,10 +20,13 @@ from middlewares.logging import LoggingMiddleware, LoggingFilter
 from middlewares.db import DbSessionMiddleware
 from middlewares.user_tracking import UserTrackingMiddleware
 from services.reminders import ReminderScheduler
+from utils import texts
 
 
 async def main():
     bot = Bot(token=config.BOT_TOKEN, parse_mode="HTML")
+    started_at = datetime.now(timezone.utc)
+    set_bot_started_at(started_at)
     # storage = MemoryStorage()
     storage = RedisStorage.from_url(config.REDIS_URL)
     dp = Dispatcher(storage=storage)
@@ -44,6 +50,13 @@ async def main():
     dp.include_router(funnel_h.router)
     dp.include_router(cases_h.router)
     dp.include_router(reminders_h.router)
+
+    try:
+        startup_time = escape_html_text(format_timestamp_msk(started_at))
+        startup_message = texts.STARTUP_DEPLOY_NOTIFICATION.format(time=startup_time)
+        await bot.send_message(config.LOGS_CHAT_ID, startup_message)
+    except Exception as exc:
+        logging.error("Failed to notify about deployment: %s", exc)
 
     logging.info("Bot started...")
     try:

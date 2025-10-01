@@ -17,7 +17,8 @@ async def set_bot_commands(bot: Bot):
     # Команды для администраторов
     admin_commands = [
         BotCommand(command="start", description="🚀 Запуск/перезапуск бота"),
-        BotCommand(command="admin", description="👑 Панель администратора")
+        BotCommand(command="admin", description="👑 Панель администратора"),
+        BotCommand(command="status", description="📊 Текущий статус бота"),
     ]
 
     # Устанавливаем персональные команды для каждого админа из конфига

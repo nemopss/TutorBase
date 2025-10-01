@@ -8,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import crud
 from utils import texts
+from utils.formatters import escape_html_text
 
 router = Router()
 
@@ -57,7 +58,10 @@ async def cb_show_one_case(query: CallbackQuery, session: AsyncSession):
         await query.answer(texts.STUDENT_NOT_FOUND, show_alert=True)
         return
 
-    text = texts.CASE_STORY_HEADER.format(name=student.name, story=student.story)
+    text = texts.CASE_STORY_HEADER.format(
+        name=escape_html_text(student.name),
+        story=escape_html_text(student.story, default=texts.LEARNER_NOTES_EMPTY),
+    )
 
     builder = InlineKeyboardBuilder()
     builder.button(text="⬅️ Назад к списку", callback_data="show_cases")

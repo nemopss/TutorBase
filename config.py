@@ -16,6 +16,7 @@ class Settings(BaseSettings):
     GOOGLE_FORM_URL: str = ""
     ADMIN_CHAT_ID: int
     LOGS_CHAT_ID: int
+    CANCELLATION_IMAGE_FILE_ID: str
     ADMINS: list[int]
     REGULATIONS_URL: str
     REDIS_URL: str

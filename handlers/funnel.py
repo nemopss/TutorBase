@@ -8,6 +8,7 @@ from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 from config import config
 from utils import texts
+from utils.formatters import escape_html_text
 from keyboards.common import start_keyboard
 
 router = Router()
@@ -55,8 +56,8 @@ async def state_diagnostic_time(message: types.Message, state: FSMContext):
     # Формируем текст заявки для администратора
     admin_text = (
         "🔔 Новая запись на диагностику!\n\n"
-        f"👤 <b>Пользователь:</b> {contact_info}\n"
-        f"⏰ <b>Удобное время:</b> {message.text.strip()}"
+        f"👤 <b>Пользователь:</b> {escape_html_text(contact_info, default='—')}\n"
+        f"⏰ <b>Удобное время:</b> {escape_html_text(message.text.strip(), default='—')}"
     )
 
     # Отправляем уведомление в админ-чат
@@ -76,6 +77,5 @@ async def state_diagnostic_time(message: types.Message, state: FSMContext):
         texts.DIAGNOSTIC_SUBMITTED,
         reply_markup=start_keyboard()
     )
-
 
 

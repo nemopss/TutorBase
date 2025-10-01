@@ -1,7 +1,7 @@
 import logging
 import csv
 import math
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from io import StringIO, BytesIO
 from typing import NamedTuple
 import pandas as pd
@@ -14,9 +14,12 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery, BufferedInputFile, InlineKeyboardButton
 from aiogram.utils.keyboard import InlineKeyboardBuilder
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, func
 
 from config import config
 from database import crud
+from database.models import Application, BotUser
+from utils.state import get_bot_started_at
 from filters.admin import IsAdmin
 from keyboards.common import (
     admin_keyboard,
@@ -25,6 +28,7 @@ from keyboards.common import (
 )
 from utils import texts
 from utils.formatters import (
+    escape_html_text,
     format_timestamp_msk,
     pack_chat_identifier,
     split_chat_identifier,
@@ -148,7 +152,13 @@ def _format_learners_menu_text(learners, page: int, total_pages: int, total_coun
     lines = [texts.LEARNERS_MENU_HEADER.format(total=total_count), ""]
     for idx, learner in enumerate(learners, start=start_index):
         username = _format_username(learner.bot_user)
-        lines.append(texts.LEARNERS_MENU_ITEM.format(index=idx, name=learner.display_name, username=username))
+        lines.append(
+            texts.LEARNERS_MENU_ITEM.format(
+                index=idx,
+                name=escape_html_text(learner.display_name),
+                username=escape_html_text(username or "—"),
+            )
+        )
     lines.extend(["", texts.LEARNERS_MENU_FOOTER.format(page=page, pages=total_pages)])
     return "\n".join(lines)
 
@@ -189,13 +199,15 @@ def _build_bot_user_picker_keyboard(users, page: int, total_pages: int) -> Inlin
 
 
 def _format_learner_detail_text(learner) -> str:
-    username = _format_username(learner.bot_user)
-    chat_id = learner.bot_user.chat_id if learner.bot_user else '—'
-    last_seen = format_timestamp_msk(learner.bot_user.last_seen_at) if learner.bot_user else '—'
-    notes = learner.notes or texts.LEARNER_NOTES_EMPTY
-    created = format_timestamp_msk(learner.created_at)
+    username = escape_html_text(_format_username(learner.bot_user) or '—')
+    chat_id = escape_html_text(learner.bot_user.chat_id if learner.bot_user else '—')
+    last_seen = escape_html_text(
+        format_timestamp_msk(learner.bot_user.last_seen_at) if learner.bot_user else '—'
+    )
+    notes = escape_html_text(learner.notes or texts.LEARNER_NOTES_EMPTY, default=texts.LEARNER_NOTES_EMPTY)
+    created = escape_html_text(format_timestamp_msk(learner.created_at))
     return texts.LEARNER_DETAILS.format(
-        name=learner.display_name,
+        name=escape_html_text(learner.display_name),
         username=username,
         chat_id=chat_id,
         last_seen=last_seen,
@@ -307,16 +319,17 @@ def _format_last_response(reminder) -> str:
     if reminder.last_response == "confirmed":
         return texts.REMINDER_STATUS_CONFIRM
     if reminder.last_response == "declined":
-        return f"{texts.REMINDER_STATUS_DECLINE}: {reminder.last_decline_reason or ''}".strip()
-    return reminder.last_response
+        reason = escape_html_text(reminder.last_decline_reason or '')
+        return f"{texts.REMINDER_STATUS_DECLINE}: {reason}".strip()
+    return escape_html_text(reminder.last_response)
 
 
 def _reminder_summary(reminder) -> str:
-    next_run = _format_next_run(reminder.next_run_at)
-    schedule = _reminder_schedule(reminder)
-    comment = reminder.comment or texts.REMINDER_STATUS_NONE
+    next_run = escape_html_text(_format_next_run(reminder.next_run_at))
+    schedule = escape_html_text(_reminder_schedule(reminder))
+    comment = escape_html_text(reminder.comment or texts.REMINDER_STATUS_NONE, default=texts.REMINDER_STATUS_NONE)
     return texts.REMINDER_SUMMARY.format(
-        name=reminder.student_name,
+        name=escape_html_text(reminder.student_name),
         schedule=schedule,
         next_run=next_run,
         reminder_type=_format_reminder_type(reminder),
@@ -325,14 +338,14 @@ def _reminder_summary(reminder) -> str:
 
 
 def _reminder_details(reminder) -> str:
-    next_run = _format_next_run(reminder.next_run_at)
-    schedule = _reminder_schedule(reminder)
-    comment = reminder.comment or texts.REMINDER_STATUS_NONE
+    next_run = escape_html_text(_format_next_run(reminder.next_run_at))
+    schedule = escape_html_text(_reminder_schedule(reminder))
+    comment = escape_html_text(reminder.comment or texts.REMINDER_STATUS_NONE, default=texts.REMINDER_STATUS_NONE)
     last_response = _format_last_response(reminder)
     contact_display, _ = split_chat_identifier(reminder.chat_identifier)
     return texts.REMINDER_DETAILS_BODY.format(
-        name=reminder.student_name,
-        contact=contact_display or reminder.chat_identifier,
+        name=escape_html_text(reminder.student_name),
+        contact=escape_html_text(contact_display or reminder.chat_identifier or '—'),
         reminder_type=_format_reminder_type(reminder),
         schedule=schedule,
         next_run=next_run,
@@ -379,6 +392,43 @@ async def cmd_admin(message: types.Message):
     await message.answer(texts.ADMIN_PANEL, reply_markup=admin_keyboard())
 
 
+@router.message(Command("status"), IsAdmin())
+async def cmd_status(message: types.Message, session: AsyncSession):
+    logging.info("Admin %s requested status", message.from_user.id)
+
+    bot_started_at = get_bot_started_at()
+    started_at_text = "—"
+    if isinstance(bot_started_at, datetime):
+        started_at_text = escape_html_text(format_timestamp_msk(bot_started_at))
+
+    now_utc = datetime.now(timezone.utc)
+    week_ago = now_utc - timedelta(days=7)
+
+    active_reminders, total_reminders = await crud.fetch_reminders_stats(session)
+
+    recent_applications = (
+        await session.execute(
+            select(func.count())
+            .select_from(Application)
+            .where(Application.created_at >= week_ago)
+        )
+    ).scalar_one()
+
+    total_users = (
+        await session.execute(select(func.count()).select_from(BotUser))
+    ).scalar_one()
+
+    text = texts.STATUS_REPORT.format(
+        started_at=started_at_text,
+        active_reminders=escape_html_text(active_reminders),
+        total_reminders=escape_html_text(total_reminders),
+        recent_applications=escape_html_text(recent_applications),
+        total_users=escape_html_text(total_users),
+    )
+
+    await message.answer(text, reply_markup=admin_keyboard())
+
+
 @router.callback_query(F.data == 'admin_stats_menu', IsAdmin())
 async def cb_admin_stats_menu(query: CallbackQuery):
     logging.info(f"Admin {query.from_user.id} opened stats menu.")
@@ -400,6 +450,8 @@ async def cmd_admin_denied(message: types.Message):
     await message.answer(texts.ACCESS_DENIED)
 
 
+
+
 @router.callback_query(F.data == 'admin_list', IsAdmin())
 async def cb_admin_list(query: CallbackQuery, session: AsyncSession):
     logging.info(f"Admin {query.from_user.id} (@{query.from_user.username}) requested application list.")
@@ -417,9 +469,11 @@ async def cb_admin_list(query: CallbackQuery, session: AsyncSession):
         return
     response_texts = []
     for r in rows:
-        created_at = format_timestamp_msk(r.created_at)
+        created_at = escape_html_text(format_timestamp_msk(r.created_at))
         response_texts.append(
-            f"#{r.id} — {created_at} — {r.name} ({r.language}, {r.level})\nКонтакт: {r.contact}"
+            f"#{escape_html_text(r.id)} — {created_at} — {escape_html_text(r.name)}"
+            f" ({escape_html_text(r.language)}, {escape_html_text(r.level)})\n"
+            f"Контакт: {escape_html_text(r.contact)}"
         )
     await query.message.edit_text('\n\n'.join(response_texts), reply_markup=admin_stats_keyboard())
     await query.answer()
@@ -511,15 +565,18 @@ async def state_add_student_photo(message: types.Message, state: FSMContext, ses
         return
 
     await state.clear()
-    await message.answer(texts.STUDENT_ADDED_SUCCESS.format(name=name), reply_markup=admin_cases_keyboard())
+    await message.answer(
+        texts.STUDENT_ADDED_SUCCESS.format(name=escape_html_text(name)),
+        reply_markup=admin_cases_keyboard(),
+    )
 
     admin_user = message.from_user
     log_caption = (
-        f"#new_student\n"
-        f"👨‍💻 Admin: @{admin_user.username} (ID: {admin_user.id})\n"
-        f"✅ Added new student:\n"
-        f"👤 Name: {name}\n"
-        f"📖 Story: {story[:200]}"
+        "#new_student\n"
+        f"👨‍💻 Admin: @{escape_html_text(admin_user.username or admin_user.id)} (ID: {admin_user.id})\n"
+        "✅ Added new student:\n"
+        f"👤 Name: {escape_html_text(name)}\n"
+        f"📖 Story: {escape_html_text(story[:200])}"
     )
     try:
         await message.bot.send_photo(config.LOGS_CHAT_ID, photo=photo_file_id, caption=log_caption)
@@ -543,16 +600,19 @@ async def cb_skip_add_student_photo(query: CallbackQuery, state: FSMContext, ses
         return
 
     await state.clear()
-    await query.message.edit_text(texts.STUDENT_ADDED_SUCCESS.format(name=name), reply_markup=admin_cases_keyboard())
+    await query.message.edit_text(
+        texts.STUDENT_ADDED_SUCCESS.format(name=escape_html_text(name)),
+        reply_markup=admin_cases_keyboard(),
+    )
 
     admin_user = query.from_user
     log_text = (
-        f"#new_student\n"
-        f"👨‍💻 Admin: @{admin_user.username} (ID: {admin_user.id})\n"
-        f"✅ Added new student:\n"
-        f"👤 Name: {name}\n"
-        f"📖 Story: {story[:200]}\n"
-        f"🖼 Photo: No"
+        "#new_student\n"
+        f"👨‍💻 Admin: @{escape_html_text(admin_user.username or admin_user.id)} (ID: {admin_user.id})\n"
+        "✅ Added new student:\n"
+        f"👤 Name: {escape_html_text(name)}\n"
+        f"📖 Story: {escape_html_text(story[:200])}\n"
+        "🖼 Photo: No"
     )
     try:
         await query.bot.send_message(config.LOGS_CHAT_ID, log_text)
@@ -606,7 +666,7 @@ async def cb_delete_confirm(query: CallbackQuery, session: AsyncSession):
     builder.adjust(1)
 
     await query.message.edit_text(
-        texts.CONFIRM_DELETE_STUDENT.format(name=student.name),
+        texts.CONFIRM_DELETE_STUDENT.format(name=escape_html_text(student.name)),
         reply_markup=builder.as_markup()
     )
     await query.answer()
@@ -634,10 +694,10 @@ async def cb_delete_execute(query: CallbackQuery, session: AsyncSession):
 
     admin_user = query.from_user
     log_text = (
-        f"#delete_student\n"
-        f"👨‍💻 Admin: @{admin_user.username} (ID: {admin_user.id})\n"
-        f"❌ Deleted student:\n"
-        f"👤 Name: {student_name}"
+        "#delete_student\n"
+        f"👨‍💻 Admin: @{escape_html_text(admin_user.username or admin_user.id)} (ID: {admin_user.id})\n"
+        "❌ Deleted student:\n"
+        f"👤 Name: {escape_html_text(student_name)}"
     )
     try:
         await query.bot.send_message(config.LOGS_CHAT_ID, log_text)
@@ -702,9 +762,9 @@ async def cb_confirm_clear_applications(query: CallbackQuery, session: AsyncSess
 
     admin_user = query.from_user
     log_text = (
-        f"#clear_applications\n"
-        f"👨‍💻 Admin: @{admin_user.username} (ID: {admin_user.id})\n"
-        f"🗑️ Cleared all applications."
+        "#clear_applications\n"
+        f"👨‍💻 Admin: @{escape_html_text(admin_user.username or admin_user.id)} (ID: {admin_user.id})\n"
+        "🗑️ Cleared all applications."
     )
     try:
         await query.bot.send_message(config.LOGS_CHAT_ID, log_text)
@@ -730,7 +790,10 @@ async def cb_send_cute_message(query: CallbackQuery, state: FSMContext):
 @router.message(CuteMessageStates.message, F.text, IsAdmin())
 async def state_send_cute_message(message: types.Message, state: FSMContext):
     sender_id = message.from_user.id
-    text_to_send = f"{texts.CUTE_MESSAGE_HEADER}\n\n{message.text}"
+    text_to_send = (
+        f"{texts.CUTE_MESSAGE_HEADER}\n\n"
+        f"{escape_html_text(message.text, default='—')}"
+    )
 
     for admin_id in config.ADMINS:
         if admin_id != sender_id:
@@ -851,7 +914,7 @@ async def cb_learner_select(query: CallbackQuery, state: FSMContext, session: As
     markup = InlineKeyboardBuilder()
     markup.button(text='⬅️ Отмена', callback_data='learner_add_cancel')
     await query.message.edit_text(
-        texts.LEARNER_PROMPT_DISPLAY.format(default=suggested),
+        texts.LEARNER_PROMPT_DISPLAY.format(default=escape_html_text(suggested)),
         reply_markup=markup.as_markup()
     )
     await query.answer()
@@ -864,7 +927,9 @@ async def state_learner_display_name(message: types.Message, state: FSMContext):
     suggested = data.get('suggested_name') or '—'
     display_name = suggested if text in {'', '-'} else text
     if not display_name:
-        await message.answer(texts.LEARNER_PROMPT_DISPLAY.format(default=suggested))
+        await message.answer(
+            texts.LEARNER_PROMPT_DISPLAY.format(default=escape_html_text(suggested))
+        )
         return
     await state.update_data(display_name=display_name)
     await state.set_state(LearnerCreateStates.notes)
@@ -920,14 +985,17 @@ async def state_learner_notes(message: types.Message, state: FSMContext, session
     await _edit_menu_message(message.bot, menu_chat_id, menu_message_id, detail_text, detail_markup)
 
     await state.clear()
-    await message.answer(texts.LEARNER_CREATED.format(name=learner.display_name))
+    await message.answer(
+        texts.LEARNER_CREATED.format(name=escape_html_text(learner.display_name))
+    )
 
     try:
         admin_user = message.from_user
         log_text = (
-            f"#learner_added\n"
-            f"👨‍💻 Admin: @{admin_user.username} (ID: {admin_user.id})\n"
-            f"➕ Learner: {learner.display_name} (chat_id: {learner.bot_user.chat_id})"
+            "#learner_added\n"
+            f"👨‍💻 Admin: @{escape_html_text(admin_user.username or admin_user.id)} (ID: {admin_user.id})\n"
+            "➕ Learner: "
+            f"{escape_html_text(learner.display_name)} (chat_id: {escape_html_text(learner.bot_user.chat_id)})"
         )
         await message.bot.send_message(config.LOGS_CHAT_ID, log_text)
     except Exception as exc:
@@ -991,8 +1059,8 @@ async def cb_learner_reminder(query: CallbackQuery, state: FSMContext, session: 
     builder.adjust(1)
 
     text = texts.LEARNER_REMINDER_PREFILLED.format(
-        name=learner.display_name,
-        username=_format_username(learner.bot_user),
+        name=escape_html_text(learner.display_name),
+        username=escape_html_text(_format_username(learner.bot_user) or '—'),
     )
     await query.message.edit_text(text, reply_markup=builder.as_markup())
     await query.answer()
@@ -1019,15 +1087,18 @@ async def cb_learner_reminders(query: CallbackQuery, session: AsyncSession):
     related = [rem for rem in all_reminders if split_chat_identifier(rem.chat_identifier)[1] == chat_id_str]
 
     if not related:
-        text = texts.LEARNER_NO_REMINDERS.format(name=learner.display_name)
+        text = texts.LEARNER_NO_REMINDERS.format(name=escape_html_text(learner.display_name))
     else:
-        lines = [texts.LEARNER_REMINDERS_HEADER.format(name=learner.display_name), ""]
+        lines = [
+            texts.LEARNER_REMINDERS_HEADER.format(name=escape_html_text(learner.display_name)),
+            "",
+        ]
         for reminder in related:
             lines.append(
                 texts.LEARNER_REMINDER_ITEM.format(
-                    reminder_id=reminder.id,
-                    schedule=_reminder_schedule(reminder),
-                    next_run=_format_next_run(reminder.next_run_at),
+                    reminder_id=escape_html_text(reminder.id),
+                    schedule=escape_html_text(_reminder_schedule(reminder)),
+                    next_run=escape_html_text(_format_next_run(reminder.next_run_at)),
                     status=texts.LEARNER_REMINDER_ACTIVE if reminder.active else texts.LEARNER_REMINDER_INACTIVE,
                 )
             )
@@ -1064,7 +1135,7 @@ async def cb_learner_delete_confirm(query: CallbackQuery, session: AsyncSession)
     builder.adjust(1)
 
     await query.message.edit_text(
-        texts.LEARNER_DELETE_CONFIRM.format(name=learner.display_name),
+        texts.LEARNER_DELETE_CONFIRM.format(name=escape_html_text(learner.display_name)),
         reply_markup=builder.as_markup()
     )
     await query.answer()
@@ -1095,9 +1166,10 @@ async def cb_learner_delete_execute(query: CallbackQuery, session: AsyncSession)
         try:
             admin_user = query.from_user
             log_text = (
-                f"#learner_deleted\n"
-                f"👨‍💻 Admin: @{admin_user.username} (ID: {admin_user.id})\n"
-                f"🗑 Learner: {learner.display_name} (chat_id: {learner.bot_user.chat_id if learner.bot_user else '—'})"
+                "#learner_deleted\n"
+                f"👨‍💻 Admin: @{escape_html_text(admin_user.username or admin_user.id)} (ID: {admin_user.id})\n"
+                "🗑 Learner: "
+                f"{escape_html_text(learner.display_name)} (chat_id: {escape_html_text(learner.bot_user.chat_id if learner.bot_user else '—')})"
             )
             await query.bot.send_message(config.LOGS_CHAT_ID, log_text)
         except Exception as exc:
@@ -1364,7 +1436,7 @@ async def state_reminder_comment(message: types.Message, state: FSMContext, sess
         return_page = int(data.get('return_page', 1))
 
         await state.clear()
-        next_run_display = _format_next_run(reminder.next_run_at)
+        next_run_display = escape_html_text(_format_next_run(reminder.next_run_at))
         summary = _reminder_summary(reminder)
         builder = InlineKeyboardBuilder()
         builder.button(text='📋 Список напоминаний', callback_data='rem_list')
@@ -1493,7 +1565,11 @@ async def cb_reminder_activate(query: CallbackQuery, session: AsyncSession):
         await crud.save_lesson_reminder(session, reminder)
         await session.commit()
 
-        await query.answer(texts.REMINDER_ACTIVATED.format(next_run=_format_next_run(reminder.next_run_at)))
+        await query.answer(
+            texts.REMINDER_ACTIVATED.format(
+                next_run=escape_html_text(_format_next_run(reminder.next_run_at))
+            )
+        )
         builder = _reminder_detail_keyboard(reminder.id, reminder.active)
         await query.message.edit_text(
             f"{texts.REMINDER_DETAILS_TITLE.format(id=reminder.id)}\n\n{_reminder_details(reminder)}",

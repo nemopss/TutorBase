@@ -132,6 +132,18 @@ async def fetch_due_reminders(session: AsyncSession, now_utc: datetime) -> list[
     return result.scalars().all()
 
 
+async def fetch_reminders_stats(session: AsyncSession) -> tuple[int, int]:
+    total_stmt = select(func.count()).select_from(LessonReminder)
+    active_stmt = (
+        select(func.count())
+        .select_from(LessonReminder)
+        .where(LessonReminder.active.is_(True))
+    )
+    total = (await session.execute(total_stmt)).scalar_one()
+    active = (await session.execute(active_stmt)).scalar_one()
+    return active, total
+
+
 # --- Bot users & learners ---------------------------------------------------
 
 

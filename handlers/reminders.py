@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from config import config
 from database import crud
 from utils import texts
+from utils.formatters import escape_html_text
 
 
 router = Router()
@@ -48,8 +49,8 @@ async def cb_reminder_confirm(query: CallbackQuery, session: AsyncSession):
     await query.message.answer(texts.REMINDER_CONFIRM_REPLY)
     try:
         log_text = texts.REMINDER_CONFIRM_LOG.format(
-            name=reminder.student_name,
-            mention=config.REMINDER_NOTIFY_USERNAME,
+            name=escape_html_text(reminder.student_name),
+            mention=escape_html_text(config.REMINDER_NOTIFY_USERNAME, default=config.REMINDER_NOTIFY_USERNAME),
         )
         await query.bot.send_message(config.LOGS_CHAT_ID, log_text)
     except Exception as exc:
@@ -106,11 +107,15 @@ async def state_decline_reason(message: types.Message, state: FSMContext, sessio
 
     try:
         log_text = texts.REMINDER_DECLINE_LOG.format(
-            name=reminder.student_name,
-            reason=reminder.last_decline_reason,
-            mention=config.REMINDER_NOTIFY_USERNAME,
+            name=escape_html_text(reminder.student_name),
+            reason=escape_html_text(reminder.last_decline_reason),
+            mention=escape_html_text(config.REMINDER_NOTIFY_USERNAME, default=config.REMINDER_NOTIFY_USERNAME),
         )
-        await message.bot.send_message(config.LOGS_CHAT_ID, log_text)
+        await message.bot.send_photo(
+            config.LOGS_CHAT_ID,
+            photo=config.CANCELLATION_IMAGE_FILE_ID,
+            caption=log_text
+        )
     except Exception as exc:
         logging.error(f"Failed to send reminder decline log: {exc}")
 

@@ -10,7 +10,7 @@ from config import config
 from database import crud
 from database.engine import async_session
 from utils import texts
-from utils.formatters import format_timestamp_msk, split_chat_identifier
+from utils.formatters import escape_html_text, format_timestamp_msk, split_chat_identifier
 from utils.scheduling import (
     deserialize_days,
     humanize_days,
@@ -83,8 +83,11 @@ class ReminderScheduler:
         if isinstance(send_target, str) and send_target.lstrip('-').isdigit():
             send_target = int(send_target)
 
-        schedule = self._build_schedule_text(reminder)
-        message_text = texts.REMINDER_TRIGGER_MESSAGE.format(name=reminder.student_name, schedule=schedule)
+        schedule_text = self._build_schedule_text(reminder)
+        message_text = texts.REMINDER_TRIGGER_MESSAGE.format(
+            name=escape_html_text(reminder.student_name),
+            schedule=escape_html_text(schedule_text),
+        )
 
         contact_details = contact_label or contact_target or "—"
         if contact_target and contact_target != contact_details:
@@ -139,7 +142,7 @@ class ReminderScheduler:
             )
         else:
             reminder.last_notified_at = now_utc
-            await self._log_sent(reminder, schedule)
+            await self._log_sent(reminder, schedule_text)
 
         if should_reschedule:
             await self._schedule_next(reminder, now_utc + timedelta(seconds=30))
@@ -172,13 +175,13 @@ class ReminderScheduler:
 
     async def _log_sent(self, reminder, schedule: str) -> None:
         try:
-            next_run = format_timestamp_msk(reminder.next_run_at)
+            next_run = escape_html_text(format_timestamp_msk(reminder.next_run_at))
             log_text = texts.REMINDER_SENT_LOG.format(
-                name=reminder.student_name,
-                schedule=schedule,
-                lead=reminder.lead_minutes,
+                name=escape_html_text(reminder.student_name),
+                schedule=escape_html_text(schedule),
+                lead=escape_html_text(reminder.lead_minutes),
                 next_run=next_run,
-                mention=config.REMINDER_NOTIFY_USERNAME,
+                mention=escape_html_text(config.REMINDER_NOTIFY_USERNAME, default=config.REMINDER_NOTIFY_USERNAME),
             )
             await self._bot.send_message(config.LOGS_CHAT_ID, log_text)
         except Exception as exc:
@@ -187,9 +190,8 @@ class ReminderScheduler:
     def _build_schedule_text(self, reminder) -> str:
         if reminder.is_recurring:
             days = humanize_days(deserialize_days(reminder.days))
-            return f"{days} в {reminder.lesson_time}"
-        lesson_dt = format_timestamp_msk(reminder.lesson_datetime)
-        return lesson_dt
+            return f"{days} в {reminder.lesson_time}" if reminder.lesson_time else days
+        return format_timestamp_msk(reminder.lesson_datetime)
 
     async def _handle_fatal_send_failure(
         self,
@@ -209,14 +211,15 @@ class ReminderScheduler:
         reminder.comment = comment
 
         admin_message = (
-            f"⚠️ **Напоминание отключено**\n\n"
-            f"Не удалось отправить напоминание #{reminder.id} для **{reminder.student_name}** (контакт: `{contact_details}`).\n"
-            f"Причина: `{admin_reason}`\n\n"
+            "⚠️ <b>Напоминание отключено</b>\n\n"
+            f"Не удалось отправить напоминание #{escape_html_text(reminder.id, default='—')} для "
+            f"<b>{escape_html_text(reminder.student_name)}</b> (контакт: <code>{escape_html_text(contact_details)}</code>).\n"
+            f"Причина: <code>{escape_html_text(admin_reason)}</code>\n\n"
             "Напоминание было автоматически деактивировано. Пожалуйста, проверьте и обновите контактные данные студента."
         )
         try:
             for admin_id in config.ADMINS:
-                await self._bot.send_message(admin_id, admin_message, parse_mode="Markdown")
+                await self._bot.send_message(admin_id, admin_message)
         except Exception as admin_exc:
             logging.error(
                 "Failed to notify admin about failed reminder #%s: %s",
