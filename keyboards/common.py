@@ -15,6 +15,7 @@ def start_keyboard():
 def admin_keyboard():
     builder = InlineKeyboardBuilder()
     builder.button(text='👩‍🎓 Ученики', callback_data='manage_students')
+    builder.button(text='📦 Пакеты', callback_data='packages_manager')
     builder.button(text='📊 Статистика', callback_data='admin_stats_menu')
     builder.button(text='📚 Менеджер кейсов', callback_data='cases_manager')
     builder.adjust(1)

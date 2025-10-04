@@ -58,6 +58,13 @@ DAY_LABELS = [
 LEARNERS_PER_PAGE = 5
 BOT_USERS_PER_PAGE = 6
 
+LESSON_REMINDER_KIND = 'lesson'
+PAYMENT_REMINDER_KIND = 'payment'
+PAYMENT_TEMPLATE_WEEK = 'week_before'
+PAYMENT_TEMPLATE_DAY = 'day_before'
+PAYMENT_WEEK_LEAD_MINUTES = 7 * 24 * 60
+PAYMENT_DAY_LEAD_MINUTES = 24 * 60
+
 
 def _build_days_keyboard(selected: set[int]) -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
@@ -174,7 +181,6 @@ def _build_learners_keyboard(learners, page: int, total_pages: int) -> InlineKey
         builder.adjust(1)
     _add_pagination(builder, page, total_pages, 'learners_page')
     builder.row(InlineKeyboardButton(text='➕ Добавить ученика', callback_data=f'learner_add:{page}'))
-    builder.row(InlineKeyboardButton(text='🔔 Менеджер напоминаний', callback_data='rem_list'))
     builder.row(InlineKeyboardButton(text='💌 Сообщение!', callback_data='send_cute_message'))
     builder.row(InlineKeyboardButton(text='⬅️ Назад', callback_data='back_to_admin_panel'))
     return builder
@@ -220,6 +226,7 @@ def _build_learner_detail_keyboard(learner_id: int, page: int) -> InlineKeyboard
     builder = InlineKeyboardBuilder()
     builder.button(text='🔔 Создать напоминание', callback_data=f'learner_reminder:{learner_id}:{page}')
     builder.button(text='📋 Напоминания', callback_data=f'learner_reminders:{learner_id}:{page}')
+    builder.button(text='💳 Напоминания об оплате', callback_data=f'learner_payment_menu:{learner_id}:{page}')
     builder.button(text='🗑 Удалить', callback_data=f'learner_delete_confirm:{learner_id}:{page}')
     builder.button(text='⬅️ Назад', callback_data=f'learners_page:{page}')
     builder.adjust(1)
@@ -309,8 +316,62 @@ def _reminder_schedule(reminder) -> str:
     return format_timestamp_msk(reminder.lesson_datetime)
 
 
-def _format_reminder_type(reminder) -> str:
+def _reminder_kind_label(reminder) -> str:
+    kind = getattr(reminder, 'kind', None) or LESSON_REMINDER_KIND
+    if kind == PAYMENT_REMINDER_KIND:
+        template = (reminder.template_key or '').lower()
+        if template == PAYMENT_TEMPLATE_WEEK:
+            return texts.REMINDER_TYPE_PAYMENT_WEEK
+        if template == PAYMENT_TEMPLATE_DAY:
+            return texts.REMINDER_TYPE_PAYMENT_DAY
+        return texts.REMINDER_TYPE_PAYMENT_GENERIC
     return texts.REMINDER_TYPE_RECURRING if reminder.is_recurring else texts.REMINDER_TYPE_ONE_TIME
+
+
+def _format_reminder_type(reminder) -> str:
+    return _reminder_kind_label(reminder)
+
+
+def _filter_payment_reminders(reminders, chat_id_str: str):
+    result = []
+    for reminder in reminders:
+        kind = getattr(reminder, 'kind', None) or LESSON_REMINDER_KIND
+        if kind != PAYMENT_REMINDER_KIND:
+            continue
+        _, target = split_chat_identifier(reminder.chat_identifier)
+        if target == chat_id_str:
+            result.append(reminder)
+    return result
+
+
+def _format_payment_menu_text(learner, reminders) -> str:
+    header = texts.PAYMENT_REMINDERS_MENU_HEADER.format(name=escape_html_text(learner.display_name))
+    if not reminders:
+        empty = texts.PAYMENT_REMINDERS_EMPTY.format(name=escape_html_text(learner.display_name))
+        return "\n\n".join([header, empty, texts.PAYMENT_REMINDERS_EMPTY_HINT])
+
+    lines = [header, ""]
+    for reminder in reminders:
+        lines.append(
+            texts.LEARNER_REMINDER_ITEM.format(
+                reminder_id=escape_html_text(reminder.id),
+                kind=escape_html_text(_reminder_kind_label(reminder)),
+                schedule=escape_html_text(_reminder_schedule(reminder)),
+                next_run=escape_html_text(_format_next_run(reminder.next_run_at)),
+                status=texts.LEARNER_REMINDER_ACTIVE if reminder.active else texts.LEARNER_REMINDER_INACTIVE,
+            )
+        )
+    return "\n".join(lines)
+
+
+
+def _build_payment_menu_keyboard(learner_id: int, page: int) -> InlineKeyboardBuilder:
+    builder = InlineKeyboardBuilder()
+    builder.button(text='➕ Создать напоминание об оплате', callback_data=f'learner_payment_create:{learner_id}:{page}')
+    builder.button(text='📋 Все напоминания', callback_data=f'learner_reminders:{learner_id}:{page}')
+    builder.button(text='⬅️ Назад', callback_data=f'learner_view:{learner_id}:{page}')
+    builder.adjust(1)
+    return builder
 
 
 def _format_last_response(reminder) -> str:
@@ -384,6 +445,10 @@ class ReminderCreateStates(StatesGroup):
     one_time_datetime = State()
     lead = State()
     comment = State()
+
+
+class PaymentReminderStates(StatesGroup):
+    last_lesson = State()
 
 
 @router.message(Command("admin"), IsAdmin())
@@ -1097,6 +1162,7 @@ async def cb_learner_reminders(query: CallbackQuery, session: AsyncSession):
             lines.append(
                 texts.LEARNER_REMINDER_ITEM.format(
                     reminder_id=escape_html_text(reminder.id),
+                    kind=escape_html_text(_reminder_kind_label(reminder)),
                     schedule=escape_html_text(_reminder_schedule(reminder)),
                     next_run=escape_html_text(_format_next_run(reminder.next_run_at)),
                     status=texts.LEARNER_REMINDER_ACTIVE if reminder.active else texts.LEARNER_REMINDER_INACTIVE,
@@ -1106,10 +1172,74 @@ async def cb_learner_reminders(query: CallbackQuery, session: AsyncSession):
 
     builder = InlineKeyboardBuilder()
     builder.button(text='🔔 Создать напоминание', callback_data=f'learner_reminder:{learner.id}:{page}')
+    builder.button(text='💳 Напоминания об оплате', callback_data=f'learner_payment_menu:{learner.id}:{page}')
     builder.button(text='⬅️ Назад', callback_data=f'learner_view:{learner.id}:{page}')
     builder.adjust(1)
 
     await query.message.edit_text(text, reply_markup=builder.as_markup())
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith('learner_payment_menu:'), IsAdmin())
+async def cb_learner_payment_menu(query: CallbackQuery, session: AsyncSession):
+    try:
+        _, learner_id_str, page_str = query.data.split(':')
+        learner_id = int(learner_id_str)
+        page = int(page_str)
+    except (ValueError, IndexError):
+        await query.answer()
+        return
+
+    learner = await crud.get_learner(session, learner_id)
+    if not learner or not learner.bot_user:
+        await query.answer(texts.LEARNER_NOT_FOUND, show_alert=True)
+        await _show_learners_menu(query.message, session, page)
+        return
+
+    all_reminders = await crud.get_lesson_reminders(session)
+    chat_id_str = str(learner.bot_user.chat_id)
+    payment_reminders = _filter_payment_reminders(all_reminders, chat_id_str)
+
+    text = _format_payment_menu_text(learner, payment_reminders)
+    markup = _build_payment_menu_keyboard(learner.id, page).as_markup()
+
+    await query.message.edit_text(text, reply_markup=markup)
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith('learner_payment_create:'), IsAdmin())
+async def cb_learner_payment_create(query: CallbackQuery, state: FSMContext, session: AsyncSession):
+    try:
+        _, learner_id_str, page_str = query.data.split(':')
+        learner_id = int(learner_id_str)
+        page = int(page_str)
+    except (ValueError, IndexError):
+        await query.answer()
+        return
+
+    learner = await crud.get_learner(session, learner_id)
+    if not learner or not learner.bot_user:
+        await query.answer(texts.LEARNER_NOT_FOUND, show_alert=True)
+        await _show_learners_menu(query.message, session, page)
+        return
+
+    contact = pack_chat_identifier(learner.display_name, str(learner.bot_user.chat_id))
+
+    await state.set_state(PaymentReminderStates.last_lesson)
+    await state.update_data(
+        student_name=learner.display_name,
+        chat_identifier=contact,
+        return_to_learner_id=learner.id,
+        return_page=page,
+        return_menu_chat_id=query.message.chat.id,
+        return_menu_message_id=query.message.message_id,
+        return_to_payment_menu=True,
+    )
+
+    builder = InlineKeyboardBuilder()
+    builder.button(text='⬅️ Отмена', callback_data='rem_cancel')
+
+    await query.message.edit_text(texts.PAYMENT_REMINDER_PROMPT_LAST_LESSON, reply_markup=builder.as_markup())
     await query.answer()
 
 
@@ -1205,6 +1335,21 @@ async def cb_reminder_cancel(query: CallbackQuery, state: FSMContext, session: A
     await state.clear()
 
     learner_id = data.get('return_to_learner_id')
+    if data.get('return_to_payment_menu') and learner_id:
+        learner = await crud.get_learner(session, learner_id)
+        if learner and learner.bot_user:
+            page = int(data.get('return_page', 1))
+            chat_id = data.get('return_menu_chat_id', query.message.chat.id)
+            message_id = data.get('return_menu_message_id', query.message.message_id)
+            all_reminders = await crud.get_lesson_reminders(session)
+            chat_id_str = str(learner.bot_user.chat_id)
+            payment_reminders = _filter_payment_reminders(all_reminders, chat_id_str)
+            menu_text = _format_payment_menu_text(learner, payment_reminders)
+            menu_markup = _build_payment_menu_keyboard(learner.id, page).as_markup()
+            await _edit_menu_message(query.bot, chat_id, message_id, menu_text, menu_markup)
+            await query.answer()
+            return
+
     if learner_id:
         learner = await crud.get_learner(session, learner_id)
         if learner and learner.bot_user:
@@ -1465,6 +1610,102 @@ async def state_reminder_comment(message: types.Message, state: FSMContext, sess
         logging.error("Error in state_reminder_comment: %s", exc, exc_info=True)
         await message.answer(texts.DATABASE_ERROR)
         await state.clear()
+
+
+@router.message(PaymentReminderStates.last_lesson, F.text, IsAdmin())
+async def state_payment_last_lesson(message: types.Message, state: FSMContext, session: AsyncSession):
+    raw = (message.text or '').strip()
+    if not raw:
+        await message.answer(texts.PAYMENT_REMINDER_PROMPT_LAST_LESSON)
+        return
+
+    try:
+        lesson_local = datetime.strptime(raw, "%d.%m.%Y %H:%M")
+    except ValueError:
+        await message.answer(texts.REMINDER_INVALID_DATE)
+        return
+
+    data = await state.get_data()
+    student_name = data.get('student_name')
+    chat_identifier = data.get('chat_identifier')
+    learner_id = data.get('return_to_learner_id')
+    return_page = int(data.get('return_page', 1))
+    menu_chat_id = data.get('return_menu_chat_id')
+    menu_message_id = data.get('return_menu_message_id')
+
+    lesson_utc = lesson_local.replace(tzinfo=MOSCOW_TZ).astimezone(timezone.utc)
+    now_utc = datetime.now(timezone.utc)
+
+    specs = [
+        (PAYMENT_TEMPLATE_WEEK, PAYMENT_WEEK_LEAD_MINUTES, texts.PAYMENT_REMINDER_COMMENT_WEEK, texts.PAYMENT_REMINDER_LABEL_WEEK),
+        (PAYMENT_TEMPLATE_DAY, PAYMENT_DAY_LEAD_MINUTES, texts.PAYMENT_REMINDER_COMMENT_DAY, texts.PAYMENT_REMINDER_LABEL_DAY),
+    ]
+
+    created = []
+    try:
+        for template_key, lead_minutes, comment, label in specs:
+            next_run = compute_next_run_for_one_time(lesson_utc, lead_minutes, now_utc)
+            payload = {
+                'student_name': student_name,
+                'chat_identifier': chat_identifier,
+                'is_recurring': False,
+                'days': None,
+                'lesson_time': None,
+                'lesson_datetime': lesson_utc,
+                'lead_minutes': lead_minutes,
+                'next_run_at': next_run,
+                'comment': comment,
+                'active': next_run is not None,
+                'created_at': now_utc,
+                'kind': PAYMENT_REMINDER_KIND,
+                'template_key': template_key,
+            }
+            reminder = await crud.create_lesson_reminder(session, payload)
+            created.append((reminder, label))
+        await session.commit()
+    except Exception as exc:
+        await session.rollback()
+        logging.error("Error while creating payment reminders: %s", exc, exc_info=True)
+        await message.answer(texts.DATABASE_ERROR)
+        return
+
+    await state.clear()
+
+    def build_status(reminder, label: str) -> str:
+        if reminder.next_run_at:
+            next_run_display = escape_html_text(_format_next_run(reminder.next_run_at))
+            status_text = texts.PAYMENT_REMINDER_STATUS_SCHEDULE.format(next_run=next_run_display)
+        else:
+            status_text = texts.PAYMENT_REMINDER_STATUS_PAST
+        return texts.PAYMENT_REMINDER_STATUS_LINE.format(
+            label=escape_html_text(label),
+            status=escape_html_text(status_text, default=status_text),
+        )
+
+    status_lines = [build_status(rem, label) for rem, label in created]
+    week_line, day_line = status_lines
+
+    summary_text = texts.PAYMENT_REMINDER_CREATED.format(
+        week_line=week_line,
+        day_line=day_line,
+    )
+
+    builder = InlineKeyboardBuilder()
+    if learner_id:
+        builder.button(text='💳 К списку оплат', callback_data=f'learner_payment_menu:{learner_id}:{return_page}')
+        builder.button(text='⬅️ К ученику', callback_data=f'learner_view:{learner_id}:{return_page}')
+        builder.adjust(1)
+    await message.answer(summary_text, reply_markup=builder.as_markup())
+
+    if learner_id and menu_chat_id and menu_message_id:
+        learner = await crud.get_learner(session, learner_id)
+        if learner and learner.bot_user:
+            all_reminders = await crud.get_lesson_reminders(session)
+            chat_id_str = str(learner.bot_user.chat_id)
+            payment_reminders = _filter_payment_reminders(all_reminders, chat_id_str)
+            menu_text = _format_payment_menu_text(learner, payment_reminders)
+            menu_markup = _build_payment_menu_keyboard(learner.id, return_page).as_markup()
+            await _edit_menu_message(message.bot, menu_chat_id, menu_message_id, menu_text, menu_markup)
 
 
 @router.callback_query(F.data == 'rem_list', IsAdmin())
