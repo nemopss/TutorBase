@@ -1,7 +1,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from aiogram.types import User
+from aiogram.types import User as AiogramUser
 from sqlalchemy import select, func, or_, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
@@ -17,6 +17,7 @@ from database.models import (
     Lesson,
     ReminderRule,
     ReminderInstance,
+    User,
 )
 
 
@@ -157,10 +158,71 @@ async def fetch_reminders_stats(session: AsyncSession) -> tuple[int, int]:
     return active, total
 
 
+# --- Users ------------------------------------------------------------------
+
+
+async def get_user(session: AsyncSession, user_id: int) -> User | None:
+    return await session.get(User, user_id)
+
+
+async def get_user_by_telegram_id(session: AsyncSession, telegram_id: int) -> User | None:
+    stmt = select(User).where(User.telegram_id == telegram_id)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def create_user(
+    session: AsyncSession,
+    *,
+    telegram_id: int | None,
+    username: str | None,
+    display_name: str,
+    role: str = "teacher",
+) -> User:
+    now = datetime.now(timezone.utc)
+    user = User(
+        telegram_id=telegram_id,
+        username=username,
+        display_name=display_name,
+        role=role,
+        created_at=now,
+        updated_at=now,
+        last_login_at=now,
+    )
+    session.add(user)
+    await session.flush([user])
+    return user
+
+
+async def update_user_login_metadata(
+    session: AsyncSession,
+    user: User,
+    *,
+    username: str | None = None,
+    display_name: str | None = None,
+    role: str | None = None,
+    last_login_at: datetime | None = None,
+) -> User:
+    now = datetime.now(timezone.utc)
+    if username is not None:
+        user.username = username
+    if display_name is not None:
+        user.display_name = display_name
+    if role is not None:
+        user.role = role
+    if last_login_at is not None:
+        user.last_login_at = last_login_at
+    else:
+        user.last_login_at = now
+    user.updated_at = now
+    session.add(user)
+    await session.flush([user])
+    return user
+
+
 # --- Bot users & learners ---------------------------------------------------
 
 
-async def upsert_bot_user(session: AsyncSession, user: User) -> BotUser:
+async def upsert_bot_user(session: AsyncSession, user: AiogramUser) -> BotUser:
     now_utc = datetime.now(timezone.utc)
     stmt = select(BotUser).where(BotUser.chat_id == user.id)
     existing = (await session.execute(stmt)).scalar_one_or_none()
@@ -666,6 +728,24 @@ async def get_reminder_instance(session: AsyncSession, instance_id: int) -> Remi
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def fetch_reminder_instances_for_package(
+    session: AsyncSession,
+    package_id: int,
+) -> list[ReminderInstance]:
+    stmt = (
+        select(ReminderInstance)
+        .options(
+            selectinload(ReminderInstance.rule),
+            selectinload(ReminderInstance.package),
+            selectinload(ReminderInstance.learner),
+            selectinload(ReminderInstance.lesson),
+        )
+        .where(ReminderInstance.package_id == package_id)
+        .order_by(ReminderInstance.scheduled_for.asc())
+    )
+    return (await session.execute(stmt)).scalars().all()
+
+
 async def fetch_reminder_instances_count(
     session: AsyncSession,
     status: Optional[str] = None,
@@ -675,3 +755,45 @@ async def fetch_reminder_instances_count(
         stmt = stmt.where(ReminderInstance.status == status)
     result = await session.execute(stmt)
     return result.scalar_one()
+
+
+async def count_lessons_by_status(session: AsyncSession) -> dict[str, int]:
+    stmt = select(Lesson.status, func.count()).group_by(Lesson.status)
+    result = await session.execute(stmt)
+    return {status or 'unknown': count for status, count in result.all()}
+
+
+async def count_reminders_by_status(session: AsyncSession) -> dict[str, int]:
+    stmt = select(ReminderInstance.status, func.count()).group_by(ReminderInstance.status)
+    result = await session.execute(stmt)
+    return {status or 'unknown': count for status, count in result.all()}
+
+
+async def lessons_daily_stats(
+    session: AsyncSession,
+    *,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+) -> list[tuple[str, int]]:
+    stmt = select(func.date(Lesson.scheduled_at), func.count()).group_by(func.date(Lesson.scheduled_at)).order_by(func.date(Lesson.scheduled_at))
+    if from_date is not None:
+        stmt = stmt.where(Lesson.scheduled_at >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(Lesson.scheduled_at <= to_date)
+    result = await session.execute(stmt)
+    return [(row[0], row[1]) for row in result.all() if row[0] is not None]
+
+
+async def reminders_daily_stats(
+    session: AsyncSession,
+    *,
+    from_date: Optional[datetime] = None,
+    to_date: Optional[datetime] = None,
+) -> list[tuple[str, int]]:
+    stmt = select(func.date(ReminderInstance.scheduled_for), func.count()).group_by(func.date(ReminderInstance.scheduled_for)).order_by(func.date(ReminderInstance.scheduled_for))
+    if from_date is not None:
+        stmt = stmt.where(ReminderInstance.scheduled_for >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(ReminderInstance.scheduled_for <= to_date)
+    result = await session.execute(stmt)
+    return [(row[0], row[1]) for row in result.all() if row[0] is not None]
