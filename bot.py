@@ -11,6 +11,7 @@ from utils.formatters import escape_html_text, format_timestamp_msk
 from utils.state import set_bot_started_at
 from config import config
 from handlers import admin as admin_h
+from handlers import admin_packages as admin_packages_h
 from handlers import application as app_h
 from handlers import start as start_h
 from handlers import funnel as funnel_h
@@ -47,6 +48,7 @@ async def main():
     dp.include_router(start_h.router)
     dp.include_router(app_h.router)
     dp.include_router(admin_h.router)
+    dp.include_router(admin_packages_h.router)
     dp.include_router(funnel_h.router)
     dp.include_router(cases_h.router)
     dp.include_router(reminders_h.router)

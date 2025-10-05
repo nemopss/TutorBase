@@ -1,4 +1,16 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, BigInteger, ForeignKey, DateTime
+from datetime import datetime, timezone
+
+from sqlalchemy import (
+    Column,
+    Integer,
+    String,
+    Text,
+    Boolean,
+    BigInteger,
+    ForeignKey,
+    DateTime,
+    JSON,
+)
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
@@ -49,6 +61,7 @@ class Learner(Base):
     created_at = Column(DateTime(timezone=True), nullable=False)
 
     bot_user = relationship('BotUser', back_populates='learner', lazy='joined')
+    packages = relationship('LessonPackage', back_populates='learner', cascade='all, delete-orphan')
 
 
 class LessonReminder(Base):
@@ -62,6 +75,8 @@ class LessonReminder(Base):
     lesson_time = Column(String)
     lesson_datetime = Column(DateTime(timezone=True))
     lead_minutes = Column(Integer, nullable=False, default=60)
+    kind = Column(String(32), nullable=False, default='lesson')
+    template_key = Column(String(64))
     next_run_at = Column(DateTime(timezone=True))
     last_notified_at = Column(DateTime(timezone=True))
     last_response = Column(String)
@@ -70,3 +85,110 @@ class LessonReminder(Base):
     comment = Column(Text)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
+
+
+class LessonPackageTemplate(Base):
+    __tablename__ = 'lesson_package_templates'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, unique=True)
+    description = Column(Text)
+    lesson_count = Column(Integer)
+    duration_days = Column(Integer)
+    default_timezone = Column(String(64), nullable=False, default='Europe/Moscow')
+    default_config = Column(JSON, default=dict)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    packages = relationship('LessonPackage', back_populates='template')
+
+
+class LessonPackage(Base):
+    __tablename__ = 'lesson_packages'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    learner_id = Column(Integer, ForeignKey('learners.id', ondelete='CASCADE'), nullable=False)
+    template_id = Column(Integer, ForeignKey('lesson_package_templates.id', ondelete='SET NULL'))
+    title = Column(String, nullable=False)
+    status = Column(String(32), nullable=False, default='draft')
+    start_date = Column(DateTime(timezone=True))
+    end_date = Column(DateTime(timezone=True))
+    timezone = Column(String(64), nullable=False, default='Europe/Moscow')
+    total_lessons = Column(Integer)
+    notes = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    learner = relationship('Learner', back_populates='packages')
+    template = relationship('LessonPackageTemplate', back_populates='packages')
+    lessons = relationship('Lesson', back_populates='package', cascade='all, delete-orphan')
+    reminder_rules = relationship('ReminderRule', back_populates='package', cascade='all, delete-orphan')
+    reminder_instances = relationship('ReminderInstance', back_populates='package', cascade='all, delete-orphan')
+
+
+class Lesson(Base):
+    __tablename__ = 'lessons'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    package_id = Column(Integer, ForeignKey('lesson_packages.id', ondelete='CASCADE'), nullable=False)
+    scheduled_at = Column(DateTime(timezone=True), nullable=False)
+    duration_minutes = Column(Integer)
+    status = Column(String(32), nullable=False, default='scheduled')
+    sequence_index = Column(Integer)
+    teacher_notes = Column(Text)
+    homework_due_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    package = relationship('LessonPackage', back_populates='lessons')
+    reminder_rules = relationship('ReminderRule', back_populates='lesson', cascade='all, delete-orphan')
+    reminder_instances = relationship('ReminderInstance', back_populates='lesson', cascade='all, delete-orphan')
+
+
+class ReminderRule(Base):
+    __tablename__ = 'reminder_rules'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    package_id = Column(Integer, ForeignKey('lesson_packages.id', ondelete='CASCADE'))
+    lesson_id = Column(Integer, ForeignKey('lessons.id', ondelete='CASCADE'))
+    reminder_type = Column(String(32), nullable=False)
+    config = Column(JSON, nullable=False, default=dict)
+    channel = Column(String(32), nullable=False, default='telegram')
+    active = Column(Boolean, nullable=False, default=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    package = relationship('LessonPackage', back_populates='reminder_rules')
+    lesson = relationship('Lesson', back_populates='reminder_rules')
+    instances = relationship('ReminderInstance', back_populates='rule', cascade='all, delete-orphan')
+
+
+class ReminderInstance(Base):
+    __tablename__ = 'reminder_instances'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    rule_id = Column(Integer, ForeignKey('reminder_rules.id', ondelete='CASCADE'), nullable=False)
+    package_id = Column(Integer, ForeignKey('lesson_packages.id', ondelete='CASCADE'), nullable=False)
+    lesson_id = Column(Integer, ForeignKey('lessons.id', ondelete='CASCADE'))
+    learner_id = Column(Integer, ForeignKey('learners.id', ondelete='CASCADE'), nullable=False)
+    scheduled_for = Column(DateTime(timezone=True), nullable=False)
+    status = Column(String(32), nullable=False, default='scheduled')
+    payload = Column(JSON, default=dict)
+    chat_identifier = Column(String)
+    comment = Column(Text)
+    active = Column(Boolean, nullable=False, default=True)
+    last_notified_at = Column(DateTime(timezone=True))
+    last_response = Column(String)
+    last_response_at = Column(DateTime(timezone=True))
+    last_decline_reason = Column(Text)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    rule = relationship('ReminderRule', back_populates='instances')
+    package = relationship('LessonPackage', back_populates='reminder_instances')
+    lesson = relationship('Lesson', back_populates='reminder_instances')
+    learner = relationship('Learner')
