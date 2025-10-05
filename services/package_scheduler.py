@@ -13,6 +13,9 @@ from database import crud
 from database.models import LessonPackage, Lesson, ReminderRule
 from services.reminder_definitions import (
     DEFAULT_LESSON_CONFIRM_LEAD_MINUTES,
+    LESSON_DAY_BEFORE_LEAD_DAYS,
+    LESSON_DAY_BEFORE_SEND_HOUR,
+    LESSON_DAY_BEFORE_SEND_MINUTE,
     HOMEWORK_LEAD_DAYS,
     HOMEWORK_SEND_HOUR,
     HOMEWORK_SEND_MINUTE,
@@ -20,12 +23,11 @@ from services.reminder_definitions import (
     PACKAGE_RENEWAL_SEND_HOUR,
     PACKAGE_RENEWAL_SEND_MINUTE,
     REMINDER_TYPE_LESSON_CONFIRM,
+    REMINDER_TYPE_LESSON_DAY_BEFORE,
     REMINDER_TYPE_HOMEWORK,
     REMINDER_TYPE_PACKAGE_RENEWAL,
     REMINDER_TYPE_PAYMENT_DAY,
     REMINDER_TYPE_PAYMENT_WEEK,
-    PAYMENT_TEMPLATE_DAY,
-    PAYMENT_TEMPLATE_WEEK,
 )
 from utils.formatters import pack_chat_identifier
 
@@ -49,13 +51,17 @@ async def regenerate_package_reminders(session: AsyncSession, package: LessonPac
 
     await _clear_existing(session, package)
 
-    lessons = sorted([lesson for lesson in package.lessons or [] if lesson.scheduled_at], key=lambda l: l.scheduled_at)
+    lessons = sorted(
+        [lesson for lesson in package.lessons or [] if lesson.scheduled_at],
+        key=lambda lesson: _normalize_datetime(lesson.scheduled_at),
+    )
     now_utc = datetime.now(timezone.utc)
     tz = _package_tz(package)
     chat_identifier = _preferred_chat_identifier(package)
 
     for lesson in lessons:
         await _create_lesson_confirm(session, package, lesson, tz, chat_identifier, now_utc)
+        await _create_lesson_day_before_confirm(session, package, lesson, tz, chat_identifier, now_utc)
         await _create_homework_reminder(session, package, lesson, tz, chat_identifier, now_utc)
 
     if lessons:
@@ -130,6 +136,48 @@ async def _create_lesson_confirm(
     )
 
 
+async def _create_lesson_day_before_confirm(
+    session: AsyncSession,
+    package: LessonPackage,
+    lesson: Lesson,
+    tz: ZoneInfo,
+    chat_identifier: Optional[str],
+    now_utc: datetime,
+) -> None:
+    rule = await crud.create_reminder_rule(
+        session,
+        package=package,
+        lesson=lesson,
+        reminder_type=REMINDER_TYPE_LESSON_DAY_BEFORE,
+        config={
+            'send_time': f"{LESSON_DAY_BEFORE_SEND_HOUR:02d}:{LESSON_DAY_BEFORE_SEND_MINUTE:02d}",
+            'lead_days': LESSON_DAY_BEFORE_LEAD_DAYS,
+        },
+    )
+
+    scheduled = _compute_day_before_confirm_time(lesson, tz)
+    schedule_meta = _resolve_schedule_state(scheduled, now_utc)
+    payload = {
+        'student_name': package.learner.display_name,
+        'lesson_id': lesson.id,
+        'sequence_index': lesson.sequence_index,
+        'lead_minutes': LESSON_DAY_BEFORE_LEAD_DAYS * 24 * 60,
+    }
+
+    await crud.create_reminder_instance(
+        session,
+        rule=rule,
+        package=package,
+        learner=package.learner,
+        lesson=lesson,
+        scheduled_for=schedule_meta.scheduled_for or now_utc,
+        status=schedule_meta.status,
+        active=schedule_meta.active,
+        payload=payload,
+        chat_identifier=chat_identifier,
+    )
+
+
 async def _create_homework_reminder(
     session: AsyncSession,
     package: LessonPackage,
@@ -180,16 +228,16 @@ async def _create_payment_reminders(
     chat_identifier: Optional[str],
     now_utc: datetime,
 ) -> None:
-    for reminder_type, template_key, delta in (
-        (REMINDER_TYPE_PAYMENT_WEEK, PAYMENT_TEMPLATE_WEEK, timedelta(weeks=1)),
-        (REMINDER_TYPE_PAYMENT_DAY, PAYMENT_TEMPLATE_DAY, timedelta(days=1)),
+    for reminder_type, delta in (
+        (REMINDER_TYPE_PAYMENT_WEEK, timedelta(weeks=1)),
+        (REMINDER_TYPE_PAYMENT_DAY, timedelta(days=1)),
     ):
         rule = await crud.create_reminder_rule(
             session,
             package=package,
             lesson=None,
             reminder_type=reminder_type,
-            config={'template_key': template_key},
+            config={},
         )
 
         scheduled = _compute_payment_time(last_lesson, tz, delta)
@@ -197,7 +245,6 @@ async def _create_payment_reminders(
         payload = {
             'student_name': package.learner.display_name,
             'lesson_id': last_lesson.id,
-            'template_key': template_key,
         }
 
         await crud.create_reminder_instance(
@@ -276,6 +323,20 @@ def _compute_homework_time(lesson: Lesson, tz: ZoneInfo) -> Optional[datetime]:
     return homework_local.astimezone(timezone.utc)
 
 
+def _compute_day_before_confirm_time(lesson: Lesson, tz: ZoneInfo) -> Optional[datetime]:
+    if not lesson.scheduled_at:
+        return None
+    lesson_local = _to_local(lesson.scheduled_at, tz)
+    reminder_day = lesson_local - timedelta(days=LESSON_DAY_BEFORE_LEAD_DAYS)
+    reminder_local = reminder_day.replace(
+        hour=LESSON_DAY_BEFORE_SEND_HOUR,
+        minute=LESSON_DAY_BEFORE_SEND_MINUTE,
+        second=0,
+        microsecond=0,
+    )
+    return reminder_local.astimezone(timezone.utc)
+
+
 def _compute_payment_time(lesson: Lesson, tz: ZoneInfo, delta: timedelta) -> Optional[datetime]:
     if not lesson.scheduled_at:
         return None
@@ -307,3 +368,11 @@ def _to_local(dt: datetime, tz: ZoneInfo) -> datetime:
 
 def _format_local(dt: datetime, tz: ZoneInfo) -> str:
     return _to_local(dt, tz).strftime('%Y-%m-%d')
+
+
+def _normalize_datetime(dt: Optional[datetime]) -> datetime:
+    if dt is None:
+        return datetime.min.replace(tzinfo=timezone.utc)
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt.astimezone(timezone.utc)

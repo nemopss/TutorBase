@@ -17,11 +17,8 @@ from utils.scheduling import parse_utc
 from zoneinfo import ZoneInfo
 
 from services.reminder_definitions import (
-    LESSON_REMINDER_KIND,
-    PAYMENT_REMINDER_KIND,
-    PAYMENT_TEMPLATE_WEEK,
-    PAYMENT_TEMPLATE_DAY,
     REMINDER_TYPE_LESSON_CONFIRM,
+    REMINDER_TYPE_LESSON_DAY_BEFORE,
     REMINDER_TYPE_PAYMENT_WEEK,
     REMINDER_TYPE_PAYMENT_DAY,
     REMINDER_TYPE_HOMEWORK,
@@ -168,6 +165,8 @@ class ReminderScheduler:
         reminder_type = getattr(instance.rule, 'reminder_type', '') if instance.rule else ''
         if reminder_type == REMINDER_TYPE_LESSON_CONFIRM:
             return texts.REMINDER_TYPE_RECURRING
+        if reminder_type == REMINDER_TYPE_LESSON_DAY_BEFORE:
+            return texts.REMINDER_TYPE_LESSON_DAY_BEFORE
         if reminder_type == REMINDER_TYPE_PAYMENT_WEEK:
             return texts.REMINDER_TYPE_PAYMENT_WEEK
         if reminder_type == REMINDER_TYPE_PAYMENT_DAY:
@@ -232,6 +231,17 @@ class ReminderScheduler:
             )
             return message, keyboard.as_markup()
 
+        if reminder_type == REMINDER_TYPE_LESSON_DAY_BEFORE:
+            keyboard = InlineKeyboardBuilder()
+            keyboard.button(text=texts.REMINDER_CONFIRM_BUTTON, callback_data=f"remi_confirm_{instance.id}")
+            keyboard.button(text=texts.REMINDER_DECLINE_BUTTON, callback_data=f"remi_decline_{instance.id}")
+            keyboard.adjust(1)
+            message = texts.REMINDER_DAY_BEFORE_MESSAGE.format(
+                name=name,
+                schedule=escape_html_text(schedule_label),
+            )
+            return message, keyboard.as_markup()
+
         if reminder_type == REMINDER_TYPE_PAYMENT_WEEK:
             return texts.PAYMENT_REMINDER_WEEK_BEFORE, None
 
@@ -279,37 +289,3 @@ class ReminderScheduler:
             await self._bot.send_message(config.LOGS_CHAT_ID, log_text)
         except Exception as exc:
             logging.error("Failed to log reminder instance send: %s", exc)
-
-    async def _handle_fatal_send_failure(
-        self,
-        reminder,
-        contact_details: str,
-        comment_reason: str,
-        admin_reason: str,
-        now_utc: datetime,
-    ) -> None:
-        reminder.active = False
-        reminder.next_run_at = None
-        deactivation_date = now_utc.strftime('%Y-%m-%d')
-        system_note = f"[СИСТЕМА] Отключено {deactivation_date} ({comment_reason})."
-        comment = reminder.comment or ""
-        if system_note not in comment:
-            comment = f"{comment}\n{system_note}" if comment else system_note
-        reminder.comment = comment
-
-        admin_message = (
-            "⚠️ <b>Напоминание отключено</b>\n\n"
-            f"Не удалось отправить напоминание #{escape_html_text(reminder.id, default='—')} для "
-            f"<b>{escape_html_text(reminder.student_name)}</b> (контакт: <code>{escape_html_text(contact_details)}</code>).\n"
-            f"Причина: <code>{escape_html_text(admin_reason)}</code>\n\n"
-            "Напоминание было автоматически деактивировано. Пожалуйста, проверьте и обновите контактные данные студента."
-        )
-        try:
-            for admin_id in config.ADMINS:
-                await self._bot.send_message(admin_id, admin_message)
-        except Exception as admin_exc:
-            logging.error(
-                "Failed to notify admin about failed reminder #%s: %s",
-                reminder.id,
-                admin_exc,
-            )

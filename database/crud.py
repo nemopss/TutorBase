@@ -405,6 +405,10 @@ async def create_lesson_package(
     return package
 
 
+async def delete_lesson_package(session: AsyncSession, package: LessonPackage) -> None:
+    await session.delete(package)
+
+
 async def update_lesson_package(
     session: AsyncSession,
     package: LessonPackage,
@@ -510,6 +514,7 @@ async def fetch_lesson_packages_paginated(
         .options(
             selectinload(LessonPackage.learner).selectinload(Learner.bot_user),
             selectinload(LessonPackage.template),
+            selectinload(LessonPackage.lessons),
         )
         .order_by(LessonPackage.created_at.desc())
         .offset(offset)
@@ -659,3 +664,14 @@ async def get_reminder_instance(session: AsyncSession, instance_id: int) -> Remi
         .where(ReminderInstance.id == instance_id)
     )
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def fetch_reminder_instances_count(
+    session: AsyncSession,
+    status: Optional[str] = None,
+) -> int:
+    stmt = select(func.count()).select_from(ReminderInstance)
+    if status is not None:
+        stmt = stmt.where(ReminderInstance.status == status)
+    result = await session.execute(stmt)
+    return result.scalar_one()

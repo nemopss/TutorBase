@@ -133,6 +133,7 @@ REMINDER_TYPE_ONE_TIME = "одноразовое"
 REMINDER_TYPE_PAYMENT_WEEK = "оплата — за неделю"
 REMINDER_TYPE_PAYMENT_DAY = "оплата — за день"
 REMINDER_TYPE_PAYMENT_GENERIC = "оплата"
+REMINDER_TYPE_LESSON_DAY_BEFORE = "подтверждение за день"
 REMINDER_TYPE_HOMEWORK = "домашнее задание"
 REMINDER_TYPE_PACKAGE_RENEWAL = "продление пакета"
 REMINDER_DAY_PREFIX = "✅ "
@@ -144,6 +145,9 @@ REMINDER_DELETED = "Напоминание удалено."
 REMINDER_NO_NEXT_RUN = "Нет будущих срабатываний — проверьте расписание."
 REMINDER_TRIGGER_MESSAGE = (
     "Привет, {name}! Напоминаю о занятии {schedule}."
+)
+REMINDER_DAY_BEFORE_MESSAGE = (
+    "Привет, {name}! Завтра занятие {schedule}. Подтверди, пожалуйста, участие."
 )
 HOMEWORK_REMINDER_MESSAGE = (
     "Привет, {name}! Напоминаю: урок {schedule}. Не забудь выполнить и отправить домашку до 10:00."
@@ -231,12 +235,12 @@ PAYMENT_REMINDER_COMMENT_WEEK = "Оплата: за неделю до после
 PAYMENT_REMINDER_COMMENT_DAY = "Оплата: за день до последнего занятия"
 PACKAGES_EMPTY = 'Пакетов пока нет. Создайте первый, чтобы начать планировать напоминания.'
 PACKAGES_LIST_HEADER = 'Пакеты (всего: {total}):'
-PACKAGES_LIST_ITEM = '{index}. {title} — {learner} ({status})'
+PACKAGES_LIST_ITEM = '{index}. {title} — {learner} ({status}, уроки все/проведено/отменено: {lessons})'
 PACKAGE_DETAILS = (
     '<b>{title}</b>\n'
     'Ученик: {learner}\n'
     'Статус: {status}\n'
-    'Уроков: {lessons}\n'
+    'Уроки (все/проведено/отменено): {lessons}\n'
     'Период: {period}\n'
     'Часовой пояс: {timezone}\n'
     'Заметки: {notes}'
@@ -251,6 +255,7 @@ PACKAGE_LESSON_ITEM = '{index}. {scheduled} — {status}'
 PACKAGE_CREATE_SELECT_LEARNER = 'Выберите ученика для пакета:'
 PACKAGE_CREATE_NO_LEARNERS = 'Сначала добавьте ученика, чтобы создать пакет.'
 PACKAGE_PROMPT_TITLE = 'Введите название пакета:'
+PACKAGE_TITLE_REQUIRED = 'Название пакета не может быть пустым.'
 PACKAGE_PROMPT_NOTES = 'Добавьте заметку (или "-" чтобы пропустить).'
 PACKAGE_CREATE_CANCELLED = 'Создание пакета отменено.'
 PACKAGE_CREATED = 'Пакет «{title}» создан.'
@@ -264,16 +269,20 @@ PACKAGE_LESSON_EDIT_PROMPT = 'Введите новую дату и время �
 PACKAGE_LESSON_UPDATED = 'Урок #{index} обновлён.'
 PACKAGE_LESSON_DELETED = 'Урок #{index} удалён.'
 PACKAGE_LESSON_EDIT_CANCELLED = 'Редактирование урока отменено.'
-PACKAGE_LESSON_PROMPT_STATUS = 'Введите статус урока #{index} (scheduled/completed/cancelled):'
+PACKAGE_LESSON_PROMPT_STATUS = 'Введите статус урока #{index} (например completed):'
+PACKAGE_LESSON_PROMPT_STATUS_INLINE = 'Выберите статус урока #{index}:'
 PACKAGE_LESSON_INVALID_STATUS = 'Недопустимый статус. Используйте scheduled/completed/cancelled.'
 PACKAGE_LESSON_STATUS_UPDATED = 'Статус урока #{index} обновлён.'
 PACKAGE_LESSON_PROMPT_NOTES = 'Введите заметку для урока #{index} (или "-" чтобы убрать).'
 PACKAGE_LESSON_NOTES_UPDATED = 'Заметка для урока #{index} обновлена.'
 PACKAGE_LESSON_PROMPT_DURATION_EDIT = 'Введите новую длительность урока #{index} в минутах (или "-" чтобы убрать):'
 PACKAGE_LESSON_DURATION_UPDATED = 'Длительность урока #{index} обновлена.'
-PACKAGE_EDIT_PROMPT_STATUS = 'Введите статус пакета (draft/active/completed/cancelled):'
+PACKAGE_CREATED_NOTICE = '✅ Пакет создан.'
+PACKAGE_UPDATED_NOTICE = '✅ Пакет обновлён.'
+PACKAGE_LESSON_CREATED_NOTICE = '✅ Урок добавлен.'
+PACKAGE_LESSON_UPDATED_NOTICE = '✅ Урок обновлён.'
+PACKAGE_EDIT_PROMPT_STATUS = 'Выберите статус пакета:'
 PACKAGE_EDIT_PROMPT_START = 'Введите дату начала пакета в формате ДД.ММ.ГГГГ (или "-" чтобы пропустить):'
-PACKAGE_EDIT_PROMPT_END = 'Введите дату окончания пакета в формате ДД.ММ.ГГГГ (или "-" чтобы пропустить):'
 PACKAGE_EDIT_PROMPT_TIMEZONE = 'Введите часовой пояс пакета (например Europe/Moscow):'
 PACKAGE_EDIT_PROMPT_NOTES = 'Обновите заметку (или "-" чтобы оставить пустой):'
 PACKAGE_EDIT_CANCELLED = 'Редактирование пакета отменено.'
@@ -282,6 +291,8 @@ PACKAGE_EDIT_INVALID_STATUS = 'Недопустимый статус. Испол
 PACKAGE_EDIT_INVALID_DATE = 'Неверный формат даты. Используйте ДД.ММ.ГГГГ или "-".'
 PACKAGE_EDIT_INVALID_TIMEZONE = 'Не удалось распознать часовой пояс. Попробуйте снова.'
 PACKAGE_EDIT_NO_CHANGES = 'Изменений не обнаружено.'
+PACKAGE_DELETE_CONFIRM = 'Удалить пакет «{title}» вместе со всеми уроками и напоминаниями?'
+PACKAGE_DELETED = 'Пакет удалён.'
 PACKAGE_TEMPLATES_MENU = 'Пресеты пакетов:'
 PACKAGE_TEMPLATES_EMPTY = 'Пресетов пока нет. Создайте первый, чтобы автоматизировать создание пакетов.'
 PACKAGE_TEMPLATES_LIST_HEADER = 'Пресеты (всего: {total}):'
@@ -295,6 +306,7 @@ PACKAGE_TEMPLATE_DETAILS = (
 )
 PACKAGE_TEMPLATE_SCHEDULE_LINE = '- {day} {time}'
 PACKAGE_TEMPLATE_CREATED = 'Пресет «{name}» создан.'
+PACKAGE_TEMPLATE_CREATED_FROM = 'Пресет «{name}» создан на основе «{source}».'
 PACKAGE_TEMPLATE_DELETED = 'Пресет удалён.'
 PACKAGE_TEMPLATE_DELETE_CONFIRM = 'Удалить пресет «{name}»?'
 PACKAGE_TEMPLATE_PROMPT_NAME = 'Введите название пресета:'
@@ -311,3 +323,9 @@ PACKAGE_TEMPLATE_PROMPT_START_DATE = 'Введите дату начала па�
 PACKAGE_TEMPLATE_INVALID_DATE = 'Неверный формат даты. Используйте ДД.ММ.ГГГГ.'
 PACKAGE_PROMPT_TITLE_TEMPLATE = 'Введите название пакета (или "-" чтобы использовать «{default}»):'
 PACKAGE_TEMPLATE_SELECT_PROMPT = 'Выберите пресет или создайте пакет вручную:'
+PACKAGE_TEMPLATE_PROMPT_NAME_EDIT = 'Введите новое название пресета (или "-" чтобы оставить «{current}»):'
+PACKAGE_TEMPLATE_PROMPT_DESCRIPTION_EDIT = 'Введите новое описание (или "-" чтобы оставить текущее):'
+PACKAGE_TEMPLATE_PROMPT_SCHEDULE_EDIT = 'Введите расписание (например: "Пн 19:00, Чт 19:00") или "-" чтобы оставить без изменений:'
+PACKAGE_TEMPLATE_PROMPT_LESSON_COUNT_EDIT = 'Введите количество уроков (или "-" чтобы оставить {current}):'
+PACKAGE_TEMPLATE_PROMPT_DURATION_EDIT = 'Введите длительность пакета в днях (или "-" чтобы оставить {current}):'
+PACKAGE_TEMPLATE_PROMPT_TIMEZONE_EDIT = 'Введите часовой пояс (или "-" чтобы оставить {current}):'
