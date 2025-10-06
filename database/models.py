@@ -10,10 +10,15 @@ from sqlalchemy import (
     ForeignKey,
     DateTime,
     JSON,
+    Index,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
 Base = declarative_base()
+
+
+def _utc_now() -> datetime:
+    return datetime.now(timezone.utc)
 
 class BotUser(Base):
     __tablename__ = 'bot_users'
@@ -30,6 +35,22 @@ class BotUser(Base):
     last_seen_at = Column(DateTime(timezone=True), nullable=False)
 
     learner = relationship('Learner', back_populates='bot_user', uselist=False)
+
+
+class User(Base):
+    __tablename__ = 'users'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    telegram_id = Column(BigInteger, unique=True)
+    username = Column(String)
+    display_name = Column(String, nullable=False)
+    role = Column(String(32), nullable=False, default='teacher')
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    last_login_at = Column(DateTime(timezone=True))
+
+    updated_packages = relationship('LessonPackage', back_populates='updated_by')
+    updated_lessons = relationship('Lesson', back_populates='updated_by')
 
 class Application(Base):
     __tablename__ = 'applications'
@@ -85,12 +106,6 @@ class LessonReminder(Base):
     comment = Column(Text)
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
-
-
-def _utc_now() -> datetime:
-    return datetime.now(timezone.utc)
-
-
 class LessonPackageTemplate(Base):
     __tablename__ = 'lesson_package_templates'
 
@@ -122,12 +137,18 @@ class LessonPackage(Base):
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
 
     learner = relationship('Learner', back_populates='packages')
     template = relationship('LessonPackageTemplate', back_populates='packages')
     lessons = relationship('Lesson', back_populates='package', cascade='all, delete-orphan')
     reminder_rules = relationship('ReminderRule', back_populates='package', cascade='all, delete-orphan')
     reminder_instances = relationship('ReminderInstance', back_populates='package', cascade='all, delete-orphan')
+    updated_by = relationship('User', back_populates='updated_packages')
+
+    __table_args__ = (
+        Index('ix_lesson_packages_learner_status', 'learner_id', 'status'),
+    )
 
 
 class Lesson(Base):
@@ -143,10 +164,16 @@ class Lesson(Base):
     homework_due_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
 
     package = relationship('LessonPackage', back_populates='lessons')
     reminder_rules = relationship('ReminderRule', back_populates='lesson', cascade='all, delete-orphan')
     reminder_instances = relationship('ReminderInstance', back_populates='lesson', cascade='all, delete-orphan')
+    updated_by = relationship('User', back_populates='updated_lessons')
+
+    __table_args__ = (
+        Index('ix_lessons_package_scheduled_at', 'package_id', 'scheduled_at'),
+    )
 
 
 class ReminderRule(Base):

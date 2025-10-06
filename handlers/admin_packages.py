@@ -16,7 +16,10 @@ from zoneinfo import ZoneInfo
 from database import crud
 from database.models import LessonPackage, Lesson
 from filters.admin import IsAdmin
+from services import package_service, lesson_service, template_service
+from services.exceptions import NotFoundError
 from services.package_scheduler import regenerate_package_reminders
+from services.utils import lesson_stats, sync_package_metrics
 from utils import texts
 from utils.formatters import escape_html_text, format_timestamp_msk
 from utils.scheduling import parse_time
@@ -241,48 +244,6 @@ def _compute_auto_end_date(
     return occurrences[-1].astimezone(timezone.utc)
 
 
-def _normalize_to_utc(dt: Optional[datetime]) -> Optional[datetime]:
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        dt = dt.replace(tzinfo=timezone.utc)
-    return dt.astimezone(timezone.utc)
-
-
-def _lesson_stats(lessons: list[Lesson]) -> tuple[int, int, int]:
-    total = len(lessons)
-    completed = sum(1 for lesson in lessons if lesson.status == 'completed')
-    cancelled = sum(1 for lesson in lessons if lesson.status == 'cancelled')
-    return total, completed, cancelled
-
-
-async def _sync_package_metrics(
-    session: AsyncSession,
-    package_id: int,
-) -> tuple[Optional[LessonPackage], list[Lesson]]:
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
-        return None, []
-
-    lessons = sorted(
-        package.lessons or [],
-        key=lambda lesson: (_normalize_to_utc(lesson.scheduled_at) or datetime.min.replace(tzinfo=timezone.utc)),
-    )
-
-    package.total_lessons = len(lessons)
-    if lessons:
-        package.start_date = _normalize_to_utc(lessons[0].scheduled_at)
-        package.end_date = _normalize_to_utc(lessons[-1].scheduled_at)
-    else:
-        package.start_date = None
-        package.end_date = None
-
-    await session.flush([package])
-    for lesson in lessons:
-        lesson.package = package
-    return package, lessons
-
-
 def _package_create_cancel_keyboard() -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
     builder.button(text='⬅️ Отмена', callback_data='package_create_cancel')
@@ -383,42 +344,6 @@ def _with_current(prompt: str, current: Optional[str]) -> str:
     return f"{prompt}\nТекущее: {current_display}"
 
 
-async def _generate_lessons_from_template(
-    session: AsyncSession,
-    package,
-    template,
-    start_date: datetime,
-) -> None:
-    config = template.default_config or {}
-    schedule = config.get('weekly_schedule') or []
-    if not schedule:
-        return
-
-    lesson_limit = template.lesson_count or len(schedule)
-    tz = ZoneInfo(package.timezone or template.default_timezone or 'Europe/Moscow')
-    base_date = start_date.astimezone(tz)
-    occurrences = _iter_weekly_occurrences(base_date, schedule, lesson_limit)
-
-    for sequence, candidate in enumerate(occurrences, start=1):
-        scheduled_utc = candidate.astimezone(timezone.utc)
-        await crud.create_lesson(
-            session,
-            package,
-            scheduled_at=scheduled_utc,
-            sequence_index=sequence,
-            duration_minutes=None,
-        )
-
-    if occurrences:
-        last_lesson = occurrences[-1].astimezone(timezone.utc)
-        await crud.update_lesson_package(
-            session,
-            package,
-            total_lessons=len(occurrences),
-            end_date=last_lesson,
-        )
-
-
 def _packages_menu_keyboard() -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
     builder.button(text='📋 Список пакетов', callback_data='packages_list:1')
@@ -432,7 +357,10 @@ def _packages_menu_keyboard() -> InlineKeyboardBuilder:
 def _build_packages_keyboard(packages, page: int, total_pages: int) -> InlineKeyboardBuilder:
     builder = InlineKeyboardBuilder()
     for package in packages:
-        label = f"📦 {package.title} — {package.learner.display_name if package.learner else '—'}"
+        learner_name = getattr(package, 'learner_name', None)
+        if learner_name is None and getattr(package, 'learner', None):
+            learner_name = package.learner.display_name
+        label = f"📦 {package.title} — {learner_name or '—'}"
         builder.button(text=label[:64], callback_data=f'package_view:{package.id}:{page}')
     if packages:
         builder.adjust(1)
@@ -531,8 +459,18 @@ def _format_packages_list(packages, total: int, page: int) -> str:
     lines = [texts.PACKAGES_LIST_HEADER.format(total=total), '']
     start_index = (page - 1) * PACKAGES_PER_PAGE + 1
     for idx, package in enumerate(packages, start=start_index):
-        learner = package.learner.display_name if package.learner else '—'
-        total_lessons, completed_lessons, cancelled_lessons = _lesson_stats(package.lessons or [])
+        learner = getattr(package, 'learner_name', None)
+        if learner is None and getattr(package, 'learner', None):
+            learner = package.learner.display_name
+        if learner is None:
+            learner = '—'
+        progress = getattr(package, 'progress', None)
+        if progress:
+            total_lessons = progress.total
+            completed_lessons = progress.completed
+            cancelled_lessons = progress.cancelled
+        else:
+            total_lessons, completed_lessons, cancelled_lessons = lesson_stats(package.lessons or [])
         lessons_display = f"{total_lessons}/{completed_lessons}/{cancelled_lessons}"
         status_label = PACKAGE_STATUS_LABELS.get(package.status, package.status or '—')
         lines.append(
@@ -550,9 +488,19 @@ def _format_packages_list(packages, total: int, page: int) -> str:
 def _format_package_details(package) -> str:
     period = _format_package_period(package)
     notes = escape_html_text(package.notes or '—')
-    total_lessons, completed_lessons, cancelled_lessons = _lesson_stats(package.lessons or [])
+    progress = getattr(package, 'progress', None)
+    if progress:
+        total_lessons = progress.total
+        completed_lessons = progress.completed
+        cancelled_lessons = progress.cancelled
+    else:
+        total_lessons, completed_lessons, cancelled_lessons = lesson_stats(getattr(package, 'lessons', []) or [])
     lessons_display = f"{total_lessons}/{completed_lessons}/{cancelled_lessons}"
-    learner = package.learner.display_name if package.learner else '—'
+    learner = getattr(package, 'learner_name', None)
+    if learner is None and getattr(package, 'learner', None):
+        learner = package.learner.display_name
+    if learner is None:
+        learner = '—'
     status_label = PACKAGE_STATUS_LABELS.get(package.status, package.status or '—')
     return texts.PACKAGE_DETAILS.format(
         title=escape_html_text(package.title),
@@ -586,11 +534,16 @@ def _build_package_status_keyboard(package_id: int, page: int) -> InlineKeyboard
     return builder
 
 
-def _format_lessons_list(lessons) -> str:
+def _format_lessons_list(lessons, package_title: Optional[str] = None) -> str:
     if not lessons:
         return texts.PACKAGE_LESSONS_EMPTY
-    first_package = lessons[0].package if lessons[0].package else None
-    title = escape_html_text(first_package.title) if first_package else '—'
+    if package_title is None:
+        first_package = getattr(lessons[0], 'package', None)
+        if first_package is not None:
+            package_title = getattr(first_package, 'title', None)
+        if package_title is None:
+            package_title = getattr(lessons[0], 'package_title', None)
+    title = escape_html_text(package_title or '—')
     lines = [texts.PACKAGE_LESSONS_HEADER.format(title=title), '']
     for idx, lesson in enumerate(lessons, start=1):
         scheduled = format_timestamp_msk(lesson.scheduled_at) if lesson.scheduled_at else '—'
@@ -705,7 +658,7 @@ def _format_template_details(template) -> str:
     description = escape_html_text(template.description or '—')
     lesson_count = escape_html_text(template.lesson_count or '—')
     duration = escape_html_text(template.duration_days or '—')
-    timezone_name = escape_html_text(template.default_timezone or 'Europe/Moscow')
+    timezone_name = escape_html_text(getattr(template, 'default_timezone', None) or getattr(template, 'timezone', 'Europe/Moscow'))
     base = texts.PACKAGE_TEMPLATE_DETAILS.format(
         name=escape_html_text(template.name),
         lesson_count=lesson_count,
@@ -741,7 +694,7 @@ async def cb_packages_manager(query: CallbackQuery, state: FSMContext):
 @router.callback_query(F.data == 'package_templates', IsAdmin())
 async def cb_package_templates(query: CallbackQuery, session: AsyncSession, state: FSMContext):
     await state.clear()
-    templates = await crud.fetch_lesson_package_templates(session)
+    templates = await template_service.list_templates(session)
     text = _format_templates_list(templates, len(templates))
     markup = _build_templates_keyboard(templates).as_markup()
     await query.message.edit_text(texts.PACKAGE_TEMPLATES_MENU + '\n\n' + text, reply_markup=markup)
@@ -757,8 +710,9 @@ async def cb_package_template_view(query: CallbackQuery, session: AsyncSession):
         await query.answer()
         return
 
-    template = await crud.get_lesson_package_template(session, template_id)
-    if not template:
+    try:
+        template = await template_service.get_template(session, template_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_TEMPLATE_NOT_FOUND, show_alert=True)
         return
 
@@ -789,8 +743,9 @@ async def cb_package_template_delete_confirm(query: CallbackQuery, session: Asyn
         await query.answer()
         return
 
-    template = await crud.get_lesson_package_template(session, template_id)
-    if not template:
+    try:
+        template = await template_service.get_template(session, template_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_TEMPLATE_NOT_FOUND, show_alert=True)
         return
 
@@ -814,13 +769,14 @@ async def cb_package_template_delete(query: CallbackQuery, session: AsyncSession
         await query.answer()
         return
 
-    template = await crud.get_lesson_package_template(session, template_id)
-    if not template:
+    try:
+        template = await template_service.get_template(session, template_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_TEMPLATE_NOT_FOUND, show_alert=True)
         return
 
     try:
-        await crud.delete_lesson_package_template(session, template)
+        await template_service.delete_template(session, template_id)
         await session.commit()
     except Exception as exc:
         await session.rollback()
@@ -828,7 +784,7 @@ async def cb_package_template_delete(query: CallbackQuery, session: AsyncSession
         await query.answer(texts.DATABASE_ERROR, show_alert=True)
         return
 
-    templates = await crud.fetch_lesson_package_templates(session)
+    templates = await template_service.list_templates(session)
     text = texts.PACKAGE_TEMPLATES_MENU + '\n\n' + _format_templates_list(templates, len(templates))
     markup = _build_templates_keyboard(templates).as_markup()
     await query.message.edit_text(text, reply_markup=markup)
@@ -841,7 +797,7 @@ async def cb_package_template_cancel(query: CallbackQuery, state: FSMContext, se
     menu_chat_id = data.get('menu_chat_id', query.message.chat.id)
     menu_message_id = data.get('menu_message_id', query.message.message_id)
     await state.clear()
-    templates = await crud.fetch_lesson_package_templates(session)
+    templates = await template_service.list_templates(session)
     text = texts.PACKAGE_TEMPLATES_MENU + '\n\n' + _format_templates_list(templates, len(templates))
     markup = _build_templates_keyboard(templates).as_markup()
     await _safe_edit_message(query.bot, menu_chat_id, menu_message_id, text, markup)
@@ -857,8 +813,9 @@ async def cb_package_template_create_package(query: CallbackQuery, state: FSMCon
         await query.answer()
         return
 
-    template = await crud.get_lesson_package_template(session, template_id)
-    if not template:
+    try:
+        template = await template_service.get_template(session, template_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_TEMPLATE_NOT_FOUND, show_alert=True)
         return
 
@@ -883,7 +840,10 @@ async def cb_package_template_edit_cancel(query: CallbackQuery, state: FSMContex
     await state.clear()
 
     if template_id:
-        template = await crud.get_lesson_package_template(session, template_id)
+        try:
+            template = await template_service.get_template(session, template_id)
+        except NotFoundError:
+            template = None
         if template:
             text = _format_template_details(template)
             markup = _build_template_details_keyboard(template_id).as_markup()
@@ -891,7 +851,7 @@ async def cb_package_template_edit_cancel(query: CallbackQuery, state: FSMContex
             await query.answer(texts.PACKAGE_TEMPLATE_CANCELLED)
             return
 
-    templates = await crud.fetch_lesson_package_templates(session)
+    templates = await template_service.list_templates(session)
     text = texts.PACKAGE_TEMPLATES_MENU + '\n\n' + _format_templates_list(templates, len(templates))
     markup = _build_templates_keyboard(templates).as_markup()
     await query.message.edit_text(text, reply_markup=markup)
@@ -907,30 +867,25 @@ async def cb_package_template_copy(query: CallbackQuery, session: AsyncSession):
         await query.answer()
         return
 
-    template = await crud.get_lesson_package_template(session, template_id)
-    if not template:
+    try:
+        template = await template_service.get_template(session, template_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_TEMPLATE_NOT_FOUND, show_alert=True)
         return
 
     base_name = template.name
     new_name = f"{base_name} (копия)"
-    existing_names = {t.name for t in await crud.fetch_lesson_package_templates(session)}
+    existing_names = {t.name for t in await template_service.list_templates(session)}
     counter = 1
     while new_name in existing_names:
         counter += 1
         new_name = f"{base_name} (копия {counter})"
 
-    config_copy = copy.deepcopy(template.default_config or {})
-
     try:
-        new_template = await crud.create_lesson_package_template(
+        new_template = await template_service.duplicate_template(
             session,
+            template_id,
             name=new_name,
-            description=template.description,
-            lesson_count=template.lesson_count,
-            duration_days=template.duration_days,
-            default_timezone=template.default_timezone,
-            default_config=config_copy,
         )
         await session.commit()
     except Exception as exc:
@@ -939,7 +894,7 @@ async def cb_package_template_copy(query: CallbackQuery, session: AsyncSession):
         await query.answer(texts.DATABASE_ERROR, show_alert=True)
         return
 
-    templates = await crud.fetch_lesson_package_templates(session)
+    templates = await template_service.list_templates(session)
     text = texts.PACKAGE_TEMPLATES_MENU + '\n\n' + _format_templates_list(templates, len(templates))
     markup = _build_templates_keyboard(templates).as_markup()
     await query.message.edit_text(text, reply_markup=markup)
@@ -958,8 +913,9 @@ async def cb_package_template_edit(query: CallbackQuery, state: FSMContext, sess
         await query.answer()
         return
 
-    template = await crud.get_lesson_package_template(session, template_id)
-    if not template:
+    try:
+        template = await template_service.get_template(session, template_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_TEMPLATE_NOT_FOUND, show_alert=True)
         return
 
@@ -973,7 +929,7 @@ async def cb_package_template_edit(query: CallbackQuery, state: FSMContext, sess
         original_description=template.description,
         original_lesson_count=template.lesson_count,
         original_duration_days=template.duration_days,
-        original_timezone=template.default_timezone,
+        original_timezone=getattr(template, 'default_timezone', None) or template.timezone,
     )
 
     prompt = texts.PACKAGE_TEMPLATE_PROMPT_NAME_EDIT.format(current=escape_html_text(template.name))
@@ -1079,7 +1035,7 @@ async def cb_package_create_select(query: CallbackQuery, state: FSMContext, sess
         markup = _package_create_cancel_keyboard().as_markup()
         await query.message.edit_text(prompt, reply_markup=markup)
     else:
-        templates = await crud.fetch_lesson_package_templates(session)
+        templates = await template_service.list_templates(session)
         if templates:
             await state.set_state(PackageCreateStates.selecting_template)
             text = texts.PACKAGE_TEMPLATE_SELECT_PROMPT
@@ -1118,8 +1074,9 @@ async def cb_package_create_template_choice(query: CallbackQuery, state: FSMCont
         await query.answer()
         return
 
-    template = await crud.get_lesson_package_template(session, template_id)
-    if not template:
+    try:
+        template = await template_service.get_template(session, template_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_TEMPLATE_NOT_FOUND, show_alert=True)
         return
 
@@ -1159,7 +1116,10 @@ async def cb_package_edit_cancel(query: CallbackQuery, state: FSMContext, sessio
     await state.clear()
 
     if package_id:
-        package = await crud.get_lesson_package(session, package_id)
+        try:
+            package = await package_service.get_package(session, package_id)
+        except NotFoundError:
+            package = None
         if package:
             detail_text = _format_package_details(package)
             detail_markup = _build_package_details_keyboard(package_id, page).as_markup()
@@ -1282,14 +1242,24 @@ async def state_package_notes(message: types.Message, state: FSMContext, session
         return
 
     try:
-        package = await crud.create_lesson_package(
+        package_dto = await package_service.create_package(
             session,
-            learner=learner,
+            learner_id=learner.id,
             title=title,
             notes=notes,
         )
-        await regenerate_package_reminders(session, package)
         await session.commit()
+    except NotFoundError:
+        await session.rollback()
+        await _edit_flow_message(
+            message.bot,
+            data,
+            message,
+            texts.LEARNER_NOT_FOUND,
+            _package_create_cancel_keyboard().as_markup(),
+        )
+        await state.clear()
+        return
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to create package: %s", exc, exc_info=True)
@@ -1303,7 +1273,7 @@ async def state_package_notes(message: types.Message, state: FSMContext, session
         await state.clear()
         return
 
-    package = await crud.get_lesson_package(session, package.id)
+    package = await package_service.get_package(session, package_dto.id)
     detail_text = f"{texts.PACKAGE_CREATED_NOTICE}\n\n{_format_package_details(package)}"
     detail_markup = _build_package_details_keyboard(package.id, list_page).as_markup()
     await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, detail_text, detail_markup)
@@ -1339,9 +1309,9 @@ async def state_package_template_start_date(message: types.Message, state: FSMCo
 
     await _discard_user_message(message)
 
-    learner = await crud.get_learner(session, learner_id)
-    template = await crud.get_lesson_package_template(session, template_id)
-    if not learner or not template:
+    try:
+        template = await template_service.get_template(session, template_id)
+    except NotFoundError:
         await state.clear()
         await _safe_edit_message(
             message.bot,
@@ -1350,27 +1320,35 @@ async def state_package_template_start_date(message: types.Message, state: FSMCo
             texts.PACKAGE_NOT_FOUND,
             _package_create_cancel_keyboard().as_markup(),
         )
+        await state.clear()
         return
 
-    timezone_name = template.default_timezone or 'Europe/Moscow'
+    timezone_name = template.timezone or 'Europe/Moscow'
     tz = ZoneInfo(timezone_name)
     start_local = datetime.combine(start_date_value, time.min, tz)
-    start_utc = start_local.astimezone(timezone.utc)
 
     try:
-        package = await crud.create_lesson_package(
+        package_dto = await package_service.create_package_from_template(
             session,
-            learner=learner,
-            template=template,
+            learner_id=learner_id,
+            template_id=template_id,
             title=title,
             notes=notes,
-            start_date=start_utc,
+            start_local=start_local,
             timezone_name=timezone_name,
-            total_lessons=template.lesson_count,
         )
-        await _generate_lessons_from_template(session, package, template, start_local)
-        await regenerate_package_reminders(session, package)
         await session.commit()
+    except NotFoundError:
+        await session.rollback()
+        await _safe_edit_message(
+            message.bot,
+            menu_chat_id,
+            menu_message_id,
+            texts.PACKAGE_NOT_FOUND,
+            _package_create_cancel_keyboard().as_markup(),
+        )
+        await state.clear()
+        return
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to create package from template %s: %s", template_id, exc, exc_info=True)
@@ -1384,7 +1362,7 @@ async def state_package_template_start_date(message: types.Message, state: FSMCo
         await state.clear()
         return
 
-    package = await crud.get_lesson_package(session, package.id)
+    package = await package_service.get_package(session, package_dto.id)
     detail_text = f"{texts.PACKAGE_CREATED_NOTICE}\n\n{_format_package_details(package)}"
     detail_markup = _build_package_details_keyboard(package.id, list_page).as_markup()
     await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, detail_text, detail_markup)
@@ -1593,7 +1571,7 @@ async def state_template_timezone(message: types.Message, state: FSMContext, ses
     menu_message_id = data.get('menu_message_id', message.message_id)
 
     try:
-        template = await crud.create_lesson_package_template(
+        template_dto = await template_service.create_template(
             session,
             name=name,
             description=description,
@@ -1616,14 +1594,14 @@ async def state_template_timezone(message: types.Message, state: FSMContext, ses
         await state.set_state(TemplateCreateStates.timezone)
         return
 
-    templates = await crud.fetch_lesson_package_templates(session)
+    templates = await template_service.list_templates(session)
     text = texts.PACKAGE_TEMPLATES_MENU + '\n\n' + _format_templates_list(templates, len(templates))
     markup = _build_templates_keyboard(templates).as_markup()
     await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, text, markup)
     await _send_notice(
         message.bot,
         menu_chat_id,
-        texts.PACKAGE_TEMPLATE_CREATED.format(name=escape_html_text(template.name)),
+        texts.PACKAGE_TEMPLATE_CREATED.format(name=escape_html_text(template_dto.name)),
     )
     await state.clear()
 
@@ -1746,8 +1724,9 @@ async def state_template_edit_timezone(message: types.Message, state: FSMContext
         tz_name = raw
 
     await _discard_user_message(message)
-    template = await crud.get_lesson_package_template(session, template_id)
-    if not template:
+    try:
+        template = await template_service.get_template(session, template_id)
+    except NotFoundError:
         await state.clear()
         await _safe_edit_message(
             message.bot,
@@ -1778,9 +1757,9 @@ async def state_template_edit_timezone(message: types.Message, state: FSMContext
         config_update = config
 
     try:
-        await crud.update_lesson_package_template(
+        await template_service.update_template(
             session,
-            template,
+            template_id,
             default_config=config_update,
             **updates,
         )
@@ -1788,7 +1767,7 @@ async def state_template_edit_timezone(message: types.Message, state: FSMContext
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to update template %s: %s", template_id, exc, exc_info=True)
-        current_timezone = escape_html_text((tz_name or template.default_timezone) or 'Europe/Moscow')
+        current_timezone = escape_html_text((tz_name or template.timezone) or 'Europe/Moscow')
         prompt = texts.PACKAGE_TEMPLATE_PROMPT_TIMEZONE_EDIT.format(current=current_timezone)
         await _edit_flow_message(
             message.bot,
@@ -1800,7 +1779,7 @@ async def state_template_edit_timezone(message: types.Message, state: FSMContext
         await state.set_state(TemplateEditStates.timezone)
         return
 
-    template = await crud.get_lesson_package_template(session, template_id)
+    template = await template_service.get_template(session, template_id)
     text = _format_template_details(template)
     detail_markup = _build_template_details_keyboard(template_id).as_markup()
     await _safe_edit_message(
@@ -1827,12 +1806,12 @@ async def cb_packages_list(query: CallbackQuery, session: AsyncSession):
 
     limit = PACKAGES_PER_PAGE
     offset = max(0, (page - 1) * limit)
-    packages, total = await crud.fetch_lesson_packages_paginated(session, limit=limit, offset=offset)
+    packages, total = await package_service.list_packages(session, limit=limit, offset=offset)
     total_pages = _calc_total_pages(total, limit)
     if page > total_pages:
         page = total_pages
         offset = max(0, (page - 1) * limit)
-        packages, total = await crud.fetch_lesson_packages_paginated(session, limit=limit, offset=offset)
+        packages, total = await package_service.list_packages(session, limit=limit, offset=offset)
 
     text = _format_packages_list(packages, total, page)
     markup = _build_packages_keyboard(packages, page, total_pages).as_markup()
@@ -1850,8 +1829,9 @@ async def cb_package_view(query: CallbackQuery, session: AsyncSession):
         await query.answer()
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
+    try:
+        package = await package_service.get_package(session, package_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
         return
 
@@ -1871,10 +1851,19 @@ async def cb_package_edit(query: CallbackQuery, state: FSMContext, session: Asyn
         await query.answer()
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
+    try:
+        package = await package_service.get_package(session, package_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
         return
+
+    original_schedule: list[dict[str, object]] = []
+    if package.template_id:
+        try:
+            template = await template_service.get_template(session, package.template_id)
+            original_schedule = copy.deepcopy((template.default_config or {}).get('weekly_schedule', []))
+        except NotFoundError:
+            original_schedule = []
 
     await state.set_state(PackageEditStates.status)
     await state.update_data(
@@ -1882,7 +1871,7 @@ async def cb_package_edit(query: CallbackQuery, state: FSMContext, session: Asyn
         list_page=page,
         menu_chat_id=query.message.chat.id,
         menu_message_id=query.message.message_id,
-        original_schedule=copy.deepcopy((package.template.default_config or {}).get('weekly_schedule', []) if package.template else []),
+        original_schedule=original_schedule,
         total_lessons=package.total_lessons,
         original_timezone=package.timezone or 'Europe/Moscow',
     )
@@ -2016,8 +2005,9 @@ async def state_package_edit_notes(message: types.Message, state: FSMContext, se
         await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.DATABASE_ERROR, markup)
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
+    try:
+        package = await package_service.get_package(session, package_id)
+    except NotFoundError:
         await state.clear()
         await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
         return
@@ -2025,8 +2015,9 @@ async def state_package_edit_notes(message: types.Message, state: FSMContext, se
     start_date_iso = data.get('start_date')
     original_schedule = data.get('original_schedule') or []
     total_lessons = data.get('total_lessons') or package.total_lessons
+    lessons = await lesson_service.list_lessons(session, package_id)
     lessons_sorted = sorted(
-        [lesson for lesson in package.lessons or [] if lesson.scheduled_at],
+        [lesson for lesson in lessons if lesson.scheduled_at],
         key=lambda l: l.scheduled_at,
     )
 
@@ -2088,9 +2079,20 @@ async def state_package_edit_notes(message: types.Message, state: FSMContext, se
         return
 
     try:
-        await crud.update_lesson_package(session, package, **changes)
-        await regenerate_package_reminders(session, package)
+        await package_service.update_package(session, package_id, **changes)
+        await package_service.regenerate_reminders_for_package(session, package_id)
         await session.commit()
+    except NotFoundError:
+        await session.rollback()
+        await _edit_flow_message(
+            message.bot,
+            data,
+            message,
+            texts.PACKAGE_NOT_FOUND,
+            markup,
+        )
+        await state.clear()
+        return
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to update package %s: %s", package_id, exc, exc_info=True)
@@ -2104,7 +2106,7 @@ async def state_package_edit_notes(message: types.Message, state: FSMContext, se
         await state.set_state(PackageEditStates.notes)
         return
 
-    package = await crud.get_lesson_package(session, package_id)
+    package = await package_service.get_package(session, package_id)
     detail_text = _format_package_details(package)
     detail_markup = _build_package_details_keyboard(package_id, list_page).as_markup()
     await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, detail_text, detail_markup)
@@ -2126,8 +2128,9 @@ async def cb_package_add_lesson(query: CallbackQuery, state: FSMContext, session
         await query.answer()
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
+    try:
+        await package_service.get_package(session, package_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
         return
 
@@ -2166,7 +2169,10 @@ async def cb_package_add_lesson_cancel(query: CallbackQuery, state: FSMContext, 
     await state.clear()
 
     if package_id is not None:
-        package = await crud.get_lesson_package(session, package_id)
+        try:
+            package = await package_service.get_package(session, package_id)
+        except NotFoundError:
+            package = None
         if package:
             detail_text = _format_package_details(package)
             detail_markup = _build_package_details_keyboard(package_id, page).as_markup()
@@ -2195,8 +2201,9 @@ async def state_package_add_lesson(message: types.Message, state: FSMContext, se
         await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
+    try:
+        package = await package_service.get_package(session, package_id)
+    except NotFoundError:
         await state.clear()
         markup = _package_add_lesson_cancel_keyboard(package_id, page).as_markup()
         await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
@@ -2242,13 +2249,6 @@ async def state_package_add_duration(message: types.Message, state: FSMContext, 
         await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
-        await state.clear()
-        markup = _package_add_lesson_cancel_keyboard(package_id, page).as_markup()
-        await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
-        return
-
     duration_text = (message.text or '').strip()
     if duration_text in {'', '-'}:
         duration = None
@@ -2267,7 +2267,13 @@ async def state_package_add_duration(message: types.Message, state: FSMContext, 
         duration = int(duration_text)
 
     scheduled_at = datetime.fromisoformat(scheduled_at_iso).replace(tzinfo=timezone.utc)
-    existing = await crud.fetch_lessons_for_package(session, package_id)
+    try:
+        existing = await lesson_service.list_lessons(session, package_id)
+    except NotFoundError:
+        await state.clear()
+        markup = _package_add_lesson_cancel_keyboard(package_id or 0, page).as_markup()
+        await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
+        return
     existing_indices = [lesson.sequence_index for lesson in existing if lesson.sequence_index is not None]
     if existing_indices:
         sequence_index = max(existing_indices) + 1
@@ -2275,17 +2281,21 @@ async def state_package_add_duration(message: types.Message, state: FSMContext, 
         sequence_index = len(existing) + 1
 
     try:
-        await crud.create_lesson(
+        await lesson_service.create_lesson(
             session,
-            package,
+            package_id=package_id,
             scheduled_at=scheduled_at,
-            sequence_index=sequence_index,
             duration_minutes=duration,
+            sequence_index=sequence_index,
         )
-        await session.flush()
-        package, lessons = await _sync_package_metrics(session, package_id)
-        await regenerate_package_reminders(session, package)
+        await package_service.regenerate_reminders_for_package(session, package_id)
         await session.commit()
+    except NotFoundError:
+        await session.rollback()
+        markup = _package_add_lesson_cancel_keyboard(package_id, page).as_markup()
+        await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
+        await state.clear()
+        return
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to add lesson to package %s: %s", package_id, exc, exc_info=True)
@@ -2293,9 +2303,13 @@ async def state_package_add_duration(message: types.Message, state: FSMContext, 
         await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.DATABASE_ERROR, markup)
         return
 
-    if not package:
-        package = await crud.get_lesson_package(session, package_id)
-        lessons = package.lessons if package else []
+    try:
+        package = await package_service.get_package(session, package_id)
+    except NotFoundError:
+        await state.clear()
+        markup = _packages_menu_keyboard().as_markup()
+        await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
+        return
 
     detail_text = f"{texts.PACKAGE_LESSON_CREATED_NOTICE}\n\n{_format_package_details(package)}"
     detail_markup = _build_package_details_keyboard(package_id, page).as_markup()
@@ -2313,8 +2327,13 @@ async def cb_package_lesson_edit(query: CallbackQuery, state: FSMContext, sessio
         await query.answer()
         return
 
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not lesson or lesson.package_id != package_id:
+    try:
+        lesson = await lesson_service.get_lesson(session, lesson_id)
+    except NotFoundError:
+        await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+
+    if lesson.package_id != package_id:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
         return
 
@@ -2354,8 +2373,12 @@ async def cb_package_lesson_status(query: CallbackQuery, state: FSMContext, sess
         await query.answer()
         return
 
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not lesson or lesson.package_id != package_id:
+    try:
+        lesson = await lesson_service.get_lesson(session, lesson_id)
+    except NotFoundError:
+        await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+    if lesson.package_id != package_id:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
         return
 
@@ -2392,8 +2415,12 @@ async def cb_package_lesson_notes(query: CallbackQuery, state: FSMContext, sessi
         await query.answer()
         return
 
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not lesson or lesson.package_id != package_id:
+    try:
+        lesson = await lesson_service.get_lesson(session, lesson_id)
+    except NotFoundError:
+        await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+    if lesson.package_id != package_id:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
         return
 
@@ -2427,8 +2454,12 @@ async def cb_package_lesson_duration(query: CallbackQuery, state: FSMContext, se
         await query.answer()
         return
 
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not lesson or lesson.package_id != package_id:
+    try:
+        lesson = await lesson_service.get_lesson(session, lesson_id)
+    except NotFoundError:
+        await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+    if lesson.package_id != package_id:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
         return
 
@@ -2462,8 +2493,12 @@ async def cb_package_lesson_delete_confirm(query: CallbackQuery, session: AsyncS
         await query.answer()
         return
 
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not lesson or lesson.package_id != package_id:
+    try:
+        lesson = await lesson_service.get_lesson(session, lesson_id)
+    except NotFoundError:
+        await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+    if lesson.package_id != package_id:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
         return
 
@@ -2499,33 +2534,38 @@ async def cb_package_lesson_delete(query: CallbackQuery, session: AsyncSession):
         await query.answer()
         return
 
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not lesson or lesson.package_id != package_id:
+    try:
+        lesson = await lesson_service.get_lesson(session, lesson_id)
+    except NotFoundError:
+        await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+    if lesson.package_id != package_id:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
+    try:
+        await package_service.get_package(session, package_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
         return
 
     try:
-        await crud.delete_lesson(session, lesson)
-        await session.flush()
-        package, lessons = await _sync_package_metrics(session, package_id)
-        if package:
-            await regenerate_package_reminders(session, package)
+        await lesson_service.delete_lesson(session, lesson_id)
+        await package_service.regenerate_reminders_for_package(session, package_id)
         await session.commit()
+    except NotFoundError:
+        await session.rollback()
+        await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to delete lesson %s from package %s: %s", lesson_id, package_id, exc, exc_info=True)
         await query.answer(texts.DATABASE_ERROR, show_alert=True)
         return
 
-    if not package:
-        package, lessons = await _sync_package_metrics(session, package_id)
-
-    text = _format_lessons_list(lessons)
+    package = await package_service.get_package(session, package_id)
+    lessons = await lesson_service.list_lessons(session, package_id)
+    text = _format_lessons_list(lessons, package_title=package.title)
     markup = _build_lessons_keyboard(lessons, package_id, page).as_markup()
     await query.message.edit_text(text, reply_markup=markup)
     await query.answer(texts.PACKAGE_LESSON_DELETED.format(index=lesson_index))
@@ -2548,31 +2588,36 @@ async def cb_package_lesson_edit_cancel(query: CallbackQuery, state: FSMContext,
     lesson_index = int(data.get('lesson_index', 1))
     await state.clear()
 
-    package = await crud.get_lesson_package(session, package_id) if package_id else None
-    if package and lesson_id:
-        lesson = await crud.get_lesson(session, lesson_id)
-        if lesson and lesson.package_id == package_id:
-            await _show_lesson_detail(
-                query.bot,
-                {'menu_chat_id': menu_chat_id, 'menu_message_id': menu_message_id},
-                query.message,
-                package,
-                lesson,
-                lesson_index,
-                page,
-            )
+    if package_id:
+        try:
+            package = await package_service.get_package(session, package_id)
+        except NotFoundError:
+            package = None
+        if package and lesson_id:
+            try:
+                lesson = await lesson_service.get_lesson(session, lesson_id)
+            except NotFoundError:
+                lesson = None
+            if lesson and lesson.package_id == package_id:
+                await _show_lesson_detail(
+                    query.bot,
+                    {'menu_chat_id': menu_chat_id, 'menu_message_id': menu_message_id},
+                    query.message,
+                    package,
+                    lesson,
+                    lesson_index,
+                    page,
+                )
+                await query.answer(texts.PACKAGE_LESSON_EDIT_CANCELLED)
+                return
+
+        if package:
+            lessons = await lesson_service.list_lessons(session, package.id)
+            text = _format_lessons_list(lessons, package_title=package.title)
+            markup = _build_lessons_keyboard(lessons, package.id, page).as_markup()
+            await _safe_edit_message(query.bot, menu_chat_id, menu_message_id, text, markup)
             await query.answer(texts.PACKAGE_LESSON_EDIT_CANCELLED)
             return
-
-    if package:
-        lessons = await crud.fetch_lessons_for_package(session, package.id)
-        for l in lessons:
-            l.package = package
-        text = _format_lessons_list(lessons)
-        markup = _build_lessons_keyboard(lessons, package.id, page).as_markup()
-        await _safe_edit_message(query.bot, menu_chat_id, menu_message_id, text, markup)
-        await query.answer(texts.PACKAGE_LESSON_EDIT_CANCELLED)
-        return
 
     markup = _packages_menu_keyboard().as_markup()
     await _safe_edit_message(query.bot, menu_chat_id, menu_message_id, texts.ADMIN_PACKAGES_MENU, markup)
@@ -2601,6 +2646,13 @@ async def state_package_lesson_edit(message: types.Message, state: FSMContext, s
         return
 
     try:
+        package = await package_service.get_package(session, package_id)
+    except NotFoundError:
+        await state.clear()
+        await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
+        return
+
+    try:
         local_dt = datetime.strptime(raw_text, "%d.%m.%Y %H:%M")
     except ValueError:
         await _safe_edit_message(
@@ -2613,23 +2665,22 @@ async def state_package_lesson_edit(message: types.Message, state: FSMContext, s
         await state.set_state(LessonEditStates.scheduled_at)
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not package or not lesson:
-        await state.clear()
-        await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
-        return
-
     tz = ZoneInfo(package.timezone or 'Europe/Moscow')
     scheduled_at = local_dt.replace(tzinfo=tz).astimezone(timezone.utc)
 
     try:
-        lesson.scheduled_at = scheduled_at
-        await session.flush([lesson])
-        package, lessons = await _sync_package_metrics(session, package_id)
-        if package:
-            await regenerate_package_reminders(session, package)
+        await lesson_service.update_lesson(
+            session,
+            lesson_id,
+            scheduled_at=scheduled_at,
+        )
+        await package_service.regenerate_reminders_for_package(session, package_id)
         await session.commit()
+    except NotFoundError:
+        await session.rollback()
+        await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
+        await state.clear()
+        return
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to update lesson %s in package %s: %s", lesson_id, package_id, exc, exc_info=True)
@@ -2643,10 +2694,9 @@ async def state_package_lesson_edit(message: types.Message, state: FSMContext, s
         await state.set_state(LessonEditStates.scheduled_at)
         return
 
-    if not package:
-        package, lessons = await _sync_package_metrics(session, package_id)
-
-    text = _format_lessons_list(lessons)
+    package = await package_service.get_package(session, package_id)
+    lessons = await lesson_service.list_lessons(session, package_id)
+    text = _format_lessons_list(lessons, package_title=package.title)
     markup = _build_lessons_keyboard(lessons, package_id, page).as_markup()
     await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, text, markup)
     await _send_notice(
@@ -2677,19 +2727,20 @@ async def cb_package_lesson_status_set(query: CallbackQuery, state: FSMContext, 
     menu_chat_id = data.get('menu_chat_id', query.message.chat.id)
     menu_message_id = data.get('menu_message_id', query.message.message_id)
 
-    package = await crud.get_lesson_package(session, package_id)
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not package or not lesson:
+    try:
+        await lesson_service.update_lesson(
+            session,
+            lesson_id,
+            status=status,
+        )
+        await package_service.regenerate_reminders_for_package(session, package_id)
+        await session.commit()
+    except NotFoundError:
+        await session.rollback()
         await state.clear()
         await _safe_edit_message(query.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, _package_lesson_edit_cancel_keyboard(package_id, page).as_markup())
         await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
         return
-
-    try:
-        lesson.status = status
-        await session.flush([lesson])
-        await regenerate_package_reminders(session, package)
-        await session.commit()
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to update lesson status %s in package %s: %s", lesson_id, package_id, exc, exc_info=True)
@@ -2707,11 +2758,10 @@ async def cb_package_lesson_status_set(query: CallbackQuery, state: FSMContext, 
         await query.answer(texts.DATABASE_ERROR, show_alert=True)
         return
 
-    lessons = await crud.fetch_lessons_for_package(session, package_id)
-    for l in lessons:
-        l.package = package
+    package = await package_service.get_package(session, package_id)
+    lessons = await lesson_service.list_lessons(session, package_id)
 
-    text = _format_lessons_list(lessons)
+    text = _format_lessons_list(lessons, package_title=package.title)
     markup = _build_lessons_keyboard(lessons, package_id, page).as_markup()
     await _safe_edit_message(query.bot, menu_chat_id, menu_message_id, text, markup)
     await _send_notice(
@@ -2765,17 +2815,18 @@ async def state_package_lesson_notes(message: types.Message, state: FSMContext, 
         await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not package or not lesson:
+    try:
+        await lesson_service.update_lesson(
+            session,
+            lesson_id,
+            teacher_notes=notes,
+        )
+        await session.commit()
+    except NotFoundError:
+        await session.rollback()
         await state.clear()
         await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
         return
-
-    try:
-        lesson.teacher_notes = notes
-        await session.flush([lesson])
-        await session.commit()
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to update lesson notes %s in package %s: %s", lesson_id, package_id, exc, exc_info=True)
@@ -2789,11 +2840,9 @@ async def state_package_lesson_notes(message: types.Message, state: FSMContext, 
         await state.set_state(LessonNotesStates.value)
         return
 
-    lessons = await crud.fetch_lessons_for_package(session, package_id)
-    for l in lessons:
-        l.package = package
-
-    text = _format_lessons_list(lessons)
+    package = await package_service.get_package(session, package_id)
+    lessons = await lesson_service.list_lessons(session, package_id)
+    text = _format_lessons_list(lessons, package_title=package.title)
     markup = _build_lessons_keyboard(lessons, package_id, page).as_markup()
     await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, text, markup)
     await _send_notice(
@@ -2849,17 +2898,18 @@ async def state_package_lesson_duration(message: types.Message, state: FSMContex
         await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not package or not lesson:
+    try:
+        await lesson_service.update_lesson(
+            session,
+            lesson_id,
+            duration_minutes=duration,
+        )
+        await session.commit()
+    except NotFoundError:
+        await session.rollback()
         await state.clear()
         await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, texts.PACKAGE_NOT_FOUND, markup)
         return
-
-    try:
-        lesson.duration_minutes = duration
-        await session.flush([lesson])
-        await session.commit()
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to update lesson duration %s in package %s: %s", lesson_id, package_id, exc, exc_info=True)
@@ -2876,11 +2926,9 @@ async def state_package_lesson_duration(message: types.Message, state: FSMContex
         await state.set_state(LessonDurationStates.value)
         return
 
-    lessons = await crud.fetch_lessons_for_package(session, package_id)
-    for l in lessons:
-        l.package = package
-
-    text = _format_lessons_list(lessons)
+    package = await package_service.get_package(session, package_id)
+    lessons = await lesson_service.list_lessons(session, package_id)
+    text = _format_lessons_list(lessons, package_title=package.title)
     markup = _build_lessons_keyboard(lessons, package_id, page).as_markup()
     await _safe_edit_message(message.bot, menu_chat_id, menu_message_id, text, markup)
     await _send_notice(
@@ -2899,15 +2947,16 @@ async def cb_package_regenerate(query: CallbackQuery, session: AsyncSession):
         await query.answer()
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
+    try:
+        package_dto = await package_service.get_package(session, package_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
         return
 
     try:
-        await regenerate_package_reminders(session, package)
+        await package_service.regenerate_reminders_for_package(session, package_id)
         await session.commit()
-        await query.answer(texts.PACKAGE_REGENERATED.format(title=escape_html_text(package.title)))
+        await query.answer(texts.PACKAGE_REGENERATED.format(title=escape_html_text(package_dto.title)))
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to regenerate reminders for package %s: %s", package_id, exc, exc_info=True)
@@ -2915,7 +2964,7 @@ async def cb_package_regenerate(query: CallbackQuery, session: AsyncSession):
         return
 
     # Refresh package details after regeneration
-    package = await crud.get_lesson_package(session, package_id)
+    package = await package_service.get_package(session, package_id)
     text = _format_package_details(package)
     markup = _build_package_details_keyboard(package_id, page).as_markup()
     await query.message.edit_text(text, reply_markup=markup)
@@ -2931,8 +2980,9 @@ async def cb_package_delete_confirm(query: CallbackQuery, session: AsyncSession)
         await query.answer()
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
+    try:
+        package = await package_service.get_package(session, package_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
         return
 
@@ -2957,14 +3007,19 @@ async def cb_package_delete(query: CallbackQuery, session: AsyncSession):
         await query.answer()
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
+    try:
+        package = await package_service.get_package(session, package_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
         return
 
     try:
-        await crud.delete_lesson_package(session, package)
+        await package_service.delete_package(session, package_id)
         await session.commit()
+    except NotFoundError:
+        await session.rollback()
+        await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
+        return
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to delete package %s: %s", package_id, exc, exc_info=True)
@@ -2973,12 +3028,12 @@ async def cb_package_delete(query: CallbackQuery, session: AsyncSession):
 
     limit = PACKAGES_PER_PAGE
     offset = max(0, (page - 1) * limit)
-    packages, total = await crud.fetch_lesson_packages_paginated(session, limit=limit, offset=offset)
+    packages, total = await package_service.list_packages(session, limit=limit, offset=offset)
     total_pages = _calc_total_pages(total, limit)
     if page > total_pages:
         page = total_pages
         offset = max(0, (page - 1) * limit)
-        packages, total = await crud.fetch_lesson_packages_paginated(session, limit=limit, offset=offset)
+        packages, total = await package_service.list_packages(session, limit=limit, offset=offset)
 
     text = _format_packages_list(packages, total, page)
     markup = _build_packages_keyboard(packages, page, total_pages).as_markup()
@@ -2996,16 +3051,14 @@ async def cb_package_lessons(query: CallbackQuery, session: AsyncSession):
         await query.answer()
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    if not package:
+    try:
+        package = await package_service.get_package(session, package_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
         return
 
-    lessons = await crud.fetch_lessons_for_package(session, package_id)
-    for lesson in lessons:
-        lesson.package = package
-
-    text = _format_lessons_list(lessons)
+    lessons = await lesson_service.list_lessons(session, package_id)
+    text = _format_lessons_list(lessons, package_title=package.title)
     markup = _build_lessons_keyboard(lessons, package_id, page).as_markup()
     await query.message.edit_text(text, reply_markup=markup)
     await query.answer()
@@ -3023,9 +3076,10 @@ async def cb_package_lesson_view(query: CallbackQuery, session: AsyncSession):
         await query.answer()
         return
 
-    package = await crud.get_lesson_package(session, package_id)
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not package or not lesson:
+    try:
+        package = await package_service.get_package(session, package_id)
+        lesson = await lesson_service.get_lesson(session, lesson_id)
+    except NotFoundError:
         await query.answer(texts.PACKAGE_NOT_FOUND, show_alert=True)
         return
 

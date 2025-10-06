@@ -1,9 +1,12 @@
-aiogram==3.1.0
+aiogram==3.4.1
 aiosqlite==0.18.0
-pydantic-settings==2.3.4
+pydantic-settings==2.2.1
 redis
 pandas
 openpyxl
 sqlalchemy==2.0.29
 alembic==1.13.1
 greenlet==3.0.3
+fastapi==0.110.0
+uvicorn[standard]==0.29.0
+pyjwt[crypto]==2.8.0

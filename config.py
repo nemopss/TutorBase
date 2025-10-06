@@ -21,6 +21,10 @@ class Settings(BaseSettings):
     REGULATIONS_URL: str
     REDIS_URL: str
     REMINDER_NOTIFY_USERNAME: str = "nemopss"
+    JWT_SECRET: str = "change-me"
+    JWT_ALGORITHM: str = "HS256"
+    JWT_ACCESS_EXPIRES_SECONDS: int = 900
+    JWT_REFRESH_EXPIRES_SECONDS: int = 1209600  # 14 days
 
     @field_validator("ADMINS", mode="before")
     @classmethod
