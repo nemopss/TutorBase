@@ -1,5 +1,6 @@
 
-import React, { createContext, useState, useEffect, useContext, PropsWithChildren } from 'react';
+import React, { createContext, useState, useEffect, useContext } from 'react';
+import type { PropsWithChildren } from 'react';
 import api from '../services/api';
 
 // Предполагаемые типы для данных пользователя и ответа от API

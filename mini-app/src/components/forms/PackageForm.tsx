@@ -1,6 +1,6 @@
 import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Modal, Form, Input, Select, Spin, Alert } from 'antd';
+import { Modal, Form, Input, Select } from 'antd';
 import api from '../../services/api';
 
 // --- Types --- //
