@@ -371,6 +371,12 @@ async def delete_learner(session: AsyncSession, learner: Learner) -> None:
     await session.delete(learner)
 
 
+async def fetch_all_learners(session: AsyncSession) -> list[Learner]:
+    stmt = select(Learner).order_by(Learner.display_name.asc())
+    result = await session.execute(stmt)
+    return result.scalars().all()
+
+
 # --- Lesson packages & lessons ---------------------------------------------
 
 
@@ -565,15 +571,32 @@ async def fetch_lesson_packages_paginated(
     *,
     limit: int,
     offset: int,
+    learner_id: Optional[int] = None,
+    status: Optional[str] = None,
+    search: Optional[str] = None,
 ) -> tuple[list[LessonPackage], int]:
-    total_stmt = select(func.count()).select_from(LessonPackage)
-    total = (await session.execute(total_stmt)).scalar_one()
+    base_query = select(LessonPackage)
+
+    if learner_id is not None:
+        base_query = base_query.where(LessonPackage.learner_id == learner_id)
+    if status is not None:
+        base_query = base_query.where(LessonPackage.status == status)
+    if search:
+        pattern = f"%{search}%"
+        base_query = base_query.join(LessonPackage.learner).where(
+            or_(
+                LessonPackage.title.ilike(pattern),
+                Learner.display_name.ilike(pattern),
+            )
+        )
+
+    count_stmt = base_query.with_only_columns(func.count()).order_by(None)
+    total = (await session.execute(count_stmt)).scalar_one()
     if total == 0:
         return [], 0
 
     rows_stmt = (
-        select(LessonPackage)
-        .options(
+        base_query.options(
             selectinload(LessonPackage.learner).selectinload(Learner.bot_user),
             selectinload(LessonPackage.template),
             selectinload(LessonPackage.lessons),
@@ -591,9 +614,35 @@ async def fetch_lessons_for_package(session: AsyncSession, package_id: int) -> l
         select(Lesson)
         .options(selectinload(Lesson.package))
         .where(Lesson.package_id == package_id)
-        .order_by(Lesson.sequence_index.asc().nulls_last(), Lesson.scheduled_at.asc())
+        .order_by(Lesson.scheduled_at.asc())
     )
     return (await session.execute(stmt)).scalars().all()
+
+
+async def list_all_lessons(
+    session: AsyncSession,
+    *, 
+    status: Optional[str] = None, 
+    limit: int = 100, 
+    offset: int = 0,
+    sort_by: str = 'scheduled_at',
+    sort_order: str = 'asc',
+) -> list[Lesson]:
+    stmt = select(Lesson).options(selectinload(Lesson.package).selectinload(LessonPackage.learner))
+
+    if status:
+        stmt = stmt.where(Lesson.status == status)
+
+    order_column = getattr(Lesson, sort_by, Lesson.scheduled_at)
+    if sort_order == 'desc':
+        stmt = stmt.order_by(order_column.desc())
+    else:
+        stmt = stmt.order_by(order_column.asc())
+
+    stmt = stmt.limit(limit).offset(offset)
+    
+    result = await session.execute(stmt)
+    return result.scalars().all()
 
 
 # --- Reminder rules & instances -------------------------------------------

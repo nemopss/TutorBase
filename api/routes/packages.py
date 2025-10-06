@@ -50,6 +50,7 @@ async def list_packages(  # pragma: no cover - thin wrapper
     offset: int = Query(0, ge=0),
     learner_id: int | None = None,
     status_filter: str | None = None,
+    search: str | None = None,
     session: AsyncSession = Depends(get_session),
 ) -> PackageListResponse:
     packages, total = await package_service.list_packages(
@@ -58,6 +59,7 @@ async def list_packages(  # pragma: no cover - thin wrapper
         offset=offset,
         learner_id=learner_id,
         status=status_filter,
+        search=search,
     )
     return PackageListResponse(
         total=total,
@@ -77,7 +79,7 @@ async def get_package_endpoint(
     return _to_response(package)
 
 
-@router.post("/", response_model=PackageResponse, status_code=status.HTTP_201_CREATED)
+@router.post("/create", response_model=PackageResponse, status_code=status.HTTP_201_CREATED)
 async def create_package_endpoint(
     payload: PackageCreateRequest,
     session: AsyncSession = Depends(get_session),

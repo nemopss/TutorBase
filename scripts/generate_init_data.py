@@ -19,6 +19,7 @@ import hmac
 import json
 import urllib.parse
 from dataclasses import dataclass
+from datetime import datetime
 
 
 @dataclass
@@ -49,7 +50,7 @@ def generate_init_data(bot_token: str, user: TelegramUserData) -> str:
     data_pairs = {
         "query_id": "AAAAA_BBBB",  # fake id
         "user": user.to_json(),
-        "auth_date": "1700000000",
+        "auth_date": str(int(datetime.now().timestamp())),
     }
 
     # Build data-check string (sorted key=value joined by newlines)

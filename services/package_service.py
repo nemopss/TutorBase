@@ -60,18 +60,17 @@ async def list_packages(
     offset: int,
     learner_id: Optional[int] = None,
     status: Optional[str] = None,
+    search: Optional[str] = None,
 ) -> tuple[list[LessonPackageDTO], int]:
-    packages, total = await crud.fetch_lesson_packages_paginated(session, limit=limit, offset=offset)
-    filtered: list[LessonPackage] = []
-    for package in packages:
-        if learner_id is not None and package.learner_id != learner_id:
-            continue
-        if status is not None and package.status != status:
-            continue
-        filtered.append(package)
-    dtos = [_build_package_dto(pkg) for pkg in filtered]
-    if learner_id is not None or status is not None:
-        total = len(dtos)
+    packages, total = await crud.fetch_lesson_packages_paginated(
+        session, 
+        limit=limit, 
+        offset=offset,
+        learner_id=learner_id,
+        status=status,
+        search=search,
+    )
+    dtos = [_build_package_dto(pkg) for pkg in packages]
     return dtos, total
 
 

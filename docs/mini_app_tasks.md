@@ -47,30 +47,42 @@
    - [ ] Update OpenAPI schema, generate client types.
 
 ## Stage 2 – Frontend MVP
-1. Project setup
-   - [ ] Bootstrap Vite + React + TS + Ant Design.
-   - [ ] Configure Axios/fetch client with JWT interceptors.
-   - [ ] Implement `AuthProvider` (initData → /auth/login).
-2. Layout & navigation
-   - [ ] Global layout (header, sidebar/drawer).
-   - [ ] React Router routes (`/`, `/packages`, `/packages/:id`, `/templates`, `/settings`).
-3. Dashboard
-   - [ ] Cards: lessons total/completed/cancelled, reminders stats.
-   - [ ] Next lessons list.
-   - [ ] Basic chart (lessons per day).
-4. Packages module
-   - [ ] Packages list page (table + filters + search).
-   - [ ] Package detail page (info, tabs: Lessons, Reminders).
-   - [ ] Lesson table with inline status change.
-   - [ ] Modals: add/edit lesson, edit package, delete confirmation.
-5. Templates module
-   - [ ] List + CRUD forms, copy template.
-6. Integration with Telegram UI
-   - [ ] Handle `MainButton`, `BackButton`, theme changes.
-   - [ ] Responsive design adjustments.
-7. Testing
-   - [ ] Jest/RTL tests for key components.
-   - [ ] Playwright smoke scenario (auth → create package → add lesson).
+
+1.  **Project setup:**
+    - [ ] Create `mini-app` directory.
+    - [ ] Initialize project using Vite (React + TypeScript).
+    - [ ] Install dependencies: `antd`, `react-query`, `axios`, `react-router-dom`, `zustand`.
+    - [ ] Configure folder structure (`pages`, `components`, `services`, `hooks`).
+
+2.  **Authentication & API Client:**
+    - [ ] Implement `AuthProvider` to read `initData` and call `/api/v1/auth/login`.
+    - [ ] Configure `axios` with interceptors for JWT and refresh tokens.
+
+3.  **Layout & Navigation:**
+    - [ ] Create main app layout (header, sidebar) with Ant Design.
+    - [ ] Configure routing for pages: `/`, `/packages`, `/packages/:id`, `/templates`, `/settings`.
+
+4.  **Dashboard:**
+    - [ ] Display key metrics from `/metrics/summary`.
+    - [ ] Show a list of upcoming lessons.
+
+5.  **Packages Module:**
+    - [ ] Implement package list page: table with pagination, filters, and search.
+    - [ ] Implement package detail page: info, "Lessons" and "Reminders" tabs.
+    - [ ] Implement modals for creating/editing lessons and packages.
+
+6.  **Templates Module:**
+    - [ ] Implement template list page.
+    - [ ] Add forms for CRUD operations on templates.
+
+7.  **Telegram UI Integration:**
+    - [ ] Connect and manage native Telegram buttons (`MainButton`, `BackButton`).
+    - [ ] Implement theme change handling (light/dark).
+    - [ ] Ensure responsive, mobile-first design.
+
+8.  **Testing:**
+    - [ ] Write unit tests for key components using Jest/RTL.
+    - [ ] Create an e2e smoke test (login -> create package) with Playwright.
 
 ## Stage 3 – Enhancements
 1. Reminders page with filters/actions.

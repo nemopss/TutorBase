@@ -108,10 +108,31 @@ async def list_lessons(session: AsyncSession, package_id: int) -> list[LessonDTO
     return [_build_lesson_dto(lesson) for lesson in lessons]
 
 
+async def list_all_lessons(
+    session: AsyncSession,
+    *, 
+    status: Optional[str] = None, 
+    limit: int = 100, 
+    offset: int = 0,
+    sort_by: str = 'scheduled_at',
+    sort_order: str = 'asc',
+) -> list[LessonDTO]:
+    lessons = await crud.list_all_lessons(
+        session, 
+        status=status, 
+        limit=limit, 
+        offset=offset,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    return [_build_lesson_dto(lesson) for lesson in lessons]
+
+
 __all__ = [
     "get_lesson",
     "update_lesson",
     "delete_lesson",
     "create_lesson",
     "list_lessons",
+    "list_all_lessons",
 ]

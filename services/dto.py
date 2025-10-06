@@ -5,6 +5,12 @@ from datetime import datetime
 from typing import Optional
 
 
+@dataclass
+class LearnerDTO:
+    id: int
+    display_name: str
+
+
 @dataclass(slots=True)
 class LessonDTO:
     id: int
@@ -49,3 +55,6 @@ class TemplateDTO:
     duration_days: Optional[int]
     timezone: str
     default_config: Optional[dict]
+
+
+

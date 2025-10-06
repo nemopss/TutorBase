@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from typing import Optional
+
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,6 +18,26 @@ from services.dto import LessonDTO
 from services.exceptions import NotFoundError
 
 router = APIRouter()
+
+
+@router.get("", response_model=LessonListResponse)
+async def list_all_lessons_endpoint(
+    status: Optional[str] = None,
+    limit: int = 20,
+    offset: int = 0,
+    sort_by: str = 'scheduled_at',
+    sort_order: str = 'asc',
+    session: AsyncSession = Depends(get_session),
+) -> LessonListResponse:
+    lessons = await lesson_service.list_all_lessons(
+        session, 
+        status=status, 
+        limit=limit, 
+        offset=offset,
+        sort_by=sort_by,
+        sort_order=sort_order,
+    )
+    return LessonListResponse(total=len(lessons), items=[_to_response(lesson) for lesson in lessons])
 
 
 def _to_response(dto: LessonDTO) -> LessonResponse:
