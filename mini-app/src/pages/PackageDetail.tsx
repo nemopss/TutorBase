@@ -205,7 +205,7 @@ const PackageDetail: React.FC = () => {
         open={isModalOpen}
         onCancel={handleCancel}
         onFinish={handleFormFinish}
-        isLoading={createLessonMutation.isLoading || updateLessonMutation.isLoading}
+        isLoading={createLessonMutation.isPending || updateLessonMutation.isPending}
         initialValues={editingLesson}
       />
     </div>

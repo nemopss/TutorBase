@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Spin, Alert, Tag, Select, Space, Input, Button, message } from 'antd';
+import { Table, Tag, Select, Space, Input, Button, message } from 'antd';
 import type { TableProps } from 'antd';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
@@ -70,10 +70,10 @@ const Packages: React.FC = () => {
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  const { data, isLoading, isError, error } = useQuery<PackageListResponse, Error>({
+  const { data, isLoading } = useQuery<PackageListResponse, Error>({
     queryKey: ['packages', currentPage, pageSize, statusFilter, debouncedSearchTerm],
     queryFn: () => fetchPackages(currentPage, pageSize, statusFilter, debouncedSearchTerm),
-    keepPreviousData: true,
+    placeholderData: (previousData) => previousData,
   });
 
   const mutationOptions = {
@@ -211,7 +211,7 @@ const Packages: React.FC = () => {
         open={isModalOpen}
         onCancel={() => { setIsModalOpen(false); setEditingPackage(null); }}
         onFinish={handleFormFinish}
-        isLoading={createMutation.isLoading || updateMutation.isLoading}
+        isLoading={createMutation.isPending || updateMutation.isPending}
         initialValues={editingPackage}
       />
     </div>

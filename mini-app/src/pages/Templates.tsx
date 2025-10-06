@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Spin, Alert, Button, Space, Modal, message } from 'antd';
+import { Table, Button, Space, Modal, message, Alert } from 'antd';
 import type { TableProps } from 'antd';
 import api from '../services/api';
 import TemplateForm from '../components/forms/TemplateForm';
@@ -163,7 +163,7 @@ const Templates: React.FC = () => {
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}
         onFinish={handleFormFinish}
-        isLoading={createMutation.isLoading || updateMutation.isLoading}
+        isLoading={createMutation.isPending || updateMutation.isPending}
         initialValues={editingTemplate}
       />
     </div>
