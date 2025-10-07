@@ -26,7 +26,7 @@ class Settings(BaseSettings):
     JWT_ACCESS_EXPIRES_SECONDS: int = 900
     JWT_REFRESH_EXPIRES_SECONDS: int = 1209600  # 14 days
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
-    MINI_APP_URL: str = "https://your-domain.com/mini-app"  # Update with actual URL
+    MINI_APP_URL: str = "https://app.xpyrkova23.ru/mini-app"  # Update with actual URL
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

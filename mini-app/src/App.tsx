@@ -10,6 +10,7 @@ import Templates from './pages/Templates';
 import Reminders from './pages/Reminders';
 import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
+import Lessons from './pages/Lessons';
 
 function App() {
   const { isLoading, isAuthenticated } = useAuth();
@@ -77,10 +78,11 @@ function App() {
           <Route path="/" element={<Dashboard />} />
           <Route path="/packages" element={<Packages />} />
           <Route path="/packages/:id" element={<PackageDetail />} />
+          <Route path="/lessons" element={<Lessons />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/reminders" element={<Reminders />} />
-          <Route path="/settings" element={<Settings />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/settings" element={<Settings />} />
         </Routes>
       </AppLayout>
     </ConfigProvider>
