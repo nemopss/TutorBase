@@ -44,7 +44,7 @@ def _to_response(dto: LessonPackageDTO) -> PackageResponse:
     )
 
 
-@router.get("/", response_model=PackageListResponse)
+@router.get("", response_model=PackageListResponse)
 async def list_packages(  # pragma: no cover - thin wrapper
     limit: int = Query(10, ge=1, le=1000),
     offset: int = Query(0, ge=0),

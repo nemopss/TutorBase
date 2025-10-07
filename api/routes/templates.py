@@ -29,7 +29,7 @@ def _to_response(dto: TemplateDTO) -> TemplateResponse:
     )
 
 
-@router.get("/", response_model=TemplateListResponse)
+@router.get("", response_model=TemplateListResponse)
 async def list_templates(
     session: AsyncSession = Depends(get_session),
 ) -> TemplateListResponse:
