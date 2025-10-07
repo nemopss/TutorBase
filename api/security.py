@@ -37,7 +37,9 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> Dict[str, Any]:
         raise InitDataVerificationError("Missing hash in init data")
 
     data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(payload.items()))
-    secret_key = hashlib.sha256(bot_token.encode()).digest()
+    
+    # For Telegram WebApp, secret key is HMAC of "WebAppData" with bot token
+    secret_key = hmac.new("WebAppData".encode(), bot_token.encode(), hashlib.sha256).digest()
     calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
 
     if not hmac.compare_digest(calculated_hash, hash_value):
