@@ -1,0 +1,31 @@
+services:
+  applications_bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ksu-applications-bot-local
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "8001:8001"
+    command: uvicorn api.app:create_app --factory --host 0.0.0.0 --port 8001 --reload
+    volumes:
+      - .:/app
+    depends_on:
+      - redis
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: ksu-applications-bot-bot
+    env_file: .env
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    command: python bot.py
+    volumes:
+      - .:/app
+    depends_on:
+      - applications_bot
+      - redis

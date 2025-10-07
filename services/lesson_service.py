@@ -13,9 +13,14 @@ from services.utils import sync_package_metrics
 
 
 def _build_lesson_dto(lesson: Lesson) -> LessonDTO:
+    package_title = lesson.package.title if lesson.package else None
+    learner_name = lesson.package.learner.display_name if lesson.package and lesson.package.learner else None
+    
     return LessonDTO(
         id=lesson.id,
         package_id=lesson.package_id,
+        package_title=package_title,
+        learner_name=learner_name,
         scheduled_at=lesson.scheduled_at,
         status=lesson.status,
         duration_minutes=lesson.duration_minutes,

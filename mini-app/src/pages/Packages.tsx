@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Tag, Select, Space, Input, Button, message } from 'antd';
+import { Table, Tag, Select, Space, Input, Button, message, Progress } from 'antd';
 import type { TableProps } from 'antd';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import PackageForm from '../components/forms/PackageForm';
+import PageHeader from '../components/common/PageHeader';
+import EmptyState from '../components/common/EmptyState';
 
 // --- Types --- //
 interface PackageProgress {
@@ -134,11 +136,25 @@ const Packages: React.FC = () => {
     {
       title: 'Progress',
       key: 'progress',
-      render: (_, record) => (
-        <span>
-          {record.progress.completed} / {record.progress.total}
-        </span>
-      ),
+      width: 200,
+      render: (_, record) => {
+        const percent = record.progress.total > 0 
+          ? Math.round((record.progress.completed / record.progress.total) * 100) 
+          : 0;
+        return (
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <Progress 
+              percent={percent} 
+              size="small" 
+              strokeColor="#0f7b6c"
+              style={{ flex: 1, margin: 0 }}
+            />
+            <span style={{ fontSize: 12, color: '#8c8c8c', minWidth: 60 }}>
+              {record.progress.completed}/{record.progress.total}
+            </span>
+          </div>
+        );
+      },
     },
     {
       title: 'Actions',
@@ -156,12 +172,15 @@ const Packages: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h1>Lesson Packages</h1>
-        <Button type="primary" onClick={() => { setEditingPackage(null); setIsModalOpen(true); }}>
-          Create Package
-        </Button>
-      </div>
+      <PageHeader 
+        title="Packages"
+        subtitle="Manage lesson packages for your students"
+        actions={
+          <Button type="primary" onClick={() => { setEditingPackage(null); setIsModalOpen(true); }}>
+            Create Package
+          </Button>
+        }
+      />
       <Space style={{ marginBottom: 16 }}>
         <Input.Search
           placeholder="Search by title or learner"
@@ -187,32 +206,40 @@ const Packages: React.FC = () => {
           }}
         />
       </Space>
-      <Table
-        columns={columns}
-        dataSource={data?.items}
-        rowKey="id"
-        loading={isLoading}
-        pagination={{
-          current: currentPage,
-          pageSize: pageSize,
-          total: data?.total,
-        }}
-        onChange={handleTableChange}
-        onRow={(record) => {
-          return {
-            onClick: () => {
-              navigate(`/packages/${record.id}`);
-            },
-          };
-        }}
-        bordered
-      />
+      {!isLoading && (!data?.items || data.items.length === 0) ? (
+        <EmptyState 
+          title="No packages yet"
+          description="Create your first lesson package to get started"
+          actionText="Create Package"
+          onAction={() => { setEditingPackage(null); setIsModalOpen(true); }}
+        />
+      ) : (
+        <Table
+          columns={columns}
+          dataSource={data?.items}
+          rowKey="id"
+          loading={isLoading}
+          pagination={{
+            current: currentPage,
+            pageSize: pageSize,
+            total: data?.total,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} packages`,
+          }}
+          onChange={handleTableChange}
+          onRow={(record) => ({
+            onClick: () => navigate(`/packages/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
+          bordered
+        />
+      )}
       <PackageForm 
         open={isModalOpen}
         onCancel={() => { setIsModalOpen(false); setEditingPackage(null); }}
         onFinish={handleFormFinish}
         isLoading={createMutation.isPending || updateMutation.isPending}
-        initialValues={editingPackage}
       />
     </div>
   );

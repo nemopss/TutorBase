@@ -12,19 +12,40 @@ jobs:
       packages: write
     steps:
       - uses: actions/checkout@v4
+      
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
-      - name: Build and push image
+      
+      # Build Telegram Bot
+      - name: Build and push Bot image
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/ksu-applications-bot:latest
+      
+      # Build FastAPI Backend
+      - name: Build and push API image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          file: ./Dockerfile.api
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/ksu-applications-bot-api:latest
+      
+      # Build React Frontend
+      - name: Build and push App image
+        uses: docker/build-push-action@v6
+        with:
+          context: ./mini-app
+          file: ./mini-app/Dockerfile
+          push: true
+          tags: ghcr.io/${{ github.repository_owner }}/ksu-applications-bot-app:latest
 
   deploy:
     needs: build
@@ -41,5 +62,5 @@ jobs:
             cd /srv/applications-bot/current
             git pull
             docker compose pull
-            docker compose up -d
+            docker compose up -d --remove-orphans
 

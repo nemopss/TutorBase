@@ -46,6 +46,7 @@
 ### `services/reminder_service.py`
 - Обёртки над `regenerate_package_reminders`, управление отдельными инстансами/правилами.
 - Подготовка DTO напоминаний для API/фронта.
+- ✅ Реализована CRUD функция `fetch_reminder_instances_paginated` с фильтрацией по статусу, типу и пакету.
 
 ## Общие компоненты
 - DTO в `services/dto.py` (pydantic models): `PackageDTO`, `LessonDTO`, `TemplateDTO`, `ReminderDTO`.
@@ -67,7 +68,9 @@
    - Затем пресеты.
 3. После переноса обновить импорт в обработчиках, удалить дублирующийся код. — ✅ (основные обработчики переведены)
 4. Добавить unit-тесты на сервисы (pytest + async fixtures). — TODO
-5. Обновить документацию (mini_app_tasks, architecture doc) по завершении шага. — частично (обновлено `mini_app_tasks.md`)
+5. Обновить документацию (mini_app_tasks, architecture doc) по завершении шага. — ✅ (обновлено `mini_app_tasks.md`, `mini_app_architecture.md`)
+6. ✅ Реализован общий эндпоинт `/reminders` с пагинацией и фильтрацией.
+7. ✅ Добавлена поддержка фильтрации по типу reminder в API и CRUD.
 
 ## Интеграция с FSM (Stage 0.3)
 1. Создать адаптер `handlers/admin_packages_service.py` (или обновить существующий модуль), где каждое действие FSM вызывает соответствующий метод сервиса.

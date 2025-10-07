@@ -6,6 +6,7 @@ export default {
     '\\.css$': 'identity-obj-proxy',
   },
   transform: {
-    '^.+\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.app.json', compilerOptions: { verbatimModuleSyntax: false, } }],
+    '^.+\.tsx?$': ['ts-jest', { tsconfig: 'tsconfig.test.json' }],
   },
+  maxWorkers: 1,
 };

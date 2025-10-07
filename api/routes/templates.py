@@ -97,7 +97,7 @@ async def update_template_endpoint(
 async def delete_template_endpoint(
     template_id: int,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_required),
+    user=Depends(admin_or_teacher_required),
 ):
     try:
         await template_service.delete_template(session, template_id)

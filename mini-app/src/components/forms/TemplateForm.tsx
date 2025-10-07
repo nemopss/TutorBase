@@ -63,7 +63,7 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
       onCancel={onCancel}
       onOk={() => form.validateFields().then(handleFinish).catch(info => console.log('Validate Failed:', info))}
       confirmLoading={isLoading}
-      destroyOnClose
+      destroyOnHidden
       width={600}
     >
       <Form form={form} layout="vertical" name="template_form" autoComplete="off">
