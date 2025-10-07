@@ -1,8 +1,16 @@
 import React, { useState } from 'react';
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Descriptions, Spin, Alert, Tag, Table, Button, message, Space } from 'antd';
+import { Descriptions, Spin, Alert, Tag, Table, Button, message, Space, Tabs, Progress, Card, Statistic, Row, Col } from 'antd';
 import type { TableProps } from 'antd';
+import { 
+  ArrowLeftOutlined, 
+  ReloadOutlined, 
+  CheckCircleOutlined, 
+  CloseCircleOutlined,
+  ClockCircleOutlined
+} from '@ant-design/icons';
+import dayjs from 'dayjs';
 import api from '../services/api';
 import LessonForm from '../components/forms/LessonForm';
 
@@ -62,6 +70,7 @@ const updateLesson = async ({ lessonId, values }: { lessonId: number; values: an
 // --- Component --- //
 const PackageDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
@@ -165,41 +174,133 @@ const PackageDetail: React.FC = () => {
     return <Alert message="Error fetching package details" description={errorPackage.message} type="error" />;
   }
 
+  const handleRegenerateReminders = async () => {
+    try {
+      await api.post(`/packages/${id}/regenerate`);
+      message.success('Reminders regenerated successfully!');
+      queryClient.invalidateQueries({ queryKey: ['packageReminders', id] });
+    } catch (error: any) {
+      message.error(`Failed to regenerate reminders: ${error.message}`);
+    }
+  };
+
+  const progressPercent = packageData ? Math.round((packageData.progress.completed / packageData.progress.total) * 100) : 0;
+
+  const tabItems = [
+    {
+      key: 'lessons',
+      label: 'Lessons',
+      children: (
+        <div>
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
+            <Space>
+              <Button type="primary" onClick={() => { setEditingLesson(null); setIsModalOpen(true); }}>
+                Add Lesson
+              </Button>
+            </Space>
+          </div>
+          <Table
+            columns={lessonColumns}
+            dataSource={lessonsData?.items}
+            rowKey="id"
+            loading={isLoadingLessons}
+            pagination={false}
+            bordered
+          />
+        </div>
+      ),
+    },
+    {
+      key: 'reminders',
+      label: 'Reminders',
+      children: (
+        <div>
+          <Button icon={<ReloadOutlined />} onClick={handleRegenerateReminders} style={{ marginBottom: 16 }}>
+            Regenerate Reminders
+          </Button>
+          <Alert message="Reminders functionality coming soon" type="info" />
+        </div>
+      ),
+    },
+  ];
+
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-        <h1>{packageData?.title}</h1>
-        <Button type="primary" onClick={() => { setEditingLesson(null); setIsModalOpen(true); }}>
-          Add Lesson
+      <div style={{ marginBottom: 24 }}>
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/packages')} style={{ marginBottom: 16 }}>
+          Back to Packages
         </Button>
+        <Card>
+          <Row gutter={16} align="middle">
+            <Col flex="auto">
+              <h1 style={{ margin: 0 }}>{packageData?.title}</h1>
+              <p style={{ margin: '8px 0 0 0', color: '#8c8c8c' }}>Learner: {packageData?.learner_name}</p>
+            </Col>
+            <Col>
+              <Tag color={packageData?.status === 'active' ? 'green' : 'volcano'} style={{ fontSize: 14, padding: '4px 12px' }}>
+                {packageData?.status.toUpperCase()}
+              </Tag>
+            </Col>
+          </Row>
+        </Card>
       </div>
-      <Descriptions bordered column={1} style={{ marginBottom: 24 }}>
-        <Descriptions.Item label="Learner">{packageData?.learner_name}</Descriptions.Item>
-        <Descriptions.Item label="Status">
-          <Tag color={packageData?.status === 'active' ? 'green' : 'volcano'}>{packageData?.status.toUpperCase()}</Tag>
-        </Descriptions.Item>
-        <Descriptions.Item label="Progress">
-          {`${packageData?.progress.completed} / ${packageData?.progress.total} lessons`}
-        </Descriptions.Item>
-        <Descriptions.Item label="Start Date">
-          {packageData?.start_date ? new Date(packageData.start_date).toLocaleDateString() : 'N/A'}
-        </Descriptions.Item>
-        <Descriptions.Item label="End Date">
-          {packageData?.end_date ? new Date(packageData.end_date).toLocaleDateString() : 'N/A'}
-        </Descriptions.Item>
-        <Descriptions.Item label="Timezone">{packageData?.timezone}</Descriptions.Item>
-        <Descriptions.Item label="Notes">{packageData?.notes || '-'}</Descriptions.Item>
-      </Descriptions>
 
-      <h2>Lessons</h2>
-      <Table
-        columns={lessonColumns}
-        dataSource={lessonsData?.items}
-        rowKey="id"
-        loading={isLoadingLessons}
-        pagination={false}
-        bordered
-      />
+      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+        <Col xs={24} sm={8}>
+          <Card>
+            <Statistic
+              title="Total Lessons"
+              value={packageData?.progress.total || 0}
+              prefix={<ClockCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card>
+            <Statistic
+              title="Completed"
+              value={packageData?.progress.completed || 0}
+              prefix={<CheckCircleOutlined />}
+              valueStyle={{ color: '#3f8600' }}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={8}>
+          <Card>
+            <Statistic
+              title="Cancelled"
+              value={packageData?.progress.cancelled || 0}
+              prefix={<CloseCircleOutlined />}
+              valueStyle={{ color: '#cf1322' }}
+            />
+          </Card>
+        </Col>
+      </Row>
+
+      <Card style={{ marginBottom: 24 }}>
+        <h3>Progress</h3>
+        <Progress 
+          percent={progressPercent} 
+          status={progressPercent === 100 ? 'success' : 'active'}
+          strokeColor={{
+            '0%': '#108ee9',
+            '100%': '#87d068',
+          }}
+        />
+        <Descriptions bordered column={2} style={{ marginTop: 16 }}>
+          <Descriptions.Item label="Start Date">
+            {packageData?.start_date ? dayjs(packageData.start_date).format('MMM DD, YYYY') : 'N/A'}
+          </Descriptions.Item>
+          <Descriptions.Item label="End Date">
+            {packageData?.end_date ? dayjs(packageData.end_date).format('MMM DD, YYYY') : 'N/A'}
+          </Descriptions.Item>
+          <Descriptions.Item label="Timezone">{packageData?.timezone}</Descriptions.Item>
+          <Descriptions.Item label="Total Lessons">{packageData?.total_lessons || '-'}</Descriptions.Item>
+          <Descriptions.Item label="Notes" span={2}>{packageData?.notes || '-'}</Descriptions.Item>
+        </Descriptions>
+      </Card>
+
+      <Tabs items={tabItems} defaultActiveKey="lessons" />
 
       <LessonForm
         open={isModalOpen}

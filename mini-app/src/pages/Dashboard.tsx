@@ -1,7 +1,16 @@
 import React from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Row, Statistic, Spin, Alert, List, Typography } from 'antd';
-import { ArrowUpOutlined, ArrowDownOutlined } from '@ant-design/icons';
+import { Card, Col, Row, Statistic, Spin, Alert, List, Button, Space, Progress } from 'antd';
+import { 
+  PlusOutlined, 
+  CalendarOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  ClockCircleOutlined
+} from '@ant-design/icons';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import dayjs from 'dayjs';
 import api from '../services/api';
 
 // --- Types --- //
@@ -22,6 +31,32 @@ interface LessonListResponse {
   items: Lesson[];
 }
 
+interface DailyPoint {
+  date: string;
+  value: number;
+}
+
+interface DailyMetricsResponse {
+  items: DailyPoint[];
+}
+
+interface Package {
+  id: number;
+  title: string;
+  learner_name: string;
+  status: string;
+  progress: {
+    total: number;
+    completed: number;
+    cancelled: number;
+  };
+}
+
+interface PackageListResponse {
+  total: number;
+  items: Package[];
+}
+
 // --- API Fetchers --- //
 const fetchMetrics = async (): Promise<MetricsSummary> => {
   const { data } = await api.get('/metrics/summary');
@@ -34,6 +69,26 @@ const fetchUpcomingLessons = async (): Promise<LessonListResponse> => {
       status: 'scheduled',
       sort_by: 'scheduled_at',
       sort_order: 'asc',
+      limit: 10,
+    },
+  });
+  return data;
+};
+
+const fetchDailyLessons = async (): Promise<DailyMetricsResponse> => {
+  const { data } = await api.get('/metrics/lessons/daily', {
+    params: {
+      from_date: dayjs().subtract(30, 'days').toISOString(),
+      to_date: dayjs().toISOString(),
+    },
+  });
+  return data;
+};
+
+const fetchActivePackages = async (): Promise<PackageListResponse> => {
+  const { data } = await api.get('/packages', {
+    params: {
+      status_filter: 'active',
       limit: 5,
     },
   });
@@ -42,6 +97,8 @@ const fetchUpcomingLessons = async (): Promise<LessonListResponse> => {
 
 // --- Component --- //
 const Dashboard: React.FC = () => {
+  const navigate = useNavigate();
+
   const { 
     data: metricsData, 
     isLoading: isLoadingMetrics, 
@@ -62,6 +119,16 @@ const Dashboard: React.FC = () => {
     queryFn: fetchUpcomingLessons 
   });
 
+  const { data: dailyData } = useQuery<DailyMetricsResponse, Error>({
+    queryKey: ['dailyLessons'],
+    queryFn: fetchDailyLessons,
+  });
+
+  const { data: packagesData } = useQuery<PackageListResponse, Error>({
+    queryKey: ['activePackages'],
+    queryFn: fetchActivePackages,
+  });
+
   if (isLoadingMetrics) {
     return <Spin size="large" />;
   }
@@ -70,56 +137,179 @@ const Dashboard: React.FC = () => {
     return <Alert message="Error fetching metrics" description={errorMetrics.message} type="error" />;
   }
 
+  // Prepare chart data
+  const chartData = dailyData?.items.map(item => ({
+    date: dayjs(item.date).format('MMM DD'),
+    lessons: item.value,
+  })) || [];
+
+  // Prepare pie chart data
+  const totalLessons = Object.values(metricsData?.lessons || {}).reduce((a, b) => a + b, 0);
+  const pieData = [
+    { name: 'Scheduled', value: metricsData?.lessons.scheduled || 0, color: '#1890ff' },
+    { name: 'Completed', value: metricsData?.lessons.completed || 0, color: '#52c41a' },
+    { name: 'Cancelled', value: metricsData?.lessons.cancelled || 0, color: '#ff4d4f' },
+  ].filter(item => item.value > 0);
+
+
   return (
     <div>
-      <h1>Dashboard</h1>
-      <Row gutter={16}>
-        <Col span={8}>
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+        <h1>Dashboard</h1>
+        <Space>
+          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/packages')}>
+            New Package
+          </Button>
+          <Button icon={<CalendarOutlined />} onClick={() => navigate('/lessons')}>
+            View All Lessons
+          </Button>
+        </Space>
+      </div>
+
+      {/* Key Metrics */}
+      <Row gutter={[16, 16]}>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
               title="Total Lessons"
-              value={metricsData?.lessons.total || 0}
+              value={totalLessons}
+              prefix={<ClockCircleOutlined />}
             />
           </Card>
         </Col>
-        <Col span={8}>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
               title="Completed"
               value={metricsData?.lessons.completed || 0}
               valueStyle={{ color: '#3f8600' }}
-              prefix={<ArrowUpOutlined />}
+              prefix={<CheckCircleOutlined />}
             />
           </Card>
         </Col>
-        <Col span={8}>
+        <Col xs={24} sm={12} lg={6}>
+          <Card>
+            <Statistic
+              title="Scheduled"
+              value={metricsData?.lessons.scheduled || 0}
+              valueStyle={{ color: '#1890ff' }}
+              prefix={<ClockCircleOutlined />}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} sm={12} lg={6}>
           <Card>
             <Statistic
               title="Cancelled"
               value={metricsData?.lessons.cancelled || 0}
               valueStyle={{ color: '#cf1322' }}
-              prefix={<ArrowDownOutlined />}
+              prefix={<CloseCircleOutlined />}
             />
           </Card>
         </Col>
       </Row>
 
-      <h2 style={{ marginTop: 24 }}>Upcoming Lessons</h2>
-      {isLoadingLessons ? (
-        <Spin />
-      ) : isErrorLessons ? (
-        <Alert message="Error fetching lessons" description={errorLessons.message} type="error" />
-      ) : (
-        <List
-          bordered
-          dataSource={lessonsData?.items}
-          renderItem={(item) => (
-            <List.Item key={item.id}>
-              <Typography.Text>{new Date(item.scheduled_at).toLocaleString()}</Typography.Text>
-            </List.Item>
-          )}
-        />
-      )}
+      {/* Charts Row */}
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col xs={24} lg={16}>
+          <Card title="Lessons Over Time (Last 30 Days)" bordered={false}>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={chartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="date" />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Line type="monotone" dataKey="lessons" stroke="#1890ff" strokeWidth={2} />
+              </LineChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+        <Col xs={24} lg={8}>
+          <Card title="Lessons by Status" bordered={false}>
+            <ResponsiveContainer width="100%" height={300}>
+              <PieChart>
+                <Pie
+                  data={pieData}
+                  cx="50%"
+                  cy="50%"
+                  labelLine={false}
+                  label={(props: any) => `${props.name}: ${(props.percent * 100).toFixed(0)}%`}
+                  outerRadius={80}
+                  fill="#8884d8"
+                  dataKey="value"
+                >
+                  {pieData.map((entry, index) => (
+                    <Cell key={`cell-${index}`} fill={entry.color} />
+                  ))}
+                </Pie>
+                <Tooltip />
+              </PieChart>
+            </ResponsiveContainer>
+          </Card>
+        </Col>
+      </Row>
+
+      {/* Active Packages & Calendar */}
+      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+        <Col xs={24} lg={12}>
+          <Card 
+            title="Active Packages" 
+            bordered={false}
+            extra={<Button type="link" onClick={() => navigate('/packages')}>View All</Button>}
+          >
+            <List
+              dataSource={packagesData?.items || []}
+              loading={!packagesData}
+              renderItem={(pkg) => (
+                <List.Item 
+                  key={pkg.id}
+                  style={{ cursor: 'pointer' }}
+                  onClick={() => navigate(`/packages/${pkg.id}`)}
+                >
+                  <List.Item.Meta
+                    title={pkg.title}
+                    description={`Learner: ${pkg.learner_name}`}
+                  />
+                  <div style={{ textAlign: 'right' }}>
+                    <Progress 
+                      type="circle" 
+                      percent={Math.round((pkg.progress.completed / pkg.progress.total) * 100)} 
+                      width={50}
+                      strokeColor="#52c41a"
+                    />
+                    <div style={{ marginTop: 8, fontSize: 12, color: '#8c8c8c' }}>
+                      {pkg.progress.completed}/{pkg.progress.total} lessons
+                    </div>
+                  </div>
+                </List.Item>
+              )}
+            />
+          </Card>
+        </Col>
+        <Col xs={24} lg={12}>
+          <Card title="Upcoming Lessons" bordered={false}>
+            {isLoadingLessons ? (
+              <Spin />
+            ) : isErrorLessons ? (
+              <Alert message="Error fetching lessons" description={errorLessons.message} type="error" />
+            ) : (
+              <List
+                dataSource={lessonsData?.items}
+                renderItem={(item) => (
+                  <List.Item key={item.id}>
+                    <List.Item.Meta
+                      avatar={<CalendarOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
+                      title={dayjs(item.scheduled_at).format('MMM DD, YYYY HH:mm')}
+                      description={`Status: ${item.status}`}
+                    />
+                  </List.Item>
+                )}
+              />
+            )}
+          </Card>
+        </Col>
+      </Row>
     </div>
   );
 };

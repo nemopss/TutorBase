@@ -90,10 +90,12 @@
 
 ## Stage 3 – Enhancements
 1. [x] Reminders page with filters/actions (status, type, package filters).
-2. [ ] Settings page (profile, default timezone, notifications toggles).
-3. [ ] Advanced analytics (additional charts, breakdown by learner).
-4. [ ] Audit log/history display in package detail.
-5. [ ] WebSockets or polling strategy for real-time updates (optional).
+2. [x] Settings page (profile, default timezone, notifications toggles).
+3. [x] Advanced analytics (additional charts, breakdown by learner).
+4. [x] Enhanced Dashboard with graphs and statistics.
+5. [x] PackageDetail with tabs (lessons/reminders) and progress visualization.
+6. [ ] Audit log/history display in package detail.
+7. [ ] WebSockets or polling strategy for real-time updates (optional).
 
 ## Recent Fixes & Improvements
 1. [x] **Fixed Reminders API**: Added missing general `/reminders` endpoint with pagination and filtering.

@@ -1,7 +1,7 @@
 import React, { useEffect } from 'react';
 import { Layout, Menu } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined } from '@ant-design/icons';
+import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined, BarChartOutlined, SettingOutlined } from '@ant-design/icons';
 import { useTelegram } from '../../hooks/useTelegram';
 
 const { Sider, Content } = Layout;
@@ -26,6 +26,16 @@ const menuItems = [
     key: '/reminders',
     icon: <BellOutlined />,
     label: <Link to="/reminders">Reminders</Link>,
+  },
+  {
+    key: '/analytics',
+    icon: <BarChartOutlined />,
+    label: <Link to="/analytics">Analytics</Link>,
+  },
+  {
+    key: '/settings',
+    icon: <SettingOutlined />,
+    label: <Link to="/settings">Settings</Link>,
   },
 ];
 

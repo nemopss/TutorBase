@@ -8,6 +8,8 @@ import Packages from './pages/Packages';
 import PackageDetail from './pages/PackageDetail';
 import Templates from './pages/Templates';
 import Reminders from './pages/Reminders';
+import Settings from './pages/Settings';
+import Analytics from './pages/Analytics';
 
 function App() {
   const { isLoading, isAuthenticated } = useAuth();
@@ -77,7 +79,8 @@ function App() {
           <Route path="/packages/:id" element={<PackageDetail />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/reminders" element={<Reminders />} />
-          {/* Другие маршруты будут здесь */}
+          <Route path="/settings" element={<Settings />} />
+          <Route path="/analytics" element={<Analytics />} />
         </Routes>
       </AppLayout>
     </ConfigProvider>
