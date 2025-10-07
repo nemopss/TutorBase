@@ -57,7 +57,7 @@ const fetchDailyReminders = async (from?: string, to?: string): Promise<DailyMet
 };
 
 const fetchAllPackages = async (): Promise<PackageListResponse> => {
-  const { data } = await api.get('/packages', { params: { limit: 100 } });
+  const { data } = await api.get('/packages', { params: { limit: 1000 } });
   return data;
 };
 
@@ -188,7 +188,7 @@ const Analytics: React.FC = () => {
           <Card>
             <Statistic
               title="Total Packages"
-              value={packagesData?.total || 0}
+              value={packagesData?.items.length || 0}
               prefix={<BarChartOutlined />}
             />
           </Card>
