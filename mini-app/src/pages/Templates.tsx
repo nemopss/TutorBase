@@ -59,6 +59,18 @@ const Templates: React.FC = () => {
     queryFn: fetchTemplates,
   });
 
+  // Debug logging for Android
+  React.useEffect(() => {
+    console.log('Templates Debug:', { 
+      isLoading, 
+      isError, 
+      error: error?.message,
+      hasData: !!data, 
+      itemsCount: data?.items?.length || 0,
+      userAgent: navigator.userAgent 
+    });
+  }, [data, isLoading, isError, error]);
+
   const mutationOptions = {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
@@ -164,9 +176,8 @@ const Templates: React.FC = () => {
     },
   ];
 
-  if (isError) {
-    return <Alert message="Error fetching templates" description={error.message} type="error" />;
-  }
+  // Show error inline instead of blocking entire page
+  const showError = isError && error;
 
   return (
     <div>
@@ -179,7 +190,16 @@ const Templates: React.FC = () => {
           </Button>
         }
       />
-      {!isLoading && (!data?.items || data.items.length === 0) ? (
+      {showError && (
+        <Alert 
+          message="Error loading templates" 
+          description={error.message} 
+          type="error" 
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+      {!isLoading && !isError && (!data?.items || data.items.length === 0) ? (
         <EmptyState 
           title="No templates yet"
           description="Create a template to quickly generate lesson packages with predefined schedules"

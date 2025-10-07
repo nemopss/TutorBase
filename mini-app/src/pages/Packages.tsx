@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Tag, Select, Space, Input, Button, message, Progress } from 'antd';
+import { Table, Tag, Select, Space, Input, Button, message, Progress, Alert } from 'antd';
 import type { TableProps } from 'antd';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
@@ -72,11 +72,23 @@ const Packages: React.FC = () => {
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
-  const { data, isLoading } = useQuery<PackageListResponse, Error>({
+  const { data, isLoading, error, isError } = useQuery<PackageListResponse, Error>({
     queryKey: ['packages', currentPage, pageSize, statusFilter, debouncedSearchTerm],
     queryFn: () => fetchPackages(currentPage, pageSize, statusFilter, debouncedSearchTerm),
     placeholderData: (previousData) => previousData,
   });
+
+  // Debug logging for Android
+  React.useEffect(() => {
+    console.log('Packages Debug:', { 
+      isLoading, 
+      isError, 
+      error: error?.message,
+      hasData: !!data, 
+      itemsCount: data?.items?.length || 0,
+      userAgent: navigator.userAgent 
+    });
+  }, [data, isLoading, isError, error]);
 
   const mutationOptions = {
     onSuccess: () => {
@@ -131,15 +143,19 @@ const Packages: React.FC = () => {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => <Tag color={status === 'active' ? 'green' : 'volcano'}>{status?.toUpperCase() || 'UNKNOWN'}</Tag>,
+      render: (status: string) => {
+        const displayStatus = status ? status.toUpperCase() : 'UNKNOWN';
+        return <Tag color={status === 'active' ? 'green' : 'volcano'}>{displayStatus}</Tag>;
+      },
     },
     {
       title: 'Progress',
       key: 'progress',
       width: 200,
       render: (_, record) => {
-        const percent = record.progress?.total > 0 
-          ? Math.round((record.progress.completed / record.progress.total) * 100) 
+        const progress = record.progress || { total: 0, completed: 0 };
+        const percent = progress.total > 0 
+          ? Math.round((progress.completed / progress.total) * 100) 
           : 0;
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -205,7 +221,16 @@ const Packages: React.FC = () => {
           }}
         />
       </Space>
-      {!isLoading && (!data?.items || data.items.length === 0) ? (
+      {isError && (
+        <Alert 
+          message="Error loading packages" 
+          description={error?.message || 'Failed to load packages'} 
+          type="error" 
+          showIcon
+          style={{ marginBottom: 16 }}
+        />
+      )}
+      {!isLoading && !isError && (!data?.items || data.items.length === 0) ? (
         <EmptyState 
           title="No packages yet"
           description="Create your first lesson package to get started"

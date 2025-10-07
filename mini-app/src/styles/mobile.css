@@ -1,0 +1,72 @@
+/* Mobile-specific styles */
+
+/* Reduce padding on mobile */
+@media (max-width: 768px) {
+  .ant-btn {
+    padding: 4px 12px !important;
+    font-size: 13px !important;
+    height: auto !important;
+    min-height: 32px;
+  }
+
+  .ant-btn-icon-only {
+    padding: 4px !important;
+  }
+
+  /* Smaller headers on mobile */
+  h1 {
+    font-size: 24px !important;
+  }
+
+  h2 {
+    font-size: 20px !important;
+  }
+
+  /* Date picker improvements */
+  .ant-picker {
+    font-size: 13px !important;
+  }
+
+  .ant-picker-dropdown {
+    z-index: 9999 !important;
+  }
+
+  /* Card spacing */
+  .ant-card {
+    margin-bottom: 12px !important;
+  }
+
+  .ant-card-body {
+    padding: 16px !important;
+  }
+
+  /* Table responsive */
+  .ant-table {
+    font-size: 13px !important;
+  }
+
+  .ant-table-thead > tr > th {
+    padding: 8px !important;
+  }
+
+  .ant-table-tbody > tr > td {
+    padding: 8px !important;
+  }
+
+  /* Space between elements */
+  .ant-space-item {
+    margin-bottom: 8px !important;
+  }
+}
+
+/* Very small screens */
+@media (max-width: 480px) {
+  .ant-btn {
+    font-size: 12px !important;
+    padding: 2px 8px !important;
+  }
+
+  h1 {
+    font-size: 20px !important;
+  }
+}

@@ -2,7 +2,23 @@ import axios from 'axios';
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || '/api/v1',
+  timeout: 15000, // 15 second timeout for Android
 });
+
+// Request interceptor for debugging
+api.interceptors.request.use(
+  (config) => {
+    console.log(`API Request: ${config.method?.toUpperCase()} ${config.url}`, {
+      headers: config.headers,
+      params: config.params,
+    });
+    return config;
+  },
+  (error) => {
+    console.error('API Request Error:', error);
+    return Promise.reject(error);
+  }
+);
 
 // Response interceptor for token refresh
 api.interceptors.response.use(
@@ -11,7 +27,7 @@ api.interceptors.response.use(
     const originalRequest = error.config;
 
     // Check if the error is 401 and it's not a retry request or the refresh endpoint
-    if (error.response.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh') {
+    if (error.response && error.response.status === 401 && !originalRequest._retry && originalRequest.url !== '/auth/refresh') {
       originalRequest._retry = true; // Mark it as a retry
 
       try {

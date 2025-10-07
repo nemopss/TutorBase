@@ -1,5 +1,4 @@
 import React from 'react';
-import { Space } from 'antd';
 import { useTelegram } from '../../hooks/useTelegram';
 
 interface PageHeaderProps {
@@ -18,34 +17,36 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions }) => 
   return (
     <div style={{ 
       display: 'flex', 
-      justifyContent: 'space-between', 
-      alignItems: 'flex-start',
-      marginBottom: 32,
+      flexDirection: 'column',
+      gap: 16,
+      marginBottom: 24,
       paddingBottom: 16,
       borderBottom: `1px solid ${borderColor}`,
     }}>
-      <div>
-        <h1 style={{ 
-          fontSize: 32, 
-          fontWeight: 700, 
-          margin: 0,
-          marginBottom: subtitle ? 4 : 0,
-          color: titleColor,
-          lineHeight: 1.2,
-        }}>
-          {title}
-        </h1>
-        {subtitle && (
-          <p style={{ 
-            fontSize: 14, 
-            color: subtitleColor, 
-            margin: 0 
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: 12 }}>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <h1 style={{ 
+            fontSize: 28, 
+            fontWeight: 700, 
+            margin: 0,
+            marginBottom: subtitle ? 4 : 0,
+            color: titleColor,
+            lineHeight: 1.2,
           }}>
-            {subtitle}
-          </p>
-        )}
+            {title}
+          </h1>
+          {subtitle && (
+            <p style={{ 
+              fontSize: 14, 
+              color: subtitleColor, 
+              margin: 0 
+            }}>
+              {subtitle}
+            </p>
+          )}
+        </div>
+        {actions && <div style={{ display: 'flex', alignItems: 'center' }}>{actions}</div>}
       </div>
-      {actions && <Space>{actions}</Space>}
     </div>
   );
 };

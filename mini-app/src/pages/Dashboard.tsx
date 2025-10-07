@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Row, Statistic, Spin, Alert, List, Button, Progress } from 'antd';
+import { Card, Col, Row, Statistic, Spin, Alert, List, Button, Progress, Space } from 'antd';
 import { 
   PlusOutlined, 
   CalendarOutlined,
@@ -160,14 +160,23 @@ const Dashboard: React.FC = () => {
         title="Dashboard"
         subtitle="Overview of your lessons and packages"
         actions={
-          <>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/packages')}>
+          <Space wrap size="small" style={{ display: 'flex', flexWrap: 'wrap' }}>
+            <Button 
+              type="primary" 
+              icon={<PlusOutlined />} 
+              onClick={() => navigate('/packages')}
+              size="middle"
+            >
               New Package
             </Button>
-            <Button icon={<CalendarOutlined />} onClick={() => navigate('/lessons')}>
+            <Button 
+              icon={<CalendarOutlined />} 
+              onClick={() => navigate('/lessons')}
+              size="middle"
+            >
               View Lessons
             </Button>
-          </>
+          </Space>
         }
       />
 

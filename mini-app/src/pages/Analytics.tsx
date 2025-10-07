@@ -114,21 +114,24 @@ const Analytics: React.FC = () => {
   }));
 
   // Learner breakdown data
-  const learnerData = packagesData?.items.reduce((acc: any[], pkg) => {
+  const learnerData = (packagesData?.items || []).reduce((acc: any[], pkg) => {
+    if (!pkg.learner_name || !pkg.progress) return acc;
+    
     const existing = acc.find(item => item.name === pkg.learner_name);
     if (existing) {
-      existing.total += pkg.progress.total;
-      existing.completed += pkg.progress.completed;
+      existing.total += pkg.progress?.total || 0;
+      existing.completed += pkg.progress?.completed || 0;
+      existing.packages += 1;
     } else {
       acc.push({
         name: pkg.learner_name,
-        total: pkg.progress.total,
-        completed: pkg.progress.completed,
+        total: pkg.progress?.total || 0,
+        completed: pkg.progress?.completed || 0,
         packages: 1,
       });
     }
     return acc;
-  }, []) || [];
+  }, []);
 
   const topLearners = learnerData
     .sort((a, b) => b.completed - a.completed)
@@ -144,14 +147,16 @@ const Analytics: React.FC = () => {
         title="Analytics"
         subtitle="Insights and statistics about your lessons"
         actions={
-          <Space wrap style={{ flexWrap: 'wrap' }}>
+          <Space wrap size="small" direction="vertical" style={{ width: '100%' }}>
             <RangePicker
               value={dateRange}
               onChange={handleDateChange}
               format="YYYY-MM-DD"
-              style={{ width: '100%', maxWidth: 300 }}
+              style={{ width: '100%' }}
+              placement="bottomLeft"
+              getPopupContainer={(trigger) => trigger.parentElement || document.body}
             />
-            <Button icon={<DownloadOutlined />} onClick={handleExport}>
+            <Button icon={<DownloadOutlined />} onClick={handleExport} block>
               Export CSV
             </Button>
           </Space>
