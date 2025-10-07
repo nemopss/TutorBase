@@ -1,5 +1,6 @@
 import React from 'react';
 import { Space } from 'antd';
+import { useTelegram } from '../../hooks/useTelegram';
 
 interface PageHeaderProps {
   title: string;
@@ -8,6 +9,12 @@ interface PageHeaderProps {
 }
 
 const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions }) => {
+  const { colorScheme } = useTelegram();
+  
+  const titleColor = colorScheme === 'dark' ? '#ffffff' : '#000000';
+  const subtitleColor = colorScheme === 'dark' ? '#a0a0a0' : 'rgba(0,0,0,0.45)';
+  const borderColor = colorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)';
+
   return (
     <div style={{ 
       display: 'flex', 
@@ -15,7 +22,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions }) => 
       alignItems: 'flex-start',
       marginBottom: 32,
       paddingBottom: 16,
-      borderBottom: '1px solid rgba(0,0,0,0.06)',
+      borderBottom: `1px solid ${borderColor}`,
     }}>
       <div>
         <h1 style={{ 
@@ -23,7 +30,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions }) => 
           fontWeight: 700, 
           margin: 0,
           marginBottom: subtitle ? 4 : 0,
-          color: 'var(--ant-color-text)',
+          color: titleColor,
           lineHeight: 1.2,
         }}>
           {title}
@@ -31,7 +38,7 @@ const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions }) => 
         {subtitle && (
           <p style={{ 
             fontSize: 14, 
-            color: 'rgba(0,0,0,0.45)', 
+            color: subtitleColor, 
             margin: 0 
           }}>
             {subtitle}

@@ -13,6 +13,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import dayjs from 'dayjs';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import { useTelegram } from '../hooks/useTelegram';
 
 // --- Types --- //
 interface MetricsSummary {
@@ -99,6 +100,7 @@ const fetchActivePackages = async (): Promise<PackageListResponse> => {
 // --- Component --- //
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
+  const { colorScheme } = useTelegram();
 
   const { 
     data: metricsData, 
@@ -152,6 +154,14 @@ const Dashboard: React.FC = () => {
     { name: 'Cancelled', value: metricsData?.lessons.cancelled || 0, color: '#ff4d4f' },
   ].filter(item => item.value > 0);
 
+  // Card styles for dark mode
+  const cardStyle = {
+    background: colorScheme === 'dark' ? '#1f1f1f' : '#ffffff',
+    borderColor: colorScheme === 'dark' ? '#3a3a3a' : '#e8e8e8',
+  };
+
+  const textColor = colorScheme === 'dark' ? '#ffffff' : '#000000';
+  const subtitleColor = colorScheme === 'dark' ? '#a0a0a0' : '#8c8c8c';
 
   return (
     <div>
@@ -173,26 +183,27 @@ const Dashboard: React.FC = () => {
       {/* Key Metrics */}
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
+          <Card style={cardStyle}>
             <Statistic
               title="Total Lessons"
               value={totalLessons}
               prefix={<ClockCircleOutlined />}
+              valueStyle={{ color: textColor }}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
+          <Card style={cardStyle}>
             <Statistic
               title="Completed"
               value={metricsData?.lessons.completed || 0}
-              valueStyle={{ color: '#3f8600' }}
+              valueStyle={{ color: '#52c41a' }}
               prefix={<CheckCircleOutlined />}
             />
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
+          <Card style={cardStyle}>
             <Statistic
               title="Scheduled"
               value={metricsData?.lessons.scheduled || 0}
@@ -202,11 +213,11 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} sm={12} lg={6}>
-          <Card>
+          <Card style={cardStyle}>
             <Statistic
               title="Cancelled"
               value={metricsData?.lessons.cancelled || 0}
-              valueStyle={{ color: '#cf1322' }}
+              valueStyle={{ color: '#ff4d4f' }}
               prefix={<CloseCircleOutlined />}
             />
           </Card>
@@ -216,13 +227,13 @@ const Dashboard: React.FC = () => {
       {/* Charts Row */}
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={16}>
-          <Card title="Lessons Over Time (Last 30 Days)" bordered={false}>
+          <Card title="Lessons Over Time (Last 30 Days)" bordered={false} style={cardStyle}>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="date" />
-                <YAxis />
-                <Tooltip />
+                <CartesianGrid strokeDasharray="3 3" stroke={colorScheme === 'dark' ? '#3a3a3a' : '#e8e8e8'} />
+                <XAxis dataKey="date" stroke={textColor} />
+                <YAxis stroke={textColor} />
+                <Tooltip contentStyle={{ backgroundColor: cardStyle.background, borderColor: cardStyle.borderColor, color: textColor }} />
                 <Legend />
                 <Line type="monotone" dataKey="lessons" stroke="#1890ff" strokeWidth={2} />
               </LineChart>
@@ -230,7 +241,7 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="Lessons by Status" bordered={false}>
+          <Card title="Lessons by Status" bordered={false} style={cardStyle}>
             <ResponsiveContainer width="100%" height={300}>
               <PieChart>
                 <Pie
@@ -260,6 +271,7 @@ const Dashboard: React.FC = () => {
           <Card 
             title="Active Packages" 
             bordered={false}
+            style={cardStyle}
             extra={<Button type="link" onClick={() => navigate('/packages')}>View All</Button>}
           >
             <List
@@ -282,7 +294,7 @@ const Dashboard: React.FC = () => {
                       width={50}
                       strokeColor="#52c41a"
                     />
-                    <div style={{ marginTop: 8, fontSize: 12, color: '#8c8c8c' }}>
+                    <div style={{ marginTop: 8, fontSize: 12, color: subtitleColor }}>
                       {pkg.progress.completed}/{pkg.progress.total} lessons
                     </div>
                   </div>
@@ -292,7 +304,7 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Upcoming Lessons" bordered={false}>
+          <Card title="Upcoming Lessons" bordered={false} style={cardStyle}>
             {isLoadingLessons ? (
               <Spin />
             ) : isErrorLessons ? (
