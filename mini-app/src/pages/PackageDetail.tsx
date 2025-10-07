@@ -189,15 +189,16 @@ const PackageDetail: React.FC = () => {
   const tabItems = [
     {
       key: 'lessons',
-      label: 'Lessons',
+      label: `Lessons (${lessonsData?.items.length || 0})`,
       children: (
         <div>
-          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between' }}>
-            <Space>
-              <Button type="primary" onClick={() => { setEditingLesson(null); setIsModalOpen(true); }}>
-                Add Lesson
-              </Button>
-            </Space>
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            <div style={{ color: '#8c8c8c', fontSize: 14 }}>
+              {packageData?.progress.completed} completed, {packageData?.progress.cancelled} cancelled
+            </div>
+            <Button type="primary" onClick={() => { setEditingLesson(null); setIsModalOpen(true); }}>
+              Add Lesson
+            </Button>
           </div>
           <Table
             columns={lessonColumns}
@@ -215,10 +216,20 @@ const PackageDetail: React.FC = () => {
       label: 'Reminders',
       children: (
         <div>
-          <Button icon={<ReloadOutlined />} onClick={handleRegenerateReminders} style={{ marginBottom: 16 }}>
-            Regenerate Reminders
-          </Button>
-          <Alert message="Reminders functionality coming soon" type="info" />
+          <Space style={{ marginBottom: 16 }}>
+            <Button type="primary" icon={<ReloadOutlined />} onClick={handleRegenerateReminders}>
+              Regenerate All Reminders
+            </Button>
+            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['packageReminders', id] })}>
+              Refresh
+            </Button>
+          </Space>
+          <Alert 
+            message="Reminders Management" 
+            description="Use the Reminders page to view and manage all reminders for this package. Click 'Regenerate' to recreate all reminders based on current lessons."
+            type="info" 
+            showIcon
+          />
         </div>
       ),
     },
