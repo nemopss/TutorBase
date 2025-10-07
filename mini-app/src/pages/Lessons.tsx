@@ -68,7 +68,6 @@ const Lessons: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
-  const [selectedDate, setSelectedDate] = useState<Dayjs>(dayjs());
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -212,7 +211,6 @@ const Lessons: React.FC = () => {
   };
 
   const onCalendarSelect = (date: Dayjs) => {
-    setSelectedDate(date);
     const lessonsOnDate = data?.items.filter(lesson => 
       dayjs(lesson.scheduled_at).isSame(date, 'day')
     ) || [];

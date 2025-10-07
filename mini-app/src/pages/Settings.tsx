@@ -63,9 +63,6 @@ const Settings: React.FC = () => {
             <Form.Item label="Display Name" initialValue={user?.display_name}>
               <Input placeholder="Your display name" disabled />
             </Form.Item>
-            <Form.Item label="Username" initialValue={user?.username}>
-              <Input placeholder="@username" disabled />
-            </Form.Item>
             <Text type="secondary" style={{ fontSize: 12 }}>
               Profile information is synced from your Telegram account
             </Text>
