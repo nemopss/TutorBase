@@ -51,6 +51,8 @@ const Templates: React.FC = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [templateToDelete, setTemplateToDelete] = useState<number | null>(null);
 
   const { data, isLoading, isError, error } = useQuery<TemplateListResponse, Error>({
     queryKey: ['templates'],
@@ -86,8 +88,26 @@ const Templates: React.FC = () => {
     }
   });
 
-  const deleteMutation = useMutation({ mutationFn: deleteTemplate, ...mutationOptions, onSuccess: () => message.success('Template deleted!') });
-  const duplicateMutation = useMutation({ mutationFn: duplicateTemplate, ...mutationOptions, onSuccess: () => message.success('Template duplicated!') });
+  const deleteMutation = useMutation({ 
+    mutationFn: deleteTemplate, 
+    onSuccess: () => { 
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
+      message.success('Template deleted!');
+    },
+    onError: (error: any) => {
+      console.error('Delete error:', error);
+      message.error(`Failed to delete template: ${error.response?.data?.detail || error.message}`);
+    }
+  });
+  
+  const duplicateMutation = useMutation({ 
+    mutationFn: duplicateTemplate, 
+    ...mutationOptions, 
+    onSuccess: () => { 
+      message.success('Template duplicated!'); 
+      mutationOptions.onSuccess();
+    }
+  });
 
   const handleFormFinish = (values: any) => {
     if (editingTemplate) {
@@ -98,13 +118,16 @@ const Templates: React.FC = () => {
   };
 
   const handleDelete = (id: number) => {
-    Modal.confirm({
-      title: 'Are you sure you want to delete this template?',
-      content: 'This action cannot be undone.',
-      okText: 'Yes, delete it',
-      okType: 'danger',
-      onOk: () => deleteMutation.mutate(id),
-    });
+    setTemplateToDelete(id);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDelete = () => {
+    if (templateToDelete) {
+      deleteMutation.mutate(templateToDelete);
+      setDeleteModalOpen(false);
+      setTemplateToDelete(null);
+    }
   };
 
   const columns: TableProps<Template>['columns'] = [
@@ -180,6 +203,19 @@ const Templates: React.FC = () => {
         isLoading={createMutation.isPending || updateMutation.isPending}
         initialValues={editingTemplate}
       />
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Template"
+        onCancel={() => setDeleteModalOpen(false)}
+        onOk={confirmDelete}
+        okText="Delete"
+        okType="danger"
+        confirmLoading={deleteMutation.isPending}
+      >
+        <p>Are you sure you want to delete this template?</p>
+        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+      </Modal>
     </div>
   );
 };
