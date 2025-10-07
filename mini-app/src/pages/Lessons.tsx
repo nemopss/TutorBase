@@ -13,6 +13,8 @@ import PageHeader from '../components/common/PageHeader';
 interface Lesson {
   id: number;
   package_id: number;
+  package_title?: string;
+  learner_name?: string;
   scheduled_at: string;
   status: string;
   duration_minutes?: number;
@@ -131,6 +133,20 @@ const Lessons: React.FC = () => {
       key: 'scheduled_at',
       render: (text: string) => dayjs(text).format('YYYY-MM-DD HH:mm'),
       sorter: (a, b) => dayjs(a.scheduled_at).unix() - dayjs(b.scheduled_at).unix(),
+      width: 180,
+    },
+    {
+      title: 'Package',
+      dataIndex: 'package_title',
+      key: 'package_title',
+      render: (title: string) => title || '-',
+      ellipsis: true,
+    },
+    {
+      title: 'Learner',
+      dataIndex: 'learner_name',
+      key: 'learner_name',
+      render: (name: string) => name || '-',
     },
     {
       title: 'Status',
@@ -139,26 +155,30 @@ const Lessons: React.FC = () => {
       render: (status: string) => <Tag color={getStatusColor(status)}>{status.toUpperCase()}</Tag>,
       filters: STATUS_OPTIONS.map(option => ({ text: option.label, value: option.value })),
       onFilter: (value, record) => record.status === value,
+      width: 120,
     },
     {
-      title: 'Duration (min)',
+      title: 'Duration',
       dataIndex: 'duration_minutes',
       key: 'duration_minutes',
-      render: (duration: number) => duration || '-',
+      render: (duration: number) => duration ? `${duration} min` : '-',
+      width: 100,
     },
     {
       title: 'Notes',
       dataIndex: 'teacher_notes',
       key: 'teacher_notes',
-      render: (notes: string) => notes ? notes.substring(0, 50) + (notes.length > 50 ? '...' : '') : '-',
+      render: (notes: string) => notes ? notes.substring(0, 40) + (notes.length > 40 ? '...' : '') : '-',
+      ellipsis: true,
     },
     {
       title: 'Actions',
       key: 'actions',
+      width: 150,
       render: (_, record) => (
-        <Space size="middle">
-          <Button type="link" onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>Edit</Button>
-          <Button type="link" danger onClick={() => handleDelete(record.id)}>Delete</Button>
+        <Space size="small">
+          <Button type="link" size="small" onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>Edit</Button>
+          <Button type="link" size="small" danger onClick={() => handleDelete(record.id)}>Delete</Button>
         </Space>
       ),
     },

@@ -15,6 +15,8 @@ class LearnerDTO:
 class LessonDTO:
     id: int
     package_id: int
+    package_title: Optional[str]
+    learner_name: Optional[str]
     scheduled_at: datetime
     status: str
     duration_minutes: Optional[int]

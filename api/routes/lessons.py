@@ -44,6 +44,8 @@ def _to_response(dto: LessonDTO) -> LessonResponse:
     return LessonResponse(
         id=dto.id,
         package_id=dto.package_id,
+        package_title=dto.package_title,
+        learner_name=dto.learner_name,
         scheduled_at=dto.scheduled_at,
         status=dto.status,
         duration_minutes=dto.duration_minutes,
