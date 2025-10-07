@@ -5,6 +5,7 @@ import type { TableProps } from 'antd';
 import api from '../services/api';
 import TemplateForm from '../components/forms/TemplateForm';
 import PageHeader from '../components/common/PageHeader';
+import EmptyState from '../components/common/EmptyState';
 
 // --- Types --- //
 interface Template {
@@ -155,14 +156,23 @@ const Templates: React.FC = () => {
           </Button>
         }
       />
-      <Table
-        columns={columns}
-        dataSource={data?.items}
-        rowKey="id"
-        loading={isLoading}
-        pagination={false}
-        bordered
-      />
+      {!isLoading && (!data?.items || data.items.length === 0) ? (
+        <EmptyState 
+          title="No templates yet"
+          description="Create a template to quickly generate lesson packages with predefined schedules"
+          actionText="Create Template"
+          onAction={() => { setEditingTemplate(null); setIsModalOpen(true); }}
+        />
+      ) : (
+        <Table
+          columns={columns}
+          dataSource={data?.items}
+          rowKey="id"
+          loading={isLoading}
+          pagination={false}
+          bordered
+        />
+      )}
       <TemplateForm 
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}

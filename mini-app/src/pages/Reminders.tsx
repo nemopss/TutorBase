@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import PageHeader from '../components/common/PageHeader';
+import EmptyState from '../components/common/EmptyState';
 
 // --- Types --- //
 interface Reminder {
@@ -298,28 +299,34 @@ const Reminders: React.FC = () => {
         />
       </Space>
 
-      <Table
-        columns={columns}
-        dataSource={data?.items}
-        rowKey="id"
-        loading={isLoading}
-        pagination={{
-          current: currentPage,
-          pageSize: pageSize,
-          total: data?.total,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} reminders`,
-        }}
-        onChange={handleTableChange}
-        bordered
-        scroll={{ x: 1200 }}
-      />
+      {!isLoading && (!data?.items || data.items.length === 0) ? (
+        <EmptyState 
+          title="No reminders found"
+          description="Reminders will be automatically created when you schedule lessons"
+        />
+      ) : (
+        <Table
+          columns={columns}
+          dataSource={data?.items}
+          rowKey="id"
+          loading={isLoading}
+          pagination={{
+            current: currentPage,
+            pageSize: pageSize,
+            total: data?.total,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} reminders`,
+          }}
+          onChange={handleTableChange}
+          bordered
+          scroll={{ x: 1200 }}
+        />
+      )}
 
       <Modal
         open={isModalOpen}
         title="Edit Reminder"
-        okText="Save"
         cancelText="Cancel"
         onCancel={handleCancel}
         onOk={() => {

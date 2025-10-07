@@ -8,6 +8,7 @@ import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import LessonForm from '../components/forms/LessonForm';
 import PageHeader from '../components/common/PageHeader';
+import EmptyState from '../components/common/EmptyState';
 
 // --- Types --- //
 interface Lesson {
@@ -287,22 +288,29 @@ const Lessons: React.FC = () => {
             />
           </Space>
 
-          <Table
-            columns={columns}
-            dataSource={data?.items}
-            rowKey="id"
-            loading={isLoading}
-            pagination={{
-              current: currentPage,
-              pageSize: pageSize,
-              total: data?.total,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} lessons`,
-            }}
-            onChange={handleTableChange}
-            bordered
-          />
+          {!isLoading && (!data?.items || data.items.length === 0) ? (
+            <EmptyState 
+              title="No lessons found"
+              description="Lessons will appear here once you create packages and schedule lessons"
+            />
+          ) : (
+            <Table
+              columns={columns}
+              dataSource={data?.items}
+              rowKey="id"
+              loading={isLoading}
+              pagination={{
+                current: currentPage,
+                pageSize: pageSize,
+                total: data?.total,
+                showSizeChanger: true,
+                showQuickJumper: true,
+                showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} lessons`,
+              }}
+              onChange={handleTableChange}
+              bordered
+            />
+          )}
         </>
       ) : (
         <Card>
