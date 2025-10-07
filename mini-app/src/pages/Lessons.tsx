@@ -297,6 +297,7 @@ const Lessons: React.FC = () => {
               dataSource={data?.items}
               rowKey="id"
               loading={isLoading}
+              scroll={{ x: 900 }}
               pagination={{
                 current: currentPage,
                 pageSize: pageSize,

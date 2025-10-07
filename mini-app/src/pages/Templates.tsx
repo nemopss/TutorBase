@@ -193,6 +193,7 @@ const Templates: React.FC = () => {
           rowKey="id"
           loading={isLoading}
           pagination={false}
+          scroll={{ x: 700 }}
           bordered
         />
       )}

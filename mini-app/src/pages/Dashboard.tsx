@@ -13,7 +13,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, Responsi
 import dayjs from 'dayjs';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
-import { useTelegram } from '../hooks/useTelegram';
+import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 
 // --- Types --- //
 interface MetricsSummary {
@@ -100,7 +100,7 @@ const fetchActivePackages = async (): Promise<PackageListResponse> => {
 // --- Component --- //
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
-  const { colorScheme } = useTelegram();
+  const { cardStyle, textColor, subtitleColor, chartGridColor, tooltipStyle } = useResponsiveStyles();
 
   const { 
     data: metricsData, 
@@ -153,15 +153,6 @@ const Dashboard: React.FC = () => {
     { name: 'Completed', value: metricsData?.lessons.completed || 0, color: '#52c41a' },
     { name: 'Cancelled', value: metricsData?.lessons.cancelled || 0, color: '#ff4d4f' },
   ].filter(item => item.value > 0);
-
-  // Card styles for dark mode
-  const cardStyle = {
-    background: colorScheme === 'dark' ? '#1f1f1f' : '#ffffff',
-    borderColor: colorScheme === 'dark' ? '#3a3a3a' : '#e8e8e8',
-  };
-
-  const textColor = colorScheme === 'dark' ? '#ffffff' : '#000000';
-  const subtitleColor = colorScheme === 'dark' ? '#a0a0a0' : '#8c8c8c';
 
   return (
     <div>
@@ -230,10 +221,10 @@ const Dashboard: React.FC = () => {
           <Card title="Lessons Over Time (Last 30 Days)" bordered={false} style={cardStyle}>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={colorScheme === 'dark' ? '#3a3a3a' : '#e8e8e8'} />
+                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
                 <XAxis dataKey="date" stroke={textColor} />
                 <YAxis stroke={textColor} />
-                <Tooltip contentStyle={{ backgroundColor: cardStyle.background, borderColor: cardStyle.borderColor, color: textColor }} />
+                <Tooltip contentStyle={tooltipStyle} />
                 <Legend />
                 <Line type="monotone" dataKey="lessons" stroke="#1890ff" strokeWidth={2} />
               </LineChart>

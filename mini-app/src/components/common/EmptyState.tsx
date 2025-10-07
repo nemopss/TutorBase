@@ -1,6 +1,7 @@
 import React from 'react';
 import { Empty, Button } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import { useTelegram } from '../../hooks/useTelegram';
 
 interface EmptyStateProps {
   title?: string;
@@ -17,6 +18,10 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   onAction,
   icon 
 }) => {
+  const { colorScheme } = useTelegram();
+  const titleColor = colorScheme === 'dark' ? '#ffffff' : '#37352f';
+  const descColor = colorScheme === 'dark' ? '#a0a0a0' : '#8c8c8c';
+
   return (
     <div style={{ 
       display: 'flex', 
@@ -32,11 +37,11 @@ const EmptyState: React.FC<EmptyStateProps> = ({
         }}
         description={
           <div>
-            <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 8, color: '#37352f' }}>
+            <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 8, color: titleColor }}>
               {title}
             </div>
             {description && (
-              <div style={{ fontSize: 14, color: '#8c8c8c' }}>
+              <div style={{ fontSize: 14, color: descColor }}>
                 {description}
               </div>
             )}

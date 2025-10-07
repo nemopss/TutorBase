@@ -131,14 +131,14 @@ const Packages: React.FC = () => {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => <Tag color={status === 'active' ? 'green' : 'volcano'}>{status.toUpperCase()}</Tag>,
+      render: (status: string) => <Tag color={status === 'active' ? 'green' : 'volcano'}>{status?.toUpperCase() || 'UNKNOWN'}</Tag>,
     },
     {
       title: 'Progress',
       key: 'progress',
       width: 200,
       render: (_, record) => {
-        const percent = record.progress.total > 0 
+        const percent = record.progress?.total > 0 
           ? Math.round((record.progress.completed / record.progress.total) * 100) 
           : 0;
         return (
@@ -181,24 +181,23 @@ const Packages: React.FC = () => {
           </Button>
         }
       />
-      <Space style={{ marginBottom: 16 }}>
+      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }}>
         <Input.Search
           placeholder="Search by title or learner"
           allowClear
-          onSearch={(value) => {
-            setSearchTerm(value);
+          onSearch={() => {
             setCurrentPage(1);
           }}
           onChange={(e) => {
             setSearchTerm(e.target.value);
             setCurrentPage(1);
           }}
-          style={{ width: 300 }}
+          style={{ width: '100%', maxWidth: 300 }}
         />
         <Select
           placeholder="Filter by status"
           allowClear
-          style={{ width: 200 }}
+          style={{ width: '100%', maxWidth: 200 }}
           options={STATUS_OPTIONS}
           onChange={(value) => {
             setStatusFilter(value);
@@ -219,6 +218,7 @@ const Packages: React.FC = () => {
           dataSource={data?.items}
           rowKey="id"
           loading={isLoading}
+          scroll={{ x: 800 }}
           pagination={{
             current: currentPage,
             pageSize: pageSize,
