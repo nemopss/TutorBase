@@ -41,10 +41,10 @@ pytest
 FastAPI app available at `/api/v1`. Key endpoints:
 - `POST /api/v1/auth/login`
 - `POST /api/v1/auth/refresh`
-- `GET /api/v1/packages`
-- `GET /api/v1/lessons/packages/{package_id}`
-- `GET /api/v1/templates`
-- `GET /api/v1/reminders/packages/{package_id}`
+- `GET /api/v1/packages`, `POST /api/v1/packages/create`
+- `GET /api/v1/lessons`, `GET /api/v1/lessons/packages/{package_id}`, `POST /api/v1/lessons/packages/{package_id}`
+- `GET /api/v1/templates`, `POST /api/v1/templates/create`
+- `GET /api/v1/reminders`, `GET /api/v1/reminders/packages/{package_id}`
 - `GET /api/v1/metrics/summary`
 
 ## License

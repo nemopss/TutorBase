@@ -11,9 +11,9 @@
    - [x] Add `updated_by_user_id` / `updated_at` fields to packages and lessons.
    - [x] Ensure indices on `lessons` (package_id + scheduled_at).
 3. API skeleton
-   - [ ] Set up FastAPI app with router structure `/api/v1`.
-   - [ ] Configure logging, error handling, OpenAPI docs.
-   - [ ] Integrate DB session dependency (shared with bot).
+   - [x] Set up FastAPI app with router structure `/api/v1`.
+   - [x] Configure logging, error handling, OpenAPI docs.
+   - [x] Integrate DB session dependency (shared with bot).
 
 ## Stage 1 – Backend API
 0. API skeleton
@@ -26,17 +26,21 @@
    - [x] Role-based dependency (`admin`, `teacher`, future `student`).
 2. Packages API
    - [x] `GET /packages` with filtering, pagination, stats.
-   - [x] `POST /packages` (from template or manual).
+   - [x] `POST /packages/create` (from template or manual).
    - [x] `GET /packages/{id}`, `PATCH /packages/{id}`, `DELETE /packages/{id}`.
    - [x] `POST /packages/{id}/regenerate`.
 3. Lessons API
-   - [x] `GET /packages/{id}/lessons`.
-   - [x] `POST /packages/{id}/lessons`.
+   - [x] `GET /lessons/packages/{id}` (lessons for package).
+   - [x] `POST /lessons/packages/{id}` (create lesson in package).
    - [x] `GET /lessons/{id}`, `PATCH /lessons/{id}`, `DELETE /lessons/{id}`.
+   - [x] `GET /lessons` (all lessons with filters).
 4. Templates API
-   - [x] CRUD endpoints + `/templates/{id}/duplicate`.
+   - [x] `GET /templates`, `GET /templates/{id}`.
+   - [x] `POST /templates/create`, `PATCH /templates/{id}`, `DELETE /templates/{id}`.
+   - [x] `POST /templates/{id}/duplicate`.
 5. Reminders API
-   - [x] `GET /packages/{id}/reminders`.
+   - [x] `GET /reminders/packages/{id}` (reminders for package).
+   - [x] `GET /reminders` (general reminders list with pagination and filters).
    - [x] `PATCH /reminders/{id}` (activate/deactivate, reschedule).
 6. Metrics API
    - [x] `GET /metrics/summary?from=&to=`.
@@ -49,47 +53,58 @@
 ## Stage 2 – Frontend MVP
 
 1.  **Project setup:**
-    - [ ] Create `mini-app` directory.
-    - [ ] Initialize project using Vite (React + TypeScript).
-    - [ ] Install dependencies: `antd`, `react-query`, `axios`, `react-router-dom`, `zustand`.
-    - [ ] Configure folder structure (`pages`, `components`, `services`, `hooks`).
+    - [x] Create `mini-app` directory.
+    - [x] Initialize project using Vite (React + TypeScript).
+    - [x] Install dependencies: `antd`, `react-query`, `axios`, `react-router-dom`, `zustand`.
+    - [x] Configure folder structure (`pages`, `components`, `services`, `hooks`).
 
 2.  **Authentication & API Client:**
-    - [ ] Implement `AuthProvider` to read `initData` and call `/api/v1/auth/login`.
-    - [ ] Configure `axios` with interceptors for JWT and refresh tokens.
+    - [x] Implement `AuthProvider` to read `initData` and call `/api/v1/auth/login`.
+    - [x] Configure `axios` with interceptors for JWT and refresh tokens.
 
 3.  **Layout & Navigation:**
-    - [ ] Create main app layout (header, sidebar) with Ant Design.
-    - [ ] Configure routing for pages: `/`, `/packages`, `/packages/:id`, `/templates`, `/settings`.
+    - [x] Create main app layout (header, sidebar) with Ant Design.
+    - [x] Configure routing for pages: `/`, `/packages`, `/packages/:id`, `/templates`, `/reminders`.
 
 4.  **Dashboard:**
-    - [ ] Display key metrics from `/metrics/summary`.
-    - [ ] Show a list of upcoming lessons.
+    - [x] Display key metrics from `/metrics/summary`.
+    - [x] Show a list of upcoming lessons.
 
 5.  **Packages Module:**
-    - [ ] Implement package list page: table with pagination, filters, and search.
-    - [ ] Implement package detail page: info, "Lessons" and "Reminders" tabs.
-    - [ ] Implement modals for creating/editing lessons and packages.
+    - [x] Implement package list page: table with pagination, filters, and search.
+    - [x] Implement package detail page: info, "Lessons" and "Reminders" tabs.
+    - [x] Implement modals for creating/editing lessons and packages.
 
 6.  **Templates Module:**
-    - [ ] Implement template list page.
-    - [ ] Add forms for CRUD operations on templates.
+    - [x] Implement template list page.
+    - [x] Add forms for CRUD operations on templates.
 
 7.  **Telegram UI Integration:**
-    - [ ] Connect and manage native Telegram buttons (`MainButton`, `BackButton`).
-    - [ ] Implement theme change handling (light/dark).
-    - [ ] Ensure responsive, mobile-first design.
+    - [x] Connect and manage native Telegram buttons (`MainButton`, `BackButton`).
+    - [x] Implement theme change handling (light/dark).
+    - [x] Ensure responsive, mobile-first design.
 
 8.  **Testing:**
-    - [ ] Write unit tests for key components using Jest/RTL.
-    - [ ] Create an e2e smoke test (login -> create package) with Playwright.
+    - [x] Write unit tests for key components using Jest/RTL.
+    - [x] Create an e2e smoke test (login -> create package) with Playwright.
 
 ## Stage 3 – Enhancements
-1. Reminders page with filters/actions.
-2. Settings page (profile, default timezone, notifications toggles).
-3. Advanced analytics (additional charts, breakdown by learner).
-4. Audit log/history display in package detail.
-5. WebSockets or polling strategy for real-time updates (optional).
+1. [x] Reminders page with filters/actions (status, type, package filters).
+2. [ ] Settings page (profile, default timezone, notifications toggles).
+3. [ ] Advanced analytics (additional charts, breakdown by learner).
+4. [ ] Audit log/history display in package detail.
+5. [ ] WebSockets or polling strategy for real-time updates (optional).
+
+## Recent Fixes & Improvements
+1. [x] **Fixed Reminders API**: Added missing general `/reminders` endpoint with pagination and filtering.
+2. [x] **Fixed Reminders Filters**: Updated status options to match real system data (scheduled, sent, responded, failed, cancelled).
+3. [x] **Added Reminder Type Filter**: Implemented filtering by reminder types (lesson_confirm, lesson_day_before, payment_week, etc.).
+4. [x] **Fixed API Limits**: Increased packages API limit from 100 to 1000 to support frontend requirements.
+5. [x] **Enhanced CRUD Functions**: Added `fetch_reminder_instances_paginated` with support for status, type, and package filtering.
+6. [x] **Updated Frontend Components**: Fixed status colors, icons, and form validation in Reminders page.
+7. [x] **Fixed Reminders Count Bug**: Fixed total count calculation when filtering by `reminder_type` - now count query includes proper joins.
+8. [x] **Enhanced Reminders Search**: Search now works across comment, package title, and learner name (not just comment).
+9. [x] **Updated API Documentation**: Aligned endpoint paths in docs to match implementation (`/create` suffix for POST operations).
 
 ## Stage 4 – Integration & Release
 1. Bot integration

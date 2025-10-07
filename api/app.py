@@ -1,6 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from config import config
 from api.routes import auth, packages, lessons, templates, reminders, metrics, learners
 
 APP_TITLE = "KSU Applications Bot API"
@@ -13,7 +14,7 @@ def create_app() -> FastAPI:
     # Add CORS middleware for local development
     app.add_middleware(
         CORSMiddleware,
-        allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],  # Frontend dev server
+        allow_origins=config.CORS_ORIGINS,  # Configurable via environment variable
         allow_credentials=True,
         allow_methods=["*"],  # Allows all methods
         allow_headers=["*"],  # Allows all headers

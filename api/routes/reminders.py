@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_session, admin_or_teacher_required
@@ -37,6 +37,32 @@ def _to_response(instance: ReminderInstance) -> ReminderResponse:
         last_response_at=instance.last_response_at,
         last_decline_reason=instance.last_decline_reason,
     )
+
+
+@router.get("", response_model=ReminderListResponse)
+async def list_reminders(
+    limit: int = Query(10, ge=1, le=100),
+    offset: int = Query(0, ge=0),
+    status: str | None = Query(None),
+    reminder_type: str | None = Query(None),
+    package_id: int | None = Query(None),
+    search: str | None = Query(None),
+    session: AsyncSession = Depends(get_session),
+    user=Depends(admin_or_teacher_required),
+) -> ReminderListResponse:
+    try:
+        instances, total = await crud.fetch_reminder_instances_paginated(
+            session,
+            limit=limit,
+            offset=offset,
+            status=status,
+            reminder_type=reminder_type,
+            package_id=package_id,
+            search=search,
+        )
+    except Exception as exc:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+    return ReminderListResponse(total=total, items=[_to_response(instance) for instance in instances])
 
 
 @router.get("/packages/{package_id}", response_model=ReminderListResponse)

@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from aiogram.types import User as AiogramUser
-from sqlalchemy import select, func, or_, cast, String
+from sqlalchemy import select, func, or_, and_, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
@@ -804,6 +804,91 @@ async def fetch_reminder_instances_count(
         stmt = stmt.where(ReminderInstance.status == status)
     result = await session.execute(stmt)
     return result.scalar_one()
+
+
+async def fetch_reminder_instances_paginated(
+    session: AsyncSession,
+    *,
+    limit: int,
+    offset: int,
+    status: Optional[str] = None,
+    reminder_type: Optional[str] = None,
+    package_id: Optional[int] = None,
+    search: Optional[str] = None,
+) -> tuple[list[ReminderInstance], int]:
+    # Build base query with eager loading
+    stmt = (
+        select(ReminderInstance)
+        .options(
+            selectinload(ReminderInstance.rule),
+            selectinload(ReminderInstance.package),
+            selectinload(ReminderInstance.learner),
+            selectinload(ReminderInstance.lesson),
+        )
+    )
+    
+    # Build count query base
+    count_stmt = select(func.count()).select_from(ReminderInstance)
+    
+    # Track if we need joins for filtering
+    needs_rule_join = False
+    needs_package_join = False
+    needs_learner_join = False
+    
+    # Apply filters
+    conditions = []
+    
+    if status is not None:
+        conditions.append(ReminderInstance.status == status)
+    
+    if reminder_type is not None:
+        needs_rule_join = True
+        conditions.append(ReminderRule.reminder_type == reminder_type)
+    
+    if package_id is not None:
+        conditions.append(ReminderInstance.package_id == package_id)
+    
+    if search is not None:
+        needs_package_join = True
+        needs_learner_join = True
+        # Search in comment, package title, and learner name
+        search_pattern = f"%{search}%"
+        search_condition = or_(
+            ReminderInstance.comment.ilike(search_pattern),
+            LessonPackage.title.ilike(search_pattern),
+            Learner.display_name.ilike(search_pattern),
+        )
+        conditions.append(search_condition)
+    
+    # Apply joins to main query if needed
+    if needs_rule_join:
+        stmt = stmt.join(ReminderRule, ReminderInstance.rule_id == ReminderRule.id)
+        count_stmt = count_stmt.join(ReminderRule, ReminderInstance.rule_id == ReminderRule.id)
+    
+    if needs_package_join:
+        stmt = stmt.join(LessonPackage, ReminderInstance.package_id == LessonPackage.id)
+        count_stmt = count_stmt.join(LessonPackage, ReminderInstance.package_id == LessonPackage.id)
+    
+    if needs_learner_join:
+        stmt = stmt.join(Learner, ReminderInstance.learner_id == Learner.id)
+        count_stmt = count_stmt.join(Learner, ReminderInstance.learner_id == Learner.id)
+    
+    # Apply conditions to both queries
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
+        count_stmt = count_stmt.where(and_(*conditions))
+    
+    # Get total count
+    total_result = await session.execute(count_stmt)
+    total = total_result.scalar_one()
+    
+    # Apply pagination and ordering
+    stmt = stmt.order_by(ReminderInstance.scheduled_for.desc()).limit(limit).offset(offset)
+    
+    result = await session.execute(stmt)
+    instances = result.scalars().all()
+    
+    return instances, total
 
 
 async def count_lessons_by_status(session: AsyncSession) -> dict[str, int]:
