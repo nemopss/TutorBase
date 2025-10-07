@@ -13,6 +13,7 @@ import {
 import dayjs from 'dayjs';
 import api from '../services/api';
 import LessonForm from '../components/forms/LessonForm';
+import PageHeader from '../components/common/PageHeader';
 
 // --- Types --- //
 interface PackageProgress {
@@ -237,24 +238,15 @@ const PackageDetail: React.FC = () => {
 
   return (
     <div>
-      <div style={{ marginBottom: 24 }}>
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/packages')} style={{ marginBottom: 16 }}>
-          Back to Packages
-        </Button>
-        <Card>
-          <Row gutter={16} align="middle">
-            <Col flex="auto">
-              <h1 style={{ margin: 0 }}>{packageData?.title}</h1>
-              <p style={{ margin: '8px 0 0 0', color: '#8c8c8c' }}>Learner: {packageData?.learner_name}</p>
-            </Col>
-            <Col>
-              <Tag color={packageData?.status === 'active' ? 'green' : 'volcano'} style={{ fontSize: 14, padding: '4px 12px' }}>
-                {packageData?.status.toUpperCase()}
-              </Tag>
-            </Col>
-          </Row>
-        </Card>
-      </div>
+      <PageHeader 
+        title={packageData?.title || 'Package Details'}
+        subtitle={`Learner: ${packageData?.learner_name || '-'} • Status: ${packageData?.status || '-'}`}
+        actions={
+          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/packages')}>
+            Back to Packages
+          </Button>
+        }
+      />
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} sm={8}>

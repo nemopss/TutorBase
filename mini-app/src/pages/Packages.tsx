@@ -1,5 +1,4 @@
 import React, { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Select, Space, Input, Button, message, Progress } from 'antd';
 import type { TableProps } from 'antd';
@@ -7,6 +6,7 @@ import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import PackageForm from '../components/forms/PackageForm';
 import PageHeader from '../components/common/PageHeader';
+import EmptyState from '../components/common/EmptyState';
 
 // --- Types --- //
 interface PackageProgress {
@@ -205,32 +205,40 @@ const Packages: React.FC = () => {
           }}
         />
       </Space>
-      <Table
-        columns={columns}
-        dataSource={data?.items}
-        rowKey="id"
-        loading={isLoading}
-        pagination={{
-          current: currentPage,
-          pageSize: pageSize,
-          total: data?.total,
-        }}
-        onChange={handleTableChange}
-        onRow={(record) => {
-          return {
-            onClick: () => {
-              navigate(`/packages/${record.id}`);
-            },
-          };
-        }}
-        bordered
-      />
+      {!isLoading && (!data?.items || data.items.length === 0) ? (
+        <EmptyState 
+          title="No packages yet"
+          description="Create your first lesson package to get started"
+          actionText="Create Package"
+          onAction={() => { setEditingPackage(null); setIsModalOpen(true); }}
+        />
+      ) : (
+        <Table
+          columns={columns}
+          dataSource={data?.items}
+          rowKey="id"
+          loading={isLoading}
+          pagination={{
+            current: currentPage,
+            pageSize: pageSize,
+            total: data?.total,
+            showSizeChanger: true,
+            showQuickJumper: true,
+            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} packages`,
+          }}
+          onChange={handleTableChange}
+          onRow={(record) => ({
+            onClick: () => navigate(`/packages/${record.id}`),
+            style: { cursor: 'pointer' },
+          })}
+          bordered
+        />
+      )}
       <PackageForm 
         open={isModalOpen}
         onCancel={() => { setIsModalOpen(false); setEditingPackage(null); }}
         onFinish={handleFormFinish}
         isLoading={createMutation.isPending || updateMutation.isPending}
-        initialValues={editingPackage}
       />
     </div>
   );

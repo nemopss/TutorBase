@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Card, Form, Input, Select, Switch, Button, message, Divider, Avatar, Space, Typography } from 'antd';
 import { UserOutlined, BellOutlined, GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
 import { useAuth } from '../auth/AuthProvider';
+import PageHeader from '../components/common/PageHeader';
 
 const { Title, Text } = Typography;
 
@@ -35,7 +36,10 @@ const Settings: React.FC = () => {
 
   return (
     <div>
-      <Title level={2}>Settings</Title>
+      <PageHeader 
+        title="Settings"
+        subtitle="Manage your profile and preferences"
+      />
       
       {/* Profile Section */}
       <Card 

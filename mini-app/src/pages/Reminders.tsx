@@ -6,6 +6,7 @@ import { EditOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutl
 import dayjs from 'dayjs';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
+import PageHeader from '../components/common/PageHeader';
 
 // --- Types --- //
 interface Reminder {
@@ -241,13 +242,13 @@ const Reminders: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h1>Reminders</h1>
-      </div>
+      <PageHeader 
+        title="Reminders"
+        subtitle="Manage automated reminders for lessons and payments"
+      />
       
       <Space style={{ marginBottom: 16 }} wrap>
         <Input.Search
-          placeholder="Search reminders..."
           allowClear
           onSearch={(value) => {
             setSearchTerm(value);
