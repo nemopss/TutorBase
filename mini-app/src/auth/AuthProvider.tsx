@@ -51,8 +51,19 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         const initData = window.Telegram?.WebApp?.initData;
 
         if (!initData || initData.length === 0) {
-          setError('⚠️ Please open this app from Telegram bot.\n\nTelegram WebApp: ' + (window.Telegram?.WebApp ? 'Available' : 'Not found') + '\nInitData length: ' + (initData?.length || 0));
-          throw new Error('Telegram initData not found');
+          const debugInfo = [
+            '⚠️ Please open this app from Telegram bot.',
+            '',
+            'Debug Info:',
+            `• Telegram object: ${window.Telegram ? 'Found' : 'Not found'}`,
+            `• WebApp object: ${window.Telegram?.WebApp ? 'Found' : 'Not found'}`,
+            `• InitData: ${initData ? `"${initData.substring(0, 50)}..."` : 'Empty'}`,
+            `• InitData length: ${initData?.length || 0}`,
+          ].join('\n');
+          
+          setError(debugInfo);
+          setIsLoading(false);
+          return;
         }
 
         const response = await api.post<AuthResponse>('/auth/login', { init_data: initData });
@@ -67,18 +78,16 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
         setUser(user);
+        setIsLoading(false);
       } catch (err: any) {
         console.error('Authentication failed:', err);
-        if (!error) {
-          const errorMsg = err?.response?.data?.detail || err?.message || 'Authentication failed';
-          setError('❌ Authentication Error\n\n' + errorMsg);
-        }
+        const errorMsg = err?.response?.data?.detail || err?.message || 'Authentication failed';
+        setError('❌ Authentication Error\n\n' + errorMsg);
         setUser(null);
         // Очищаем токены в случае ошибки
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
         delete api.defaults.headers.common['Authorization'];
-      } finally {
         setIsLoading(false);
       }
     };
@@ -111,7 +120,14 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           maxWidth: '400px'
         }}>
-          <pre style={{ whiteSpace: 'pre-wrap', fontSize: '14px', lineHeight: '1.6' }}>{error}</pre>
+          <pre style={{ 
+            whiteSpace: 'pre-wrap', 
+            fontSize: '14px', 
+            lineHeight: '1.6',
+            color: '#333',
+            margin: 0,
+            fontFamily: 'monospace'
+          }}>{error}</pre>
           <button 
             onClick={() => window.location.reload()} 
             style={{
@@ -122,7 +138,8 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
               border: 'none',
               borderRadius: '6px',
               cursor: 'pointer',
-              fontSize: '16px'
+              fontSize: '16px',
+              fontWeight: '500'
             }}
           >
             🔄 Reload
