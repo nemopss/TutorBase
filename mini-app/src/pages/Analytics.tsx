@@ -5,6 +5,7 @@ import { DownloadOutlined, BarChartOutlined, PieChartOutlined, LineChartOutlined
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import dayjs, { Dayjs } from 'dayjs';
 import api from '../services/api';
+import PageHeader from '../components/common/PageHeader';
 
 const { RangePicker } = DatePicker;
 
@@ -137,19 +138,22 @@ const Analytics: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1>Analytics</h1>
-        <Space>
-          <RangePicker
-            value={dateRange}
-            onChange={handleDateChange}
-            format="YYYY-MM-DD"
-          />
-          <Button icon={<DownloadOutlined />} onClick={handleExport}>
-            Export CSV
-          </Button>
-        </Space>
-      </div>
+      <PageHeader 
+        title="Analytics"
+        subtitle="Insights and statistics about your lessons"
+        actions={
+          <Space>
+            <RangePicker
+              value={dateRange}
+              onChange={handleDateChange}
+              format="YYYY-MM-DD"
+            />
+            <Button icon={<DownloadOutlined />} onClick={handleExport}>
+              Export CSV
+            </Button>
+          </Space>
+        }
+      />
 
       {/* Summary Cards */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>

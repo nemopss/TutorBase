@@ -6,6 +6,7 @@ import type { TableProps } from 'antd';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import PackageForm from '../components/forms/PackageForm';
+import PageHeader from '../components/common/PageHeader';
 
 // --- Types --- //
 interface PackageProgress {
@@ -170,12 +171,15 @@ const Packages: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h1>Lesson Packages</h1>
-        <Button type="primary" onClick={() => { setEditingPackage(null); setIsModalOpen(true); }}>
-          Create Package
-        </Button>
-      </div>
+      <PageHeader 
+        title="Packages"
+        subtitle="Manage lesson packages for your students"
+        actions={
+          <Button type="primary" onClick={() => { setEditingPackage(null); setIsModalOpen(true); }}>
+            Create Package
+          </Button>
+        }
+      />
       <Space style={{ marginBottom: 16 }}>
         <Input.Search
           placeholder="Search by title or learner"

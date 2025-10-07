@@ -7,6 +7,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import LessonForm from '../components/forms/LessonForm';
+import PageHeader from '../components/common/PageHeader';
 
 // --- Types --- //
 interface Lesson {
@@ -215,25 +216,28 @@ const Lessons: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h1>Lessons</h1>
-        <Space>
-          <Button 
-            icon={<UnorderedListOutlined />} 
-            type={viewMode === 'table' ? 'primary' : 'default'}
-            onClick={() => setViewMode('table')}
-          >
-            Table
-          </Button>
-          <Button 
-            icon={<CalendarOutlined />} 
-            type={viewMode === 'calendar' ? 'primary' : 'default'}
-            onClick={() => setViewMode('calendar')}
-          >
-            Calendar
-          </Button>
-        </Space>
-      </div>
+      <PageHeader 
+        title="Lessons"
+        subtitle="View and manage all lessons"
+        actions={
+          <Space>
+            <Button 
+              icon={<UnorderedListOutlined />} 
+              type={viewMode === 'table' ? 'primary' : 'default'}
+              onClick={() => setViewMode('table')}
+            >
+              Table
+            </Button>
+            <Button 
+              icon={<CalendarOutlined />} 
+              type={viewMode === 'calendar' ? 'primary' : 'default'}
+              onClick={() => setViewMode('calendar')}
+            >
+              Calendar
+            </Button>
+          </Space>
+        }
+      />
 
       {viewMode === 'table' ? (
         <>

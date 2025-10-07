@@ -4,6 +4,7 @@ import { Table, Button, Space, Modal, message, Alert } from 'antd';
 import type { TableProps } from 'antd';
 import api from '../services/api';
 import TemplateForm from '../components/forms/TemplateForm';
+import PageHeader from '../components/common/PageHeader';
 
 // --- Types --- //
 interface Template {
@@ -145,12 +146,15 @@ const Templates: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-        <h1>Templates</h1>
-        <Button type="primary" onClick={() => { setEditingTemplate(null); setIsModalOpen(true); }}>
-          Create Template
-        </Button>
-      </div>
+      <PageHeader 
+        title="Templates"
+        subtitle="Manage lesson package templates"
+        actions={
+          <Button type="primary" onClick={() => { setEditingTemplate(null); setIsModalOpen(true); }}>
+            Create Template
+          </Button>
+        }
+      />
       <Table
         columns={columns}
         dataSource={data?.items}
