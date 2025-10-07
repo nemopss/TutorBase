@@ -40,12 +40,14 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   useEffect(() => {
     const login = async () => {
       try {
-        // В реальном приложении initData берется из window.Telegram.WebApp.initData
-        // Для разработки можно использовать моковые данные
-        const initData = window.Telegram?.WebApp?.initData || 'hash=8aeaa09ed7637cfb1a756d804e26c83ddb05017d54c89582589b9e81090f5968&query_id=AAAAA_BBBB&user=%7B%22id%22%3A352019235%2C%22username%22%3A%22nemopss%22%2C%22first_name%22%3A%22%5Cu0410%5Cu043b%5Cu0435%5Cu043a%5Cu0441%5Cu0435%5Cu0439%22%7D&auth_date=1759771465';
+        // Get initData from Telegram WebApp
+        const initData = window.Telegram?.WebApp?.initData;
+        
+        console.log('Telegram WebApp available:', !!window.Telegram?.WebApp);
+        console.log('InitData length:', initData?.length || 0);
 
-        if (!initData) {
-          throw new Error('Telegram initData not found.');
+        if (!initData || initData.length === 0) {
+          throw new Error('Telegram initData not found. Please open this app from Telegram bot.');
         }
 
         const response = await api.post<AuthResponse>('/auth/login', { init_data: initData });
