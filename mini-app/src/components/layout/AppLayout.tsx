@@ -1,7 +1,7 @@
-import React, { useEffect } from 'react';
-import { Layout, Menu } from 'antd';
+import React, { useEffect, useState } from 'react';
+import { Layout, Menu, Drawer, Button } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined, BarChartOutlined, SettingOutlined, CalendarOutlined } from '@ant-design/icons';
+import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined, BarChartOutlined, SettingOutlined, CalendarOutlined, MenuOutlined } from '@ant-design/icons';
 import { useTelegram } from '../../hooks/useTelegram';
 
 const { Sider, Content } = Layout;
@@ -52,6 +52,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
   const navigate = useNavigate();
   const { tg, colorScheme } = useTelegram();
+  const [drawerVisible, setDrawerVisible] = useState(false);
+  const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+
+  useEffect(() => {
+    const handleResize = () => {
+      setIsMobile(window.innerWidth < 768);
+    };
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, []);
 
   useEffect(() => {
     const handleBackButtonClick = () => {
@@ -72,54 +82,103 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     };
   }, [location, navigate, tg]);
 
+  const menuContent = (
+    <>
+      <div style={{ 
+        padding: '20px 16px', 
+        fontSize: '18px', 
+        fontWeight: 600,
+        color: colorScheme === 'dark' ? '#ffffff' : '#37352f',
+        borderBottom: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+      }}>
+        📚 KSU App
+      </div>
+      
+      <Menu 
+        selectedKeys={[location.pathname]} 
+        mode="inline" 
+        items={menuItems}
+        onClick={() => isMobile && setDrawerVisible(false)}
+        style={{
+          background: 'transparent',
+          border: 'none',
+          marginTop: '8px',
+          fontSize: '14px',
+          color: colorScheme === 'dark' ? '#ffffff' : '#37352f',
+        }}
+      />
+    </>
+  );
+
   return (
     <Layout style={{ minHeight: '100vh', background: colorScheme === 'dark' ? '#191919' : '#ffffff' }}>
-      <Sider 
-        collapsible
-        width={240}
-        collapsedWidth={80}
-        style={{
-          background: colorScheme === 'dark' ? '#252525' : '#f7f7f5',
-          borderRight: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
-          overflow: 'auto',
-          height: '100vh',
-          position: 'fixed',
-          left: 0,
-          top: 0,
-          bottom: 0,
-        }}
-        trigger={null}
-        theme={colorScheme === 'dark' ? 'dark' : 'light'}
-      >
-        <div style={{ 
-          padding: '20px 16px', 
-          fontSize: '18px', 
-          fontWeight: 600,
-          color: colorScheme === 'dark' ? '#ffffff' : '#37352f',
-          borderBottom: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
-        }}>
-          📚 KSU App
-        </div>
-        
-        <Menu 
-          selectedKeys={[location.pathname]} 
-          mode="inline" 
-          items={menuItems}
+      {/* Desktop Sidebar */}
+      {!isMobile && (
+        <Sider 
+          collapsible
+          width={240}
+          collapsedWidth={80}
           style={{
-            background: 'transparent',
-            border: 'none',
-            marginTop: '8px',
-            fontSize: '14px',
-            color: colorScheme === 'dark' ? '#ffffff' : '#37352f',
+            background: colorScheme === 'dark' ? '#252525' : '#f7f7f5',
+            borderRight: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+            overflow: 'auto',
+            height: '100vh',
+            position: 'fixed',
+            left: 0,
+            top: 0,
+            bottom: 0,
           }}
-        />
-      </Sider>
-      <Layout style={{ marginLeft: 240, background: colorScheme === 'dark' ? '#191919' : '#ffffff' }}>
+          trigger={null}
+          theme={colorScheme === 'dark' ? 'dark' : 'light'}
+        >
+          {menuContent}
+        </Sider>
+      )}
+
+      {/* Mobile Drawer */}
+      {isMobile && (
+        <Drawer
+          placement="left"
+          onClose={() => setDrawerVisible(false)}
+          open={drawerVisible}
+          width={240}
+          styles={{
+            body: {
+              padding: 0,
+              background: colorScheme === 'dark' ? '#252525' : '#f7f7f5',
+            },
+          }}
+        >
+          {menuContent}
+        </Drawer>
+      )}
+
+      <Layout style={{ marginLeft: isMobile ? 0 : 240, background: colorScheme === 'dark' ? '#191919' : '#ffffff' }}>
+        {/* Mobile Header with Hamburger */}
+        {isMobile && (
+          <div style={{
+            padding: '12px 16px',
+            background: colorScheme === 'dark' ? '#252525' : '#ffffff',
+            borderBottom: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+            display: 'flex',
+            alignItems: 'center',
+            gap: '12px',
+          }}>
+            <Button
+              type="text"
+              icon={<MenuOutlined />}
+              onClick={() => setDrawerVisible(true)}
+              style={{ fontSize: '18px' }}
+            />
+            <span style={{ fontSize: '18px', fontWeight: 600 }}>📚 KSU App</span>
+          </div>
+        )}
+
         <Content style={{ 
-          margin: '24px 24px 24px 24px', 
-          padding: '32px', 
+          margin: isMobile ? '16px' : '24px', 
+          padding: isMobile ? '16px' : '32px', 
           background: colorScheme === 'dark' ? '#252525' : '#ffffff',
-          minHeight: 'calc(100vh - 48px)',
+          minHeight: isMobile ? 'calc(100vh - 120px)' : 'calc(100vh - 48px)',
           borderRadius: '8px',
           border: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
         }}>
