@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Row, Statistic, Spin, Alert, List, Button, Space, Progress } from 'antd';
+import { Card, Col, Row, Statistic, Spin, Alert, List, Button, Progress } from 'antd';
 import { 
   PlusOutlined, 
   CalendarOutlined,
@@ -12,6 +12,7 @@ import {
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import dayjs from 'dayjs';
 import api from '../services/api';
+import PageHeader from '../components/common/PageHeader';
 
 // --- Types --- //
 interface MetricsSummary {
@@ -154,17 +155,20 @@ const Dashboard: React.FC = () => {
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-        <h1>Dashboard</h1>
-        <Space>
-          <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/packages')}>
-            New Package
-          </Button>
-          <Button icon={<CalendarOutlined />} onClick={() => navigate('/lessons')}>
-            View All Lessons
-          </Button>
-        </Space>
-      </div>
+      <PageHeader 
+        title="Dashboard"
+        subtitle="Overview of your lessons and packages"
+        actions={
+          <>
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/packages')}>
+              New Package
+            </Button>
+            <Button icon={<CalendarOutlined />} onClick={() => navigate('/lessons')}>
+              View Lessons
+            </Button>
+          </>
+        }
+      />
 
       {/* Key Metrics */}
       <Row gutter={[16, 16]}>

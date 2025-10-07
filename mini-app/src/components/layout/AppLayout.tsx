@@ -73,44 +73,55 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }, [location, navigate, tg]);
 
   return (
-    <Layout style={{ minHeight: '100vh' }}>
+    <Layout style={{ minHeight: '100vh', background: colorScheme === 'dark' ? '#191919' : '#ffffff' }}>
       <Sider 
         collapsible
+        width={240}
+        collapsedWidth={80}
         style={{
-          background: colorScheme === 'dark' 
-            ? 'var(--tg-theme-bg-color, #f8fafc)' 
-            : 'var(--tg-theme-bg-color, #1a1a1a)',
-          boxShadow: colorScheme === 'dark' 
-            ? '2px 0 8px rgba(0,0,0,0.3)' 
-            : '2px 0 8px rgba(0,0,0,0.1)'
+          background: colorScheme === 'dark' ? '#252525' : '#f7f7f5',
+          borderRight: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+          overflow: 'auto',
+          height: '100vh',
+          position: 'fixed',
+          left: 0,
+          top: 0,
+          bottom: 0,
         }}
+        trigger={null}
+        theme={colorScheme === 'dark' ? 'dark' : 'light'}
       >
-       
+        <div style={{ 
+          padding: '20px 16px', 
+          fontSize: '18px', 
+          fontWeight: 600,
+          color: colorScheme === 'dark' ? '#ffffff' : '#37352f',
+          borderBottom: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+        }}>
+          📚 KSU App
+        </div>
+        
         <Menu 
-          theme="dark" 
           selectedKeys={[location.pathname]} 
           mode="inline" 
           items={menuItems}
           style={{
             background: 'transparent',
-            border: 'none'
+            border: 'none',
+            marginTop: '8px',
+            fontSize: '14px',
+            color: colorScheme === 'dark' ? '#ffffff' : '#37352f',
           }}
         />
       </Sider>
-      <Layout>
+      <Layout style={{ marginLeft: 240, background: colorScheme === 'dark' ? '#191919' : '#ffffff' }}>
         <Content style={{ 
-          margin: '16px', 
-          padding: 24, 
-          background: colorScheme === 'dark' 
-            ? 'var(--tg-theme-bg-color, #1a1a1a)' 
-            : 'var(--tg-theme-bg-color, #f8fafc)', 
-          borderRadius: '12px',
-          boxShadow: colorScheme === 'dark' 
-            ? '0 2px 8px rgba(0,0,0,0.3)' 
-            : '0 2px 8px rgba(0,0,0,0.06)',
-          border: colorScheme === 'dark' 
-            ? '1px solid rgba(255,255,255,0.1)' 
-            : '1px solid rgba(0,0,0,0.05)'
+          margin: '24px 24px 24px 24px', 
+          padding: '32px', 
+          background: colorScheme === 'dark' ? '#252525' : '#ffffff',
+          minHeight: 'calc(100vh - 48px)',
+          borderRadius: '8px',
+          border: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
         }}>
           {children}
         </Content>
