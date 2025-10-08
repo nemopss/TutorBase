@@ -7,7 +7,7 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import LessonPackage, Lesson, Learner
-from database.db import async_session_maker
+from database.engine import async_session
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +25,7 @@ async def update_gauge_metrics():
         return
 
     try:
-        async with async_session_maker() as session:
+        async with async_session() as session:
             # Count active packages
             active_packages_result = await session.execute(
                 select(func.count()).select_from(LessonPackage).where(LessonPackage.status == 'active')
