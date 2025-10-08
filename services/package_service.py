@@ -12,6 +12,14 @@ from services.exceptions import NotFoundError
 from services.package_scheduler import regenerate_package_reminders
 from services.utils import generate_lessons_from_template, lesson_stats, sync_package_metrics
 
+# Prometheus metrics
+try:
+    from api.prometheus_metrics import packages_created_total, db_query_duration
+except ImportError:
+    # Fallback if metrics not available
+    packages_created_total = None
+    db_query_duration = None
+
 
 def _build_package_dto(package: LessonPackage) -> LessonPackageDTO:
     total, completed, cancelled = lesson_stats(package.lessons or [])
@@ -111,6 +119,11 @@ async def create_package(
     await session.flush([package])
     await regenerate_package_reminders(session, package)
     await session.flush([package])
+    
+    # Track metric
+    if packages_created_total:
+        packages_created_total.labels(learner_id=learner_id).inc()
+    
     return _build_package_dto(package)
 
 
@@ -145,6 +158,11 @@ async def create_package_from_template(
     await generate_lessons_from_template(session, package, template, start_local)
     await sync_package_metrics(session, package.id)
     await regenerate_package_reminders(session, package)
+    
+    # Track metric
+    if packages_created_total:
+        packages_created_total.labels(learner_id=learner_id).inc()
+    
     return _build_package_dto(package)
 
 

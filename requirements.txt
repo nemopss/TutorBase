@@ -10,3 +10,5 @@ greenlet==3.0.3
 fastapi==0.110.0
 uvicorn[standard]==0.29.0
 pyjwt[crypto]==2.8.0
+prometheus-fastapi-instrumentator==7.0.0
+prometheus-client==0.20.0
