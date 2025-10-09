@@ -76,6 +76,23 @@ class ReminderScheduler:
                 )
 
     async def _process_instance(self, session, instance, now_utc: datetime) -> None:
+        # Check if notifications are enabled for this learner
+        if instance.learner and not instance.learner.notifications_enabled:
+            logging.info(
+                "Skipping reminder instance #%s: notifications disabled for learner #%s (%s)",
+                instance.id,
+                instance.learner.id,
+                instance.learner.display_name,
+            )
+            await crud.set_reminder_instance_status(
+                session,
+                instance,
+                status='skipped',
+                active=False,
+                comment='Notifications disabled for learner',
+            )
+            return
+
         target, contact_display = self._resolve_instance_target(instance)
         if not target:
             logging.error(

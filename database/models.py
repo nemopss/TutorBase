@@ -79,6 +79,7 @@ class Learner(Base):
     bot_user_id = Column(Integer, ForeignKey('bot_users.id', ondelete='CASCADE'), nullable=False, unique=True)
     display_name = Column(String, nullable=False)
     notes = Column(Text)
+    notifications_enabled = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
 
     bot_user = relationship('BotUser', back_populates='learner', lazy='joined')

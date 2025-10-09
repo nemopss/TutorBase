@@ -358,10 +358,14 @@ async def update_learner(
     *,
     display_name: Optional[str] = None,
     notes: Optional[str] = None,
+    notifications_enabled: Optional[bool] = None,
 ) -> Learner:
     if display_name is not None:
         learner.display_name = display_name
-    learner.notes = notes
+    if notes is not None:
+        learner.notes = notes
+    if notifications_enabled is not None:
+        learner.notifications_enabled = notifications_enabled
     session.add(learner)
     await session.flush([learner])
     return learner
@@ -375,6 +379,53 @@ async def fetch_all_learners(session: AsyncSession) -> list[Learner]:
     stmt = select(Learner).order_by(Learner.display_name.asc())
     result = await session.execute(stmt)
     return result.scalars().all()
+
+
+async def create_learner_from_chat_id(
+    session: AsyncSession,
+    *,
+    chat_id: int,
+    display_name: str,
+    notes: Optional[str] = None,
+) -> Learner:
+    """Create a learner directly from chat_id, creating BotUser if needed."""
+    now_utc = datetime.now(timezone.utc)
+    
+    # Try to get existing BotUser
+    bot_user = await get_bot_user_by_chat_id(session, chat_id)
+    
+    if not bot_user:
+        # Create new BotUser if it doesn't exist
+        bot_user = BotUser(
+            chat_id=chat_id,
+            username=None,
+            first_name=display_name,
+            last_name=None,
+            language_code=None,
+            is_bot=False,
+            created_at=now_utc,
+            updated_at=now_utc,
+            last_seen_at=now_utc,
+        )
+        session.add(bot_user)
+        await session.flush([bot_user])
+    
+    # Check if learner already exists for this bot_user
+    existing_learner = await get_learner_by_bot_user(session, bot_user.id)
+    if existing_learner:
+        return existing_learner
+    
+    # Create new learner
+    learner = Learner(
+        bot_user_id=bot_user.id,
+        display_name=display_name,
+        notes=notes,
+        notifications_enabled=True,
+        created_at=now_utc,
+    )
+    session.add(learner)
+    await session.flush([learner])
+    return learner
 
 
 # --- Lesson packages & lessons ---------------------------------------------

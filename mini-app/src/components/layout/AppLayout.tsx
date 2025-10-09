@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Layout, Menu, Drawer, Button } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined, BarChartOutlined, SettingOutlined, CalendarOutlined, MenuOutlined } from '@ant-design/icons';
+import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined, BarChartOutlined, SettingOutlined, CalendarOutlined, MenuOutlined, TeamOutlined } from '@ant-design/icons';
 import { useTelegram } from '../../hooks/useTelegram';
 
 const { Sider, Content } = Layout;
@@ -21,6 +21,11 @@ const menuItems = [
     key: '/lessons',
     icon: <CalendarOutlined />,
     label: <Link to="/lessons">Lessons</Link>,
+  },
+  {
+    key: '/learners',
+    icon: <TeamOutlined />,
+    label: <Link to="/learners">Learners</Link>,
   },
   {
     key: '/templates',

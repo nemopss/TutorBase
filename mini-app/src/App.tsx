@@ -12,6 +12,7 @@ import Reminders from './pages/Reminders';
 import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
 import Lessons from './pages/Lessons';
+import Learners from './pages/Learners';
 
 function App() {
   const { isLoading, isAuthenticated } = useAuth();
@@ -21,10 +22,24 @@ function App() {
     if (!tg) return;
 
     tg.ready();
-    if (!tg.isExpanded) {
-      tg.expand();
+    
+    // Принудительно разворачиваем приложение
+    // Убираем проверку isExpanded для iPad
+    tg.expand();
+    
+    // Включаем кнопку закрытия для возможности свернуть
+    tg.enableClosingConfirmation();
+    
+    // Устанавливаем цвет заголовка
+    if (tg.setHeaderColor) {
+      tg.setHeaderColor(colorScheme === 'dark' ? '#191919' : '#ffffff');
     }
-  }, [tg]);
+    
+    // Устанавливаем цвет фона
+    if (tg.setBackgroundColor) {
+      tg.setBackgroundColor(colorScheme === 'dark' ? '#191919' : '#ffffff');
+    }
+  }, [tg, colorScheme]);
 
   const antdTheme = {
     algorithm: colorScheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
@@ -98,6 +113,7 @@ function App() {
           <Route path="/packages" element={<Packages />} />
           <Route path="/packages/:id" element={<PackageDetail />} />
           <Route path="/lessons" element={<Lessons />} />
+          <Route path="/learners" element={<Learners />} />
           <Route path="/templates" element={<Templates />} />
           <Route path="/reminders" element={<Reminders />} />
           <Route path="/analytics" element={<Analytics />} />
