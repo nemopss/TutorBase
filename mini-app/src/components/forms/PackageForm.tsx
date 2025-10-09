@@ -14,6 +14,17 @@ interface LearnerListResponse {
   items: Learner[];
 }
 
+interface Template {
+  id: number;
+  name: string;
+  description?: string;
+}
+
+interface TemplateListResponse {
+  total: number;
+  items: Template[];
+}
+
 interface PackageFormProps {
   open: boolean;
   onCancel: () => void;
@@ -28,6 +39,11 @@ const fetchLearners = async (): Promise<LearnerListResponse> => {
   return data;
 };
 
+const fetchTemplates = async (): Promise<TemplateListResponse> => {
+  const { data } = await api.get('/templates');
+  return data;
+};
+
 // --- Component --- //
 const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isLoading, initialValues }) => {
   const [form] = Form.useForm();
@@ -35,6 +51,11 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
   const { data: learnersData, isLoading: isLoadingLearners } = useQuery<LearnerListResponse, Error>({
     queryKey: ['learners'],
     queryFn: fetchLearners,
+  });
+
+  const { data: templatesData, isLoading: isLoadingTemplates } = useQuery<TemplateListResponse, Error>({
+    queryKey: ['templates'],
+    queryFn: fetchTemplates,
   });
 
   useEffect(() => {
@@ -50,6 +71,8 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
   }, [initialValues, form, open]);
 
   const isEditing = !!initialValues;
+  const selectedTemplateId = Form.useWatch('template_id', form);
+  const shouldRequireStartDate = !isEditing && !!selectedTemplateId;
 
   return (
     <Modal
@@ -62,8 +85,21 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
         form
           .validateFields()
           .then((values) => {
+            const formattedValues = {
+              ...values,
+              start_date: values.start_date ? values.start_date.toISOString() : undefined,
+            };
+
+            if (!formattedValues.template_id) {
+              delete formattedValues.template_id;
+            }
+
+            if (!formattedValues.start_date) {
+              delete formattedValues.start_date;
+            }
+
             if (!isEditing) form.resetFields();
-            onFinish(values);
+            onFinish(formattedValues);
           })
           .catch((info) => {
             console.log('Validate Failed:', info);
@@ -82,20 +118,40 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
         </Form.Item>
         
         {!isEditing && (
-          <Form.Item
-            name="learner_id"
-            label="Learner"
-            rules={[{ required: true, message: 'Please select a learner!' }]}
-          >
-            <Select
-              showSearch
-              placeholder="Select a learner"
-              loading={isLoadingLearners}
-              optionFilterProp="children"
-              filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
-              options={learnersData?.items.map(learner => ({ value: learner.id, label: learner.display_name }))}
-            />
-          </Form.Item>
+          <>
+            <Form.Item
+              name="template_id"
+              label="Template (optional)"
+            >
+              <Select
+                allowClear
+                showSearch
+                placeholder="Select a template to pre-fill lessons"
+                loading={isLoadingTemplates}
+                optionFilterProp="label"
+                filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                options={templatesData?.items.map(template => ({
+                  value: template.id,
+                  label: template.name,
+                }))}
+              />
+            </Form.Item>
+            
+            <Form.Item
+              name="learner_id"
+              label="Learner"
+              rules={[{ required: true, message: 'Please select a learner!' }]}
+            >
+              <Select
+                showSearch
+                placeholder="Select a learner"
+                loading={isLoadingLearners}
+                optionFilterProp="children"
+                filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
+                options={learnersData?.items.map(learner => ({ value: learner.id, label: learner.display_name }))}
+              />
+            </Form.Item>
+          </>
         )}
 
         <Form.Item
@@ -113,11 +169,15 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
           />
         </Form.Item>
 
-        <Form.Item name="start_date" label="Start Date">
+        <Form.Item
+          name="start_date"
+          label="Start Date"
+          rules={shouldRequireStartDate ? [{ required: true, message: 'Start date is required when using a template.' }] : []}
+        >
           <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
         </Form.Item>
 
-        <Form.Item name="end_date" label="End Date">
+        {/* <Form.Item name="end_date" label="End Date">
           <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
         </Form.Item>
 
@@ -137,7 +197,9 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
               { value: 'Asia/Dubai', label: 'Dubai (UTC+4)' },
             ]}
           />
-        </Form.Item>
+        </Form.Item> */}
+
+       
 
         <Form.Item name="total_lessons" label="Total Lessons (optional)">
           <Input type="number" min={1} placeholder="e.g., 20" />

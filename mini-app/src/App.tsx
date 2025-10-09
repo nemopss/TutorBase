@@ -1,3 +1,4 @@
+import { useEffect } from 'react';
 import { Routes, Route } from 'react-router-dom';
 import { ConfigProvider, theme } from 'antd';
 import { useAuth } from './auth/AuthProvider';
@@ -14,7 +15,16 @@ import Lessons from './pages/Lessons';
 
 function App() {
   const { isLoading, isAuthenticated } = useAuth();
-  const { colorScheme } = useTelegram();
+  const { tg, colorScheme } = useTelegram();
+
+  useEffect(() => {
+    if (!tg) return;
+
+    tg.ready();
+    if (!tg.isExpanded) {
+      tg.expand();
+    }
+  }, [tg]);
 
   const antdTheme = {
     algorithm: colorScheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
