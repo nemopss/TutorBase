@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
 
 from config import config
-from api.routes import auth, packages, lessons, templates, reminders, metrics, learners, health
+from api.routes import auth, packages, lessons, templates, reminders, metrics, learners, users, health
 from api.metrics_updater import lifespan_with_metrics
 
 APP_TITLE = "KSU Applications Bot API"
@@ -40,5 +40,6 @@ def create_app() -> FastAPI:
     app.include_router(reminders.router, prefix=f"{API_PREFIX}/reminders", tags=["reminders"])
     app.include_router(metrics.router, prefix=f"{API_PREFIX}/metrics", tags=["metrics"])
     app.include_router(learners.router, prefix=f"{API_PREFIX}/learners", tags=["learners"])
+    app.include_router(users.router, prefix=f"{API_PREFIX}/users", tags=["users"])
 
     return app

@@ -44,7 +44,7 @@ class User(Base):
     telegram_id = Column(BigInteger, unique=True)
     username = Column(String)
     display_name = Column(String, nullable=False)
-    role = Column(String(32), nullable=False, default='teacher')
+    role = Column(String(32), nullable=False, default='viewer')
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     last_login_at = Column(DateTime(timezone=True))

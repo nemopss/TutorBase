@@ -8,7 +8,7 @@ from api.dependencies import get_session
 router = APIRouter()
 
 
-@router.get("/health")
+@router.api_route("/health", methods=["GET", "HEAD"])
 async def health_check(session: AsyncSession = Depends(get_session)):
     """
     Health check endpoint.

@@ -176,7 +176,7 @@ async def create_user(
     telegram_id: int | None,
     username: str | None,
     display_name: str,
-    role: str = "teacher",
+    role: str = "viewer",
 ) -> User:
     now = datetime.now(timezone.utc)
     user = User(
@@ -217,6 +217,12 @@ async def update_user_login_metadata(
     session.add(user)
     await session.flush([user])
     return user
+
+
+async def list_users(session: AsyncSession) -> list[User]:
+    stmt = select(User).order_by(User.created_at.asc())
+    result = await session.execute(stmt)
+    return result.scalars().all()
 
 
 # --- Bot users & learners ---------------------------------------------------

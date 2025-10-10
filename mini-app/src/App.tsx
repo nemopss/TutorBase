@@ -1,5 +1,5 @@
 import { useEffect } from 'react';
-import { Routes, Route } from 'react-router-dom';
+import { Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, theme } from 'antd';
 import { useAuth } from './auth/AuthProvider';
 import { useTelegram } from './hooks/useTelegram';
@@ -13,10 +13,14 @@ import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
 import Lessons from './pages/Lessons';
 import Learners from './pages/Learners';
+import Admin from './pages/Admin';
+import AccessDenied from './pages/AccessDenied';
 
 function App() {
-  const { isLoading, isAuthenticated } = useAuth();
+  const { isLoading, isAuthenticated, user } = useAuth();
   const { tg, colorScheme } = useTelegram();
+  const isAdmin = user?.role === 'admin';
+  const hasStaffAccess = user?.role === 'admin' || user?.role === 'teacher';
 
   useEffect(() => {
     if (!tg) return;
@@ -105,6 +109,10 @@ function App() {
     return <div>Authentication Error! Please reload the app.</div>;
   }
 
+  if (!hasStaffAccess) {
+    return <AccessDenied />;
+  }
+
   return (
     <ConfigProvider theme={antdTheme}>
       <AppLayout>
@@ -118,6 +126,8 @@ function App() {
           <Route path="/reminders" element={<Reminders />} />
           <Route path="/analytics" element={<Analytics />} />
           <Route path="/settings" element={<Settings />} />
+          {isAdmin && <Route path="/admin" element={<Admin />} />}
+          <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </AppLayout>
     </ConfigProvider>

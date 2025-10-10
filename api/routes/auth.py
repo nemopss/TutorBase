@@ -47,6 +47,8 @@ async def _persist_user(session: AsyncSession, user_data: dict[str, object]):
 
     user = await crud.get_user_by_telegram_id(session, telegram_id)
     now = datetime.now(timezone.utc)
+    is_admin = telegram_id in config.ADMINS
+    default_role = "admin" if is_admin else "viewer"
 
     if user is None:
         user = await crud.create_user(
@@ -54,14 +56,16 @@ async def _persist_user(session: AsyncSession, user_data: dict[str, object]):
             telegram_id=telegram_id,
             username=username,
             display_name=display_name,
-            role="teacher",
+            role=default_role,
         )
     else:
+        role_update = "admin" if is_admin and user.role != "admin" else None
         user = await crud.update_user_login_metadata(
             session,
             user,
             username=username,
             display_name=display_name,
+            role=role_update,
             last_login_at=now,
         )
     return user

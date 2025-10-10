@@ -4,19 +4,31 @@ import { AuthProvider, useAuth } from '../AuthProvider';
 
 // Mock the api module
 jest.mock('../../services/api', () => ({
-  post: jest.fn(() => Promise.resolve({ 
-    data: { 
-      access_token: 'test-access-token', 
-      refresh_token: 'test-refresh-token', 
-      user: { id: 1, display_name: 'Test User', role: 'teacher' } 
-    } 
-  })),
-  defaults: {
-    headers: {
-      common: {}
-    }
-  }
+  __esModule: true,
+  default: {
+    post: jest.fn(),
+    defaults: {
+      headers: {
+        common: {} as Record<string, string>,
+      },
+    },
+  },
 }));
+
+const api = require('../../services/api').default as {
+  post: jest.Mock;
+  defaults: { headers: { common: Record<string, string> } };
+};
+
+const postMock = api.post;
+
+const defaultAuthResponse = {
+  data: {
+    access_token: 'test-access-token',
+    refresh_token: 'test-refresh-token',
+    user: { id: 1, display_name: 'Test User', role: 'teacher' },
+  },
+};
 
 // Mock localStorage
 const localStorageMock = {
@@ -34,7 +46,12 @@ const mockTelegramWebApp = {
   initData: 'test-init-data',
   initDataUnsafe: {
     user: { id: 123, username: 'testuser', first_name: 'Test' }
-  }
+  },
+  ready: jest.fn(),
+  expand: jest.fn(),
+  enableClosingConfirmation: jest.fn(),
+  setHeaderColor: jest.fn(),
+  setBackgroundColor: jest.fn(),
 };
 
 Object.defineProperty(window, 'Telegram', {
@@ -80,7 +97,9 @@ const renderComponent = () => {
 describe('AuthProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    postMock.mockImplementation(() => Promise.resolve(defaultAuthResponse));
     localStorageMock.getItem.mockReturnValue(null);
+    Object.keys(api.defaults.headers.common).forEach((key) => delete api.defaults.headers.common[key]);
   });
 
   it('shows loading state initially', () => {

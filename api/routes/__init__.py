@@ -1,4 +1,4 @@
-from . import auth, packages, lessons, templates, reminders, metrics
+from . import auth, packages, lessons, templates, reminders, metrics, users
 
 __all__ = [
     "auth",
@@ -7,4 +7,5 @@ __all__ = [
     "templates",
     "reminders",
     "metrics",
+    "users",
 ]

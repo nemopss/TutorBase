@@ -29,6 +29,11 @@ from .metrics import (
     DailyPoint,
 )
 from .common import MessageResponse
+from .users import (
+    UserItem,
+    UserListResponse,
+    UpdateUserRoleRequest,
+)
 
 __all__ = [
     "WebAppLoginRequest",
@@ -55,4 +60,7 @@ __all__ = [
     "DailyMetricsResponse",
     "DailyPoint",
     "MessageResponse",
+    "UserItem",
+    "UserListResponse",
+    "UpdateUserRoleRequest",
 ]

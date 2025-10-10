@@ -56,7 +56,7 @@ const Settings: React.FC = () => {
             <Avatar size={64} icon={<UserOutlined />} />
             <div>
               <Title level={4} style={{ margin: 0 }}>{user?.display_name || 'User'}</Title>
-              <Text type="secondary">Role: {user?.role || 'teacher'}</Text>
+              <Text type="secondary">Role: {user?.role || 'viewer'}</Text>
             </div>
           </div>
           <Form layout="vertical">

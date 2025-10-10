@@ -1,12 +1,13 @@
-import React, { useEffect, useState } from 'react';
-import { Layout, Menu, Drawer, Button } from 'antd';
+import React, { useEffect, useState, useMemo } from 'react';
+import { Layout, Menu, Drawer, Button, type MenuProps } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined, BarChartOutlined, SettingOutlined, CalendarOutlined, MenuOutlined, TeamOutlined } from '@ant-design/icons';
+import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined, BarChartOutlined, SettingOutlined, CalendarOutlined, MenuOutlined, TeamOutlined, CrownOutlined } from '@ant-design/icons';
 import { useTelegram } from '../../hooks/useTelegram';
+import { useAuth } from '../../auth/AuthProvider';
 
 const { Sider, Content } = Layout;
 
-const menuItems = [
+const baseMenuItems: MenuProps['items'] = [
   {
     key: '/',
     icon: <HomeOutlined />,
@@ -49,6 +50,12 @@ const menuItems = [
   },
 ];
 
+const adminMenuItem: MenuProps['items'][number] = {
+  key: '/admin',
+  icon: <CrownOutlined />,
+  label: <Link to="/admin">Admin</Link>,
+};
+
 interface AppLayoutProps {
   children: React.ReactNode;
 }
@@ -59,6 +66,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { tg, colorScheme } = useTelegram();
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
+  const { user } = useAuth();
+  const isAdmin = user?.role === 'admin';
+
+  const menuItems = useMemo(() => {
+    const items = [...(baseMenuItems || [])];
+    if (isAdmin) {
+      items.push(adminMenuItem);
+    }
+    return items;
+  }, [isAdmin]);
 
   useEffect(() => {
     const handleResize = () => {
