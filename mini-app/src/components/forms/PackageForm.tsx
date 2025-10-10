@@ -88,6 +88,8 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
             const formattedValues = {
               ...values,
               start_date: values.start_date ? values.start_date.toISOString() : undefined,
+              // timezone field removed from UI, ensure default is set on submit
+              timezone: values.timezone ?? 'Europe/Moscow',
             };
 
             if (!formattedValues.template_id) {
@@ -180,24 +182,9 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
         {/* <Form.Item name="end_date" label="End Date">
           <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
         </Form.Item>
+        */}
 
-        <Form.Item 
-          name="timezone" 
-          label="Timezone"
-          initialValue="Europe/Moscow"
-        >
-          <Select
-            showSearch
-            options={[
-              { value: 'Europe/Moscow', label: 'Moscow (UTC+3)' },
-              { value: 'Europe/London', label: 'London (UTC+0)' },
-              { value: 'America/New_York', label: 'New York (UTC-5)' },
-              { value: 'America/Los_Angeles', label: 'Los Angeles (UTC-8)' },
-              { value: 'Asia/Tokyo', label: 'Tokyo (UTC+9)' },
-              { value: 'Asia/Dubai', label: 'Dubai (UTC+4)' },
-            ]}
-          />
-        </Form.Item> */}
+        {/* timezone removed from the form UI; default 'Europe/Moscow' will be applied on submit */}
 
        
 
