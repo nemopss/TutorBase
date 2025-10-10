@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Card, Table, Typography, Tag, Select, Space, message } from 'antd';
+import { Card, Table, Typography, Tag, Select, Space, message, Grid } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import api from '../services/api';
 import { useAuth } from '../auth/AuthProvider';
@@ -68,6 +68,8 @@ const Admin = () => {
   const [data, setData] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens.md;
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -104,8 +106,8 @@ const Admin = () => {
     [],
   );
 
-  const columns: ColumnsType<UserRecord> = useMemo(
-    () => [
+  const columns: ColumnsType<UserRecord> = useMemo(() => {
+    return [
       {
         title: 'Пользователь',
         dataIndex: 'displayName',
@@ -116,6 +118,22 @@ const Admin = () => {
             <Typography.Text type="secondary" style={{ fontSize: 12 }}>
               ID: {record.id}
             </Typography.Text>
+            {isMobile && (
+              <>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  {record.username ? `@${record.username}` : '—'}
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  Telegram ID: {record.telegramId ?? '—'}
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  Последний вход: {formatDateTime(record.lastLoginAt)}
+                </Typography.Text>
+                <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                  Создан: {formatDateTime(record.createdAt)}
+                </Typography.Text>
+              </>
+            )}
           </Space>
         ),
       },
@@ -123,6 +141,7 @@ const Admin = () => {
         title: 'Telegram',
         dataIndex: 'username',
         key: 'username',
+        responsive: ['md'],
         render: (_: unknown, record) => (
           <Space direction="vertical" size={0}>
             <Typography.Text>{record.username ? `@${record.username}` : '—'}</Typography.Text>
@@ -137,16 +156,17 @@ const Admin = () => {
         dataIndex: 'role',
         key: 'role',
         render: (role: UserRole, record) => (
-          <Space>
+          <Space wrap>
             <Tag color={roleColors[role]}>{roleLabels[role]}</Tag>
             <Select<UserRole>
               value={role}
               options={roleOptions}
               onChange={(value) => handleRoleChange(record.id, value)}
-              size="small"
+              size={isMobile ? 'middle' : 'small'}
               loading={updatingUserId === record.id}
               disabled={updatingUserId === record.id || record.id === user?.id}
-              style={{ minWidth: 160 }}
+              style={{ minWidth: isMobile ? 140 : 160 }}
+              dropdownMatchSelectWidth={false}
             />
           </Space>
         ),
@@ -155,17 +175,18 @@ const Admin = () => {
         title: 'Последний вход',
         dataIndex: 'lastLoginAt',
         key: 'lastLoginAt',
+        responsive: ['md'],
         render: (value: string | null) => formatDateTime(value),
       },
       {
         title: 'Создан',
         dataIndex: 'createdAt',
         key: 'createdAt',
+        responsive: ['lg'],
         render: (value: string) => formatDateTime(value),
       },
-    ],
-    [handleRoleChange, updatingUserId, user?.id],
-  );
+    ];
+  }, [handleRoleChange, isMobile, updatingUserId, user?.id]);
 
   return (
     <Space direction="vertical" size={24} style={{ width: '100%' }}>
@@ -184,7 +205,9 @@ const Admin = () => {
           dataSource={data}
           columns={columns}
           loading={loading}
+          size={isMobile ? 'small' : 'middle'}
           pagination={false}
+          scroll={{ x: 720 }}
         />
       </Card>
     </Space>
