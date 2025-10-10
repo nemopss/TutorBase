@@ -7,7 +7,7 @@ import { useAuth } from '../../auth/AuthProvider';
 
 const { Sider, Content } = Layout;
 
-const baseMenuItems: MenuProps['items'] = [
+const baseMenuItems: NonNullable<MenuProps['items']> = [
   {
     key: '/',
     icon: <HomeOutlined />,
@@ -50,7 +50,7 @@ const baseMenuItems: MenuProps['items'] = [
   },
 ];
 
-const adminMenuItem: MenuProps['items'][number] = {
+const adminMenuItem: NonNullable<MenuProps['items']>[number] = {
   key: '/admin',
   icon: <CrownOutlined />,
   label: <Link to="/admin">Admin</Link>,
@@ -69,8 +69,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
 
-  const menuItems = useMemo(() => {
-    const items = [...(baseMenuItems || [])];
+  const menuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
+    const items = [...baseMenuItems];
     if (isAdmin) {
       items.push(adminMenuItem);
     }
