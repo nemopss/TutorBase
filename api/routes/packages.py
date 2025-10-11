@@ -94,7 +94,7 @@ async def create_package_endpoint(
             # Parse start_date if it's a string (YYYY-MM-DD format)
             if isinstance(payload.start_date, str):
                 # Get template to determine timezone
-                template = await package_service.get_template(session, payload.template_id)
+                template = await template_service.get_template(session, payload.template_id)
                 tz_name = payload.timezone or template.timezone
                 tz = ZoneInfo(tz_name)
                 # Parse date string and set time to midnight in template's timezone
