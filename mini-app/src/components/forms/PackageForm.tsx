@@ -79,7 +79,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
   return (
     <Modal
       open={open}
-      title={isEditing ? "Edit Package" : "Create New Package"}
+      title={isEditing ? `Edit Package${initialValues?.title ? `: ${initialValues.title}` : ''}` : "Create New Package"}
       okText={isEditing ? "Save" : "Create"}
       cancelText="Cancel"
       onCancel={onCancel}

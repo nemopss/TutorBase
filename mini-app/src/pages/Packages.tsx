@@ -29,11 +29,25 @@ interface Package {
   timezone?: string;
   total_lessons?: number;
   progress: PackageProgress;
+  template_id?: number | null;
 }
 
 interface PackageListResponse {
   total: number;
   items: Package[];
+}
+
+interface PackageFormValues {
+  id?: number;
+  learner_id?: number;
+  template_id?: number | null;
+  title?: string;
+  status?: string;
+  notes?: string;
+  start_date?: string | null;
+  end_date?: string | null;
+  timezone?: string;
+  total_lessons?: number | null;
 }
 
 const STATUS_OPTIONS = [
@@ -68,7 +82,20 @@ const updatePackage = async ({ id, values }: { id: number; values: any }) => {
 
 const deletePackage = async (id: number) => {
   await api.delete(`/packages/${id}`);
-}
+};
+
+const toFormValues = (pkg: Package): PackageFormValues => ({
+  id: pkg.id,
+  learner_id: pkg.learner_id ?? pkg.learner?.id,
+  template_id: pkg.template_id ?? null,
+  title: pkg.title,
+  status: pkg.status,
+  notes: pkg.notes ?? undefined,
+  start_date: pkg.start_date ?? null,
+  end_date: pkg.end_date ?? null,
+  timezone: pkg.timezone ?? 'Europe/Moscow',
+  total_lessons: pkg.total_lessons ?? pkg.progress?.total ?? null,
+});
 
 // --- Component --- //
 const Packages: React.FC = () => {
@@ -79,7 +106,7 @@ const Packages: React.FC = () => {
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingPackage, setEditingPackage] = useState<Package | null>(null);
+  const [editingPackage, setEditingPackage] = useState<PackageFormValues | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [packageToDelete, setPackageToDelete] = useState<number | null>(null);
 
@@ -167,7 +194,7 @@ const Packages: React.FC = () => {
   };
 
   const handleFormFinish = (values: any) => {
-    if (editingPackage) {
+    if (editingPackage?.id) {
       updateMutation.mutate({ id: editingPackage.id, values });
     } else {
       createMutation.mutate(values);
@@ -238,7 +265,7 @@ const Packages: React.FC = () => {
             type="link"
             onClick={(e) => {
               e.stopPropagation();
-              setEditingPackage(record);
+              setEditingPackage(toFormValues(record));
               setIsModalOpen(true);
             }}
           >
@@ -334,6 +361,7 @@ const Packages: React.FC = () => {
         onCancel={() => { setIsModalOpen(false); setEditingPackage(null); }}
         onFinish={handleFormFinish}
         isLoading={createMutation.isPending || updateMutation.isPending}
+        initialValues={editingPackage ?? undefined}
       />
 
       <Modal

@@ -136,6 +136,7 @@ async def create_package_from_template(
     title: str,
     notes: Optional[str],
     start_local: datetime,
+    status: str = 'draft',
     timezone_name: Optional[str] = None,
 ) -> LessonPackageDTO:
     learner = await crud.get_learner(session, learner_id)
@@ -158,6 +159,7 @@ async def create_package_from_template(
         template=template,
         title=title,
         notes=notes,
+        status=status,
         start_date=start_utc,
         timezone_name=tz_name,
         total_lessons=template.lesson_count,

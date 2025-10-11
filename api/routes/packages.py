@@ -114,6 +114,7 @@ async def create_package_endpoint(
                 title=payload.title,
                 notes=payload.notes,
                 start_local=start_local,
+                status=payload.status or 'draft',
                 timezone_name=payload.timezone,
             )
         else:
