@@ -18,9 +18,16 @@ interface PackageProgress {
 
 interface Package {
   id: number;
+  learner_id?: number;
+  learner?: { id: number; display_name: string };
+  notes?: string;
   learner_name: string;
   title: string;
   status: string;
+  start_date?: string;
+  end_date?: string;
+  timezone?: string;
+  total_lessons?: number;
   progress: PackageProgress;
 }
 
@@ -81,6 +88,7 @@ const Packages: React.FC = () => {
   const { data, isLoading, error, isError } = useQuery<PackageListResponse, Error>({
     queryKey: ['packages', currentPage, pageSize, statusFilter, debouncedSearchTerm],
     queryFn: () => fetchPackages(currentPage, pageSize, statusFilter, debouncedSearchTerm),
+    keepPreviousData: true,
     placeholderData: (previousData) => previousData,
   });
 
@@ -169,7 +177,17 @@ const Packages: React.FC = () => {
       title: 'Title',
       dataIndex: 'title',
       key: 'title',
-      render: (text, record) => <a onClick={() => navigate(`/packages/${record.id}`)}>{text}</a>,
+      render: (text, record) => (
+        <a
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            navigate(`/packages/${record.id}`);
+          }}
+        >
+          {text}
+        </a>
+      ),
     },
     {
       title: 'Learner',
@@ -214,7 +232,16 @@ const Packages: React.FC = () => {
       key: 'actions',
       render: (_, record) => (
         <Space size="middle">
-          <Button type="link" onClick={(e) => { e.stopPropagation(); setEditingPackage(record); setIsModalOpen(true); }}>Edit</Button>
+          <Button
+            type="link"
+            onClick={(e) => {
+              e.stopPropagation();
+              setEditingPackage(record);
+              setIsModalOpen(true);
+            }}
+          >
+            Edit
+          </Button>
           <Button type="link" danger onClick={(e) => { e.stopPropagation(); handleDelete(record.id); }}>Delete</Button>
         </Space>
       ),
