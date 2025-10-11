@@ -61,7 +61,6 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
 
   useEffect(() => {
     if (initialValues) {
-      console.log('Initializing form with values:', initialValues);
       form.setFieldsValue({
         ...initialValues,
         start_date: initialValues.start_date ? dayjs(initialValues.start_date) : null,

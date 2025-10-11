@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
 import { Table, Tag, Select, Space, Input, Modal, Button, message, Progress, Alert } from 'antd';
 import type { TableProps } from 'antd';
 import api from '../services/api';
@@ -88,9 +88,11 @@ const Packages: React.FC = () => {
   const { data, isLoading, error, isError } = useQuery<PackageListResponse, Error>({
     queryKey: ['packages', currentPage, pageSize, statusFilter, debouncedSearchTerm],
     queryFn: () => fetchPackages(currentPage, pageSize, statusFilter, debouncedSearchTerm),
-    keepPreviousData: true,
-    placeholderData: (previousData) => previousData,
+    placeholderData: keepPreviousData,
   });
+
+  const packagesData = data?.items ?? [];
+  const packagesTotal = data?.total ?? 0;
 
   // Debug logging for Android
   React.useEffect(() => {
@@ -99,7 +101,7 @@ const Packages: React.FC = () => {
       isError, 
       error: error?.message,
       hasData: !!data, 
-      itemsCount: data?.items?.length || 0,
+      itemsCount: packagesData.length,
       userAgent: navigator.userAgent 
     });
   }, [data, isLoading, isError, error]);
@@ -297,7 +299,7 @@ const Packages: React.FC = () => {
           style={{ marginBottom: 16 }}
         />
       )}
-      {!isLoading && !isError && (!data?.items || data.items.length === 0) ? (
+      {!isLoading && !isError && packagesData.length === 0 ? (
         <EmptyState 
           title="No packages yet"
           description="Create your first lesson package to get started"
@@ -307,14 +309,14 @@ const Packages: React.FC = () => {
       ) : (
         <Table
           columns={columns}
-          dataSource={data?.items}
+          dataSource={packagesData}
           rowKey="id"
           loading={isLoading}
           scroll={{ x: 800 }}
           pagination={{
             current: currentPage,
             pageSize: pageSize,
-            total: data?.total,
+            total: packagesTotal,
             showSizeChanger: true,
             showQuickJumper: true,
             showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} packages`,
