@@ -161,7 +161,7 @@ const Settings: React.FC = () => {
           <Form.Item label="Theme" help="Theme is automatically synced with Telegram">
             <Select
               defaultValue="auto"
-              disabled
+              // disabled
               options={[
                 { value: 'auto', label: 'Auto (follows Telegram)' },
                 { value: 'light', label: 'Light' },

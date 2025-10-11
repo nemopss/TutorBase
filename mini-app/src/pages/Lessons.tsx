@@ -11,6 +11,19 @@ import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
 import { dayjsInTimezone, formatDate, formatDateTime, formatTime, DEFAULT_TIMEZONE } from '../utils/datetime';
 
+import { ConfigProvider } from "antd";
+import { DatePicker } from "antd";
+import locale from 'antd/locale/ru_RU';
+import dayjs from 'dayjs';
+
+import 'dayjs/locale/ru-ru';
+
+dayjs.locale('ru-ru');
+
+<ConfigProvider locale={locale}>
+  <DatePicker defaultValue={dayjs('2015-01-01', 'YYYY-MM-DD')} />
+</ConfigProvider>;
+
 // --- Types --- //
 interface Lesson {
   id: number;
