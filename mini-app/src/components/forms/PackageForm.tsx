@@ -18,6 +18,7 @@ interface Template {
   id: number;
   name: string;
   description?: string;
+  timezone: string;
 }
 
 interface TemplateListResponse {
@@ -85,11 +86,13 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
         form
           .validateFields()
           .then((values) => {
+            const selectedTemplate = templatesData?.items.find(template => template.id === values.template_id);
+            const resolvedTimezone = values.timezone ?? selectedTemplate?.timezone ?? 'Europe/Moscow';
+
             const formattedValues = {
               ...values,
               start_date: values.start_date ? values.start_date.toISOString() : undefined,
-              // timezone field removed from UI, ensure default is set on submit
-              timezone: values.timezone ?? 'Europe/Moscow',
+              timezone: resolvedTimezone,
             };
 
             if (!formattedValues.template_id) {
@@ -184,7 +187,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
         </Form.Item>
         */}
 
-        {/* timezone removed from the form UI; default 'Europe/Moscow' will be applied on submit */}
+        {/* timezone removed from the form UI; resolved from template or defaulted on submit */}
 
        
 

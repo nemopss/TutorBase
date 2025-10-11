@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -135,14 +136,22 @@ async def create_package_from_template(
     title: str,
     notes: Optional[str],
     start_local: datetime,
-    timezone_name: str,
+    timezone_name: Optional[str] = None,
 ) -> LessonPackageDTO:
     learner = await crud.get_learner(session, learner_id)
     template = await crud.get_lesson_package_template(session, template_id)
     if not learner or not template:
         raise NotFoundError("Learner or template not found")
 
-    start_utc = start_local.astimezone(timezone.utc) if start_local.tzinfo else start_local.replace(tzinfo=timezone.utc)
+    tz_name = timezone_name or template.default_timezone or 'Europe/Moscow'
+    tzinfo = ZoneInfo(tz_name)
+
+    if start_local.tzinfo is None:
+        localized_start = start_local.replace(tzinfo=tzinfo)
+    else:
+        localized_start = start_local.astimezone(tzinfo)
+
+    start_utc = localized_start.astimezone(timezone.utc)
     package = await crud.create_lesson_package(
         session,
         learner=learner,
@@ -150,12 +159,12 @@ async def create_package_from_template(
         title=title,
         notes=notes,
         start_date=start_utc,
-        timezone_name=timezone_name,
+        timezone_name=tz_name,
         total_lessons=template.lesson_count,
     )
 
     await session.flush([package])
-    await generate_lessons_from_template(session, package, template, start_local)
+    await generate_lessons_from_template(session, package, template, localized_start)
     await sync_package_metrics(session, package.id)
     await regenerate_package_reminders(session, package)
     

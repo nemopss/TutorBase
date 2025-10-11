@@ -53,13 +53,12 @@ async def main():
     dp.include_router(cases_h.router)
     dp.include_router(reminders_h.router)
 
-    # TODO: enable this when deploying to production
-    # try:
-    #     startup_time = escape_html_text(format_timestamp_msk(started_at))
-    #     startup_message = texts.STARTUP_DEPLOY_NOTIFICATION.format(time=startup_time)
-    #     await bot.send_message(config.LOGS_CHAT_ID, startup_message)
-    # except Exception as exc:
-    #     logging.error("Failed to notify about deployment: %s", exc)
+    try:
+        startup_time = escape_html_text(format_timestamp_msk(started_at))
+        startup_message = texts.STARTUP_DEPLOY_NOTIFICATION.format(time=startup_time)
+        await bot.send_message(config.LOGS_CHAT_ID, startup_message)
+    except Exception as exc:
+        logging.error("Failed to notify about deployment: %s", exc)
 
     logging.info("Bot started...")
     try:

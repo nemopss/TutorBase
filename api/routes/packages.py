@@ -1,7 +1,5 @@
 from __future__ import annotations
 
-from zoneinfo import ZoneInfo
-
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -89,18 +87,14 @@ async def create_package_endpoint(
         if payload.template_id is not None:
             if payload.start_date is None:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_date required for template")
-            tz_name = payload.timezone or 'Europe/Moscow'
-            start_local = payload.start_date
-            if start_local.tzinfo is None:
-                start_local = start_local.replace(tzinfo=ZoneInfo(tz_name))
             package = await package_service.create_package_from_template(
                 session,
                 learner_id=payload.learner_id,
                 template_id=payload.template_id,
                 title=payload.title,
                 notes=payload.notes,
-                start_local=start_local,
-                timezone_name=tz_name,
+                start_local=payload.start_date,
+                timezone_name=payload.timezone,
             )
         else:
             package = await package_service.create_package(
