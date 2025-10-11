@@ -1,5 +1,5 @@
 import React from 'react';
-import { useTelegram } from '../../hooks/useTelegram';
+import { useThemeMode } from '../../theme/ThemeProvider';
 
 interface PageHeaderProps {
   title: string;
@@ -8,11 +8,12 @@ interface PageHeaderProps {
 }
 
 const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions }) => {
-  const { colorScheme } = useTelegram();
-  
-  const titleColor = colorScheme === 'dark' ? '#ffffff' : '#000000';
-  const subtitleColor = colorScheme === 'dark' ? '#a0a0a0' : 'rgba(0,0,0,0.45)';
-  const borderColor = colorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)';
+  const { resolvedTheme } = useThemeMode();
+  const isDark = resolvedTheme === 'dark';
+
+  const titleColor = isDark ? '#ffffff' : '#000000';
+  const subtitleColor = isDark ? '#a0a0a0' : 'rgba(0,0,0,0.45)';
+  const borderColor = isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.06)';
 
   return (
     <div style={{ 

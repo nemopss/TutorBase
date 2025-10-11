@@ -3,6 +3,7 @@ import { Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, theme } from 'antd';
 import { useAuth } from './auth/AuthProvider';
 import { useTelegram } from './hooks/useTelegram';
+import { useThemeMode } from './theme/ThemeProvider';
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
 import Packages from './pages/Packages';
@@ -18,7 +19,8 @@ import AccessDenied from './pages/AccessDenied';
 
 function App() {
   const { isLoading, isAuthenticated, user } = useAuth();
-  const { tg, colorScheme, autoFullscreenEnabled, requestFullscreen } = useTelegram();
+  const { tg, autoFullscreenEnabled, requestFullscreen } = useTelegram();
+  const { resolvedTheme } = useThemeMode();
   const isAdmin = user?.role === 'admin';
   const hasStaffAccess = user?.role === 'admin' || user?.role === 'teacher';
 
@@ -41,27 +43,27 @@ function App() {
     
     // Устанавливаем цвет заголовка
     if (tg.setHeaderColor) {
-      tg.setHeaderColor(colorScheme === 'dark' ? '#191919' : '#ffffff');
+      tg.setHeaderColor(resolvedTheme === 'dark' ? '#191919' : '#ffffff');
     }
-    
+
     // Устанавливаем цвет фона
     if (tg.setBackgroundColor) {
-      tg.setBackgroundColor(colorScheme === 'dark' ? '#191919' : '#ffffff');
+      tg.setBackgroundColor(resolvedTheme === 'dark' ? '#191919' : '#ffffff');
     }
-  }, [tg, colorScheme, autoFullscreenEnabled, requestFullscreen]);
+  }, [tg, resolvedTheme, autoFullscreenEnabled, requestFullscreen]);
 
   const antdTheme = {
-    algorithm: colorScheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
+    algorithm: resolvedTheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,
     token: {
       colorPrimary: '#2383e2', // Notion blue
       colorSuccess: '#0f7b6c',
       colorWarning: '#e16259',
       colorError: '#eb5757',
       colorInfo: '#2383e2',
-      colorTextBase: colorScheme === 'dark' ? '#ffffff' : '#37352f',
-      colorBgBase: colorScheme === 'dark' ? '#191919' : '#ffffff',
-      colorBgContainer: colorScheme === 'dark' ? '#252525' : '#ffffff',
-      colorBorder: colorScheme === 'dark' ? '#3a3a3a' : '#e8e8e8',
+      colorTextBase: resolvedTheme === 'dark' ? '#ffffff' : '#37352f',
+      colorBgBase: resolvedTheme === 'dark' ? '#191919' : '#ffffff',
+      colorBgContainer: resolvedTheme === 'dark' ? '#252525' : '#ffffff',
+      colorBorder: resolvedTheme === 'dark' ? '#3a3a3a' : '#e8e8e8',
       borderRadius: 6,
       fontSize: 14,
       fontFamily: '-apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, "Apple Color Emoji", Arial, sans-serif, "Segoe UI Emoji", "Segoe UI Symbol"',
@@ -69,19 +71,19 @@ function App() {
     components: {
       Card: {
         borderRadiusLG: 8,
-        boxShadowTertiary: colorScheme === 'dark' ? 'none' : '0 1px 2px rgba(0, 0, 0, 0.05)',
+        boxShadowTertiary: resolvedTheme === 'dark' ? 'none' : '0 1px 2px rgba(0, 0, 0, 0.05)',
       },
       Table: {
         borderRadius: 6,
-        headerBg: colorScheme === 'dark' ? '#2a2a2a' : '#f7f7f5',
+        headerBg: resolvedTheme === 'dark' ? '#2a2a2a' : '#f7f7f5',
       },
       Menu: {
         itemBg: 'transparent',
-        itemSelectedBg: colorScheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.04)',
-        itemSelectedColor: colorScheme === 'dark' ? '#ffffff' : '#37352f',
-        itemColor: colorScheme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(55,53,47,0.65)',
-        itemHoverBg: colorScheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.03)',
-        itemHoverColor: colorScheme === 'dark' ? '#ffffff' : '#37352f',
+        itemSelectedBg: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.04)',
+        itemSelectedColor: resolvedTheme === 'dark' ? '#ffffff' : '#37352f',
+        itemColor: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.65)' : 'rgba(55,53,47,0.65)',
+        itemHoverBg: resolvedTheme === 'dark' ? 'rgba(255,255,255,0.08)' : 'rgba(0,0,0,0.03)',
+        itemHoverColor: resolvedTheme === 'dark' ? '#ffffff' : '#37352f',
         iconSize: 18,
         itemHeight: 36,
         itemMarginInline: 4,

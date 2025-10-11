@@ -1,17 +1,18 @@
-import { useTelegram } from './useTelegram';
+import { useThemeMode } from '../theme/ThemeProvider';
 
 export const useResponsiveStyles = () => {
-  const { colorScheme } = useTelegram();
+  const { resolvedTheme } = useThemeMode();
+  const isDark = resolvedTheme === 'dark';
 
   const cardStyle = {
-    background: colorScheme === 'dark' ? '#1f1f1f' : '#ffffff',
-    borderColor: colorScheme === 'dark' ? '#3a3a3a' : '#e8e8e8',
+    background: isDark ? '#1f1f1f' : '#ffffff',
+    borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
   };
 
-  const textColor = colorScheme === 'dark' ? '#ffffff' : '#000000';
-  const subtitleColor = colorScheme === 'dark' ? '#a0a0a0' : '#8c8c8c';
-  const borderColor = colorScheme === 'dark' ? '#3a3a3a' : '#e8e8e8';
-  const chartGridColor = colorScheme === 'dark' ? '#3a3a3a' : '#e8e8e8';
+  const textColor = isDark ? '#ffffff' : '#000000';
+  const subtitleColor = isDark ? '#a0a0a0' : '#8c8c8c';
+  const borderColor = isDark ? '#3a3a3a' : '#e8e8e8';
+  const chartGridColor = isDark ? '#3a3a3a' : '#e8e8e8';
 
   const tooltipStyle = {
     backgroundColor: cardStyle.background,
@@ -26,6 +27,6 @@ export const useResponsiveStyles = () => {
     borderColor,
     chartGridColor,
     tooltipStyle,
-    colorScheme,
+    colorScheme: resolvedTheme,
   };
 };

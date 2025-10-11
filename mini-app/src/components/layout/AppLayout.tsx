@@ -2,7 +2,7 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { Layout, Menu, Drawer, Button, type MenuProps } from 'antd';
 import { Link, useLocation } from 'react-router-dom';
 import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined, BarChartOutlined, SettingOutlined, CalendarOutlined, MenuOutlined, TeamOutlined, CrownOutlined } from '@ant-design/icons';
-import { useTelegram } from '../../hooks/useTelegram';
+import { useThemeMode } from '../../theme/ThemeProvider';
 import { useAuth } from '../../auth/AuthProvider';
 
 const { Sider, Content } = Layout;
@@ -62,7 +62,8 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
-  const { colorScheme } = useTelegram();
+  const { resolvedTheme } = useThemeMode();
+  const isDark = resolvedTheme === 'dark';
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const { user } = useAuth();
@@ -90,8 +91,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         padding: '20px 16px', 
         fontSize: '18px', 
         fontWeight: 600,
-        color: colorScheme === 'dark' ? '#ffffff' : '#37352f',
-        borderBottom: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+        color: isDark ? '#ffffff' : '#37352f',
+        borderBottom: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
       }}>
         📚 KSU App
       </div>
@@ -106,14 +107,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           border: 'none',
           marginTop: '8px',
           fontSize: '14px',
-          color: colorScheme === 'dark' ? '#ffffff' : '#37352f',
+          color: isDark ? '#ffffff' : '#37352f',
         }}
       />
     </>
   );
 
   return (
-    <Layout style={{ minHeight: '100vh', background: colorScheme === 'dark' ? '#191919' : '#ffffff' }}>
+    <Layout style={{ minHeight: '100vh', background: isDark ? '#191919' : '#ffffff' }}>
       {/* Desktop Sidebar */}
       {!isMobile && (
         <Sider 
@@ -121,8 +122,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           width={240}
           collapsedWidth={80}
           style={{
-            background: colorScheme === 'dark' ? '#252525' : '#f7f7f5',
-            borderRight: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+            background: isDark ? '#252525' : '#f7f7f5',
+            borderRight: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
             overflow: 'auto',
             height: '100vh',
             position: 'fixed',
@@ -131,7 +132,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             bottom: 0,
           }}
           trigger={null}
-          theme={colorScheme === 'dark' ? 'dark' : 'light'}
+          theme={isDark ? 'dark' : 'light'}
         >
           {menuContent}
         </Sider>
@@ -147,7 +148,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           styles={{
             body: {
               padding: 0,
-              background: colorScheme === 'dark' ? '#252525' : '#f7f7f5',
+              background: isDark ? '#252525' : '#f7f7f5',
             },
           }}
         >
@@ -155,13 +156,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         </Drawer>
       )}
 
-      <Layout style={{ marginLeft: isMobile ? 0 : 240, background: colorScheme === 'dark' ? '#191919' : '#ffffff' }}>
+      <Layout style={{ marginLeft: isMobile ? 0 : 240, background: isDark ? '#191919' : '#ffffff' }}>
         {/* Mobile Header with Hamburger */}
         {isMobile && (
           <div style={{
             padding: '12px 16px',
-            background: colorScheme === 'dark' ? '#252525' : '#ffffff',
-            borderBottom: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+            background: isDark ? '#252525' : '#ffffff',
+            borderBottom: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
             display: 'flex',
             alignItems: 'center',
             gap: '12px',
@@ -179,10 +180,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <Content style={{ 
           margin: isMobile ? '16px' : '24px', 
           padding: isMobile ? '16px' : '32px', 
-          background: colorScheme === 'dark' ? '#252525' : '#ffffff',
+          background: isDark ? '#252525' : '#ffffff',
           minHeight: isMobile ? 'calc(100vh - 120px)' : 'calc(100vh - 48px)',
           borderRadius: '8px',
-          border: colorScheme === 'dark' ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+          border: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
         }}>
           {children}
         </Content>

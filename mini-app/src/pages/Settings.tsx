@@ -3,6 +3,8 @@ import { Card, Form, Input, Select, Switch, Button, message, Divider, Avatar, Sp
 import { UserOutlined, BellOutlined, GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
 import { useAuth } from '../auth/AuthProvider';
 import PageHeader from '../components/common/PageHeader';
+import { useThemeMode } from '../theme/ThemeProvider';
+import type { ThemeMode } from '../theme/ThemeProvider';
 
 const { Title, Text } = Typography;
 
@@ -19,6 +21,7 @@ const Settings: React.FC = () => {
   const { user } = useAuth();
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
+  const { mode, setMode } = useThemeMode();
 
   const handleSave = async (values: any) => {
     setLoading(true);
@@ -158,19 +161,19 @@ const Settings: React.FC = () => {
         }
       >
         <Form layout="vertical">
-          <Form.Item label="Theme" help="Theme is automatically synced with Telegram">
+          <Form.Item label="Theme" help="Choose how the interface should look in the mini-app">
             <Select
-              defaultValue="auto"
-              // disabled
+              value={mode}
+              onChange={(value: ThemeMode) => setMode(value)}
               options={[
-                { value: 'auto', label: 'Auto (follows Telegram)' },
+                { value: 'auto', label: 'Auto (follow Telegram)' },
                 { value: 'light', label: 'Light' },
                 { value: 'dark', label: 'Dark' },
               ]}
             />
           </Form.Item>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            The app automatically adapts to your Telegram theme settings
+            Switch to «Auto» to sync with Telegram again. The change applies immediately.
           </Text>
         </Form>
       </Card>
