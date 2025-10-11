@@ -1,8 +1,8 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Tag, Select, Space, Input, Button, message, Progress, Alert } from 'antd';
-import type { Modal, TableProps } from 'antd';
+import { Table, Tag, Select, Space, Input, Modal, Button, message, Progress, Alert } from 'antd';
+import type { TableProps } from 'antd';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import PackageForm from '../components/forms/PackageForm';
@@ -147,6 +147,7 @@ const Packages: React.FC = () => {
       deleteMutation.mutate(packageToDelete);
       setDeleteModalOpen(false);
     }
+  };
 
   const handleFormFinish = (values: any) => {
     if (editingPackage) {
