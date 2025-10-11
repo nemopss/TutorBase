@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Descriptions, Spin, Alert, Tag, Table, Button, message, Space, Tabs, Progress, Card, Statistic, Row, Col } from 'antd';
+import { Descriptions, Spin, Alert, Tag, Table, Button, message, Space, Tabs, Progress, Card, Statistic, Row, Col, Grid } from 'antd';
 import type { TableProps } from 'antd';
 import { 
   ArrowLeftOutlined, 
@@ -75,6 +75,8 @@ const PackageDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  const screens = Grid.useBreakpoint();
+  const isMobile = !screens?.md;
 
   const { 
     data: packageData, 
@@ -290,7 +292,12 @@ const PackageDetail: React.FC = () => {
             '100%': '#87d068',
           }}
         />
-        <Descriptions bordered column={2} style={{ marginTop: 16 }}>
+        <Descriptions 
+          bordered 
+          column={isMobile ? 1 : 2} 
+          size={isMobile ? 'small' : 'middle'} 
+          style={{ marginTop: 16 }}
+        >
           <Descriptions.Item label="Start Date">
             {packageData?.start_date ? dayjs(packageData.start_date).format('MMM DD, YYYY') : 'N/A'}
           </Descriptions.Item>
