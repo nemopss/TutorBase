@@ -139,14 +139,21 @@ const Packages: React.FC = () => {
 
   const handleDelete = (id: number) => {
     setPackageToDelete(id);
-    deleteMutation.mutate(id);
-  }
+    setDeleteModalOpen(true);
+  };
 
   const confirmDelete = () => {
     if (packageToDelete) {
       deleteMutation.mutate(packageToDelete);
       setDeleteModalOpen(false);
+      setPackageToDelete(null);
     }
+  };
+  
+  const handleDeleteCancel = () => {
+    if (deleteMutation.isPending) return;
+    setDeleteModalOpen(false);
+    setPackageToDelete(null);
   };
 
   const handleFormFinish = (values: any) => {
@@ -303,7 +310,7 @@ const Packages: React.FC = () => {
       <Modal
         open={deleteModalOpen}
         title="Delete Package"
-        onCancel={() => setDeleteModalOpen(false)}
+        onCancel={handleDeleteCancel}
         onOk={confirmDelete}
         okText="Delete"
         okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
