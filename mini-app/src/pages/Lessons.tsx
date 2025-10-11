@@ -3,7 +3,10 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Select, Space, Input, Button, message, Card, Calendar, Badge, Modal } from 'antd';
 import type { TableProps } from 'antd';
 import { CalendarOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
+import updateLocale from 'dayjs/plugin/updateLocale';
+import 'dayjs/locale/ru';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import LessonForm from '../components/forms/LessonForm';
@@ -11,18 +14,9 @@ import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
 import { dayjsInTimezone, formatDate, formatDateTime, formatTime, DEFAULT_TIMEZONE } from '../utils/datetime';
 
-import { ConfigProvider } from "antd";
-import { DatePicker } from "antd";
-import locale from 'antd/locale/ru_RU';
-import dayjs from 'dayjs';
-
-import 'dayjs/locale/ru';
-
+dayjs.extend(updateLocale);
+dayjs.updateLocale('ru', { week: { dow: 1 } });
 dayjs.locale('ru');
-
-<ConfigProvider locale={locale}>
-  <DatePicker defaultValue={dayjs('2015-01-01', 'YYYY-MM-DD')} />
-</ConfigProvider>;
 
 // --- Types --- //
 interface Lesson {
