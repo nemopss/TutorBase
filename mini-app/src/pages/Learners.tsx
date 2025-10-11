@@ -33,6 +33,7 @@ const createLearner = async (values: any) => {
     chat_id: parseInt(values.chat_id),
     display_name: values.display_name,
     notes: values.notes || null,
+    notifications_enabled: values.notifications_enabled ?? true,
   });
   return data;
 };

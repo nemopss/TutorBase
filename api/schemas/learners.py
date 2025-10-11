@@ -18,6 +18,10 @@ class CreateLearnerFromChatIdRequest(BaseModel):
     chat_id: int = Field(..., description="Telegram chat_id")
     display_name: str = Field(..., min_length=1, description="Display name for the learner")
     notes: str | None = Field(None, description="Optional notes")
+    notifications_enabled: bool = Field(
+        True,
+        description="Whether the learner should receive notifications right after creation",
+    )
 
 
 class UpdateLearnerNotificationsRequest(BaseModel):

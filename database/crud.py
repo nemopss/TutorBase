@@ -382,7 +382,11 @@ async def delete_learner(session: AsyncSession, learner: Learner) -> None:
 
 
 async def fetch_all_learners(session: AsyncSession) -> list[Learner]:
-    stmt = select(Learner).order_by(Learner.display_name.asc())
+    stmt = (
+        select(Learner)
+        .options(selectinload(Learner.bot_user))
+        .order_by(Learner.display_name.asc())
+    )
     result = await session.execute(stmt)
     return result.scalars().all()
 
@@ -393,6 +397,7 @@ async def create_learner_from_chat_id(
     chat_id: int,
     display_name: str,
     notes: Optional[str] = None,
+    notifications_enabled: bool = True,
 ) -> Learner:
     """Create a learner directly from chat_id, creating BotUser if needed."""
     now_utc = datetime.now(timezone.utc)
@@ -419,6 +424,10 @@ async def create_learner_from_chat_id(
     # Check if learner already exists for this bot_user
     existing_learner = await get_learner_by_bot_user(session, bot_user.id)
     if existing_learner:
+        if existing_learner.notifications_enabled != notifications_enabled:
+            existing_learner.notifications_enabled = notifications_enabled
+            session.add(existing_learner)
+            await session.flush([existing_learner])
         return existing_learner
     
     # Create new learner
@@ -426,9 +435,10 @@ async def create_learner_from_chat_id(
         bot_user_id=bot_user.id,
         display_name=display_name,
         notes=notes,
-        notifications_enabled=True,
+        notifications_enabled=notifications_enabled,
         created_at=now_utc,
     )
+    learner.bot_user = bot_user
     session.add(learner)
     await session.flush([learner])
     return learner
