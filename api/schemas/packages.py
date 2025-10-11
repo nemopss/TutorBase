@@ -38,7 +38,7 @@ class PackageCreateRequest(BaseModel):
     notes: Optional[str] = None
     status: str = Field(default="draft")
     template_id: Optional[int] = None
-    start_date: Optional[datetime] = None
+    start_date: Optional[datetime | str] = None
     timezone: Optional[str] = None
     total_lessons: Optional[int] = None
 

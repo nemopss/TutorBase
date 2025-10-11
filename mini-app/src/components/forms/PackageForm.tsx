@@ -91,7 +91,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
 
             const formattedValues = {
               ...values,
-              start_date: values.start_date ? values.start_date.toISOString() : undefined,
+              start_date: values.start_date ? values.start_date.format('YYYY-MM-DD') : undefined,
               timezone: resolvedTimezone,
             };
 

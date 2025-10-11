@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
+
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -12,7 +15,7 @@ from api.schemas.packages import (
     PackageProgressModel,
 )
 from api.schemas import MessageResponse
-from services import package_service
+from services import package_service, template_service
 from services.dto import LessonPackageDTO
 from services.exceptions import NotFoundError, ValidationError
 
@@ -87,13 +90,30 @@ async def create_package_endpoint(
         if payload.template_id is not None:
             if payload.start_date is None:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_date required for template")
+            
+            # Parse start_date if it's a string (YYYY-MM-DD format)
+            if isinstance(payload.start_date, str):
+                # Get template to determine timezone
+                template = await package_service.get_template(session, payload.template_id)
+                tz_name = payload.timezone or template.timezone
+                tz = ZoneInfo(tz_name)
+                # Parse date string and set time to midnight in template's timezone
+                date_parts = payload.start_date.split('-')
+                start_local = datetime(
+                    int(date_parts[0]), int(date_parts[1]), int(date_parts[2]),
+                    0, 0, 0,
+                    tzinfo=tz
+                )
+            else:
+                start_local = payload.start_date
+            
             package = await package_service.create_package_from_template(
                 session,
                 learner_id=payload.learner_id,
                 template_id=payload.template_id,
                 title=payload.title,
                 notes=payload.notes,
-                start_local=payload.start_date,
+                start_local=start_local,
                 timezone_name=payload.timezone,
             )
         else:
@@ -104,7 +124,7 @@ async def create_package_endpoint(
                 notes=payload.notes,
                 status=payload.status,
                 timezone_name=payload.timezone,
-                start_date=payload.start_date,
+                start_date=payload.start_date if isinstance(payload.start_date, datetime) else None,
                 total_lessons=payload.total_lessons,
             )
         await session.commit()
