@@ -1,6 +1,17 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 
 const tg = window.Telegram?.WebApp;
+
+function swallowPromiseRejection(result: unknown) {
+  if (
+    typeof result === 'object' &&
+    result !== null &&
+    'catch' in result &&
+    typeof (result as { catch: unknown }).catch === 'function'
+  ) {
+    (result as Promise<unknown>).catch(() => undefined);
+  }
+}
 
 export function useTelegram() {
   const [user, setUser] = useState(tg?.initDataUnsafe?.user || null);
@@ -19,21 +30,21 @@ export function useTelegram() {
     return isIosUA || isTouchMac || platformHints;
   }, []);
 
+  const requestFullscreenSafe = useCallback(() => {
+    if (!tg || !shouldRequestFullscreen) {
+      return;
+    }
+
+    try {
+      const result = tg.requestFullscreen?.() as unknown;
+      swallowPromiseRejection(result);
+    } catch {
+      // Игнорируем ошибки — на некоторых платформах метод может быть недоступен
+    }
+  }, [shouldRequestFullscreen]);
+
   useEffect(() => {
     if (!tg) return;
-
-    const requestFullscreenSafe = () => {
-      if (!shouldRequestFullscreen) return;
-
-      try {
-        const possiblePromise = tg.requestFullscreen?.();
-        if (possiblePromise && typeof possiblePromise === 'object' && 'catch' in possiblePromise) {
-          (possiblePromise as Promise<void>).catch(() => undefined);
-        }
-      } catch {
-        // Игнорируем ошибки — на некоторых платформах метод может быть недоступен
-      }
-    };
 
     const ensureExpanded = () => {
       if (!tg.isExpanded) {
@@ -71,7 +82,7 @@ export function useTelegram() {
       tg.offEvent('themeChanged', handleThemeChange);
       tg.offEvent('viewportChanged', handleViewportChange);
     };
-  }, [shouldRequestFullscreen]);
+  }, [requestFullscreenSafe]);
 
   return {
     tg,
@@ -79,5 +90,6 @@ export function useTelegram() {
     themeParams,
     colorScheme: tg?.colorScheme || 'light',
     shouldRequestFullscreen,
+    requestFullscreen: requestFullscreenSafe,
   };
 }
