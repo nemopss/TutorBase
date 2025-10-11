@@ -18,7 +18,7 @@ import AccessDenied from './pages/AccessDenied';
 
 function App() {
   const { isLoading, isAuthenticated, user } = useAuth();
-  const { tg, colorScheme, requestFullscreen } = useTelegram();
+  const { tg, colorScheme, autoFullscreenEnabled, requestFullscreen } = useTelegram();
   const isAdmin = user?.role === 'admin';
   const hasStaffAccess = user?.role === 'admin' || user?.role === 'teacher';
 
@@ -27,11 +27,14 @@ function App() {
 
     tg.ready();
     
-    // Принудительно разворачиваем приложение
-    // Убираем проверку isExpanded для iPad
-    tg.expand();
+    tg.BackButton?.hide();
 
-    requestFullscreen();
+    // Принудительно разворачиваем приложение только для устройств, где это необходимо
+    if (autoFullscreenEnabled) {
+      requestFullscreen();
+    } else if (!tg.isExpanded) {
+      tg.expand();
+    }
     
     // Включаем кнопку закрытия для возможности свернуть
     tg.enableClosingConfirmation();
@@ -45,7 +48,7 @@ function App() {
     if (tg.setBackgroundColor) {
       tg.setBackgroundColor(colorScheme === 'dark' ? '#191919' : '#ffffff');
     }
-  }, [tg, colorScheme, requestFullscreen]);
+  }, [tg, colorScheme, autoFullscreenEnabled, requestFullscreen]);
 
   const antdTheme = {
     algorithm: colorScheme === 'dark' ? theme.darkAlgorithm : theme.defaultAlgorithm,

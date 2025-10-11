@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 const tg = window.Telegram?.WebApp;
 
@@ -16,7 +16,7 @@ function swallowPromiseRejection(result: unknown) {
 export function useTelegram() {
   const [user, setUser] = useState(tg?.initDataUnsafe?.user || null);
   const [themeParams, setThemeParams] = useState(tg?.themeParams || {});
-  const shouldRequestFullscreen = useMemo(() => {
+  const autoFullscreenEnabled = useMemo(() => {
     if (!tg) {
       return false;
     }
@@ -24,31 +24,52 @@ export function useTelegram() {
     const nav = typeof navigator !== 'undefined' ? navigator : undefined;
     const userAgent = nav?.userAgent?.toLowerCase() || '';
     const isIosUA = /iphone|ipad|ipod/.test(userAgent);
+    const isIpadUA = /ipad/.test(userAgent);
     const isTouchMac = /macintosh/.test(userAgent) && (nav?.maxTouchPoints || 0) > 1;
-    const platformHints = tg.platform === 'ios' || tg.platform === 'macos';
+    const screenSize = typeof window !== 'undefined' ? Math.max(window.screen.width, window.screen.height) : 0;
+    const looksLikeTablet = screenSize >= 1024;
+    const isIpadLikeDevice = isIpadUA || (isTouchMac && looksLikeTablet);
+    const platformHints = tg.platform === 'macos';
 
-    return isIosUA || isTouchMac || platformHints;
+    if (platformHints) {
+      return (nav?.maxTouchPoints || 0) > 1 && looksLikeTablet;
+    }
+
+    if (isIpadLikeDevice) {
+      return true;
+    }
+
+    if (isIosUA) {
+      return false;
+    }
+
+    return false;
   }, []);
+  const fullscreenDismissedRef = useRef(false);
 
   const requestFullscreenSafe = useCallback(() => {
-    if (!tg || !shouldRequestFullscreen) {
+    if (!tg || !autoFullscreenEnabled || fullscreenDismissedRef.current) {
       return;
     }
 
     try {
+      if (!tg.isExpanded) {
+        tg.expand();
+      }
       const result = tg.requestFullscreen?.() as unknown;
       swallowPromiseRejection(result);
     } catch {
       // Игнорируем ошибки — на некоторых платформах метод может быть недоступен
     }
-  }, [shouldRequestFullscreen]);
+  }, [autoFullscreenEnabled]);
 
   useEffect(() => {
     if (!tg) return;
+    fullscreenDismissedRef.current = false;
 
     const ensureExpanded = () => {
-      if (!tg.isExpanded) {
-        tg.expand();
+      if (!autoFullscreenEnabled || fullscreenDismissedRef.current) {
+        return;
       }
       requestFullscreenSafe();
     };
@@ -58,38 +79,61 @@ export function useTelegram() {
     };
 
     const handleViewportChange = () => {
-      // Принудительно разворачиваем при изменении viewport
+      if (!tg.isExpanded) {
+        fullscreenDismissedRef.current = true;
+        return;
+      }
+      // Принудительно разворачиваем при изменении viewport, если пользователь не свернул вручную
       ensureExpanded();
+    };
+
+    const handleFullscreenChanged = (next?: boolean | { isFullscreen?: boolean }) => {
+      if (fullscreenDismissedRef.current) {
+        return;
+      }
+      const isFullscreen =
+        typeof next === 'boolean'
+          ? next
+          : typeof next === 'object' && next !== null && 'isFullscreen' in next
+            ? Boolean(next.isFullscreen)
+            : undefined;
+      if (isFullscreen === false) {
+        fullscreenDismissedRef.current = true;
+      }
     };
 
     tg.onEvent('themeChanged', handleThemeChange);
     tg.onEvent('viewportChanged', handleViewportChange);
+    tg.onEvent('fullscreenChanged', handleFullscreenChanged);
 
     // Set initial user data
     if (tg.initDataUnsafe?.user) {
       setUser(tg.initDataUnsafe.user);
     }
 
-    ensureExpanded();
-
-    // Дополнительные попытки развернуть приложение помогают на iPad
-    const timeouts: ReturnType<typeof setTimeout>[] = [120, 360, 1000].map((delay) =>
-      setTimeout(ensureExpanded, delay)
-    );
+    let timeouts: ReturnType<typeof setTimeout>[] = [];
+    if (autoFullscreenEnabled) {
+      ensureExpanded();
+      // Дополнительные попытки развернуть приложение помогают на iPad
+      timeouts = [120, 360, 1000].map((delay) => setTimeout(ensureExpanded, delay));
+    }
 
     return () => {
-      timeouts.forEach(clearTimeout);
+      if (timeouts.length) {
+        timeouts.forEach(clearTimeout);
+      }
       tg.offEvent('themeChanged', handleThemeChange);
       tg.offEvent('viewportChanged', handleViewportChange);
+      tg.offEvent('fullscreenChanged', handleFullscreenChanged);
     };
-  }, [requestFullscreenSafe]);
+  }, [autoFullscreenEnabled, requestFullscreenSafe]);
 
   return {
     tg,
     user,
     themeParams,
     colorScheme: tg?.colorScheme || 'light',
-    shouldRequestFullscreen,
+    autoFullscreenEnabled,
     requestFullscreen: requestFullscreenSafe,
   };
 }

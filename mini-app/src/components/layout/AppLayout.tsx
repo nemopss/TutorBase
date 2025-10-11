@@ -1,6 +1,6 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Layout, Menu, Drawer, Button, type MenuProps } from 'antd';
-import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { Link, useLocation } from 'react-router-dom';
 import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined, BarChartOutlined, SettingOutlined, CalendarOutlined, MenuOutlined, TeamOutlined, CrownOutlined } from '@ant-design/icons';
 import { useTelegram } from '../../hooks/useTelegram';
 import { useAuth } from '../../auth/AuthProvider';
@@ -62,8 +62,7 @@ interface AppLayoutProps {
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
-  const navigate = useNavigate();
-  const { tg, colorScheme } = useTelegram();
+  const { colorScheme } = useTelegram();
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const { user } = useAuth();
@@ -84,25 +83,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     window.addEventListener('resize', handleResize);
     return () => window.removeEventListener('resize', handleResize);
   }, []);
-
-  useEffect(() => {
-    const handleBackButtonClick = () => {
-      navigate(-1);
-    };
-
-    if (location.pathname !== '/') {
-      tg?.BackButton.show();
-      tg?.onEvent('backButtonClicked', handleBackButtonClick);
-    } else {
-      tg?.BackButton.hide();
-      tg?.offEvent('backButtonClicked', handleBackButtonClick);
-    }
-
-    return () => {
-      tg?.offEvent('backButtonClicked', handleBackButtonClick);
-      tg?.BackButton.hide();
-    };
-  }, [location, navigate, tg]);
 
   const menuContent = (
     <>
