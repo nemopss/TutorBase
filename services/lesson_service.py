@@ -1,9 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from zoneinfo import ZoneInfo
 
 from database import crud
 from database.models import Lesson
@@ -15,18 +16,27 @@ from services.utils import sync_package_metrics
 def _build_lesson_dto(lesson: Lesson) -> LessonDTO:
     package_title = lesson.package.title if lesson.package else None
     learner_name = lesson.package.learner.display_name if lesson.package and lesson.package.learner else None
+    tz_name = lesson.package.timezone if lesson.package and lesson.package.timezone else 'Europe/Moscow'
+
+    def _to_local(dt: Optional[datetime]) -> Optional[datetime]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            dt = dt.replace(tzinfo=timezone.utc)
+        localized = dt.astimezone(ZoneInfo(tz_name))
+        return localized.replace(tzinfo=None)
     
     return LessonDTO(
         id=lesson.id,
         package_id=lesson.package_id,
         package_title=package_title,
         learner_name=learner_name,
-        scheduled_at=lesson.scheduled_at,
+        scheduled_at=_to_local(lesson.scheduled_at),
         status=lesson.status,
         duration_minutes=lesson.duration_minutes,
         sequence_index=lesson.sequence_index,
         teacher_notes=lesson.teacher_notes,
-        homework_due_at=lesson.homework_due_at,
+        homework_due_at=_to_local(lesson.homework_due_at),
     )
 
 
