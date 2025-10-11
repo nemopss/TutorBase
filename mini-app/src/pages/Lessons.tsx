@@ -7,6 +7,7 @@ import dayjs from 'dayjs';
 import type { Dayjs } from 'dayjs';
 import updateLocale from 'dayjs/plugin/updateLocale';
 import 'dayjs/locale/ru';
+import calendarLocale from 'antd/es/calendar/locale/ru_RU';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import LessonForm from '../components/forms/LessonForm';
@@ -17,6 +18,14 @@ import { dayjsInTimezone, formatDate, formatDateTime, formatTime, DEFAULT_TIMEZO
 dayjs.extend(updateLocale);
 dayjs.updateLocale('ru', { week: { dow: 1 } });
 dayjs.locale('ru');
+
+const calendarLocaleWithMonday = {
+  ...calendarLocale,
+  lang: {
+    ...calendarLocale.lang,
+    firstDayOfWeek: 1,
+  },
+};
 
 // --- Types --- //
 interface Lesson {
@@ -323,6 +332,7 @@ const Lessons: React.FC = () => {
       ) : (
         <Card>
           <Calendar 
+            locale={calendarLocaleWithMonday}
             cellRender={dateCellRender}
             onSelect={onCalendarSelect}
           />
