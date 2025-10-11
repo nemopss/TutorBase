@@ -1,4 +1,9 @@
 services:
+  redis:
+    image: redis:7-alpine
+    restart: always
+    networks:
+      - app-network
   applications_bot:
     build:
       context: .
@@ -14,6 +19,8 @@ services:
       - .:/app
     depends_on:
       - redis
+    networks:
+      - app-network
 
   bot:
     build:
@@ -29,3 +36,9 @@ services:
     depends_on:
       - applications_bot
       - redis
+    networks:
+      - app-network
+
+networks:
+  app-network:
+    driver: bridge

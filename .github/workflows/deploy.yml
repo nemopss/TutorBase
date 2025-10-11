@@ -5,41 +5,84 @@ on:
     branches: [ master ]
 
 jobs:
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      bot: ${{ steps.filter.outputs.bot }}
+      api: ${{ steps.filter.outputs.api }}
+      app: ${{ steps.filter.outputs.app }}
+      nginx: ${{ steps.filter.outputs.nginx }}
+      compose: ${{ steps.filter.outputs.compose }}
+      deploy: ${{ steps.filter.outputs.bot == 'true' || steps.filter.outputs.api == 'true' || steps.filter.outputs.app == 'true' || steps.filter.outputs.nginx == 'true' || steps.filter.outputs.compose == 'true' }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - id: filter
+        uses: dorny/paths-filter@v3
+        with:
+          filters: |
+            bot:
+              - 'Dockerfile'
+              - 'bot.py'
+              - 'handlers/**'
+              - 'middlewares/**'
+              - 'filters/**'
+              - 'services/**'
+              - 'utils/**'
+              - 'config.py'
+              - 'requirements.txt'
+            api:
+              - 'Dockerfile.api'
+              - 'api/**'
+              - 'alembic/**'
+              - 'database/**'
+              - 'requirements.txt'
+            app:
+              - 'mini-app/**'
+            nginx:
+              - 'nginx/**'
+            compose:
+              - 'docker-compose.yml'
+              - 'certbot/**'
+              - 'scripts/**'
+
   build:
+    needs: changes
+    if: ${{ needs.changes.outputs.bot == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.app == 'true' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read
       packages: write
     steps:
       - uses: actions/checkout@v4
-      
+
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GHCR_PAT }}
-      
-      # Build Telegram Bot
+
       - name: Build and push Bot image
+        if: ${{ needs.changes.outputs.bot == 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/ksu-applications-bot:latest
-      
-      # Build FastAPI Backend
+
       - name: Build and push API image
+        if: ${{ needs.changes.outputs.api == 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: .
           file: ./Dockerfile.api
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/ksu-applications-bot-api:latest
-      
-      # Build React Frontend
+
       - name: Build and push App image
+        if: ${{ needs.changes.outputs.app == 'true' }}
         uses: docker/build-push-action@v6
         with:
           context: ./mini-app
@@ -48,9 +91,9 @@ jobs:
           tags: ghcr.io/${{ github.repository_owner }}/ksu-applications-bot-app:latest
 
   deploy:
-    needs: build
+    needs: [changes, build]
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/master'
+    if: ${{ github.ref == 'refs/heads/master' && needs.changes.outputs.deploy == 'true' }}
     steps:
       - name: Deploy over SSH
         uses: appleboy/ssh-action@v1
@@ -59,8 +102,33 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
+            set -e
             cd /srv/applications-bot/current
             git pull
-            docker compose pull
-            docker compose up -d --remove-orphans
 
+            if [ "${{ needs.changes.outputs.compose }}" = "true" ]; then
+              docker compose pull
+              docker compose up -d --remove-orphans
+              exit 0
+            fi
+
+            services=""
+            if [ "${{ needs.changes.outputs.bot }}" = "true" ]; then
+              services="$services applications_bot"
+            fi
+            if [ "${{ needs.changes.outputs.api }}" = "true" ]; then
+              services="$services api"
+            fi
+            if [ "${{ needs.changes.outputs.app }}" = "true" ]; then
+              services="$services app"
+            fi
+
+            if [ -n "$services" ]; then
+              docker compose pull $services
+              docker compose up -d $services
+            fi
+
+            if [ "${{ needs.changes.outputs.nginx }}" = "true" ] || [ "${{ needs.changes.outputs.api }}" = "true" ] || [ "${{ needs.changes.outputs.app }}" = "true" ]; then
+              docker compose up -d nginx
+              docker compose exec nginx nginx -s reload || true
+            fi
