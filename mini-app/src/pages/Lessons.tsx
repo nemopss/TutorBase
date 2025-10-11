@@ -18,7 +18,7 @@ import dayjs from 'dayjs';
 
 import 'dayjs/locale/ru-ru';
 
-dayjs.locale('ru-ru');
+dayjs.locale('ru');
 
 <ConfigProvider locale={locale}>
   <DatePicker defaultValue={dayjs('2015-01-01', 'YYYY-MM-DD')} />
