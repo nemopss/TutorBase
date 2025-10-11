@@ -63,14 +63,23 @@ export function useTelegram() {
     }
   }, [autoFullscreenEnabled]);
 
+  const expandViewport = useCallback(() => {
+    if (!tg) {
+      return;
+    }
+    try {
+      tg.expand();
+    } catch {
+      // Безопасно игнорируем — expand может быть недоступен на некоторых клиентах
+    }
+  }, []);
+
   useEffect(() => {
     if (!tg) return;
     fullscreenDismissedRef.current = false;
 
     const ensureExpanded = () => {
-      if (!autoFullscreenEnabled || fullscreenDismissedRef.current) {
-        return;
-      }
+      expandViewport();
       requestFullscreenSafe();
     };
 
@@ -79,12 +88,8 @@ export function useTelegram() {
     };
 
     const handleViewportChange = () => {
-      if (!tg.isExpanded) {
-        fullscreenDismissedRef.current = true;
-        return;
-      }
-      // Принудительно разворачиваем при изменении viewport, если пользователь не свернул вручную
-      ensureExpanded();
+      expandViewport();
+      requestFullscreenSafe();
     };
 
     const handleFullscreenChanged = (next?: boolean | { isFullscreen?: boolean }) => {
@@ -111,22 +116,25 @@ export function useTelegram() {
       setUser(tg.initDataUnsafe.user);
     }
 
-    let timeouts: ReturnType<typeof setTimeout>[] = [];
-    if (autoFullscreenEnabled) {
-      ensureExpanded();
-      // Дополнительные попытки развернуть приложение помогают на iPad
-      timeouts = [120, 360, 1000].map((delay) => setTimeout(ensureExpanded, delay));
-    }
+    ensureExpanded();
+
+    const timeouts: ReturnType<typeof setTimeout>[] = autoFullscreenEnabled
+      ? [120, 360, 1000].map((delay) =>
+          setTimeout(() => {
+            if (!fullscreenDismissedRef.current) {
+              ensureExpanded();
+            }
+          }, delay)
+        )
+      : [];
 
     return () => {
-      if (timeouts.length) {
-        timeouts.forEach(clearTimeout);
-      }
+      timeouts.forEach(clearTimeout);
       tg.offEvent('themeChanged', handleThemeChange);
       tg.offEvent('viewportChanged', handleViewportChange);
       tg.offEvent('fullscreenChanged', handleFullscreenChanged);
     };
-  }, [autoFullscreenEnabled, requestFullscreenSafe]);
+  }, [autoFullscreenEnabled, expandViewport, requestFullscreenSafe]);
 
   return {
     tg,
