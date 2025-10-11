@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Select, Space, Input, Button, message, Progress, Alert } from 'antd';
-import type { TableProps } from 'antd';
+import type { Modal, TableProps } from 'antd';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import PackageForm from '../components/forms/PackageForm';
@@ -59,6 +59,10 @@ const updatePackage = async ({ id, values }: { id: number; values: any }) => {
   return data;
 };
 
+const deletePackage = async (id: number) => {
+  await api.delete(`/packages/${id}`);
+}
+
 // --- Component --- //
 const Packages: React.FC = () => {
   const navigate = useNavigate();
@@ -69,6 +73,8 @@ const Packages: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingPackage, setEditingPackage] = useState<Package | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [packageToDelete, setPackageToDelete] = useState<number | null>(null);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -118,6 +124,29 @@ const Packages: React.FC = () => {
       mutationOptions.onSuccess();
     }
   });
+
+  const deleteMutation = useMutation({ 
+    mutationFn: deletePackage,
+    onSuccess: () => {
+      message.success('Package deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+    },
+    onError: (error: any) => {
+      console.error('Delete error:', error);
+      message.error(`Failed to delete package: ${error.message}`);
+    }
+  });
+
+  const handleDelete = (id: number) => {
+    setPackageToDelete(id);
+    deleteMutation.mutate(id);
+  }
+
+  const confirmDelete = () => {
+    if (packageToDelete) {
+      deleteMutation.mutate(packageToDelete);
+      setDeleteModalOpen(false);
+    }
 
   const handleFormFinish = (values: any) => {
     if (editingPackage) {
@@ -176,7 +205,10 @@ const Packages: React.FC = () => {
       title: 'Actions',
       key: 'actions',
       render: (_, record) => (
-        <Button type="link" onClick={(e) => { e.stopPropagation(); setEditingPackage(record); setIsModalOpen(true); }}>Edit</Button>
+        <Space size="middle">
+          <Button type="link" onClick={(e) => { e.stopPropagation(); setEditingPackage(record); setIsModalOpen(true); }}>Edit</Button>
+          <Button type="link" danger onClick={(e) => { e.stopPropagation(); handleDelete(record.id); }}>Delete</Button>
+        </Space>
       ),
     },
   ];
@@ -266,6 +298,19 @@ const Packages: React.FC = () => {
         onFinish={handleFormFinish}
         isLoading={createMutation.isPending || updateMutation.isPending}
       />
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Package"
+        onCancel={() => setDeleteModalOpen(false)}
+        onOk={confirmDelete}
+        okText="Delete"
+        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+        cancelButtonProps={{ disabled: deleteMutation.isPending }}
+      >
+        <p>Are you sure you want to delete this package? This action cannot be undone.</p>
+        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+      </Modal>
     </div>
   );
 };
