@@ -17,7 +17,7 @@ def _build_template_dto(template: LessonPackageTemplate) -> TemplateDTO:
         description=template.description,
         lesson_count=template.lesson_count,
         duration_days=template.duration_days,
-        timezone=template.default_timezone or 'Europe/Moscow',
+        timezone='Europe/Moscow',
         default_config=template.default_config or {},
     )
 
@@ -41,7 +41,6 @@ async def create_template(
     description: Optional[str] = None,
     lesson_count: Optional[int] = None,
     duration_days: Optional[int] = None,
-    default_timezone: str = 'Europe/Moscow',
     default_config: Optional[dict] = None,
 ) -> TemplateDTO:
     template = await crud.create_lesson_package_template(
@@ -50,7 +49,7 @@ async def create_template(
         description=description,
         lesson_count=lesson_count,
         duration_days=duration_days,
-        default_timezone=default_timezone,
+        default_timezone='Europe/Moscow',
         default_config=default_config,
     )
     return _build_template_dto(template)
@@ -64,7 +63,6 @@ async def update_template(
     description: Optional[str] = None,
     lesson_count: Optional[int] = None,
     duration_days: Optional[int] = None,
-    default_timezone: Optional[str] = None,
     default_config: Optional[dict] = None,
 ) -> TemplateDTO:
     template = await crud.get_lesson_package_template(session, template_id)
@@ -77,7 +75,7 @@ async def update_template(
         description=description,
         lesson_count=lesson_count,
         duration_days=duration_days,
-        default_timezone=default_timezone,
+        default_timezone='Europe/Moscow',
         default_config=default_config,
     )
     await session.flush([template])
@@ -102,7 +100,7 @@ async def duplicate_template(session: AsyncSession, template_id: int, *, name: O
         description=template.description,
         lesson_count=template.lesson_count,
         duration_days=template.duration_days,
-        default_timezone=template.default_timezone,
+        default_timezone='Europe/Moscow',
         default_config=template.default_config,
     )
     return _build_template_dto(clone)

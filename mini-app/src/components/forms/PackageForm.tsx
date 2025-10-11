@@ -3,9 +3,11 @@ import { useQuery } from '@tanstack/react-query';
 import { Modal, Form, Input, Select, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import api from '../../services/api';
 
 dayjs.extend(utc);
+dayjs.extend(timezone);
 
 // --- Types --- //
 interface Learner {
@@ -51,6 +53,7 @@ const fetchTemplates = async (): Promise<TemplateListResponse> => {
 // --- Component --- //
 const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isLoading, initialValues }) => {
   const [form] = Form.useForm();
+  const MSK_TZ = 'Europe/Moscow';
 
   const { data: learnersData, isLoading: isLoadingLearners } = useQuery<LearnerListResponse, Error>({
     queryKey: ['learners'],
@@ -70,8 +73,8 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
     if (initialValues) {
       form.setFieldsValue({
         ...initialValues,
-        start_date: initialValues.start_date ? dayjs(initialValues.start_date) : null,
-        end_date: initialValues.end_date ? dayjs(initialValues.end_date) : null,
+        start_date: initialValues.start_date ? dayjs(initialValues.start_date).tz(MSK_TZ) : null,
+        end_date: initialValues.end_date ? dayjs(initialValues.end_date).tz(MSK_TZ) : null,
         learner_id: initialValues.learner_id ?? initialValues.learner?.id,
       });
     } else {
@@ -94,8 +97,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
         form
           .validateFields()
           .then((values) => {
-            const selectedTemplate = templatesData?.items.find(template => template.id === values.template_id);
-            const resolvedTimezone = values.timezone ?? selectedTemplate?.timezone ?? 'Europe/Moscow';
+            const resolvedTimezone = MSK_TZ;
 
             const startDateValue = values.start_date;
             const endDateValue = values.end_date;
@@ -113,36 +115,31 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
             // Обрабатываем даты правильно
             if (startDateValue) {
               if (isEditing) {
-                // При редактировании отправляем только если дата изменилась
-                const originalDate = initialValues?.start_date ? dayjs(initialValues.start_date).format('YYYY-MM-DD') : null;
-                const newDate = startDateValue.format('YYYY-MM-DD');
+                const originalDate = initialValues?.start_date ? dayjs(initialValues.start_date).tz(MSK_TZ).format('YYYY-MM-DD') : null;
+                const newDate = startDateValue.tz(MSK_TZ).format('YYYY-MM-DD');
                 if (originalDate !== newDate) {
-                  // Отправляем начало дня в UTC
-                  formattedValues.start_date = startDateValue.startOf('day').utc().toISOString();
+                  formattedValues.start_date = startDateValue.tz(MSK_TZ).startOf('day').toISOString();
                 } else {
                   delete formattedValues.start_date;
                 }
               } else {
-                // Для создания с шаблоном - отправляем дату в формате YYYY-MM-DD
-                formattedValues.start_date = startDateValue.format('YYYY-MM-DD');
+                formattedValues.start_date = startDateValue.tz(MSK_TZ).format('YYYY-MM-DD');
               }
             } else {
               delete formattedValues.start_date;
             }
-            
+
             if (endDateValue) {
               if (isEditing) {
-                // При редактировании отправляем только если дата изменилась
-                const originalDate = initialValues?.end_date ? dayjs(initialValues.end_date).format('YYYY-MM-DD') : null;
-                const newDate = endDateValue.format('YYYY-MM-DD');
+                const originalDate = initialValues?.end_date ? dayjs(initialValues.end_date).tz(MSK_TZ).format('YYYY-MM-DD') : null;
+                const newDate = endDateValue.tz(MSK_TZ).format('YYYY-MM-DD');
                 if (originalDate !== newDate) {
-                  // Отправляем конец дня в UTC
-                  formattedValues.end_date = endDateValue.endOf('day').utc().toISOString();
+                  formattedValues.end_date = endDateValue.tz(MSK_TZ).endOf('day').toISOString();
                 } else {
                   delete formattedValues.end_date;
                 }
               } else {
-                formattedValues.end_date = endDateValue.endOf('day').utc().toISOString();
+                formattedValues.end_date = endDateValue.tz(MSK_TZ).endOf('day').toISOString();
               }
             } else {
               delete formattedValues.end_date;

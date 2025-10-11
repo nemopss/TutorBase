@@ -23,21 +23,24 @@ router = APIRouter()
 @router.get("", response_model=LessonListResponse)
 async def list_all_lessons_endpoint(
     status: Optional[str] = None,
+    search: Optional[str] = None,
     limit: int = 20,
     offset: int = 0,
     sort_by: str = 'scheduled_at',
     sort_order: str = 'asc',
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ) -> LessonListResponse:
-    lessons = await lesson_service.list_all_lessons(
+    lessons, total = await lesson_service.list_all_lessons(
         session, 
         status=status, 
+        search=search,
         limit=limit, 
         offset=offset,
         sort_by=sort_by,
         sort_order=sort_order,
     )
-    return LessonListResponse(total=len(lessons), items=[_to_response(lesson) for lesson in lessons])
+    return LessonListResponse(total=total, items=[_to_response(lesson) for lesson in lessons])
 
 
 def _to_response(dto: LessonDTO) -> LessonResponse:
@@ -52,7 +55,7 @@ def _to_response(dto: LessonDTO) -> LessonResponse:
         sequence_index=dto.sequence_index,
         teacher_notes=dto.teacher_notes,
         homework_due_at=dto.homework_due_at,
-        timezone=dto.timezone,
+        timezone="Europe/Moscow",
     )
 
 
@@ -60,6 +63,7 @@ def _to_response(dto: LessonDTO) -> LessonResponse:
 async def list_lessons_for_package(
     package_id: int,
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ) -> LessonListResponse:
     try:
         lessons = await lesson_service.list_lessons(session, package_id)
@@ -105,6 +109,7 @@ async def create_lesson_for_package(
 async def get_lesson_endpoint(
     lesson_id: int,
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ) -> LessonResponse:
     try:
         lesson = await lesson_service.get_lesson(session, lesson_id)

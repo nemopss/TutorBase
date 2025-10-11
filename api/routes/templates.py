@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, admin_or_teacher_required, admin_required
+from api.dependencies import get_session, admin_or_teacher_required, admin_required, get_current_user
 from api.schemas import (
     TemplateCreateRequest,
     TemplateListResponse,
@@ -32,6 +32,7 @@ def _to_response(dto: TemplateDTO) -> TemplateResponse:
 @router.get("", response_model=TemplateListResponse)
 async def list_templates(
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ) -> TemplateListResponse:
     templates = await template_service.list_templates(session)
     return TemplateListResponse(total=len(templates), items=[_to_response(tpl) for tpl in templates])
@@ -41,6 +42,7 @@ async def list_templates(
 async def get_template_endpoint(
     template_id: int,
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ) -> TemplateResponse:
     try:
         template = await template_service.get_template(session, template_id)
@@ -61,7 +63,6 @@ async def create_template_endpoint(
         description=payload.description,
         lesson_count=payload.lesson_count,
         duration_days=payload.duration_days,
-        default_timezone=payload.timezone,
         default_config=payload.default_config,
     )
     await session.commit()
@@ -83,7 +84,6 @@ async def update_template_endpoint(
             description=payload.description,
             lesson_count=payload.lesson_count,
             duration_days=payload.duration_days,
-            default_timezone=payload.timezone,
             default_config=payload.default_config,
         )
         await session.commit()

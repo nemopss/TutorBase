@@ -12,18 +12,20 @@ from services.dto import LessonDTO
 from services.exceptions import NotFoundError
 from services.utils import sync_package_metrics
 
+MSK_TZ = ZoneInfo("Europe/Moscow")
+
 
 def _build_lesson_dto(lesson: Lesson) -> LessonDTO:
     package_title = lesson.package.title if lesson.package else None
     learner_name = lesson.package.learner.display_name if lesson.package and lesson.package.learner else None
-    tz_name = lesson.package.timezone if lesson.package and lesson.package.timezone else 'Europe/Moscow'
+    tz_name = 'Europe/Moscow'
 
     def _to_local(dt: Optional[datetime]) -> Optional[datetime]:
         if dt is None:
             return None
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
-        localized = dt.astimezone(ZoneInfo(tz_name))
+        localized = dt.astimezone(MSK_TZ)
         return localized
     
     return LessonDTO(
@@ -128,20 +130,22 @@ async def list_all_lessons(
     session: AsyncSession,
     *, 
     status: Optional[str] = None, 
+    search: Optional[str] = None,
     limit: int = 100, 
     offset: int = 0,
     sort_by: str = 'scheduled_at',
     sort_order: str = 'asc',
-) -> list[LessonDTO]:
-    lessons = await crud.list_all_lessons(
+) -> tuple[list[LessonDTO], int]:
+    lessons, total = await crud.list_all_lessons(
         session, 
         status=status, 
+        search=search,
         limit=limit, 
         offset=offset,
         sort_by=sort_by,
         sort_order=sort_order,
     )
-    return [_build_lesson_dto(lesson) for lesson in lessons]
+    return [_build_lesson_dto(lesson) for lesson in lessons], total
 
 
 __all__ = [

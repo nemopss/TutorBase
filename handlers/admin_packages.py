@@ -1323,7 +1323,7 @@ async def state_package_template_start_date(message: types.Message, state: FSMCo
         await state.clear()
         return
 
-    timezone_name = template.timezone or 'Europe/Moscow'
+    timezone_name = 'Europe/Moscow'
     tz = ZoneInfo(timezone_name)
     start_local = datetime.combine(start_date_value, time.min, tz)
 
@@ -1335,7 +1335,6 @@ async def state_package_template_start_date(message: types.Message, state: FSMCo
             title=title,
             notes=notes,
             start_local=start_local,
-            timezone_name=timezone_name,
         )
         await session.commit()
     except NotFoundError:

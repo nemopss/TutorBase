@@ -1,4 +1,4 @@
-from datetime import datetime, timezone
+from datetime import datetime, timezone, date
 from typing import Optional
 
 from aiogram.types import User as AiogramUser
@@ -690,15 +690,61 @@ async def list_all_lessons(
     session: AsyncSession,
     *, 
     status: Optional[str] = None, 
+    search: Optional[str] = None,
     limit: int = 100, 
     offset: int = 0,
     sort_by: str = 'scheduled_at',
     sort_order: str = 'asc',
-) -> list[Lesson]:
-    stmt = select(Lesson).options(selectinload(Lesson.package).selectinload(LessonPackage.learner))
+) -> tuple[list[Lesson], int]:
+    stmt = (
+        select(Lesson)
+        .options(
+            selectinload(Lesson.package).selectinload(LessonPackage.learner),
+        )
+    )
+    count_stmt = select(func.count()).select_from(Lesson)
+
+    conditions: list = []
+    needs_package_join = False
+    needs_learner_join = False
 
     if status:
-        stmt = stmt.where(Lesson.status == status)
+        conditions.append(Lesson.status == status)
+
+    search_term = (search or "").strip()
+    if search_term:
+        parsed_date: Optional[date] = None
+        try:
+            parsed_date = date.fromisoformat(search_term)
+        except ValueError:
+            try:
+                parsed_date = datetime.strptime(search_term, "%d.%m.%Y").date()
+            except ValueError:
+                parsed_date = None
+
+        if parsed_date is not None:
+            conditions.append(func.date(Lesson.scheduled_at) == parsed_date.isoformat())
+        else:
+            pattern = f"%{search_term.lower()}%"
+            needs_package_join = True
+            needs_learner_join = True
+            conditions.append(
+                or_(
+                    func.lower(func.coalesce(LessonPackage.title, "")).like(pattern),
+                    func.lower(func.coalesce(Learner.display_name, "")).like(pattern),
+                )
+            )
+
+    if needs_package_join:
+        stmt = stmt.join(LessonPackage, Lesson.package_id == LessonPackage.id)
+        count_stmt = count_stmt.join(LessonPackage, Lesson.package_id == LessonPackage.id)
+    if needs_learner_join:
+        stmt = stmt.join(Learner, LessonPackage.learner_id == Learner.id)
+        count_stmt = count_stmt.join(Learner, LessonPackage.learner_id == Learner.id)
+
+    if conditions:
+        stmt = stmt.where(and_(*conditions))
+        count_stmt = count_stmt.where(and_(*conditions))
 
     order_column = getattr(Lesson, sort_by, Lesson.scheduled_at)
     if sort_order == 'desc':
@@ -706,10 +752,13 @@ async def list_all_lessons(
     else:
         stmt = stmt.order_by(order_column.asc())
 
+    total = (await session.execute(count_stmt)).scalar_one()
+    if total == 0:
+        return [], 0
+
     stmt = stmt.limit(limit).offset(offset)
-    
     result = await session.execute(stmt)
-    return result.scalars().all()
+    return result.scalars().all(), total
 
 
 # --- Reminder rules & instances -------------------------------------------

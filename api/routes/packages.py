@@ -1,12 +1,12 @@
 from __future__ import annotations
 
-from datetime import datetime, time
+from datetime import datetime, time, date
 from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, admin_or_teacher_required, admin_required
+from api.dependencies import get_session, admin_or_teacher_required, admin_required, get_current_user
 from api.schemas.packages import (
     PackageCreateRequest,
     PackageListResponse,
@@ -18,6 +18,9 @@ from api.schemas import MessageResponse
 from services import package_service, template_service
 from services.dto import LessonPackageDTO
 from services.exceptions import NotFoundError, ValidationError
+
+MSK_TZ_NAME = "Europe/Moscow"
+MSK_TZ = ZoneInfo(MSK_TZ_NAME)
 
 router = APIRouter()
 
@@ -38,11 +41,34 @@ def _to_response(dto: LessonPackageDTO) -> PackageResponse:
         status=dto.status,
         start_date=dto.start_date,
         end_date=dto.end_date,
-        timezone=dto.timezone,
+        timezone=MSK_TZ_NAME,
         notes=dto.notes,
         total_lessons=dto.total_lessons,
         progress=progress,
     )
+
+
+def _normalize_to_msk(dt: datetime | None) -> datetime | None:
+    if dt is None:
+        return None
+    if dt.tzinfo is None:
+        return dt.replace(tzinfo=MSK_TZ)
+    return dt.astimezone(MSK_TZ)
+
+
+def _parse_start_date(value: datetime | str | None) -> datetime | None:
+    if value is None:
+        return None
+    if isinstance(value, str):
+        try:
+            parsed = date.fromisoformat(value)
+        except ValueError as exc:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail="Invalid start_date format. Use YYYY-MM-DD.",
+            ) from exc
+        return datetime.combine(parsed, time.min, tzinfo=MSK_TZ)
+    return _normalize_to_msk(value)
 
 
 @router.get("", response_model=PackageListResponse)
@@ -53,6 +79,7 @@ async def list_packages(  # pragma: no cover - thin wrapper
     status_filter: str | None = None,
     search: str | None = None,
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ) -> PackageListResponse:
     packages, total = await package_service.list_packages(
         session,
@@ -72,6 +99,7 @@ async def list_packages(  # pragma: no cover - thin wrapper
 async def get_package_endpoint(
     package_id: int,
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ) -> PackageResponse:
     try:
         package = await package_service.get_package(session, package_id)
@@ -87,26 +115,11 @@ async def create_package_endpoint(
     user=Depends(admin_or_teacher_required),
 ) -> PackageResponse:
     try:
+        start_local = _parse_start_date(payload.start_date)
         if payload.template_id is not None:
             if payload.start_date is None:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_date required for template")
-            
-            # Parse start_date if it's a string (YYYY-MM-DD format)
-            if isinstance(payload.start_date, str):
-                # Get template to determine timezone
-                template = await template_service.get_template(session, payload.template_id)
-                tz_name = payload.timezone or template.timezone
-                tz = ZoneInfo(tz_name)
-                # Parse date string and set time to midnight in template's timezone
-                date_parts = payload.start_date.split('-')
-                start_local = datetime(
-                    int(date_parts[0]), int(date_parts[1]), int(date_parts[2]),
-                    0, 0, 0,
-                    tzinfo=tz
-                )
-            else:
-                start_local = payload.start_date
-            
+            await template_service.get_template(session, payload.template_id)
             package = await package_service.create_package_from_template(
                 session,
                 learner_id=payload.learner_id,
@@ -115,7 +128,6 @@ async def create_package_endpoint(
                 notes=payload.notes,
                 start_local=start_local,
                 status=payload.status or 'draft',
-                timezone_name=payload.timezone,
             )
         else:
             package = await package_service.create_package(
@@ -124,8 +136,7 @@ async def create_package_endpoint(
                 title=payload.title,
                 notes=payload.notes,
                 status=payload.status,
-                timezone_name=payload.timezone,
-                start_date=payload.start_date if isinstance(payload.start_date, datetime) else None,
+                start_date=start_local,
                 total_lessons=payload.total_lessons,
             )
         await session.commit()
@@ -152,9 +163,8 @@ async def update_package_endpoint(
             title=payload.title,
             status=payload.status,
             notes=payload.notes,
-            timezone_name=payload.timezone,
-            start_date=payload.start_date,
-            end_date=payload.end_date,
+            start_date=_normalize_to_msk(payload.start_date) if payload.start_date is not None else None,
+            end_date=_normalize_to_msk(payload.end_date) if payload.end_date is not None else None,
             total_lessons=payload.total_lessons,
         )
         await session.commit()

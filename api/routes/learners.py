@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session
+from api.dependencies import get_session, get_current_user, admin_or_teacher_required
 from api.schemas.learners import (
     LearnerListResponse,
     LearnerResponse,
@@ -18,6 +18,7 @@ router = APIRouter()
 @router.get("", response_model=LearnerListResponse)
 async def list_all_learners(
     session: AsyncSession = Depends(get_session),
+    user=Depends(get_current_user),
 ) -> LearnerListResponse:
     learners = await crud.fetch_all_learners(session)
     items = []
@@ -38,6 +39,7 @@ async def list_all_learners(
 async def create_learner_from_chat_id(
     request: CreateLearnerFromChatIdRequest,
     session: AsyncSession = Depends(get_session),
+    user=Depends(admin_or_teacher_required),
 ) -> LearnerResponse:
     """Create a new learner from Telegram chat_id"""
     learner = await crud.create_learner_from_chat_id(
@@ -63,6 +65,7 @@ async def update_learner_notifications(
     learner_id: int,
     request: UpdateLearnerNotificationsRequest,
     session: AsyncSession = Depends(get_session),
+    user=Depends(admin_or_teacher_required),
 ) -> LearnerResponse:
     """Enable or disable notifications for a learner"""
     learner = await crud.get_learner(session, learner_id)

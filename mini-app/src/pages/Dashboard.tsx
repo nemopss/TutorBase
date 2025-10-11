@@ -292,7 +292,7 @@ const Dashboard: React.FC = () => {
                   <div style={{ textAlign: 'right' }}>
                     <Progress 
                       type="circle" 
-                      percent={Math.round((pkg.progress.completed / pkg.progress.total) * 100)} 
+                      percent={pkg.progress.total > 0 ? Math.round((pkg.progress.completed / pkg.progress.total) * 100) : 0} 
                       width={50}
                       strokeColor="#52c41a"
                     />

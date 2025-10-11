@@ -13,6 +13,9 @@ from services.exceptions import NotFoundError
 from services.package_scheduler import regenerate_package_reminders
 from services.utils import generate_lessons_from_template, lesson_stats, sync_package_metrics
 
+MSK_TZ_NAME = "Europe/Moscow"
+MSK_TZ = ZoneInfo(MSK_TZ_NAME)
+
 # Prometheus metrics
 try:
     from api.prometheus_metrics import packages_created_total, db_query_duration
@@ -25,6 +28,12 @@ except ImportError:
 def _build_package_dto(package: LessonPackage) -> LessonPackageDTO:
     total, completed, cancelled = lesson_stats(package.lessons or [])
     learner_name = package.learner.display_name if package.learner else None
+    def _to_msk(dt: Optional[datetime]) -> Optional[datetime]:
+        if dt is None:
+            return None
+        if dt.tzinfo is None:
+            return dt.replace(tzinfo=timezone.utc).astimezone(MSK_TZ)
+        return dt.astimezone(MSK_TZ)
     return LessonPackageDTO(
         id=package.id,
         learner_id=package.learner_id,
@@ -32,9 +41,9 @@ def _build_package_dto(package: LessonPackage) -> LessonPackageDTO:
         template_id=package.template_id,
         title=package.title,
         status=package.status,
-        start_date=package.start_date,
-        end_date=package.end_date,
-        timezone=package.timezone or 'Europe/Moscow',
+        start_date=_to_msk(package.start_date),
+        end_date=_to_msk(package.end_date),
+        timezone=MSK_TZ_NAME,
         notes=package.notes,
         total_lessons=package.total_lessons,
         progress=PackageProgress(total=total, completed=completed, cancelled=cancelled),
@@ -92,7 +101,6 @@ async def create_package(
     status: str = 'draft',
     template_id: Optional[int] = None,
     start_date: Optional[datetime] = None,
-    timezone_name: Optional[str] = None,
     total_lessons: Optional[int] = None,
 ) -> LessonPackageDTO:
     learner = await crud.get_learner(session, learner_id)
@@ -105,6 +113,14 @@ async def create_package(
         if not template:
             raise NotFoundError(f"Template {template_id} not found")
 
+    start_local: Optional[datetime]
+    if start_date is None:
+        start_local = None
+    elif start_date.tzinfo is None:
+        start_local = start_date.replace(tzinfo=MSK_TZ)
+    else:
+        start_local = start_date.astimezone(MSK_TZ)
+
     package = await crud.create_lesson_package(
         session,
         learner=learner,
@@ -112,8 +128,8 @@ async def create_package(
         title=title,
         notes=notes,
         status=status,
-        start_date=start_date,
-        timezone_name=timezone_name,
+        start_date=start_local.astimezone(timezone.utc) if start_local else None,
+        timezone_name=MSK_TZ_NAME,
         total_lessons=total_lessons,
     )
 
@@ -137,15 +153,13 @@ async def create_package_from_template(
     notes: Optional[str],
     start_local: datetime,
     status: str = 'draft',
-    timezone_name: Optional[str] = None,
 ) -> LessonPackageDTO:
     learner = await crud.get_learner(session, learner_id)
     template = await crud.get_lesson_package_template(session, template_id)
     if not learner or not template:
         raise NotFoundError("Learner or template not found")
 
-    tz_name = timezone_name or template.default_timezone or 'Europe/Moscow'
-    tzinfo = ZoneInfo(tz_name)
+    tzinfo = MSK_TZ
 
     if start_local.tzinfo is None:
         localized_start = start_local.replace(tzinfo=tzinfo)
@@ -161,7 +175,7 @@ async def create_package_from_template(
         notes=notes,
         status=status,
         start_date=start_utc,
-        timezone_name=tz_name,
+        timezone_name=MSK_TZ_NAME,
         total_lessons=template.lesson_count,
     )
 
@@ -184,7 +198,6 @@ async def update_package(
     title: Optional[str] = None,
     status: Optional[str] = None,
     notes: Optional[str] = None,
-    timezone_name: Optional[str] = None,
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     total_lessons: Optional[int] = None,
@@ -199,12 +212,19 @@ async def update_package(
         package.status = status
     if notes is not None:
         package.notes = notes
-    if timezone_name is not None:
-        package.timezone = timezone_name
+    package.timezone = MSK_TZ_NAME
     if start_date is not None:
-        package.start_date = start_date
+        if start_date.tzinfo is None:
+            normalized_start = start_date.replace(tzinfo=MSK_TZ)
+        else:
+            normalized_start = start_date.astimezone(MSK_TZ)
+        package.start_date = normalized_start.astimezone(timezone.utc)
     if end_date is not None:
-        package.end_date = end_date
+        if end_date.tzinfo is None:
+            normalized_end = end_date.replace(tzinfo=MSK_TZ)
+        else:
+            normalized_end = end_date.astimezone(MSK_TZ)
+        package.end_date = normalized_end.astimezone(timezone.utc)
     if total_lessons is not None:
         package.total_lessons = total_lessons
 

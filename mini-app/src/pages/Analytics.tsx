@@ -271,7 +271,7 @@ const Analytics: React.FC = () => {
               title: 'Completion Rate',
               key: 'rate',
               render: (_: any, record: any) => 
-                `${Math.round((record.completed / record.total) * 100)}%`,
+                record.total > 0 ? `${Math.round((record.completed / record.total) * 100)}%` : '0%',
             },
           ]}
         />

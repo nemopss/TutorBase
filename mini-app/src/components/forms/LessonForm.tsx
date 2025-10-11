@@ -1,6 +1,11 @@
 import React, { useEffect } from 'react';
 import { Modal, Form, DatePicker, InputNumber, Select, Input } from 'antd';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
 
 interface LessonFormProps {
   open: boolean;
@@ -19,7 +24,7 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
     if (initialValues) {
       form.setFieldsValue({
         ...initialValues,
-        scheduled_at: initialValues.scheduled_at ? dayjs(initialValues.scheduled_at) : null,
+        scheduled_at: initialValues.scheduled_at ? dayjs(initialValues.scheduled_at).tz('Europe/Moscow') : null,
       });
     } else {
       form.resetFields();
@@ -42,7 +47,9 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
             // Преобразуем scheduled_at в ISO string для backend
             const formattedValues = {
               ...values,
-              scheduled_at: values.scheduled_at ? values.scheduled_at.toISOString() : undefined,
+              scheduled_at: values.scheduled_at
+                ? values.scheduled_at.tz('Europe/Moscow').toISOString()
+                : undefined,
             };
             
             // Не сбрасываем поля при редактировании, чтобы не было моргания
