@@ -94,7 +94,7 @@ const toFormValues = (pkg: Package): PackageFormValues => ({
   start_date: pkg.start_date ?? null,
   end_date: pkg.end_date ?? null,
   timezone: pkg.timezone ?? 'Europe/Moscow',
-  total_lessons: pkg.total_lessons ?? pkg.progress?.total ?? null,
+  total_lessons: pkg.total_lessons ?? null,
 });
 
 // --- Component --- //

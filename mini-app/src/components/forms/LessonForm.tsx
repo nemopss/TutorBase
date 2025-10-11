@@ -39,11 +39,17 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
         form
           .validateFields()
           .then((values) => {
+            // Преобразуем scheduled_at в ISO string для backend
+            const formattedValues = {
+              ...values,
+              scheduled_at: values.scheduled_at ? values.scheduled_at.toISOString() : undefined,
+            };
+            
             // Не сбрасываем поля при редактировании, чтобы не было моргания
             if (!isEditing) {
               form.resetFields();
             }
-            onFinish(values);
+            onFinish(formattedValues);
           })
           .catch((info) => {
             console.log('Validate Failed:', info);

@@ -2,7 +2,10 @@ import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Modal, Form, Input, Select, DatePicker } from 'antd';
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
 import api from '../../services/api';
+
+dayjs.extend(utc);
 
 // --- Types --- //
 interface Learner {
@@ -60,6 +63,10 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
   });
 
   useEffect(() => {
+    if (!open) {
+      return;
+    }
+
     if (initialValues) {
       form.setFieldsValue({
         ...initialValues,
@@ -90,18 +97,71 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
             const selectedTemplate = templatesData?.items.find(template => template.id === values.template_id);
             const resolvedTimezone = values.timezone ?? selectedTemplate?.timezone ?? 'Europe/Moscow';
 
-            const formattedValues = {
+            const startDateValue = values.start_date;
+            const endDateValue = values.end_date;
+            const totalLessonsRaw = values.total_lessons;
+            const totalLessons =
+              totalLessonsRaw === undefined || totalLessonsRaw === null || totalLessonsRaw === ''
+                ? undefined
+                : Number(totalLessonsRaw);
+
+            const formattedValues: any = {
               ...values,
-              start_date: values.start_date ? values.start_date.format('YYYY-MM-DD') : undefined,
               timezone: resolvedTimezone,
             };
 
-            if (!formattedValues.template_id) {
-              delete formattedValues.template_id;
+            // Обрабатываем даты правильно
+            if (startDateValue) {
+              if (isEditing) {
+                // При редактировании отправляем только если дата изменилась
+                const originalDate = initialValues?.start_date ? dayjs(initialValues.start_date).format('YYYY-MM-DD') : null;
+                const newDate = startDateValue.format('YYYY-MM-DD');
+                if (originalDate !== newDate) {
+                  // Отправляем начало дня в UTC
+                  formattedValues.start_date = startDateValue.startOf('day').utc().toISOString();
+                } else {
+                  delete formattedValues.start_date;
+                }
+              } else {
+                // Для создания с шаблоном - отправляем дату в формате YYYY-MM-DD
+                formattedValues.start_date = startDateValue.format('YYYY-MM-DD');
+              }
+            } else {
+              delete formattedValues.start_date;
+            }
+            
+            if (endDateValue) {
+              if (isEditing) {
+                // При редактировании отправляем только если дата изменилась
+                const originalDate = initialValues?.end_date ? dayjs(initialValues.end_date).format('YYYY-MM-DD') : null;
+                const newDate = endDateValue.format('YYYY-MM-DD');
+                if (originalDate !== newDate) {
+                  // Отправляем конец дня в UTC
+                  formattedValues.end_date = endDateValue.endOf('day').utc().toISOString();
+                } else {
+                  delete formattedValues.end_date;
+                }
+              } else {
+                formattedValues.end_date = endDateValue.endOf('day').utc().toISOString();
+              }
+            } else {
+              delete formattedValues.end_date;
+            }
+            
+            if (totalLessons !== undefined) {
+              formattedValues.total_lessons = totalLessons;
             }
 
-            if (!formattedValues.start_date) {
-              delete formattedValues.start_date;
+            // Удаляем поля которые не нужно отправлять
+            if (!isEditing) {
+              // При создании удаляем template_id если не выбран
+              if (!formattedValues.template_id) {
+                delete formattedValues.template_id;
+              }
+            } else {
+              // При редактировании удаляем learner_id и template_id (они не должны меняться)
+              delete formattedValues.learner_id;
+              delete formattedValues.template_id;
             }
 
             if (!isEditing) form.resetFields();
@@ -180,7 +240,11 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
           label="Start Date"
           rules={shouldRequireStartDate ? [{ required: true, message: 'Start date is required when using a template.' }] : []}
         >
-          <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
+          <DatePicker 
+            style={{ width: '100%' }} 
+            format="YYYY-MM-DD"
+            showTime={false}
+          />
         </Form.Item>
 
         {/* <Form.Item name="end_date" label="End Date">
