@@ -52,6 +52,7 @@ def _to_response(dto: LessonDTO) -> LessonResponse:
         sequence_index=dto.sequence_index,
         teacher_notes=dto.teacher_notes,
         homework_due_at=dto.homework_due_at,
+        timezone=dto.timezone,
     )
 
 

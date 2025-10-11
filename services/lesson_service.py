@@ -24,7 +24,7 @@ def _build_lesson_dto(lesson: Lesson) -> LessonDTO:
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
         localized = dt.astimezone(ZoneInfo(tz_name))
-        return localized.replace(tzinfo=None)
+        return localized
     
     return LessonDTO(
         id=lesson.id,
@@ -37,6 +37,7 @@ def _build_lesson_dto(lesson: Lesson) -> LessonDTO:
         sequence_index=lesson.sequence_index,
         teacher_notes=lesson.teacher_notes,
         homework_due_at=_to_local(lesson.homework_due_at),
+        timezone=tz_name,
     )
 
 

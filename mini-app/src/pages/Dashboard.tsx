@@ -14,6 +14,7 @@ import dayjs from 'dayjs';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
+import { formatDateTime } from '../utils/datetime';
 
 // --- Types --- //
 interface MetricsSummary {
@@ -26,6 +27,7 @@ interface Lesson {
   package_id: number;
   scheduled_at: string;
   status: string;
+  timezone: string;
 }
 
 interface LessonListResponse {
@@ -316,7 +318,7 @@ const Dashboard: React.FC = () => {
                   <List.Item key={item.id}>
                     <List.Item.Meta
                       avatar={<CalendarOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
-                      title={dayjs(item.scheduled_at).format('MMM DD, YYYY HH:mm')}
+                      title={formatDateTime(item.scheduled_at, { timezone: item.timezone, format: 'MMM DD, YYYY HH:mm' })}
                       description={`Status: ${item.status}`}
                     />
                   </List.Item>

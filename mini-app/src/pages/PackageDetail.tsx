@@ -10,10 +10,10 @@ import {
   CloseCircleOutlined,
   ClockCircleOutlined
 } from '@ant-design/icons';
-import dayjs from 'dayjs';
 import api from '../services/api';
 import LessonForm from '../components/forms/LessonForm';
 import PageHeader from '../components/common/PageHeader';
+import { formatDate, formatDateTime } from '../utils/datetime';
 
 // --- Types --- //
 interface PackageProgress {
@@ -40,6 +40,7 @@ interface Lesson {
   scheduled_at: string;
   status: string;
   duration_minutes?: number;
+  timezone: string;
 }
 
 interface LessonListResponse {
@@ -145,7 +146,7 @@ const PackageDetail: React.FC = () => {
       title: 'Scheduled At',
       dataIndex: 'scheduled_at',
       key: 'scheduled_at',
-      render: (text: string) => new Date(text).toLocaleString(),
+      render: (text: string) => formatDateTime(text, { timezone: packageData?.timezone }),
     },
     {
       title: 'Status',
@@ -299,10 +300,10 @@ const PackageDetail: React.FC = () => {
           style={{ marginTop: 16 }}
         >
           <Descriptions.Item label="Start Date">
-            {packageData?.start_date ? dayjs(packageData.start_date).format('MMM DD, YYYY') : 'N/A'}
+            {packageData?.start_date ? formatDate(packageData.start_date, { timezone: packageData?.timezone }) : 'N/A'}
           </Descriptions.Item>
           <Descriptions.Item label="End Date">
-            {packageData?.end_date ? dayjs(packageData.end_date).format('MMM DD, YYYY') : 'N/A'}
+            {packageData?.end_date ? formatDate(packageData.end_date, { timezone: packageData?.timezone }) : 'N/A'}
           </Descriptions.Item>
           <Descriptions.Item label="Timezone">{packageData?.timezone}</Descriptions.Item>
           <Descriptions.Item label="Total Lessons">{packageData?.total_lessons || '-'}</Descriptions.Item>

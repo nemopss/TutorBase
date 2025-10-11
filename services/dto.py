@@ -23,6 +23,7 @@ class LessonDTO:
     sequence_index: Optional[int]
     teacher_notes: Optional[str]
     homework_due_at: Optional[datetime]
+    timezone: str
 
 
 @dataclass(slots=True)
@@ -57,6 +58,5 @@ class TemplateDTO:
     duration_days: Optional[int]
     timezone: str
     default_config: Optional[dict]
-
 
 

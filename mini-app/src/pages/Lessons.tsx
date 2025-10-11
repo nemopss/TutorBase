@@ -3,12 +3,13 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Select, Space, Input, Button, message, Card, Calendar, Badge, Modal } from 'antd';
 import type { TableProps } from 'antd';
 import { CalendarOutlined, UnorderedListOutlined } from '@ant-design/icons';
-import dayjs, { Dayjs } from 'dayjs';
+import type { Dayjs } from 'dayjs';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import LessonForm from '../components/forms/LessonForm';
 import PageHeader from '../components/common/PageHeader';
 import EmptyState from '../components/common/EmptyState';
+import { dayjsInTimezone, formatDate, formatDateTime, formatTime, DEFAULT_TIMEZONE } from '../utils/datetime';
 
 // --- Types --- //
 interface Lesson {
@@ -21,6 +22,7 @@ interface Lesson {
   duration_minutes?: number;
   teacher_notes?: string;
   sequence_index?: number;
+  timezone: string;
 }
 
 interface LessonListResponse {
@@ -131,8 +133,8 @@ const Lessons: React.FC = () => {
       title: 'Scheduled At',
       dataIndex: 'scheduled_at',
       key: 'scheduled_at',
-      render: (text: string) => dayjs(text).format('YYYY-MM-DD HH:mm'),
-      sorter: (a, b) => dayjs(a.scheduled_at).unix() - dayjs(b.scheduled_at).unix(),
+      render: (_: string, record) => formatDateTime(record.scheduled_at, { timezone: record.timezone }),
+      sorter: (a, b) => dayjsInTimezone(a.scheduled_at, a.timezone).valueOf() - dayjsInTimezone(b.scheduled_at, b.timezone).valueOf(),
       width: 180,
     },
     {
@@ -192,7 +194,7 @@ const Lessons: React.FC = () => {
   // Calendar cell renderer
   const dateCellRender = (value: Dayjs) => {
     const lessonsOnDate = data?.items.filter(lesson => 
-      dayjs(lesson.scheduled_at).isSame(value, 'day')
+      dayjsInTimezone(lesson.scheduled_at, lesson.timezone).isSame(dayjsInTimezone(value, lesson.timezone), 'day')
     ) || [];
     
     return (
@@ -201,7 +203,7 @@ const Lessons: React.FC = () => {
           <li key={lesson.id}>
             <Badge 
               status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'} 
-              text={dayjs(lesson.scheduled_at).format('HH:mm')} 
+              text={formatTime(lesson.scheduled_at, { timezone: lesson.timezone })} 
             />
           </li>
         ))}
@@ -212,18 +214,18 @@ const Lessons: React.FC = () => {
 
   const onCalendarSelect = (date: Dayjs) => {
     const lessonsOnDate = data?.items.filter(lesson => 
-      dayjs(lesson.scheduled_at).isSame(date, 'day')
+      dayjsInTimezone(lesson.scheduled_at, lesson.timezone).isSame(dayjsInTimezone(date, lesson.timezone), 'day')
     ) || [];
     
     if (lessonsOnDate.length > 0) {
       Modal.info({
-        title: `Lessons on ${date.format('YYYY-MM-DD')}`,
+        title: `Lessons on ${formatDate(date, { timezone: DEFAULT_TIMEZONE, format: 'YYYY-MM-DD' })}`,
         content: (
           <div>
             {lessonsOnDate.map(lesson => (
               <div key={lesson.id} style={{ marginBottom: 8 }}>
                 <Tag color={getStatusColor(lesson.status)}>{lesson.status}</Tag>
-                {dayjs(lesson.scheduled_at).format('HH:mm')} - {lesson.duration_minutes || 60} min
+                {formatTime(lesson.scheduled_at, { timezone: lesson.timezone })} - {lesson.duration_minutes || 60} min
               </div>
             ))}
           </div>

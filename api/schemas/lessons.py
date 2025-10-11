@@ -17,6 +17,7 @@ class LessonResponse(BaseModel):
     sequence_index: Optional[int]
     teacher_notes: Optional[str]
     homework_due_at: Optional[datetime]
+    timezone: str
 
 
 class LessonListResponse(BaseModel):
@@ -38,4 +39,3 @@ class LessonUpdateRequest(BaseModel):
     status: Optional[str] = None
     teacher_notes: Optional[str] = None
     homework_due_at: Optional[datetime] = None
-
