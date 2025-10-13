@@ -121,12 +121,14 @@ const Analytics: React.FC = () => {
     if (existing) {
       existing.total += pkg.progress?.total || 0;
       existing.completed += pkg.progress?.completed || 0;
+      existing.cancelled += pkg.progress?.cancelled || 0;
       existing.packages += 1;
     } else {
       acc.push({
         name: pkg.learner_name,
         total: pkg.progress?.total || 0,
         completed: pkg.progress?.completed || 0,
+        cancelled: pkg.progress?.cancelled || 0,
         packages: 1,
       });
     }
@@ -268,10 +270,15 @@ const Analytics: React.FC = () => {
               key: 'completed',
             },
             {
+              title: 'Cancelled',
+              dataIndex: 'cancelled',
+              key: 'cancelled',
+            },
+            {
               title: 'Completion Rate',
               key: 'rate',
               render: (_: any, record: any) => 
-                record.total > 0 ? `${Math.round((record.completed / record.total) * 100)}%` : '0%',
+                record.total > 0 ? `${Math.round(((record.completed + record.cancelled) / record.total) * 100)}%` : '0%',
             },
           ]}
         />

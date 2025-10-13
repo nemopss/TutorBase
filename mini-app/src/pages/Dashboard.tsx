@@ -292,12 +292,12 @@ const Dashboard: React.FC = () => {
                   <div style={{ textAlign: 'right' }}>
                     <Progress 
                       type="circle" 
-                      percent={pkg.progress.total > 0 ? Math.round((pkg.progress.completed / pkg.progress.total) * 100) : 0} 
+                      percent={pkg.progress.total > 0 ? Math.round(((pkg.progress.completed + pkg.progress.cancelled) / pkg.progress.total) * 100) : 0} 
                       width={50}
                       strokeColor="#52c41a"
                     />
                     <div style={{ marginTop: 8, fontSize: 12, color: subtitleColor }}>
-                      {pkg.progress.completed}/{pkg.progress.total} lessons
+                      {pkg.progress.completed}+{pkg.progress.cancelled}/{pkg.progress.total}
                     </div>
                   </div>
                 </List.Item>
