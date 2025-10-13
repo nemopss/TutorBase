@@ -8,7 +8,7 @@ type RefreshSubscriber = (token: string | null) => void;
 
 const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE_URL || "/api/v1",
-  timeout: 15000, // 15 second timeout for Android
+  timeout: Number(import.meta.env.VITE_API_TIMEOUT) || 15000, // Configurable timeout, default 15s
 });
 
 let refreshTokenRequest: Promise<string | null> | null = null;

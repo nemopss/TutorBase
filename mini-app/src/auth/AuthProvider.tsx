@@ -1,7 +1,23 @@
 
-import React, { createContext, useState, useEffect, useContext } from 'react';
+import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import type { PropsWithChildren } from 'react';
 import api from '../services/api';
+
+// Decode JWT token to get expiration time
+const parseJwt = (token: string): { exp?: number } | null => {
+  try {
+    const base64Url = token.split('.')[1];
+    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
+    const jsonPayload = decodeURIComponent(
+      window.atob(base64).split('').map(c => 
+        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
+      ).join('')
+    );
+    return JSON.parse(jsonPayload);
+  } catch (e) {
+    return null;
+  }
+};
 
 // Предполагаемые типы для данных пользователя и ответа от API
 interface User {
@@ -37,6 +53,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const refreshTimerRef = useRef<number | null>(null);
 
   useEffect(() => {
     const login = async () => {
@@ -79,6 +96,9 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
         setUser(user);
         setIsLoading(false);
+        
+        // Setup auto-refresh 5 minutes before expiration
+        setupTokenRefresh(access_token);
       } catch (err: any) {
         console.error('Authentication failed:', err);
         const errorMsg = err?.response?.data?.detail || err?.message || 'Authentication failed';
@@ -93,7 +113,55 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     };
 
     login();
+    
+    // Cleanup timer on unmount
+    return () => {
+      if (refreshTimerRef.current) {
+        window.clearTimeout(refreshTimerRef.current);
+      }
+    };
   }, []);
+  
+  // Auto-refresh token before expiration
+  const setupTokenRefresh = (accessToken: string) => {
+    const payload = parseJwt(accessToken);
+    if (!payload?.exp) return;
+    
+    const now = Math.floor(Date.now() / 1000);
+    const expiresIn = payload.exp - now;
+    
+    // Refresh 5 minutes (300 seconds) before expiration
+    const refreshIn = Math.max(0, expiresIn - 300);
+    
+    if (refreshTimerRef.current) {
+      window.clearTimeout(refreshTimerRef.current);
+    }
+    
+    refreshTimerRef.current = window.setTimeout(async () => {
+      try {
+        const refreshToken = localStorage.getItem('refreshToken');
+        if (!refreshToken) return;
+        
+        const response = await api.post<AuthResponse>('/auth/refresh', {
+          refresh_token: refreshToken
+        });
+        
+        const { access_token, refresh_token: newRefreshToken, user: updatedUser } = response.data;
+        
+        localStorage.setItem('accessToken', access_token);
+        localStorage.setItem('refreshToken', newRefreshToken);
+        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+        
+        setUser(updatedUser);
+        
+        // Schedule next refresh
+        setupTokenRefresh(access_token);
+      } catch (err) {
+        console.error('Auto-refresh failed:', err);
+        // On failure, user will be logged out on next 401
+      }
+    }, refreshIn * 1000);
+  };
 
   const value = {
     isAuthenticated: !!user,

@@ -129,11 +129,20 @@ class ReminderScheduler:
         try:
             await self._bot.send_message(target, message_text, reply_markup=keyboard)
         except TelegramBadRequest as exc:
-            await self._handle_instance_send_failure(session, instance, contact_display, 'TelegramBadRequest', exc, now_utc)
+            # Permanent error: invalid request
+            await self._handle_instance_send_failure(
+                session, instance, contact_display, 'TelegramBadRequest', exc, now_utc, is_permanent=True
+            )
         except TelegramForbiddenError as exc:
-            await self._handle_instance_send_failure(session, instance, contact_display, 'TelegramForbiddenError', exc, now_utc)
+            # Permanent error: bot blocked by user
+            await self._handle_instance_send_failure(
+                session, instance, contact_display, 'TelegramForbiddenError', exc, now_utc, is_permanent=True
+            )
         except Exception as exc:
-            await self._handle_instance_send_failure(session, instance, contact_display, 'GenericError', exc, now_utc)
+            # Temporary error: network issue, timeout, etc. - retry later
+            await self._handle_instance_send_failure(
+                session, instance, contact_display, 'NetworkError', exc, now_utc, is_permanent=False
+            )
         else:
             await crud.set_reminder_instance_status(
                 session,
@@ -144,22 +153,51 @@ class ReminderScheduler:
             )
             await self._log_instance_sent(instance, schedule_label)
 
-    async def _handle_instance_send_failure(self, session, instance, contact_display: str, reason: str, exc: Exception, now_utc: datetime) -> None:
-        logging.error(
-            "Failed to send reminder instance #%s to %s: %s (%s)",
-            instance.id,
-            contact_display,
-            exc,
-            reason,
-        )
-        comment = f"Send failure ({reason}): {exc}"[:1000]
-        await crud.set_reminder_instance_status(
-            session,
-            instance,
-            status='failed',
-            active=False,
-            comment=comment,
-        )
+    async def _handle_instance_send_failure(
+        self, 
+        session, 
+        instance, 
+        contact_display: str, 
+        reason: str, 
+        exc: Exception, 
+        now_utc: datetime,
+        is_permanent: bool = True
+    ) -> None:
+        if is_permanent:
+            # Permanent failure: mark as failed and deactivate
+            logging.error(
+                "Permanent failure for reminder instance #%s to %s: %s (%s)",
+                instance.id,
+                contact_display,
+                exc,
+                reason,
+            )
+            comment = f"Permanent failure ({reason}): {exc}"[:1000]
+            await crud.set_reminder_instance_status(
+                session,
+                instance,
+                status='failed',
+                active=False,
+                comment=comment,
+            )
+        else:
+            # Temporary failure: keep active for retry
+            logging.warning(
+                "Temporary failure for reminder instance #%s to %s: %s (%s) - will retry",
+                instance.id,
+                contact_display,
+                exc,
+                reason,
+            )
+            comment = f"Temporary failure ({reason}), will retry: {exc}"[:1000]
+            await crud.set_reminder_instance_status(
+                session,
+                instance,
+                status='pending',
+                active=True,  # Keep active for retry
+                comment=comment,
+            )
+            return  # Don't send admin notification for temporary failures
         admin_message = (
             "⚠️ <b>Не удалось отправить напоминание</b>\n\n"
             f"Инстанс #{escape_html_text(instance.id)} ({escape_html_text(self._describe_instance_kind(instance))})\n"

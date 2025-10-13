@@ -102,6 +102,9 @@ async def create_lesson_for_package(
     except NotFoundError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        await session.rollback()
+        raise
     return _to_response(lesson)
 
 
@@ -128,7 +131,7 @@ async def update_lesson_endpoint(
     try:
         lesson = await lesson_service.update_lesson(
             session,
-            lesson_id,
+            lesson_id=lesson_id,
             scheduled_at=payload.scheduled_at,
             duration_minutes=payload.duration_minutes,
             status=payload.status,
@@ -140,6 +143,9 @@ async def update_lesson_endpoint(
     except NotFoundError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        await session.rollback()
+        raise
     return _to_response(lesson)
 
 
@@ -161,5 +167,8 @@ async def delete_lesson_endpoint(
     except NotFoundError as exc:
         await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except Exception as exc:
+        await session.rollback()
+        raise
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)
