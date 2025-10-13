@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Select, Space, Input, Button, message, Card, Calendar, Badge, Modal } from 'antd';
 import type { TableProps } from 'antd';
@@ -202,16 +202,30 @@ const Lessons: React.FC = () => {
     },
   ];
 
-  const handleTableChange = (pagination: any) => {
-    setCurrentPage(pagination.current);
-    setPageSize(pagination.pageSize);
+  const handleTableChange: TableProps['onChange'] = (pagination) => {
+    setCurrentPage(pagination.current || 1);
+    setPageSize(pagination.pageSize || 10);
   };
+
+  // Group lessons by date for calendar performance
+  const lessonsByDate = useMemo(() => {
+    if (!data?.items) return new Map<string, Lesson[]>();
+    
+    const grouped = new Map<string, Lesson[]>();
+    data.items.forEach(lesson => {
+      const dateKey = dayjsInTimezone(lesson.scheduled_at, lesson.timezone).format('YYYY-MM-DD');
+      if (!grouped.has(dateKey)) {
+        grouped.set(dateKey, []);
+      }
+      grouped.get(dateKey)!.push(lesson);
+    });
+    return grouped;
+  }, [data?.items]);
 
   // Calendar cell renderer
   const dateCellRender = (value: Dayjs) => {
-    const lessonsOnDate = data?.items.filter(lesson => 
-      dayjsInTimezone(lesson.scheduled_at, lesson.timezone).isSame(dayjsInTimezone(value, lesson.timezone), 'day')
-    ) || [];
+    const dateKey = value.format('YYYY-MM-DD');
+    const lessonsOnDate = lessonsByDate.get(dateKey) || [];
     
     return (
       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
@@ -229,9 +243,8 @@ const Lessons: React.FC = () => {
   };
 
   const onCalendarSelect = (date: Dayjs) => {
-    const lessonsOnDate = data?.items.filter(lesson => 
-      dayjsInTimezone(lesson.scheduled_at, lesson.timezone).isSame(dayjsInTimezone(date, lesson.timezone), 'day')
-    ) || [];
+    const dateKey = date.format('YYYY-MM-DD');
+    const lessonsOnDate = lessonsByDate.get(dateKey) || [];
     
     if (lessonsOnDate.length > 0) {
       Modal.info({

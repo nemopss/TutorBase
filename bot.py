@@ -20,6 +20,7 @@ from handlers import reminders as reminders_h
 from middlewares.logging import LoggingMiddleware, LoggingFilter
 from middlewares.db import DbSessionMiddleware
 from middlewares.user_tracking import UserTrackingMiddleware
+from middlewares.rate_limit import RateLimitMiddleware
 from services.reminders import ReminderScheduler
 from utils import texts
 
@@ -34,6 +35,7 @@ async def main():
 
     dp.update.middleware(DbSessionMiddleware())
     dp.update.middleware(UserTrackingMiddleware())
+    dp.update.middleware(RateLimitMiddleware(max_requests=20, window_seconds=60))
     dp.update.middleware(LoggingMiddleware())
 
     reminder_scheduler = ReminderScheduler(bot)
@@ -82,6 +84,6 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, SystemExit):
         logging.info("Bot stopped.")
     except ValueError as e:
-        logging.error(e)
+        logging.error(f"Configuration error: {e}", exc_info=True)
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}", exc_info=True)
