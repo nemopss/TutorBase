@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Table, Tag, Select, Space, Input, Button, message, Modal, Form, Switch, Alert } from 'antd';
 import type { TableProps } from 'antd';
+import type { FormInstance } from 'antd/es/form';
 import { EditOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import api from '../services/api';
@@ -102,6 +103,7 @@ const Reminders: React.FC = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingReminder, setEditingReminder] = useState<Reminder | null>(null);
+  const [form] = Form.useForm();
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -329,9 +331,7 @@ const Reminders: React.FC = () => {
         title="Edit Reminder"
         cancelText="Cancel"
         onCancel={handleCancel}
-        onOk={() => {
-          // Form submission will be handled by the form component
-        }}
+        onOk={() => form.submit()}
         confirmLoading={updateMutation.isPending}
         destroyOnClose
       >
@@ -339,6 +339,7 @@ const Reminders: React.FC = () => {
           reminder={editingReminder}
           onFinish={handleFormFinish}
           isLoading={updateMutation.isPending}
+          form={form}
         />
       </Modal>
     </div>
@@ -350,11 +351,10 @@ interface ReminderEditFormProps {
   reminder: Reminder | null;
   onFinish: (values: any) => void;
   isLoading: boolean;
+  form: FormInstance;
 }
 
-const ReminderEditForm: React.FC<ReminderEditFormProps> = ({ reminder, onFinish, isLoading }) => {
-  const [form] = Form.useForm();
-
+const ReminderEditForm: React.FC<ReminderEditFormProps> = ({ reminder, onFinish, isLoading, form }) => {
   React.useEffect(() => {
     if (reminder) {
       form.setFieldsValue({
@@ -362,31 +362,22 @@ const ReminderEditForm: React.FC<ReminderEditFormProps> = ({ reminder, onFinish,
         active: reminder.active,
         comment: reminder.comment,
       });
+    } else {
+      form.resetFields();
     }
-  }, [reminder, form]);
-
-  const handleSubmit = () => {
-    form.validateFields().then((values) => {
-      onFinish(values);
-    }).catch((info) => {
-      console.log('Validate Failed:', info);
-    });
-  };
-
-  // Update the parent modal's onOk handler
-  React.useEffect(() => {
-    const modal = document.querySelector('.ant-modal');
-    if (modal) {
-      const okButton = modal.querySelector('.ant-btn-primary');
-      if (okButton) {
-        okButton.addEventListener('click', handleSubmit);
-        return () => okButton.removeEventListener('click', handleSubmit);
-      }
-    }
-  }, [form]);
+  }, [form, reminder]);
 
   return (
-    <Form form={form} layout="vertical" name="reminder_edit_form">
+    <Form
+      form={form}
+      layout="vertical"
+      name="reminder_edit_form"
+      onFinish={onFinish}
+      onFinishFailed={(info) => {
+        if (import.meta.env.DEV) {
+          console.log('Validate Failed:', info);
+        }
+      }}    >
       <Form.Item
         name="status"
         label="Status"
@@ -414,4 +405,3 @@ const ReminderEditForm: React.FC<ReminderEditFormProps> = ({ reminder, onFinish,
 };
 
 export default Reminders;
-
