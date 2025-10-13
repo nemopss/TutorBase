@@ -84,6 +84,6 @@ if __name__ == "__main__":
     except (KeyboardInterrupt, SystemExit):
         logging.info("Bot stopped.")
     except ValueError as e:
-        logging.error(f"Configuration error: {e}", exc_info=True)
+        logging.error(f"Configuration error occurred: {e}", exc_info=True)
     except Exception as e:
         logging.error(f"An unexpected error occurred: {e}", exc_info=True)
