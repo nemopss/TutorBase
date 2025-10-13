@@ -873,7 +873,7 @@ async def fetch_reminder_instances_due(
     statuses: Optional[list[str]] = None,
 ) -> list[ReminderInstance]:
     if statuses is None:
-        statuses = ["scheduled"]
+        statuses = ["scheduled", "pending"]
     stmt = (
         select(ReminderInstance)
         .options(

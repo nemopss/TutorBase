@@ -125,6 +125,8 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
               } else {
                 formattedValues.start_date = startDateValue.tz(MSK_TZ).format('YYYY-MM-DD');
               }
+            } else if (isEditing) {
+              formattedValues.start_date = null;
             } else {
               delete formattedValues.start_date;
             }
@@ -141,6 +143,8 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
               } else {
                 formattedValues.end_date = endDateValue.tz(MSK_TZ).endOf('day').toISOString();
               }
+            } else if (isEditing) {
+              formattedValues.end_date = null;
             } else {
               delete formattedValues.end_date;
             }
@@ -229,7 +233,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
               { value: 'draft', label: 'Draft' },
               { value: 'active', label: 'Active' },
               { value: 'completed', label: 'Completed' },
-              { value: 'archived', label: 'Archived' },
+              { value: 'cancelled', label: 'Cancelled' },
             ]}
           />
         </Form.Item>

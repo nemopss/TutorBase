@@ -54,7 +54,7 @@ const STATUS_OPTIONS = [
   { value: 'active', label: 'Active' },
   { value: 'draft', label: 'Draft' },
   { value: 'completed', label: 'Completed' },
-  { value: 'archived', label: 'Archived' },
+  { value: 'cancelled', label: 'Cancelled' },
 ];
 
 // --- API Fetchers --- //

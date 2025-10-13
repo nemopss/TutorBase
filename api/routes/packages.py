@@ -17,7 +17,7 @@ from api.schemas import MessageResponse
 from services import package_service, template_service
 from services.dto import LessonPackageDTO
 from services.exceptions import NotFoundError, ValidationError
-from utils.timezone import DEFAULT_TIMEZONE, DEFAULT_TZ, parse_date_string
+from utils.timezone import DEFAULT_TIMEZONE, DEFAULT_TZ, parse_date_string, normalize_to_timezone
 
 router = APIRouter()
 
@@ -152,8 +152,8 @@ async def update_package_endpoint(
             title=payload.title,
             status=payload.status,
             notes=payload.notes,
-            start_date=_normalize_to_msk(payload.start_date) if payload.start_date is not None else None,
-            end_date=_normalize_to_msk(payload.end_date) if payload.end_date is not None else None,
+            start_date=normalize_to_timezone(payload.start_date) if payload.start_date is not None else None,
+            end_date=normalize_to_timezone(payload.end_date) if payload.end_date is not None else None,
             total_lessons=payload.total_lessons,
         )
         await session.commit()

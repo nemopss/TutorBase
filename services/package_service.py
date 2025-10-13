@@ -112,7 +112,7 @@ async def create_package(
         title=title,
         notes=notes,
         status=status,
-        start_date=to_utc(start_date, DEFAULT_TZ) if start_date else None,
+        start_date=to_utc(start_date, DEFAULT_TZ) if start_date else None, # TEMP: Always use DEFAULT_TZ
         timezone_name=DEFAULT_TIMEZONE,
         total_lessons=total_lessons,
     )

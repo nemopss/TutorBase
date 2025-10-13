@@ -16,6 +16,17 @@ from database import crud
 router = APIRouter()
 
 
+def _coerce_row_to_date(raw: datetime | date | str) -> date:
+    if isinstance(raw, date) and not isinstance(raw, datetime):
+        return raw
+    if isinstance(raw, datetime):
+        return raw.date()
+    if isinstance(raw, str):
+        return date.fromisoformat(raw)
+    # Fallback: convert to string and let fromisoformat raise if invalid
+    return date.fromisoformat(str(raw))
+
+
 @router.get("/summary", response_model=MetricsSummary)
 async def metrics_summary(
     session: AsyncSession = Depends(get_session),
@@ -34,7 +45,7 @@ async def lessons_daily_metrics(
     user=Depends(admin_or_teacher_required),
 ) -> DailyMetricsResponse:
     rows = await crud.lessons_daily_stats(session, from_date=from_date, to_date=to_date)
-    points = [DailyPoint(date=date.fromisoformat(row[0]), value=row[1]) for row in rows]
+    points = [DailyPoint(date=_coerce_row_to_date(row[0]), value=row[1]) for row in rows if row[0] is not None]
     return DailyMetricsResponse(items=points)
 
 
@@ -46,5 +57,5 @@ async def reminders_daily_metrics(
     user=Depends(admin_or_teacher_required),
 ) -> DailyMetricsResponse:
     rows = await crud.reminders_daily_stats(session, from_date=from_date, to_date=to_date)
-    points = [DailyPoint(date=date.fromisoformat(row[0]), value=row[1]) for row in rows]
+    points = [DailyPoint(date=_coerce_row_to_date(row[0]), value=row[1]) for row in rows if row[0] is not None]
     return DailyMetricsResponse(items=points)
