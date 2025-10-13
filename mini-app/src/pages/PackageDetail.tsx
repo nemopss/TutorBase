@@ -189,7 +189,7 @@ const PackageDetail: React.FC = () => {
   };
 
   const progressPercent = packageData && packageData.progress.total > 0
-    ? Math.round((packageData.progress.completed / packageData.progress.total) * 100)
+    ? Math.round(((packageData.progress.completed + packageData.progress.cancelled) / packageData.progress.total) * 100)
     : 0;
 
   const tabItems = [

@@ -239,9 +239,9 @@ const Packages: React.FC = () => {
       key: 'progress',
       width: 200,
       render: (_, record) => {
-        const progress = record.progress || { total: 0, completed: 0 };
+        const progress = record.progress || { total: 0, completed: 0, cancelled: 0 };
         const percent = progress.total > 0 
-          ? Math.round((progress.completed / progress.total) * 100) 
+          ? Math.round(((progress.completed + progress.cancelled) / progress.total) * 100) 
           : 0;
         return (
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
@@ -252,7 +252,7 @@ const Packages: React.FC = () => {
               style={{ flex: 1, margin: 0 }}
             />
             <span style={{ fontSize: 12, color: '#8c8c8c', minWidth: 60 }}>
-              {record.progress.completed}/{record.progress.total}
+              {progress.completed}+{progress.cancelled}/{progress.total}
             </span>
           </div>
         );
