@@ -23,3 +23,8 @@ venv/
 
 # Local SQLite DB
 database/bot.db
+utils/texts.txt
+docs/
+OLD_ROADMAP.md
+roadmap_visualization.html
+ROADMAP.md
