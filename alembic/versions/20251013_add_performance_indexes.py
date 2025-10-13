@@ -21,33 +21,33 @@ depends_on = None
 
 def upgrade() -> None:
     # Lessons table indexes
-    op.create_index('ix_lessons_status', 'lessons', ['status'])
-    op.create_index('ix_lessons_scheduled_at', 'lessons', ['scheduled_at'])
-    op.create_index('ix_lessons_package_id_scheduled_at', 'lessons', ['package_id', 'scheduled_at'])
+    op.create_index('ix_lessons_status', 'lessons', ['status'], if_not_exists=True)
+    op.create_index('ix_lessons_scheduled_at', 'lessons', ['scheduled_at'], if_not_exists=True)
+    op.create_index('ix_lessons_package_id_scheduled_at', 'lessons', ['package_id', 'scheduled_at'], if_not_exists=True)
     
     # Lesson packages indexes
-    op.create_index('ix_lesson_packages_status', 'lesson_packages', ['status'])
-    op.create_index('ix_lesson_packages_learner_id', 'lesson_packages', ['learner_id'])
-    op.create_index('ix_lesson_packages_learner_id_status', 'lesson_packages', ['learner_id', 'status'])
+    op.create_index('ix_lesson_packages_status', 'lesson_packages', ['status'], if_not_exists=True)
+    op.create_index('ix_lesson_packages_learner_id', 'lesson_packages', ['learner_id'], if_not_exists=True)
+    op.create_index('ix_lesson_packages_learner_id_status', 'lesson_packages', ['learner_id', 'status'], if_not_exists=True)
     
     # Reminder instances indexes
-    op.create_index('ix_reminder_instances_status', 'reminder_instances', ['status'])
-    op.create_index('ix_reminder_instances_active', 'reminder_instances', ['active'])
-    op.create_index('ix_reminder_instances_scheduled_for', 'reminder_instances', ['scheduled_for'])
-    op.create_index('ix_reminder_instances_active_scheduled', 'reminder_instances', ['active', 'scheduled_for'])
+    op.create_index('ix_reminder_instances_status', 'reminder_instances', ['status'], if_not_exists=True)
+    op.create_index('ix_reminder_instances_active', 'reminder_instances', ['active'], if_not_exists=True)
+    op.create_index('ix_reminder_instances_scheduled_for', 'reminder_instances', ['scheduled_for'], if_not_exists=True)
+    op.create_index('ix_reminder_instances_active_scheduled', 'reminder_instances', ['active', 'scheduled_for'], if_not_exists=True)
 
 
 def downgrade() -> None:
     # Drop indexes in reverse order
-    op.drop_index('ix_reminder_instances_active_scheduled', table_name='reminder_instances')
-    op.drop_index('ix_reminder_instances_scheduled_for', table_name='reminder_instances')
-    op.drop_index('ix_reminder_instances_active', table_name='reminder_instances')
-    op.drop_index('ix_reminder_instances_status', table_name='reminder_instances')
+    op.drop_index('ix_reminder_instances_active_scheduled', table_name='reminder_instances', if_exists=True)
+    op.drop_index('ix_reminder_instances_scheduled_for', table_name='reminder_instances', if_exists=True)
+    op.drop_index('ix_reminder_instances_active', table_name='reminder_instances', if_exists=True)
+    op.drop_index('ix_reminder_instances_status', table_name='reminder_instances', if_exists=True)
     
-    op.drop_index('ix_lesson_packages_learner_id_status', table_name='lesson_packages')
-    op.drop_index('ix_lesson_packages_learner_id', table_name='lesson_packages')
-    op.drop_index('ix_lesson_packages_status', table_name='lesson_packages')
+    op.drop_index('ix_lesson_packages_learner_id_status', table_name='lesson_packages', if_exists=True)
+    op.drop_index('ix_lesson_packages_learner_id', table_name='lesson_packages', if_exists=True)
+    op.drop_index('ix_lesson_packages_status', table_name='lesson_packages', if_exists=True)
     
-    op.drop_index('ix_lessons_package_id_scheduled_at', table_name='lessons')
-    op.drop_index('ix_lessons_scheduled_at', table_name='lessons')
-    op.drop_index('ix_lessons_status', table_name='lessons')
+    op.drop_index('ix_lessons_package_id_scheduled_at', table_name='lessons', if_exists=True)
+    op.drop_index('ix_lessons_scheduled_at', table_name='lessons', if_exists=True)
+    op.drop_index('ix_lessons_status', table_name='lessons', if_exists=True)

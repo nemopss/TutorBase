@@ -1,6 +1,5 @@
-from __future__ import annotations
-
 from datetime import datetime, timezone
+from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -30,7 +29,7 @@ router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
 
-def _build_display_name(user_payload: dict[str, object]) -> str:
+def _build_display_name(user_payload: Dict[str, object]) -> str:
     first_name = user_payload.get("first_name") or ""
     last_name = user_payload.get("last_name") or ""
     username = user_payload.get("username")
@@ -43,7 +42,7 @@ def _build_display_name(user_payload: dict[str, object]) -> str:
     return f"tg:{telegram_id}" if telegram_id is not None else "Telegram User"
 
 
-async def _persist_user(session: AsyncSession, user_data: dict[str, object]):
+async def _persist_user(session: AsyncSession, user_data: Dict[str, object]):
     telegram_id = int(user_data["id"])
     username = user_data.get("username")
     display_name = _build_display_name(user_data)
