@@ -31,6 +31,8 @@ jobs:
               - 'utils/**'
               - 'config.py'
               - 'requirements.txt'
+              - 'alembic/**'
+              - 'database/**'
             api:
               - 'Dockerfile.api'
               - 'api/**'
