@@ -202,7 +202,7 @@ const Lessons: React.FC = () => {
     },
   ];
 
-  const handleTableChange: TableProps['onChange'] = (pagination) => {
+  const handleTableChange = (pagination: any) => {
     setCurrentPage(pagination.current || 1);
     setPageSize(pagination.pageSize || 10);
   };
