@@ -2,8 +2,10 @@ from __future__ import annotations
 
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.ext.asyncio import AsyncSession
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 
 from api.dependencies import get_session
 from api.schemas import (
@@ -25,6 +27,7 @@ from config import config
 from database import crud
 
 router = APIRouter()
+limiter = Limiter(key_func=get_remote_address)
 
 
 def _build_display_name(user_payload: dict[str, object]) -> str:
@@ -72,7 +75,9 @@ async def _persist_user(session: AsyncSession, user_data: dict[str, object]):
 
 
 @router.post("/login", response_model=TokenPairResponse)
+@limiter.limit("5/minute")  # Protect against brute force
 async def login(
+    request: Request,
     payload: WebAppLoginRequest,
     session: AsyncSession = Depends(get_session),
 ) -> TokenPairResponse:
@@ -119,7 +124,9 @@ async def login(
 
 
 @router.post("/refresh", response_model=TokenPairResponse)
+@limiter.limit("10/minute")  # Allow more refreshes than login attempts
 async def refresh(
+    request: Request,
     payload: RefreshRequest,
     session: AsyncSession = Depends(get_session),
 ) -> TokenPairResponse:

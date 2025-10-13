@@ -123,14 +123,16 @@ const Packages: React.FC = () => {
 
   // Debug logging for Android
   React.useEffect(() => {
-    console.log('Packages Debug:', { 
-      isLoading, 
-      isError, 
-      error: error?.message,
-      hasData: !!data, 
-      itemsCount: packagesData.length,
-      userAgent: navigator.userAgent 
-    });
+    if (import.meta.env.DEV) {
+      console.log('Packages Debug:', { 
+        isLoading, 
+        isError, 
+        error: error?.message,
+        hasData: !!data, 
+        itemsCount: packagesData.length,
+        userAgent: navigator.userAgent 
+      });
+    }
   }, [data, isLoading, isError, error]);
 
   const mutationOptions = {

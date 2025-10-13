@@ -165,7 +165,9 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
             onFinish(formattedValues);
           })
           .catch((info) => {
-            console.log('Validate Failed:', info);
+            if (import.meta.env.DEV) {
+              console.log('Validate Failed:', info);
+            }
           });
       }}
       confirmLoading={isLoading}

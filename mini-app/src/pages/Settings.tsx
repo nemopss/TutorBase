@@ -29,7 +29,9 @@ const Settings: React.FC = () => {
       // TODO: Implement API call to save settings
       await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
       message.success('Settings saved successfully!');
-      console.log('Settings:', values);
+      if (import.meta.env.DEV) {
+        console.log('Settings:', values);
+      }
     } catch (error: any) {
       message.error(`Failed to save settings: ${error.message}`);
     } finally {

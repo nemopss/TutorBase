@@ -61,7 +61,11 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
       okText={isEditing ? "Save" : "Create"}
       cancelText="Cancel"
       onCancel={onCancel}
-      onOk={() => form.validateFields().then(handleFinish).catch(info => console.log('Validate Failed:', info))}
+      onOk={() => form.validateFields().then(handleFinish).catch(info => {
+        if (import.meta.env.DEV) {
+          console.log('Validate Failed:', info);
+        }
+      })}
       confirmLoading={isLoading}
       destroyOnHidden
       width={600}

@@ -4,42 +4,31 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
-from zoneinfo import ZoneInfo
 
 from database import crud
 from database.models import Lesson
 from services.dto import LessonDTO
 from services.exceptions import NotFoundError
 from services.utils import sync_package_metrics
-
-MSK_TZ = ZoneInfo("Europe/Moscow")
+from utils.timezone import DEFAULT_TIMEZONE, normalize_to_timezone
 
 
 def _build_lesson_dto(lesson: Lesson) -> LessonDTO:
     package_title = lesson.package.title if lesson.package else None
     learner_name = lesson.package.learner.display_name if lesson.package and lesson.package.learner else None
-    tz_name = 'Europe/Moscow'
-
-    def _to_local(dt: Optional[datetime]) -> Optional[datetime]:
-        if dt is None:
-            return None
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
-        localized = dt.astimezone(MSK_TZ)
-        return localized
     
     return LessonDTO(
         id=lesson.id,
         package_id=lesson.package_id,
         package_title=package_title,
         learner_name=learner_name,
-        scheduled_at=_to_local(lesson.scheduled_at),
+        scheduled_at=normalize_to_timezone(lesson.scheduled_at),
         status=lesson.status,
         duration_minutes=lesson.duration_minutes,
         sequence_index=lesson.sequence_index,
         teacher_notes=lesson.teacher_notes,
-        homework_due_at=_to_local(lesson.homework_due_at),
-        timezone=tz_name,
+        homework_due_at=normalize_to_timezone(lesson.homework_due_at),
+        timezone=DEFAULT_TIMEZONE,
     )
 
 

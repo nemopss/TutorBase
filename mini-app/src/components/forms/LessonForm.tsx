@@ -59,7 +59,9 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
             onFinish(formattedValues);
           })
           .catch((info) => {
-            console.log('Validate Failed:', info);
+            if (import.meta.env.DEV) {
+              console.log('Validate Failed:', info);
+            }
           });
       }}
       confirmLoading={isLoading}

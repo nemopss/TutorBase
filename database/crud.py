@@ -19,6 +19,13 @@ from database.models import (
     ReminderInstance,
     User,
 )
+from database.validators import (
+    ensure_positive_int,
+    ensure_non_empty,
+    ensure_valid_timezone,
+    ensure_in_list,
+    ensure_positive_int_or_none,
+)
 
 
 async def add_application(session: AsyncSession, app_data: dict):
@@ -178,6 +185,15 @@ async def create_user(
     display_name: str,
     role: str = "viewer",
 ) -> User:
+    # Validation
+    VALID_ROLES = ["viewer", "teacher", "admin"]
+    
+    display_name = ensure_non_empty(display_name, "display_name", max_len=255)
+    role = ensure_in_list(role, "role", VALID_ROLES)
+    
+    if telegram_id is not None:
+        telegram_id = ensure_positive_int(telegram_id, "telegram_id")
+    
     now = datetime.now(timezone.utc)
     user = User(
         telegram_id=telegram_id,
@@ -400,6 +416,10 @@ async def create_learner_from_chat_id(
     notifications_enabled: bool = True,
 ) -> Learner:
     """Create a learner directly from chat_id, creating BotUser if needed."""
+    # Validation
+    chat_id = ensure_positive_int(chat_id, "chat_id")
+    display_name = ensure_non_empty(display_name, "display_name", max_len=255)
+    
     now_utc = datetime.now(timezone.utc)
     
     # Try to get existing BotUser
@@ -457,6 +477,12 @@ async def create_lesson_package_template(
     default_timezone: str = "Europe/Moscow",
     default_config: Optional[dict] = None,
 ) -> LessonPackageTemplate:
+    # Validation
+    name = ensure_non_empty(name, "name", max_len=255)
+    lesson_count = ensure_positive_int_or_none(lesson_count, "lesson_count")
+    duration_days = ensure_positive_int_or_none(duration_days, "duration_days")
+    default_timezone = ensure_valid_timezone(default_timezone, "default_timezone")
+    
     template = LessonPackageTemplate(
         name=name,
         description=description,
@@ -524,6 +550,16 @@ async def create_lesson_package(
     total_lessons: Optional[int] = None,
     notes: Optional[str] = None,
 ) -> LessonPackage:
+    # Validation
+    VALID_PACKAGE_STATUSES = ["draft", "active", "completed", "cancelled"]
+    
+    title = ensure_non_empty(title, "title", max_len=255)
+    status = ensure_in_list(status, "status", VALID_PACKAGE_STATUSES)
+    total_lessons = ensure_positive_int_or_none(total_lessons, "total_lessons")
+    
+    final_tz = timezone_name or (template.default_timezone if template else "Europe/Moscow")
+    final_tz = ensure_valid_timezone(final_tz, "timezone")
+    
     package = LessonPackage(
         learner=learner,
         template=template,
@@ -531,7 +567,7 @@ async def create_lesson_package(
         status=status,
         start_date=start_date,
         end_date=end_date,
-        timezone=timezone_name or (template.default_timezone if template else "Europe/Moscow"),
+        timezone=final_tz,
         total_lessons=total_lessons,
         notes=notes,
     )
@@ -603,6 +639,13 @@ async def create_lesson(
     teacher_notes: Optional[str] = None,
     homework_due_at: Optional[datetime] = None,
 ) -> Lesson:
+    # Validation
+    VALID_LESSON_STATUSES = ["scheduled", "completed", "cancelled", "rescheduled"]
+    
+    status = ensure_in_list(status, "status", VALID_LESSON_STATUSES)
+    duration_minutes = ensure_positive_int_or_none(duration_minutes, "duration_minutes")
+    sequence_index = ensure_positive_int_or_none(sequence_index, "sequence_index")
+    
     lesson = Lesson(
         package=package,
         scheduled_at=scheduled_at,

@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from datetime import datetime, time, date
-from zoneinfo import ZoneInfo
 
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -18,9 +17,7 @@ from api.schemas import MessageResponse
 from services import package_service, template_service
 from services.dto import LessonPackageDTO
 from services.exceptions import NotFoundError, ValidationError
-
-MSK_TZ_NAME = "Europe/Moscow"
-MSK_TZ = ZoneInfo(MSK_TZ_NAME)
+from utils.timezone import DEFAULT_TIMEZONE, DEFAULT_TZ, parse_date_string
 
 router = APIRouter()
 
@@ -41,19 +38,11 @@ def _to_response(dto: LessonPackageDTO) -> PackageResponse:
         status=dto.status,
         start_date=dto.start_date,
         end_date=dto.end_date,
-        timezone=MSK_TZ_NAME,
+        timezone=DEFAULT_TIMEZONE,
         notes=dto.notes,
         total_lessons=dto.total_lessons,
         progress=progress,
     )
-
-
-def _normalize_to_msk(dt: datetime | None) -> datetime | None:
-    if dt is None:
-        return None
-    if dt.tzinfo is None:
-        return dt.replace(tzinfo=MSK_TZ)
-    return dt.astimezone(MSK_TZ)
 
 
 def _parse_start_date(value: datetime | str | None) -> datetime | None:
@@ -61,14 +50,14 @@ def _parse_start_date(value: datetime | str | None) -> datetime | None:
         return None
     if isinstance(value, str):
         try:
-            parsed = date.fromisoformat(value)
+            return parse_date_string(value, DEFAULT_TZ)
         except ValueError as exc:
             raise HTTPException(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid start_date format. Use YYYY-MM-DD.",
             ) from exc
-        return datetime.combine(parsed, time.min, tzinfo=MSK_TZ)
-    return _normalize_to_msk(value)
+    # If it's already a datetime, return as-is
+    return value
 
 
 @router.get("", response_model=PackageListResponse)

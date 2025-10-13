@@ -61,14 +61,16 @@ const Templates: React.FC = () => {
 
   // Debug logging for Android
   React.useEffect(() => {
-    console.log('Templates Debug:', { 
-      isLoading, 
-      isError, 
-      error: error?.message,
-      hasData: !!data, 
-      itemsCount: data?.items?.length || 0,
-      userAgent: navigator.userAgent 
-    });
+    if (import.meta.env.DEV) {
+      console.log('Templates Debug:', { 
+        isLoading, 
+        isError, 
+        error: error?.message,
+        hasData: !!data, 
+        itemsCount: data?.items?.length || 0,
+        userAgent: navigator.userAgent 
+      });
+    }
   }, [data, isLoading, isError, error]);
 
   const mutationOptions = {
