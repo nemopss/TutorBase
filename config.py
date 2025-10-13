@@ -21,7 +21,7 @@ class Settings(BaseSettings):
     REGULATIONS_URL: str
     REDIS_URL: str
     REMINDER_NOTIFY_USERNAME: str = "nemopss"
-    JWT_SECRET: str = "change-me"
+    JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_EXPIRES_SECONDS: int = 900
     JWT_REFRESH_EXPIRES_SECONDS: int = 1209600  # 14 days
@@ -32,18 +32,17 @@ class Settings(BaseSettings):
     @classmethod
     def parse_cors_origins(cls, v):
         if isinstance(v, str):
-            return [origin.strip() for origin in v.split(",")]
-        return v
-        if isinstance(v, str):
             v = v.strip()
             try:
                 parsed = json.loads(v)
                 if isinstance(parsed, list):
                     return [str(x) for x in parsed]
             except json.JSONDecodeError:
-                if v:
-                    return [str(x.strip()) for x in v.split(",")]
-                return []
+                pass
+            if v:
+                return [x.strip() for x in v.split(",") if x.strip()]
+            return []
+            
         if isinstance(v, list):
             return [str(x) for x in v]
         return []

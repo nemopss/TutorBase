@@ -66,13 +66,13 @@ async def update_lesson(
 
     if scheduled_at is not None:
         lesson.scheduled_at = scheduled_at
-    if duration_minutes is not None or duration_minutes is None:
+    if duration_minutes is not None:
         lesson.duration_minutes = duration_minutes
     if status is not None:
         lesson.status = status
     if teacher_notes is not None:
         lesson.teacher_notes = teacher_notes
-    if homework_due_at is not None or homework_due_at is None:
+    if homework_due_at is not None:
         lesson.homework_due_at = homework_due_at
 
     await session.flush([lesson])

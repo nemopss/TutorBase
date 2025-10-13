@@ -5,7 +5,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_session
 
+from redis.asyncio import Redis
+from config import config
+
 router = APIRouter()
+redis_client = Redis.from_url(
+    config.REDIS_URL,
+    encoding="utf-8",
+    decode_responses=True,
+)
 
 
 @router.api_route("/health", methods=["GET", "HEAD"])
@@ -29,10 +37,8 @@ async def health_check(session: AsyncSession = Depends(get_session)):
     
     # Check Redis (if available)
     try:
-        from bot.utils.redis_client import redis_client
-        if redis_client:
-            await redis_client.ping()
-            health_status["services"]["redis"] = "connected"
+        await redis_client.ping()
+        health_status["services"]["redis"] = "connected"
     except Exception:
         # Redis is optional
         health_status["services"]["redis"] = "not configured"

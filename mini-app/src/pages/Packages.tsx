@@ -373,7 +373,7 @@ const Packages: React.FC = () => {
         okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
         cancelButtonProps={{ disabled: deleteMutation.isPending }}
       >
-        <p>Are you sure you want to delete this package? This action cannot be undone.</p>
+        <p>Are you sure you want to delete this package?</p>
         <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
       </Modal>
     </div>
