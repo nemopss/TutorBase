@@ -1,0 +1,89 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: app
+      POSTGRES_PASSWORD: app
+      POSTGRES_DB: app
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U app -d app"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    restart: unless-stopped
+    ports:
+      - "6379:6379"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: uvicorn api.app:create_app --factory --host 0.0.0.0 --port 8001 --reload
+    env_file:
+      - .env.dev
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USER: app
+      POSTGRESQL_PASSWORD: app
+      POSTGRESQL_DBNAME: app
+    volumes:
+      - ./:/app
+    ports:
+      - "8001:8001"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+  mini-app:
+    image: node:22-alpine
+    working_dir: /app
+    environment:
+      VITE_API_BASE_URL: http://localhost:8001/api/v1
+      VITE_DEV_MODE: "true"
+      VITE_DEV_INIT_DATA: dev
+    volumes:
+      - ./mini-app:/app
+    command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"
+    ports:
+      - "5173:5173"
+    depends_on:
+      - api
+
+  bot:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    command: python bot.py
+    profiles:
+      - bot
+    env_file:
+      - .env.dev
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USER: app
+      POSTGRESQL_PASSWORD: app
+      POSTGRESQL_DBNAME: app
+    volumes:
+      - ./:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+
+volumes:
+  postgres-data:

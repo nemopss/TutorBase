@@ -3,6 +3,9 @@ import React, { createContext, useState, useEffect, useContext, useRef } from 'r
 import type { PropsWithChildren } from 'react';
 import api from '../services/api';
 
+const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
+const DEV_INIT_DATA = import.meta.env.VITE_DEV_INIT_DATA ?? 'dev';
+
 // Decode JWT token to get expiration time
 const parseJwt = (token: string): { exp?: number } | null => {
   try {
@@ -58,33 +61,38 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   useEffect(() => {
     const login = async () => {
       try {
-        // Initialize Telegram WebApp
-        if (window.Telegram?.WebApp) {
-          window.Telegram.WebApp.ready();
-          window.Telegram.WebApp.expand();
-        }
+        let initData: string | undefined = undefined;
 
-        // Get initData from Telegram WebApp
-        const initData = window.Telegram?.WebApp?.initData;
+        if (DEV_MODE) {
+          initData = DEV_INIT_DATA;
+        } else {
+          // Initialize Telegram WebApp
+          if (window.Telegram?.WebApp) {
+            window.Telegram.WebApp.ready();
+            window.Telegram.WebApp.expand();
+          }
 
-        if (!initData || initData.length === 0) {
-          const debugInfo = [
-            '⚠️ Please open this app from Telegram bot.',
-            '',
-            'Debug Info:',
-            `• Telegram object: ${window.Telegram ? 'Found' : 'Not found'}`,
-            `• WebApp object: ${window.Telegram?.WebApp ? 'Found' : 'Not found'}`,
-            `• InitData: ${initData ? `"${initData.substring(0, 50)}..."` : 'Empty'}`,
-            `• InitData length: ${initData?.length || 0}`,
-          ].join('\n');
-          
-          setError(debugInfo);
-          setIsLoading(false);
-          return;
+          initData = window.Telegram?.WebApp?.initData;
+
+          if (!initData || initData.length === 0) {
+            const debugInfo = [
+              '⚠️ Please open this app from Telegram bot.',
+              '',
+              'Debug Info:',
+              `• Telegram object: ${window.Telegram ? 'Found' : 'Not found'}`,
+              `• WebApp object: ${window.Telegram?.WebApp ? 'Found' : 'Not found'}`,
+              `• InitData: ${initData ? `"${initData.substring(0, 50)}..."` : 'Empty'}`,
+              `• InitData length: ${initData?.length || 0}`,
+            ].join('\n');
+
+            setError(debugInfo);
+            setIsLoading(false);
+            return;
+          }
         }
 
         const response = await api.post<AuthResponse>('/auth/login', { init_data: initData });
-        
+
         const { access_token, refresh_token, user } = response.data;
 
         // Сохраняем токены (например, в localStorage)

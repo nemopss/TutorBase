@@ -20,11 +20,16 @@ venv/
 .env
 .env.*
 !.env.example
+!.env.dev.example
 
 # Local SQLite DB
 database/bot.db
 utils/texts.txt
+
+# Misc
 docs/
 OLD_ROADMAP.md
 roadmap_visualization.html
 ROADMAP.md
+CODE_AUDIT.md
+backup/
