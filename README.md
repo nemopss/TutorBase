@@ -12,47 +12,61 @@ Telegram бот, FastAPI API и React mini-app для управления за�
 
 ## ⚙️ Подготовка окружения
 
-1. Скопируйте пример конфигурации:
+1. Создайте `.env` на базе примера:
    ```bash
    cp .env.example .env
    ```
-2. Заполните ключевые переменные:
-   - `BOT_TOKEN` — токен Telegram-бота.
-   - `ADMINS` — JSON-массив ID админов (`[123,456]`), именно эти пользователи получат роль `admin`.
-   - `LOGS_CHAT_ID`, `ADMIN_CHAT_ID` — каналы/чаты для уведомлений.
-   - `REDIS_URL` — адрес Redis (`redis://redis:6379/0` в docker, `redis://localhost:6379/0` локально).
-   - `JWT_SECRET`, `JWT_ACCESS_EXPIRES_SECONDS`, `JWT_REFRESH_EXPIRES_SECONDS`.
-   - `MINI_APP_URL`, `CORS_ORIGINS` — адрес фронта.
+2. Заполните обязательные поля:
+   - `BOT_TOKEN`, `ADMINS`, `LOGS_CHAT_ID`, `ADMIN_CHAT_ID`;
+   - `REDIS_URL`, `JWT_SECRET`, `JWT_*_EXPIRES_SECONDS`;
+   - `MINI_APP_URL`, `CORS_ORIGINS`.
+3. Для PostgreSQL пропишите `POSTGRESQL_HOST/PORT/USER/PASSWORD/DBNAME`. Если их нет — API переключится на локальный SQLite (`DB_PATH`).
+4. Примените миграции:
+   ```bash
+   alembic upgrade head
+   ```
 
 ## 🧪 Локальная разработка
 
-### Python-окружение
+### Вариант 1. Docker Compose
+
+В репозитории есть dev-стек (`docker-compose.dev.yml`), который поднимает Postgres, Redis, API (с авто-релоадом) и Vite Dev Server.
+
+```bash
+cp .env.dev.example .env.dev
+
+docker compose -f docker-compose.dev.yml up -d postgres redis
+
+docker compose -f docker-compose.dev.yml up -d --build api mini-app
+
+docker compose -f docker-compose.dev.yml exec api alembic upgrade head
+```
+
+Особенности dev-режима:
+- `DEV_MODE=true` включает мок авторизацию. Мини-приложение отправляет `init_data="dev"`, а API создаёт фиктивного пользователя (`DEV_TELEGRAM_ID`, `DEV_USERNAME`, `DEV_DISPLAY_NAME`).
+- Фронт доступен на `http://localhost:5173`, API — на `http://localhost:8001/api/v1`.
+- Бот можно включить по требованию: `docker compose -f docker-compose.dev.yml --profile bot up -d bot`.
+
+### Вариант 2. Ручной запуск (venv + npm)
+
 ```bash
 python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
+
+alembic upgrade head
+
+uvicorn api.app:create_app --factory --reload --port 8001
+
+cd mini-app
+npm install
+npm run dev
 ```
 
-### Запуск компонентов
-- Бот: `python bot.py`
-- API локально c uvicorn:
-  ```bash
-  uvicorn api.main:app --reload --port 8001
-  ```
-- Mini-app:
-  ```bash
-  cd mini-app
-  npm install
-  npm run dev
-  ```
-  Используйте туннель (ngrok/localhost.run), чтобы Telegram WebApp видел локальный фронт.
-
-### Docker-комплект для разработки
-```bash
-docker compose -f docker-compose.local.yml up --build
-```
+> Для работы мини-приложения без Telegram включите dev-режим: `VITE_DEV_MODE=true`, `VITE_DEV_INIT_DATA=dev` (значения совпадают с `.env.dev.example`).
 
 ### Тесты
+
 - Backend: `pytest`
 - Mini-app: `cd mini-app && npm test`
 
@@ -87,10 +101,11 @@ docker compose up -d --remove-orphans
 
 ## 🔐 Практики безопасности
 
-- Держите `.env` вне репозитория, файлы базы (`database/`) — с правами только для нужных сервисов.
-- Закройте наружу все контейнеры, кроме nginx (используйте firewall / security groups).
-- Рассмотрите fail2ban для фильтрации бот-сканеров и rate-limit в nginx.
-- Регулярно пересобирайте образы, обновляйте зависимости (`pip`, `npm`, `apk`), новыми тегами.
+- Храните `.env` вне репозитория, `database/` — с правами только для нужных сервисов.
+- Открывайте наружу только nginx (firewall / security groups).
+- Рассмотрите fail2ban + rate-limit в nginx.
+- Регулярно пересобирайте образы, обновляйте зависимости (`pip`, `npm`, `apk`).
+- Настройте бэкапы PostgreSQL (`pg_dump`, snapshot). Скрипт переноса данных из SQLite в PostgreSQL лежит в `OLD_DB/data_migrate.load` (pgloader).
 
 ## 📁 Полезные каталоги
 

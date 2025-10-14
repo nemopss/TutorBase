@@ -20,6 +20,7 @@ venv/
 .env
 .env.*
 !.env.example
+!.env.dev.example
 
 # Local SQLite DB
 database/bot.db
