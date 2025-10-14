@@ -63,11 +63,15 @@ async def fetch_applications_stats(session: AsyncSession) -> dict:
     by_language_result = await session.execute(by_language_query)
     by_language = {lang or '—': count for lang, count in by_language_result.all()}
 
-    by_month_query = (
-        select(func.strftime('%Y-%m', Application.created_at).label('month'), func.count())
-        .group_by('month')
-        .order_by('month')
-    )
+    bind = session.get_bind()
+    dialect = bind.dialect.name if bind is not None else 'sqlite'
+    if dialect == 'sqlite':
+        month_expr = func.strftime('%Y-%m', Application.created_at)
+    else:
+        month_expr = func.to_char(Application.created_at, 'YYYY-MM')
+
+    month_labeled = month_expr.label('month')
+    by_month_query = select(month_labeled, func.count()).group_by(month_labeled).order_by(month_labeled)
     by_month_result = await session.execute(by_month_query)
     by_month = {month or '—': count for month, count in by_month_result.all()}
 

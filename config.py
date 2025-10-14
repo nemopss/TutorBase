@@ -1,7 +1,8 @@
-from typing import List
+from typing import List, Optional
 from pydantic_settings import BaseSettings, SettingsConfigDict
 from pydantic import field_validator, Field
 import json
+from urllib.parse import quote_plus
 
 
 class Settings(BaseSettings):
@@ -28,6 +29,12 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     MINI_APP_URL: str = "https://app.xpyrkova23.ru/mini-app"  # Update with actual URL
 
+    POSTGRESQL_HOST: Optional[str] = None
+    POSTGRESQL_PORT: Optional[int] = None
+    POSTGRESQL_USER: Optional[str] = None
+    POSTGRESQL_PASSWORD: Optional[str] = None
+    POSTGRESQL_DBNAME: Optional[str] = None
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, v):
@@ -46,6 +53,21 @@ class Settings(BaseSettings):
         if isinstance(v, list):
             return [str(x) for x in v]
         return []
+
+    def build_async_database_url(self) -> str:
+        if self.POSTGRESQL_HOST and self.POSTGRESQL_DBNAME:
+            user = self.POSTGRESQL_USER or ""
+            password = self.POSTGRESQL_PASSWORD or ""
+            auth = ""
+            if user:
+                auth = quote_plus(user)
+                if password:
+                    auth = f"{auth}:{quote_plus(password)}"
+                auth += "@"
+            host = self.POSTGRESQL_HOST
+            port = f":{self.POSTGRESQL_PORT}" if self.POSTGRESQL_PORT else ""
+            return f"postgresql+asyncpg://{auth}{host}{port}/{self.POSTGRESQL_DBNAME}"
+        return f"sqlite+aiosqlite:///{self.DB_PATH}"
 
     @field_validator("ADMINS", mode="before")
     @classmethod
