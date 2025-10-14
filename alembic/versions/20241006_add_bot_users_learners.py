@@ -27,10 +27,10 @@ def upgrade() -> None:
         sa.Column('first_name', sa.String(), nullable=True),
         sa.Column('last_name', sa.String(), nullable=True),
         sa.Column('language_code', sa.String(length=10), nullable=True),
-        sa.Column('is_bot', sa.Boolean(), nullable=False, server_default=sa.text('0')),
-        sa.Column('created_at', sa.Text(), nullable=False),
-        sa.Column('updated_at', sa.Text(), nullable=False),
-        sa.Column('last_seen_at', sa.Text(), nullable=False),
+        sa.Column('is_bot', sa.Boolean(), nullable=False, server_default=sa.false()),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column('updated_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
+        sa.Column('last_seen_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.UniqueConstraint('chat_id', name='uq_bot_users_chat_id'),
     )
 
@@ -40,7 +40,7 @@ def upgrade() -> None:
         sa.Column('bot_user_id', sa.Integer(), sa.ForeignKey('bot_users.id', ondelete='CASCADE'), nullable=False),
         sa.Column('display_name', sa.String(), nullable=False),
         sa.Column('notes', sa.Text(), nullable=True),
-        sa.Column('created_at', sa.Text(), nullable=False),
+        sa.Column('created_at', sa.DateTime(timezone=True), nullable=False, server_default=sa.func.now()),
         sa.UniqueConstraint('bot_user_id', name='uq_learners_bot_user_id'),
     )
 

@@ -20,9 +20,17 @@ sys.path.insert(0, str(project_root))
 
 from config import config as app_config
 
-# Construct an absolute path to the database file
-db_url = f"sqlite+aiosqlite:///{project_root.joinpath(app_config.DB_PATH)}"
-config.set_main_option("sqlalchemy.url", db_url)
+
+def _build_database_url() -> str:
+    url = app_config.build_async_database_url()
+    if url.startswith("sqlite+"):
+        path = project_root.joinpath(app_config.DB_PATH)
+        return f"sqlite+aiosqlite:///{path}"
+    return url
+
+
+database_url = _build_database_url()
+config.set_main_option("sqlalchemy.url", database_url.replace("%", "%%"))
 
 # Interpret the config file for Python logging.
 # This line sets up loggers basically.
@@ -65,7 +73,8 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
-    context.configure(connection=connection, target_metadata=target_metadata, render_as_batch=True)
+    render_as_batch = database_url.startswith("sqlite+")
+    context.configure(connection=connection, target_metadata=target_metadata, render_as_batch=render_as_batch)
 
     with context.begin_transaction():
         context.run_migrations()

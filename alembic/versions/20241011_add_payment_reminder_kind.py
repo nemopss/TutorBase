@@ -22,6 +22,9 @@ def upgrade() -> None:
     inspector = sa.inspect(bind)
     existing_columns = {col['name'] for col in inspector.get_columns('lesson_reminders')}
 
+    if bind.dialect.name == 'postgresql':
+        op.execute(sa.text("ALTER TABLE alembic_version ALTER COLUMN version_num TYPE VARCHAR(255)"))
+
     if 'kind' not in existing_columns:
         op.add_column(
             'lesson_reminders',

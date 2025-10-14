@@ -25,7 +25,7 @@ def upgrade() -> None:
     if 'notifications_enabled' not in existing_columns:
         op.add_column(
             'learners',
-            sa.Column('notifications_enabled', sa.Boolean(), nullable=False, server_default='1')
+            sa.Column('notifications_enabled', sa.Boolean(), nullable=False, server_default=sa.true())
         )
         # Remove server_default after setting initial values
         if bind.dialect.name != 'sqlite':
