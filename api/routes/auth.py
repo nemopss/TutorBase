@@ -1,4 +1,5 @@
 from datetime import datetime, timezone
+import logging
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, status
@@ -80,10 +81,21 @@ async def login(
     payload: WebAppLoginRequest,
     session: AsyncSession = Depends(get_session),
 ) -> TokenPairResponse:
-    try:
-        init_payload = verify_telegram_init_data(payload.init_data, config.BOT_TOKEN)
-    except InitDataVerificationError as exc:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    init_payload: Dict[str, object]
+    if config.DEV_MODE and payload.init_data == config.DEV_INIT_DATA:
+        logging.getLogger(__name__).info("DEV_MODE active – using mock Telegram payload")
+        init_payload = {
+            "user": {
+                "id": config.DEV_TELEGRAM_ID,
+                "first_name": config.DEV_DISPLAY_NAME,
+                "username": config.DEV_USERNAME,
+            }
+        }
+    else:
+        try:
+            init_payload = verify_telegram_init_data(payload.init_data, config.BOT_TOKEN)
+        except InitDataVerificationError as exc:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
 
     user_block = init_payload.get("user")
     if not isinstance(user_block, dict):
