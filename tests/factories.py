@@ -50,7 +50,6 @@ async def create_bot_user(
         last_seen_at=now,
     )
     session.add(instance)
-    await session.flush()
     return instance
 
 
@@ -66,14 +65,13 @@ async def create_learner(
     now = _utc_now()
     suffix = _next_suffix()
     learner = Learner(
-        bot_user_id=bot_user.id,
+        bot_user=bot_user,
         display_name=display_name or f"Learner {suffix}",
         notes=notes,
         notifications_enabled=notifications_enabled,
         created_at=now,
     )
     session.add(learner)
-    await session.flush()
     return learner
 
 
@@ -103,7 +101,6 @@ async def create_template(
         updated_at=now,
     )
     session.add(template)
-    await session.flush()
     return template
 
 
@@ -122,8 +119,8 @@ async def create_package(
     now = _utc_now()
     start_date = now + timedelta(days=start_offset_days)
     package = LessonPackage(
-        learner_id=learner.id,
-        template_id=template.id if template else None,
+        learner=learner,
+        template=template,
         title=title or f"Package {suffix}",
         status=status,
         start_date=start_date,
@@ -134,7 +131,6 @@ async def create_package(
         updated_at=now,
     )
     session.add(package)
-    await session.flush()
     return package
 
 
@@ -150,7 +146,7 @@ async def create_lesson(
     suffix = _next_suffix()
     now = _utc_now()
     lesson = Lesson(
-        package_id=package.id,
+        package=package,
         scheduled_at=scheduled_at or (now + timedelta(days=suffix)),
         duration_minutes=duration_minutes,
         status=status,
@@ -159,7 +155,6 @@ async def create_lesson(
         updated_at=now,
     )
     session.add(lesson)
-    await session.flush()
     return lesson
 
 
@@ -174,8 +169,8 @@ async def create_reminder_rule(
     config: Optional[dict] = None,
 ) -> ReminderRule:
     rule = ReminderRule(
-        package_id=package.id,
-        lesson_id=lesson.id if lesson else None,
+        package=package,
+        lesson=lesson,
         reminder_type=reminder_type,
         config=config or {},
         channel=channel,
@@ -184,7 +179,6 @@ async def create_reminder_rule(
         updated_at=_utc_now(),
     )
     session.add(rule)
-    await session.flush()
     return rule
 
 
@@ -201,10 +195,10 @@ async def create_reminder_instance(
     payload: Optional[dict] = None,
 ) -> ReminderInstance:
     instance = ReminderInstance(
-        rule_id=rule.id,
-        package_id=package.id,
-        lesson_id=lesson.id if lesson else None,
-        learner_id=learner.id,
+        rule=rule,
+        package=package,
+        learner=learner,
+        lesson=lesson,
         scheduled_for=scheduled_at or (_utc_now() + timedelta(hours=1)),
         status=status,
         payload=payload or {},
@@ -213,7 +207,6 @@ async def create_reminder_instance(
         updated_at=_utc_now(),
     )
     session.add(instance)
-    await session.flush()
     return instance
 
 

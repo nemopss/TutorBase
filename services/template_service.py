@@ -52,6 +52,7 @@ async def create_template(
         default_timezone='Europe/Moscow',
         default_config=default_config,
     )
+    await session.flush()
     return _build_template_dto(template)
 
 
@@ -103,6 +104,7 @@ async def duplicate_template(session: AsyncSession, template_id: int, *, name: O
         default_timezone='Europe/Moscow',
         default_config=template.default_config,
     )
+    await session.flush()
     return _build_template_dto(clone)
 
 

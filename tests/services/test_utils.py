@@ -46,6 +46,7 @@ async def test_sync_package_metrics(db_session: AsyncSession):
         package=package,
         scheduled_at=datetime(2024, 1, 12, 15, 0, tzinfo=timezone.utc),
     )
+    await db_session.flush()
 
     updated_package, lessons = await utils.sync_package_metrics(db_session, package.id)
     assert updated_package.start_date == lesson1.scheduled_at
@@ -62,6 +63,7 @@ async def test_generate_lessons_from_template(db_session: AsyncSession):
         default_timezone="Europe/Moscow",
     )
     package = await factories.create_package(db_session, learner=learner, template=template)
+    await db_session.flush()
 
     start_local = datetime(2024, 2, 1, 9, 0, tzinfo=ZoneInfo("Europe/Moscow"))
     await utils.generate_lessons_from_template(db_session, package, template, start_local)

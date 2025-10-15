@@ -16,6 +16,7 @@ from services.exceptions import NotFoundError
 async def test_create_package_from_template_generates_lessons_and_reminders(db_session):
     learner = await factories.create_learner(db_session)
     template = await factories.create_template(db_session, lesson_count=3)
+    await db_session.flush()
     start_local = datetime(2024, 1, 10, 9, 0, tzinfo=DEFAULT_TZ)
 
     dto = await package_service.create_package_from_template(
@@ -44,6 +45,7 @@ async def test_create_package_from_template_generates_lessons_and_reminders(db_s
 async def test_update_package_normalizes_dates_to_utc(db_session):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner, status="draft")
+    await db_session.flush()
 
     new_start_local = datetime(2024, 2, 1, 15, 30, tzinfo=ZoneInfo("Europe/Moscow"))
     dto = await package_service.update_package(
@@ -69,6 +71,7 @@ async def test_update_package_normalizes_dates_to_utc(db_session):
 async def test_get_and_list_packages(db_session):
     learner = await factories.create_learner(db_session, display_name="Package Learner")
     await factories.create_package(db_session, learner=learner, title="Alpha Package", status="active")
+    await db_session.flush()
 
     packages, total = await package_service.list_packages(
         db_session,
@@ -89,6 +92,7 @@ async def test_get_and_list_packages(db_session):
 async def test_delete_package(db_session):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)
+    await db_session.flush()
 
     await package_service.delete_package(db_session, package.id)
     with pytest.raises(NotFoundError):
@@ -126,3 +130,37 @@ async def test_create_package_from_template_missing_template(db_session):
             notes=None,
             start_local=datetime.now(tz=timezone.utc),
         )
+
+@pytest.mark.asyncio
+async def test_create_package_happy_path(db_session):
+    """Tests successful creation of a simple lesson package."""
+    learner = await factories.create_learner(db_session)
+    await db_session.flush()
+    
+    title = "New Simple Package"
+    notes = "Some notes here"
+    total_lessons = 10
+
+    dto = await package_service.create_package(
+        db_session,
+        learner_id=learner.id,
+        title=title,
+        notes=notes,
+        status="active",
+        total_lessons=total_lessons,
+    )
+
+    # 1. Check the returned DTO
+    assert dto.id is not None
+    assert dto.title == title
+    assert dto.notes == notes
+    assert dto.learner_id == learner.id
+    assert dto.status == "active"
+    assert dto.total_lessons == total_lessons
+
+    # 2. Check the persisted data in the database
+    persisted_package = await crud.get_lesson_package(db_session, dto.id)
+    assert persisted_package is not None
+    assert persisted_package.title == title
+    assert persisted_package.learner_id == learner.id
+    assert persisted_package.total_lessons == total_lessons

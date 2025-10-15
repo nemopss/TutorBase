@@ -35,6 +35,7 @@ async def test_regenerate_package_reminders_creates_rules_and_instances(db_sessi
         scheduled_at=datetime(2024, 6, 8, 10, 0, tzinfo=timezone.utc),
         sequence_index=2,
     )
+    await db_session.flush()
 
     await regenerate_package_reminders(db_session, package)
 
@@ -56,6 +57,7 @@ async def test_regenerate_package_reminders_creates_rules_and_instances(db_sessi
 async def test_regenerate_package_reminders_without_lessons(db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)
+    await db_session.flush()
 
     await regenerate_package_reminders(db_session, package)
     refreshed = await crud.get_lesson_package(db_session, package.id)
@@ -66,6 +68,7 @@ async def test_regenerate_package_reminders_without_lessons(db_session: AsyncSes
 async def test_regenerate_package_reminders_missing_package_raises(monkeypatch, db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)
+    await db_session.flush()
 
     async def fake_get_package(session, package_id):
         return None

@@ -12,6 +12,7 @@ from tests import factories
 async def test_create_and_get_lesson(db_session: AsyncSession):
     learner = await factories.create_learner(db_session, display_name="Service Student")
     package = await factories.create_package(db_session, learner=learner)
+    await db_session.flush()
     scheduled = datetime(2024, 5, 1, 9, 0, tzinfo=timezone.utc)
 
     dto = await lesson_service.create_lesson(
@@ -53,6 +54,7 @@ async def test_update_lesson(db_session: AsyncSession):
         package=package,
         scheduled_at=datetime(2024, 5, 1, 9, 0, tzinfo=timezone.utc),
     )
+    await db_session.flush()
 
     dto = await lesson_service.update_lesson(
         db_session,
@@ -78,6 +80,7 @@ async def test_delete_lesson(db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)
     lesson = await factories.create_lesson(db_session, package=package)
+    await db_session.flush()
 
     await lesson_service.delete_lesson(db_session, lesson.id)
     with pytest.raises(NotFoundError):
@@ -90,6 +93,7 @@ async def test_list_lessons(db_session: AsyncSession):
     package = await factories.create_package(db_session, learner=learner)
     await factories.create_lesson(db_session, package=package, sequence_index=1)
     await factories.create_lesson(db_session, package=package, sequence_index=2)
+    await db_session.flush()
 
     lessons = await lesson_service.list_lessons(db_session, package.id)
     assert len(lessons) == 2
@@ -101,6 +105,7 @@ async def test_list_all_lessons(db_session: AsyncSession):
     learner = await factories.create_learner(db_session, display_name="Global Student")
     package = await factories.create_package(db_session, learner=learner, title="Global Package")
     await factories.create_lesson(db_session, package=package, sequence_index=1)
+    await db_session.flush()
 
     lessons, total = await lesson_service.list_all_lessons(
         db_session,

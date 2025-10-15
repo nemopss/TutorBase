@@ -49,6 +49,8 @@ async def create_learner_from_chat_id(
         notes=request.notes,
         notifications_enabled=request.notifications_enabled,
     )
+    await session.flush()
+    await session.refresh(learner, attribute_names=["bot_user"])
     
     return LearnerResponse(
         id=learner.id,

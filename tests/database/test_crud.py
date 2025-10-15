@@ -40,6 +40,7 @@ async def test_applications_crud(db_session: AsyncSession):
     assert "en" in stats["by_language"]
 
     await crud.delete_all_applications(db_session)
+    await db_session.flush()
     remaining = await crud.fetch_all_applications(db_session)
     assert remaining == []
 
@@ -68,6 +69,7 @@ async def test_bot_user_upsert_and_fetch(db_session: AsyncSession):
         username="botuser",
     )
     bot_user = await crud.upsert_bot_user(db_session, aiogram_user)
+    await db_session.flush()
     assert bot_user.chat_id == 123
 
     # second call updates
@@ -78,6 +80,7 @@ async def test_bot_user_upsert_and_fetch(db_session: AsyncSession):
         username="updated",
     )
     bot_user2 = await crud.upsert_bot_user(db_session, aiogram_user_updated)
+    await db_session.flush()
     assert bot_user2.username == "updated"
 
     # available bot users
@@ -89,6 +92,7 @@ async def test_bot_user_upsert_and_fetch(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_learners_crud(db_session: AsyncSession):
     bot_user = await factories.create_bot_user(db_session, chat_id=321)
+    await db_session.flush()
     learner = await crud.create_learner(
         db_session,
         bot_user_id=bot_user.id,
@@ -154,6 +158,7 @@ async def test_template_crud(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_lesson_package_crud(db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
+    await db_session.flush()
     package = await crud.create_lesson_package(
         db_session,
         learner=learner,
@@ -183,7 +188,9 @@ async def test_lesson_package_crud(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_lesson_crud(db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
+    await db_session.flush()
     package = await factories.create_package(db_session, learner=learner)
+    await db_session.flush()
     lesson = await crud.create_lesson(
         db_session,
         package,
@@ -210,8 +217,11 @@ async def test_lesson_crud(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_reminder_rules_and_instances(db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
+    await db_session.flush()
     package = await factories.create_package(db_session, learner=learner)
+    await db_session.flush()
     lesson = await factories.create_lesson(db_session, package=package)
+    await db_session.flush()
 
     rule = await crud.create_reminder_rule(
         db_session,
@@ -256,11 +266,15 @@ async def test_reminder_rules_and_instances(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_stats_helpers(db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
+    await db_session.flush()
     package = await factories.create_package(db_session, learner=learner)
+    await db_session.flush()
     await factories.create_lesson(db_session, package=package, status="completed")
     await factories.create_lesson(db_session, package=package, status="scheduled")
+    await db_session.flush()
 
     rule = await factories.create_reminder_rule(db_session, package=package)
+    await db_session.flush()
     await factories.create_reminder_instance(
         db_session,
         rule=rule,
@@ -342,6 +356,7 @@ async def test_create_learner_from_chat_id_invalid(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_create_lesson_package_invalid_timezone(db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
+    await db_session.flush()
     with pytest.raises(ValueError):
         await crud.create_lesson_package(
             db_session,
@@ -355,7 +370,9 @@ async def test_create_lesson_package_invalid_timezone(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_create_lesson_invalid_status(db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
+    await db_session.flush()
     package = await factories.create_package(db_session, learner=learner)
+    await db_session.flush()
     with pytest.raises(ValueError):
         await crud.create_lesson(
             db_session,
@@ -368,7 +385,9 @@ async def test_create_lesson_invalid_status(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_fetch_lesson_packages_paginated_search(db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
+    await db_session.flush()
     await factories.create_package(db_session, learner=learner, title="Alpha")
+    await db_session.flush()
     result, total = await crud.fetch_lesson_packages_paginated(
         db_session,
         limit=10,
@@ -382,8 +401,11 @@ async def test_fetch_lesson_packages_paginated_search(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_fetch_reminder_instances_paginated_search(db_session: AsyncSession):
     learner = await factories.create_learner(db_session)
+    await db_session.flush()
     package = await factories.create_package(db_session, learner=learner)
+    await db_session.flush()
     rule = await factories.create_reminder_rule(db_session, package=package)
+    await db_session.flush()
     await factories.create_reminder_instance(
         db_session,
         rule=rule,

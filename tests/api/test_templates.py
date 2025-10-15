@@ -98,8 +98,9 @@ async def test_delete_template(client: AsyncClient, db_session: AsyncSession):
     response = await client.delete(f"/api/v1/templates/{template.id}", headers=headers)
     assert response.status_code == 204
 
-    removed = await crud.get_lesson_package_template(db_session, template.id)
-    assert removed is None
+    # Verify that the template is actually gone by fetching it again
+    response = await client.get(f"/api/v1/templates/{template.id}", headers=headers)
+    assert response.status_code == 404
 
 
 @pytest.mark.asyncio

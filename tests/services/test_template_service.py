@@ -29,6 +29,7 @@ async def test_create_and_get_template(db_session: AsyncSession):
 async def test_list_templates(db_session: AsyncSession):
     await factories.create_template(db_session, name="Template One")
     await factories.create_template(db_session, name="Template Two")
+    await db_session.flush()
 
     templates = await template_service.list_templates(db_session)
     names = {tpl.name for tpl in templates}
@@ -38,6 +39,7 @@ async def test_list_templates(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_update_template(db_session: AsyncSession):
     template = await factories.create_template(db_session, name="Initial", lesson_count=4)
+    await db_session.flush()
 
     dto = await template_service.update_template(
         db_session,
@@ -61,6 +63,7 @@ async def test_update_template_missing_raises(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_duplicate_template(db_session: AsyncSession):
     template = await factories.create_template(db_session, name="Original", lesson_count=3)
+    await db_session.flush()
 
     duplicate = await template_service.duplicate_template(db_session, template.id)
     assert duplicate.name.startswith("Original")
@@ -76,6 +79,7 @@ async def test_duplicate_template_missing_raises(db_session: AsyncSession):
 @pytest.mark.asyncio
 async def test_delete_template(db_session: AsyncSession):
     template = await factories.create_template(db_session, name="Disposable")
+    await db_session.flush()
     await template_service.delete_template(db_session, template.id)
     await db_session.flush()
 

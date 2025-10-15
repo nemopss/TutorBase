@@ -71,6 +71,7 @@ async def _persist_user(session: AsyncSession, user_data: Dict[str, object]):
             role=role_update,
             last_login_at=now,
         )
+    await session.flush()
     return user
 
 
