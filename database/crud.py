@@ -157,7 +157,6 @@ async def create_user(
         last_login_at=now,
     )
     session.add(user)
-    await session.flush([user])
     return user
 
 
@@ -183,7 +182,6 @@ async def update_user_login_metadata(
         user.last_login_at = now
     user.updated_at = now
     session.add(user)
-    await session.flush([user])
     return user
 
 
@@ -216,7 +214,6 @@ async def upsert_bot_user(session: AsyncSession, user: AiogramUser) -> BotUser:
         existing.updated_at = now_utc
         existing.last_seen_at = now_utc
         session.add(existing)
-        await session.flush([existing])
         return existing
 
     new_bot_user = BotUser(
@@ -231,7 +228,6 @@ async def upsert_bot_user(session: AsyncSession, user: AiogramUser) -> BotUser:
         last_seen_at=now_utc,
     )
     session.add(new_bot_user)
-    await session.flush([new_bot_user])
     return new_bot_user
 
 
@@ -303,7 +299,6 @@ async def create_learner(
         created_at=now_utc,
     )
     session.add(learner)
-    await session.flush([learner])
     return learner
 
 
@@ -341,7 +336,6 @@ async def update_learner(
     if notifications_enabled is not None:
         learner.notifications_enabled = notifications_enabled
     session.add(learner)
-    await session.flush([learner])
     return learner
 
 
@@ -391,7 +385,6 @@ async def create_learner_from_chat_id(
             last_seen_at=now_utc,
         )
         session.add(bot_user)
-        await session.flush([bot_user])
     
     # Check if learner already exists for this bot_user
     existing_learner = await get_learner_by_bot_user(session, bot_user.id)
@@ -399,7 +392,6 @@ async def create_learner_from_chat_id(
         if existing_learner.notifications_enabled != notifications_enabled:
             existing_learner.notifications_enabled = notifications_enabled
             session.add(existing_learner)
-            await session.flush([existing_learner])
         return existing_learner
     
     # Create new learner
@@ -412,7 +404,6 @@ async def create_learner_from_chat_id(
     )
     learner.bot_user = bot_user
     session.add(learner)
-    await session.flush([learner])
     return learner
 
 
@@ -444,7 +435,6 @@ async def create_lesson_package_template(
         default_config=default_config or {},
     )
     session.add(template)
-    await session.flush([template])
     return template
 
 
@@ -481,7 +471,6 @@ async def update_lesson_package_template(
     if default_config is not None:
         template.default_config = default_config
     session.add(template)
-    await session.flush([template])
     return template
 
 
@@ -524,7 +513,6 @@ async def create_lesson_package(
         notes=notes,
     )
     session.add(package)
-    await session.flush([package])
     return package
 
 
@@ -545,7 +533,6 @@ async def update_lesson_package(
         if hasattr(package, attr):
             setattr(package, attr, value)
     session.add(package)
-    await session.flush([package])
     return package
 
 
@@ -608,7 +595,6 @@ async def create_lesson(
         homework_due_at=homework_due_at,
     )
     session.add(lesson)
-    await session.flush([lesson])
     return lesson
 
 
@@ -778,7 +764,6 @@ async def create_reminder_rule(
         active=active,
     )
     session.add(rule)
-    await session.flush([rule])
     return rule
 
 
@@ -814,7 +799,6 @@ async def create_reminder_instance(
         active=active,
     )
     session.add(instance)
-    await session.flush([instance])
     return instance
 
 
@@ -870,7 +854,6 @@ async def set_reminder_instance_status(
     if comment is not None:
         instance.comment = comment
     session.add(instance)
-    await session.flush([instance])
     return instance
 
 
