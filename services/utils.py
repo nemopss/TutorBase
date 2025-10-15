@@ -46,7 +46,6 @@ async def sync_package_metrics(
         package.start_date = normalize_to_utc(lessons[0].scheduled_at)
         package.end_date = normalize_to_utc(lessons[-1].scheduled_at)
     else:
-        package.start_date = None
         package.end_date = None
 
     await session.flush([package])

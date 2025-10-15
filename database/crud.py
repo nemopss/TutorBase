@@ -668,7 +668,7 @@ async def get_lesson(session: AsyncSession, lesson_id: int) -> Lesson | None:
     stmt = (
         select(Lesson)
         .options(
-            selectinload(Lesson.package),
+            selectinload(Lesson.package).selectinload(LessonPackage.learner),
             selectinload(Lesson.reminder_rules),
         )
         .where(Lesson.id == lesson_id)

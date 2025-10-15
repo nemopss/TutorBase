@@ -26,12 +26,20 @@ class InitDataVerificationError(Exception):
 
 
 def _parse_init_data(init_data: str) -> Dict[str, str]:
-    pairs = parse_qsl(init_data, strict_parsing=True)
+    try:
+        pairs = parse_qsl(init_data, strict_parsing=True)
+    except ValueError as exc:
+        raise InitDataVerificationError("Invalid init data format") from exc
     return {key: value for key, value in pairs}
 
 
 def verify_telegram_init_data(init_data: str, bot_token: str) -> Dict[str, Any]:
-    payload = _parse_init_data(init_data)
+    try:
+        payload = _parse_init_data(init_data)
+    except InitDataVerificationError:
+        raise
+    except Exception as exc:  # pragma: no cover - defensive
+        raise InitDataVerificationError("Failed to parse init data") from exc
     hash_value = payload.pop("hash", None)
     if not hash_value:
         raise InitDataVerificationError("Missing hash in init data")
@@ -86,4 +94,3 @@ def decode_token(token: str, expected_type: TokenType) -> Dict[str, Any]:
     if token_type != expected_type.value:
         raise TokenVerificationError("Unexpected token type")
     return payload
-
