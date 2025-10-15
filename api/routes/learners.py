@@ -49,8 +49,6 @@ async def create_learner_from_chat_id(
         notes=request.notes,
         notifications_enabled=request.notifications_enabled,
     )
-    await session.commit()
-    await session.refresh(learner, attribute_names=["bot_user"])
     
     return LearnerResponse(
         id=learner.id,
@@ -77,7 +75,6 @@ async def update_learner_notifications(
         learner,
         notifications_enabled=request.notifications_enabled,
     )
-    await session.commit()
     
     chat_id = learner.bot_user.chat_id if learner.bot_user else None
     return LearnerResponse(

@@ -65,7 +65,6 @@ async def create_template_endpoint(
         duration_days=payload.duration_days,
         default_config=payload.default_config,
     )
-    await session.commit()
     return _to_response(template)
 
 
@@ -86,9 +85,7 @@ async def update_template_endpoint(
             duration_days=payload.duration_days,
             default_config=payload.default_config,
         )
-        await session.commit()
     except NotFoundError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_response(template)
 
@@ -101,9 +98,7 @@ async def delete_template_endpoint(
 ):
     try:
         await template_service.delete_template(session, template_id)
-        await session.commit()
     except NotFoundError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -116,8 +111,6 @@ async def duplicate_template_endpoint(
 ) -> TemplateResponse:
     try:
         template = await template_service.duplicate_template(session, template_id)
-        await session.commit()
     except NotFoundError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_response(template)

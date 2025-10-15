@@ -98,12 +98,9 @@ async def create_lesson_for_package(
             sequence_index=sequence_index,
         )
         await package_service.regenerate_reminders_for_package(session, package_id)
-        await session.commit()
     except NotFoundError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        await session.rollback()
         raise
     return _to_response(lesson)
 
@@ -139,12 +136,9 @@ async def update_lesson_endpoint(
             homework_due_at=payload.homework_due_at,
         )
         await package_service.regenerate_reminders_for_package(session, lesson.package_id)
-        await session.commit()
     except NotFoundError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        await session.rollback()
         raise
     return _to_response(lesson)
 
@@ -163,12 +157,9 @@ async def delete_lesson_endpoint(
     try:
         package_id = await lesson_service.delete_lesson(session, lesson_id)  # Получаем package_id
         await package_service.regenerate_reminders_for_package(session, package_id)
-        await session.commit()
     except NotFoundError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
-        await session.rollback()
         raise
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

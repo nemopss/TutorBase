@@ -106,7 +106,6 @@ async def login(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing user id")
 
     user = await _persist_user(session, user_block)
-    await session.commit()
 
     token_payload = {
         "sub": str(user.id),

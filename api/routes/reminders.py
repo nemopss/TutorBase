@@ -97,9 +97,7 @@ async def update_reminder(
             active=payload.active if payload.active is not None else instance.active,
             comment=payload.comment if payload.comment is not None else instance.comment,
         )
-        await session.commit()
     except Exception as exc:
-        await session.rollback()
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
     refreshed = await crud.get_reminder_instance(session, reminder_id)

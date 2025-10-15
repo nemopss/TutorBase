@@ -128,12 +128,9 @@ async def create_package_endpoint(
                 start_date=start_local,
                 total_lessons=payload.total_lessons,
             )
-        await session.commit()
     except NotFoundError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValidationError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _to_response(package)
 
@@ -156,12 +153,9 @@ async def update_package_endpoint(
             end_date=normalize_to_timezone(payload.end_date) if payload.end_date is not None else None,
             total_lessons=payload.total_lessons,
         )
-        await session.commit()
     except NotFoundError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except ValidationError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _to_response(package)
 
@@ -174,9 +168,7 @@ async def delete_package_endpoint(
 ) -> Response:
     try:
         await package_service.delete_package(session, package_id)
-        await session.commit()
     except NotFoundError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -188,9 +180,7 @@ async def regenerate_package_endpoint(
 ) -> MessageResponse:
     try:
         await package_service.regenerate_reminders_for_package(session, package_id)
-        await session.commit()
     except NotFoundError as exc:
-        await session.rollback()
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     package = await package_service.get_package(session, package_id)

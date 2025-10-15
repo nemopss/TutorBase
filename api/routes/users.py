@@ -44,5 +44,4 @@ async def update_user_role(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
     user = await crud.update_user_login_metadata(session, user, role=payload.role)
-    await session.commit()
     return _serialize_user(user)
