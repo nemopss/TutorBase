@@ -5,7 +5,7 @@ Telegram бот, FastAPI API и React mini-app для управления за�
 ## 🧱 Состав проекта
 
 - **`bot.py`** — Telegram-бот (Aiogram) с Redis FSM.
-- **`api/`** — REST API на FastAPI, JWT аутентификация, SQLite (по умолчанию) или внешняя БД.
+- **`api/`** — REST API на FastAPI, JWT аутентификация и PostgreSQL в качестве основной БД.
 - **`mini-app/`** — React/Vite мини-приложение для Telegram WebApp.
 - **`nginx/`** — реверс-прокси и TLS-конфигурация.
 - **`docker-compose.yml`** — продакшн-стек.
@@ -20,7 +20,7 @@ Telegram бот, FastAPI API и React mini-app для управления за�
    - `BOT_TOKEN`, `ADMINS`, `LOGS_CHAT_ID`, `ADMIN_CHAT_ID`;
    - `REDIS_URL`, `JWT_SECRET`, `JWT_*_EXPIRES_SECONDS`;
    - `MINI_APP_URL`, `CORS_ORIGINS`.
-3. Для PostgreSQL пропишите `POSTGRESQL_HOST/PORT/USER/PASSWORD/DBNAME`. Если их нет — API переключится на локальный SQLite (`DB_PATH`).
+3. Пропишите `POSTGRESQL_HOST/PORT/USER/PASSWORD/DBNAME` — прод и dev уже работают на PostgreSQL; SQLite оставлен только для оффлайн-режима (`DB_PATH`).
 4. Примените миграции:
    ```bash
    alembic upgrade head

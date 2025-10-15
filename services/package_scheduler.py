@@ -41,9 +41,10 @@ class _ReminderSchedule:
 
 async def regenerate_package_reminders(session: AsyncSession, package: LessonPackage) -> None:
     """Rebuild reminder rules and instances for the package based on its lessons."""
-    package = await crud.get_lesson_package(session, package.id)
+    package_id = package.id
+    package = await crud.get_lesson_package(session, package_id)
     if package is None:
-        raise ValueError(f"Package #{package.id} not found")
+        raise ValueError(f"Package #{package_id} not found")
 
     if not package.learner:
         # Nothing to schedule without learner metadata

@@ -155,14 +155,14 @@ async def delete_lesson_endpoint(
     session: AsyncSession = Depends(get_session),
     user=Depends(admin_or_teacher_required),
 ):
-    try:
-        lesson = await lesson_service.get_lesson(session, lesson_id)
-    except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    # try:
+    #     lesson = await lesson_service.get_lesson(session, lesson_id)
+    # except NotFoundError as exc:
+    #     raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     try:
-        await lesson_service.delete_lesson(session, lesson_id)
-        await package_service.regenerate_reminders_for_package(session, lesson.package_id)
+        package_id = await lesson_service.delete_lesson(session, lesson_id)  # Получаем package_id
+        await package_service.regenerate_reminders_for_package(session, package_id)
         await session.commit()
     except NotFoundError as exc:
         await session.rollback()

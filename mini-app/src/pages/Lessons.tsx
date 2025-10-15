@@ -81,11 +81,13 @@ const Lessons: React.FC = () => {
   const queryClient = useQueryClient();
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
   const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(20);
+  const [pageSize, setPageSize] = useState(50);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [lessonToDelete, setLessonToDelete] = useState<number | null>(null);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -115,6 +117,7 @@ const Lessons: React.FC = () => {
       message.success('Lesson deleted successfully!');
     },
     onError: (error: Error) => {
+      console.error('Delete lesson error:', error);
       message.error(`Failed to delete lesson: ${error.message}`);
     }
   });
@@ -126,14 +129,24 @@ const Lessons: React.FC = () => {
   };
 
   const handleDelete = (id: number) => {
-    Modal.confirm({
-      title: 'Are you sure you want to delete this lesson?',
-      content: 'This action cannot be undone.',
-      okText: 'Yes, delete it',
-      okType: 'danger',
-      onOk: () => deleteMutation.mutate(id),
-    });
+    setLessonToDelete(id);
+    setDeleteModalOpen(true);
+    // Modal.confirm({
+    //   title: 'Are you sure you want to delete this lesson?',
+    //   content: 'This action cannot be undone.',
+    //   okText: 'Yes, delete it',
+    //   okType: 'danger',
+    //   onOk: () => deleteMutation.mutate(id),
+    // });
   };
+
+  const confirmDelete = () => {
+    if (lessonToDelete) {
+      deleteMutation.mutate(lessonToDelete);
+      setDeleteModalOpen(false);
+      setLessonToDelete(null);
+    }
+  }
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -359,6 +372,18 @@ const Lessons: React.FC = () => {
         isLoading={updateMutation.isPending}
         initialValues={editingLesson}
       />
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Lesson"
+        onCancel={() => setDeleteModalOpen(false)}
+        onOk={confirmDelete}
+        okText="Delete"
+        okButtonProps={{loading: deleteMutation.isPending }}
+        >
+        <p>Are you sure you want to delete this lesson?</p>
+        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+      </Modal>
     </div>
   );
 };

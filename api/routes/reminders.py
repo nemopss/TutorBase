@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, status as http_status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_session, admin_or_teacher_required
@@ -43,7 +43,7 @@ def _to_response(instance: ReminderInstance) -> ReminderResponse:
 async def list_reminders(
     limit: int = Query(10, ge=1, le=100),
     offset: int = Query(0, ge=0),
-    status: str | None = Query(None),
+    status_filter: str | None = Query(None, alias="status"),
     reminder_type: str | None = Query(None),
     package_id: int | None = Query(None),
     search: str | None = Query(None),
@@ -55,13 +55,13 @@ async def list_reminders(
             session,
             limit=limit,
             offset=offset,
-            status=status,
+            status=status_filter,
             reminder_type=reminder_type,
             package_id=package_id,
             search=search,
         )
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
     return ReminderListResponse(total=total, items=[_to_response(instance) for instance in instances])
 
 
@@ -74,7 +74,7 @@ async def list_reminders_for_package(
     try:
         instances = await crud.fetch_reminder_instances_for_package(session, package_id)
     except Exception as exc:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
     return ReminderListResponse(total=len(instances), items=[_to_response(instance) for instance in instances])
 
 
@@ -87,7 +87,7 @@ async def update_reminder(
 ) -> ReminderResponse:
     instance = await crud.get_reminder_instance(session, reminder_id)
     if not instance:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Reminder not found")
 
     try:
         await crud.set_reminder_instance_status(
@@ -100,9 +100,9 @@ async def update_reminder(
         await session.commit()
     except Exception as exc:
         await session.rollback()
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
+        raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
     refreshed = await crud.get_reminder_instance(session, reminder_id)
     if not refreshed:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Reminder not found")
+        raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Reminder not found")
     return _to_response(refreshed)

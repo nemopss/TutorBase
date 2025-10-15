@@ -4,6 +4,7 @@ from datetime import datetime, timezone
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select, delete
 
 from database import crud
 from database.models import Lesson
@@ -69,13 +70,28 @@ async def update_lesson(
     return _build_lesson_dto(lesson)
 
 
-async def delete_lesson(session: AsyncSession, lesson_id: int) -> None:
-    lesson = await crud.get_lesson(session, lesson_id)
-    if not lesson:
+# async def delete_lesson(session: AsyncSession, lesson_id: int) -> None:
+#     lesson = await crud.get_lesson(session, lesson_id)
+#     if not lesson:
+#         raise NotFoundError(f"Lesson {lesson_id} not found")
+#     package_id = lesson.package_id
+#     await crud.delete_lesson(session, lesson)
+#     await sync_package_metrics(session, package_id)
+
+async def delete_lesson(session: AsyncSession, lesson_id: int) -> int:  # возврат package_id
+    # Минимальный запрос: только package_id и проверка существования
+    stmt = select(Lesson.package_id).where(Lesson.id == lesson_id)
+    result = await session.execute(stmt)
+    package_id = result.scalar_one_or_none()
+    if not package_id:
         raise NotFoundError(f"Lesson {lesson_id} not found")
-    package_id = lesson.package_id
-    await crud.delete_lesson(session, lesson)
+    
+    # Удаление
+    delete_stmt = delete(Lesson).where(Lesson.id == lesson_id)
+    await session.execute(delete_stmt)
     await sync_package_metrics(session, package_id)
+    await session.commit()
+    return package_id  # Возвращаем для использования в эндпоинте
 
 
 async def create_lesson(
