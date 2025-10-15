@@ -193,6 +193,7 @@ async def create_reminder_instance(
     scheduled_at: Optional[datetime] = None,
     active: bool = True,
     payload: Optional[dict] = None,
+    chat_identifier: Optional[str] = None,
 ) -> ReminderInstance:
     instance = ReminderInstance(
         rule=rule,
@@ -203,6 +204,7 @@ async def create_reminder_instance(
         status=status,
         payload=payload or {},
         active=active,
+        chat_identifier=chat_identifier,
         created_at=_utc_now(),
         updated_at=_utc_now(),
     )

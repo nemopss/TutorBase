@@ -12,8 +12,8 @@ from config import config
 from database import crud
 from database.engine import async_session
 from utils import texts
-from utils.formatters import escape_html_text, format_timestamp_msk, split_chat_identifier
-from utils.scheduling import parse_utc
+from utils.formatters import escape_html_text, split_chat_identifier
+
 from zoneinfo import ZoneInfo
 
 from services.reminder_definitions import (
