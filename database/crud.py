@@ -52,15 +52,15 @@ async def fetch_applications_count(session: AsyncSession):
 
 async def fetch_applications_stats(session: AsyncSession) -> dict:
     """Return aggregate statistics for applications."""
-    total_query = select(func.count()).select_from(Application)
-    total = (await session.execute(total_query)).scalar_one()
-
     by_language_query = (
         select(Application.language, func.count())
         .group_by(Application.language)
     )
     by_language_result = await session.execute(by_language_query)
-    by_language = {lang or '—': count for lang, count in by_language_result.all()}
+    # Сохраняем результат, чтобы использовать его дважды
+    by_language_rows = by_language_result.all()
+    by_language = {lang or '—': count for lang, count in by_language_rows}
+    total = sum(by_language.values())
 
     bind = session.get_bind()
     dialect = bind.dialect.name if bind is not None else 'sqlite'
