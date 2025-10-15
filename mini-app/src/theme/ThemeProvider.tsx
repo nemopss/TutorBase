@@ -13,7 +13,7 @@ interface ThemeContextValue {
 }
 
 const ThemeContext = createContext<ThemeContextValue | null>(null);
-const STORAGE_KEY = 'ksu-theme-mode';
+const STORAGE_KEY = 'tutorbase-theme-mode';
 
 function readStoredMode(): ThemeMode {
     if (typeof window === 'undefined') {

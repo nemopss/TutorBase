@@ -1,7 +1,7 @@
 {
   "dashboard": {
-    "title": "KSU Bot API Monitoring",
-    "tags": ["fastapi", "ksu", "monitoring"],
+    "title": "TutorBase API Monitoring",
+    "tags": ["fastapi", "tutorbase", "monitoring"],
     "timezone": "browser",
     "panels": [
       {

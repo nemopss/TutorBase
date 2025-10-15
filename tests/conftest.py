@@ -43,15 +43,15 @@ def _get_database_url() -> str:
     return url_str
 
 
-@pytest.fixture(scope="session")
-def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
-    """Reuse a single event loop for the whole test session."""
-    loop = asyncio.new_event_loop()
-    asyncio.set_event_loop(loop)
-    try:
-        yield loop
-    finally:
-        loop.close()
+# @pytest.fixture(scope="session")
+# def event_loop() -> Generator[asyncio.AbstractEventLoop, None, None]:
+#     """Reuse a single event loop for the whole test session."""
+#     loop = asyncio.new_event_loop()
+#     asyncio.set_event_loop(loop)
+#     try:
+#         yield loop
+#     finally:
+#         loop.close()
 
 
 @pytest.fixture

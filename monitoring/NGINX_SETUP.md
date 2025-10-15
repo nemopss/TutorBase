@@ -129,7 +129,7 @@ open https://api.xpyrkova23.ru/grafana/
 2. Логин: `admin`
 3. Пароль: (из вашего .env, переменная GRAFANA_PASSWORD)
 4. Смените пароль при первом входе (опционально)
-5. Дашборд "KSU Bot API Monitoring" уже настроен!
+5. Дашборд "TutorBase API Monitoring" уже настроен!
 
 ## 🐛 Troubleshooting
 

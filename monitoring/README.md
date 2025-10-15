@@ -26,7 +26,7 @@ docker compose ps
 
 1. Откройте http://localhost:3001
 2. Войдите с учетными данными (admin/admin123)
-3. Дашборд "KSU Bot API Monitoring" будет доступен автоматически
+3. Дашборд "TutorBase API Monitoring" будет доступен автоматически
 
 ## 📈 Доступные метрики
 

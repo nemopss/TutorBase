@@ -1,7 +1,18 @@
 import React, { useEffect, useState, useMemo } from 'react';
 import { Layout, Menu, Drawer, Button, type MenuProps } from 'antd';
 import { Link, useLocation } from 'react-router-dom';
-import { HomeOutlined, AppstoreOutlined, ReadOutlined, BellOutlined, BarChartOutlined, SettingOutlined, CalendarOutlined, MenuOutlined, TeamOutlined, CrownOutlined } from '@ant-design/icons';
+import {
+  HomeOutlined,
+  AppstoreOutlined,
+  ReadOutlined,
+  BellOutlined,
+  BarChartOutlined,
+  SettingOutlined,
+  CalendarOutlined,
+  MenuOutlined,
+  TeamOutlined,
+  CrownOutlined
+} from '@ant-design/icons';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { useAuth } from '../../auth/AuthProvider';
 
@@ -87,19 +98,19 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const menuContent = (
     <>
-      <div style={{ 
-        padding: '20px 16px', 
-        fontSize: '18px', 
+      <div style={{
+        padding: '20px 16px',
+        fontSize: '18px',
         fontWeight: 600,
         color: isDark ? '#ffffff' : '#37352f',
         borderBottom: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
       }}>
-        📚 KSU App
+        📚 TutorBase
       </div>
-      
-      <Menu 
-        selectedKeys={[location.pathname]} 
-        mode="inline" 
+
+      <Menu
+        selectedKeys={[location.pathname]}
+        mode="inline"
         items={menuItems}
         onClick={() => isMobile && setDrawerVisible(false)}
         style={{
@@ -117,7 +128,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     <Layout style={{ minHeight: '100vh', background: isDark ? '#191919' : '#ffffff' }}>
       {/* Desktop Sidebar */}
       {!isMobile && (
-        <Sider 
+        <Sider
           collapsible
           width={240}
           collapsedWidth={80}
@@ -173,13 +184,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               onClick={() => setDrawerVisible(true)}
               style={{ fontSize: '18px' }}
             />
-            <span style={{ fontSize: '18px', fontWeight: 600 }}>📚 KSU App</span>
+            <span style={{ fontSize: '18px', fontWeight: 600 }}>TutorBase</span>
           </div>
         )}
 
-        <Content style={{ 
-          margin: isMobile ? '16px' : '24px', 
-          padding: isMobile ? '16px' : '32px', 
+        <Content style={{
+          margin: isMobile ? '16px' : '24px',
+          padding: isMobile ? '16px' : '32px',
           background: isDark ? '#252525' : '#ffffff',
           minHeight: isMobile ? 'calc(100vh - 120px)' : 'calc(100vh - 48px)',
           borderRadius: '8px',

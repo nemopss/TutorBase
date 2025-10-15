@@ -1,6 +1,6 @@
 # TutorBase
 
-Telegram бот, FastAPI API и React mini-app для управления записями и уроками KSU.
+Telegram бот, FastAPI API и React mini-app для управления записями и уроками TutorBase.
 
 ## 🧱 Состав проекта
 
