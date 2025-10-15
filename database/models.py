@@ -85,28 +85,6 @@ class Learner(Base):
     bot_user = relationship('BotUser', back_populates='learner', lazy='joined')
     packages = relationship('LessonPackage', back_populates='learner', cascade='all, delete-orphan')
 
-
-class LessonReminder(Base):
-    __tablename__ = 'lesson_reminders'
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    student_name = Column(String, nullable=False)
-    chat_identifier = Column(String, nullable=False)
-    is_recurring = Column(Boolean, nullable=False, default=True)
-    days = Column(String)
-    lesson_time = Column(String)
-    lesson_datetime = Column(DateTime(timezone=True))
-    lead_minutes = Column(Integer, nullable=False, default=60)
-    kind = Column(String(32), nullable=False, default='lesson')
-    template_key = Column(String(64))
-    next_run_at = Column(DateTime(timezone=True))
-    last_notified_at = Column(DateTime(timezone=True))
-    last_response = Column(String)
-    last_response_at = Column(DateTime(timezone=True))
-    last_decline_reason = Column(Text)
-    comment = Column(Text)
-    active = Column(Boolean, nullable=False, default=True)
-    created_at = Column(DateTime(timezone=True), nullable=False)
 class LessonPackageTemplate(Base):
     __tablename__ = 'lesson_package_templates'
 

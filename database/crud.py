@@ -9,7 +9,6 @@ from sqlalchemy.orm import selectinload
 from database.models import (
     Application,
     Student,
-    LessonReminder,
     BotUser,
     Learner,
     LessonPackageTemplate,
@@ -116,57 +115,6 @@ async def delete_student(session: AsyncSession, student_id: int):
     student = await session.get(Student, student_id)
     if student:
         await session.delete(student)
-
-
-async def create_lesson_reminder(session: AsyncSession, reminder_data: dict) -> LessonReminder:
-    payload = dict(reminder_data)
-    payload.setdefault('kind', 'lesson')
-    reminder = LessonReminder(**payload)
-    session.add(reminder)
-    await session.flush([reminder])
-    return reminder
-
-
-async def get_lesson_reminders(session: AsyncSession, include_inactive: bool = True) -> list[LessonReminder]:
-    query = select(LessonReminder)
-    if not include_inactive:
-        query = query.where(LessonReminder.active.is_(True))
-    query = query.order_by(LessonReminder.student_name.asc())
-    result = await session.execute(query)
-    return result.scalars().all()
-
-
-async def get_lesson_reminder(session: AsyncSession, reminder_id: int) -> LessonReminder | None:
-    return await session.get(LessonReminder, reminder_id)
-
-
-async def save_lesson_reminder(session: AsyncSession, reminder: LessonReminder) -> None:
-    session.add(reminder)
-
-
-async def delete_lesson_reminder(session: AsyncSession, reminder: LessonReminder) -> None:
-    await session.delete(reminder)
-
-
-async def fetch_due_reminders(session: AsyncSession, now_utc: datetime) -> list[LessonReminder]:
-    query = select(LessonReminder).where(
-        LessonReminder.active.is_(True),
-        LessonReminder.next_run_at <= now_utc
-    )
-    result = await session.execute(query)
-    return result.scalars().all()
-
-
-async def fetch_reminders_stats(session: AsyncSession) -> tuple[int, int]:
-    total_stmt = select(func.count()).select_from(LessonReminder)
-    active_stmt = (
-        select(func.count())
-        .select_from(LessonReminder)
-        .where(LessonReminder.active.is_(True))
-    )
-    total = (await session.execute(total_stmt)).scalar_one()
-    active = (await session.execute(active_stmt)).scalar_one()
-    return active, total
 
 
 # --- Users ------------------------------------------------------------------
