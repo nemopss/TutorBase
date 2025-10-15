@@ -22,7 +22,7 @@ class Settings(BaseSettings):
     ADMINS: list[int]
     REGULATIONS_URL: str
     REDIS_URL: str
-    REMINDER_NOTIFY_USERNAME: str = "nemopss"
+    REMINDER_NOTIFY_USERNAME: str
     JWT_SECRET: str
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_EXPIRES_SECONDS: int = 900
