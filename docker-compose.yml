@@ -6,8 +6,8 @@ services:
       - app-network
 
   # Telegram Bot
-  applications_bot:
-    image: ghcr.io/nemopss/ksu-applications-bot:latest
+  bot:
+    image: ghcr.io/nemopss/tutorbase-bot:latest
     env_file:
       - .env
     restart: always
@@ -22,7 +22,7 @@ services:
 
   # FastAPI Backend
   api:
-    image: ghcr.io/nemopss/ksu-applications-bot-api:latest
+    image: ghcr.io/nemopss/tutorbase-api:latest
     env_file:
       - .env
     restart: always
@@ -39,7 +39,7 @@ services:
 
   # React Frontend
   app:
-    image: ghcr.io/nemopss/ksu-applications-bot-app:latest
+    image: ghcr.io/nemopss/tutorbase-app:latest
     restart: always
     expose:
       - "80"

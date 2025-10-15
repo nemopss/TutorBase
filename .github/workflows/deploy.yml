@@ -72,7 +72,7 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/ksu-applications-bot:latest
+          tags: ghcr.io/${{ github.repository_owner }}/tutorbase-bot:latest
 
       - name: Build and push API image
         if: ${{ needs.changes.outputs.api == 'true' }}
@@ -81,7 +81,7 @@ jobs:
           context: .
           file: ./Dockerfile.api
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/ksu-applications-bot-api:latest
+          tags: ghcr.io/${{ github.repository_owner }}/tutorbase-api:latest
 
       - name: Build and push App image
         if: ${{ needs.changes.outputs.app == 'true' }}
@@ -90,7 +90,7 @@ jobs:
           context: ./mini-app
           file: ./mini-app/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/ksu-applications-bot-app:latest
+          tags: ghcr.io/${{ github.repository_owner }}/tutorbase-app:latest
 
   deploy:
     needs: [changes, build]
@@ -105,7 +105,7 @@ jobs:
           key: ${{ secrets.SERVER_SSH_KEY }}
           script: |
             set -e
-            cd /srv/applications-bot/current
+            cd /srv/tutorbase/current
             git pull
 
             if [ "${{ needs.changes.outputs.compose }}" = "true" ]; then
@@ -116,7 +116,7 @@ jobs:
 
             services=""
             if [ "${{ needs.changes.outputs.bot }}" = "true" ]; then
-              services="$services applications_bot"
+              services="$services bot"
             fi
             if [ "${{ needs.changes.outputs.api }}" = "true" ]; then
               services="$services api"

@@ -22,8 +22,7 @@ git commit -m "Add Nginx proxy for Grafana and Prometheus"
 git push origin main
 
 # 2. На сервере
-ssh your-server
-cd /path/to/applications_bot
+cd /path/to/tutorbase
 
 # 3. Обновите код
 git pull origin main
@@ -56,7 +55,7 @@ htpasswd -c .htpasswd monitoring
 # Введите пароль дважды
 
 # Скопируйте файл на сервер в директорию nginx
-# Например: /path/to/applications_bot/nginx/.htpasswd
+# Например: /path/to/tutorbase/nginx/.htpasswd
 ```
 
 ### 2. Раскомментируйте в nginx.conf:
@@ -179,7 +178,7 @@ Grafana отлично работает на мобильных! Просто о
 
 ```bash
 # На сервере
-cd /path/to/applications_bot
+cd /path/to/tutorbase
 git pull
 docker compose exec nginx nginx -t  # тест конфигурации
 docker compose restart nginx        # перезапуск

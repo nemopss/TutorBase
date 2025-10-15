@@ -1,5 +1,5 @@
 load database
-     from sqlite:////Users/nemopss/dev/ksu/applications_bot/OLD_DB/bot.db
+     from sqlite:////Users/nemopss/dev/ksu/TutorBase/OLD_DB/bot.db
      into postgresql://gen_user@31.130.155.87:5432/default_db
 
 with data only, create no tables, create no indexes, reset sequences

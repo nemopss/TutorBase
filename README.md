@@ -1,4 +1,4 @@
-# KSU Applications Bot
+# TutorBase
 
 Telegram бот, FastAPI API и React mini-app для управления записями и уроками KSU.
 
@@ -93,7 +93,7 @@ npm run dev
 ### Ручное обновление
 ```bash
 ssh user@server
-cd /srv/applications-bot/current
+cd /srv/tutorbase/current
 git pull
 docker compose pull
 docker compose up -d --remove-orphans

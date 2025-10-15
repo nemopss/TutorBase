@@ -139,7 +139,7 @@ groups:
 docker compose exec grafana grafana-cli admin export > grafana-backup.json
 
 # Backup Prometheus (volume)
-docker run --rm -v applications_bot_prometheus_data:/data -v $(pwd):/backup alpine tar czf /backup/prometheus-backup.tar.gz /data
+docker run --rm -v tutorbase_prometheus_data:/data -v $(pwd):/backup alpine tar czf /backup/prometheus-backup.tar.gz /data
 ```
 
 ## 🐛 Troubleshooting
@@ -148,7 +148,7 @@ docker run --rm -v applications_bot_prometheus_data:/data -v $(pwd):/backup alpi
 
 1. Проверьте что API доступен: `curl http://localhost:8000/metrics`
 2. Проверьте targets в Prometheus: http://localhost:9090/targets
-3. Убедитесь что контейнеры в одной сети: `docker network inspect applications_bot_app-network`
+3. Убедитесь что контейнеры в одной сети: `docker network inspect app-network`
 
 ### Grafana не показывает данные
 
