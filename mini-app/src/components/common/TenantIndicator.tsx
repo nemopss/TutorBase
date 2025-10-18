@@ -24,7 +24,7 @@ interface Tenant {
 }
 
 const TenantIndicator: React.FC = () => {
-    const { tenantId, isSuperAdmin, user } = useAuth();
+    const { tenantId, isSuperAdmin } = useAuth();
     const { resolvedTheme } = useThemeMode();
     const isDark = resolvedTheme === 'dark';
     const [tenantName, setTenantName] = useState<string | null>(null);

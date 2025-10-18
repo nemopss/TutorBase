@@ -80,14 +80,6 @@ const TenantSwitcher: React.FC = () => {
         }
     };
 
-    const getCurrentTenantName = () => {
-        if (tenantId === null) {
-            return 'Global View';
-        }
-        const tenant = tenants.find(t => t.id === tenantId);
-        return tenant?.name || `Tenant ${tenantId}`;
-    };
-
     const selectOptions = [
         {
             value: 'global',
@@ -134,14 +126,14 @@ const TenantSwitcher: React.FC = () => {
                 placeholder="Select tenant context"
                 suffixIcon={<SwapOutlined />}
                 options={selectOptions}
-                optionFilterProp="children"
                 showSearch
                 filterOption={(input, option) => {
-                    const label = option?.label;
-                    if (typeof label === 'string') {
-                        return label.toLowerCase().includes(input.toLowerCase());
+                    if (!option) return false;
+                    const tenant = tenants.find(t => t.id === option.value);
+                    if (tenant) {
+                        return tenant.name.toLowerCase().includes(input.toLowerCase());
                     }
-                    return false;
+                    return option.value === 'global' && 'global'.includes(input.toLowerCase());
                 }}
             />
         </Tooltip>

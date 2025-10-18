@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Card, Button, Table, Tag, message, Space, Typography, Modal, Tooltip, Empty } from 'antd';
+import { Card, Button, Table, Tag, message, Space, Typography, Tooltip, Empty } from 'antd';
 import { PlusOutlined, CopyOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import PageHeader from '../components/common/PageHeader';
 import api from '../services/api';
@@ -193,7 +193,7 @@ const InviteCodes: React.FC = () => {
             <PageHeader
                 title="Invite Codes"
                 subtitle="Create and manage student invitation codes"
-                extra={
+                actions={
                     <Button
                         type="primary"
                         icon={<PlusOutlined />}
