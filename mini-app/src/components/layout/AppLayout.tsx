@@ -11,7 +11,8 @@ import {
   CalendarOutlined,
   MenuOutlined,
   TeamOutlined,
-  CrownOutlined
+  CrownOutlined,
+  MailOutlined
 } from '@ant-design/icons';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { useAuth } from '../../auth/AuthProvider';
@@ -63,6 +64,12 @@ const baseMenuItems: NonNullable<MenuProps['items']> = [
   },
 ];
 
+const inviteCodesMenuItem: NonNullable<MenuProps['items']>[number] = {
+  key: '/invite-codes',
+  icon: <MailOutlined />,
+  label: <Link to="/invite-codes">Invite Codes</Link>,
+};
+
 const adminMenuItem: NonNullable<MenuProps['items']>[number] = {
   key: '/admin',
   icon: <CrownOutlined />,
@@ -81,14 +88,29 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const hasStaffAccess = user?.role === 'admin' || user?.role === 'teacher';
 
   const menuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
     const items = [...baseMenuItems];
+
+    // Add Invite Codes for teachers and admins
+    if (hasStaffAccess) {
+      // Insert before Settings
+      const settingsIndex = items.findIndex(item => item?.key === '/settings');
+      if (settingsIndex !== -1) {
+        items.splice(settingsIndex, 0, inviteCodesMenuItem);
+      } else {
+        items.push(inviteCodesMenuItem);
+      }
+    }
+
+    // Add Admin menu for admins only
     if (isAdmin) {
       items.push(adminMenuItem);
     }
+
     return items;
-  }, [isAdmin]);
+  }, [isAdmin, hasStaffAccess]);
 
   useEffect(() => {
     const handleResize = () => {

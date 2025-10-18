@@ -29,6 +29,7 @@ interface User {
   display_name: string;
   role: string;
   telegram_id?: number;
+  tenant_id?: number | null;
   last_login_at?: string;
 }
 
@@ -39,6 +40,17 @@ interface AuthResponse {
   expires_in?: number;
 }
 
+interface TutorRegistrationData {
+  school_name: string;
+  contact_email?: string;
+  tutor_name?: string;
+}
+
+interface StudentRegistrationData {
+  invite_token: string;
+  student_name?: string;
+}
+
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -46,6 +58,9 @@ interface AuthContextType {
   tenantId: number | null;
   isSuperAdmin: boolean;
   switchTenant: (tenantId: number | null) => Promise<void>;
+  registerTutor: (data: TutorRegistrationData) => Promise<void>;
+  registerStudent: (data: StudentRegistrationData) => Promise<void>;
+  logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -186,6 +201,17 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         setupTokenRefresh(access_token);
       } catch (err: any) {
         console.error('Authentication failed:', err);
+
+        // Check if this is a "user not registered" error (404)
+        if (err?.response?.status === 404) {
+          console.log('[AuthProvider] User not registered, showing registration flow');
+          // User needs to register - don't show error, just set loading to false
+          setUser(null);
+          setIsLoading(false);
+          return;
+        }
+
+        // For other errors, show error message
         const errorMsg = err?.response?.data?.detail || err?.message || 'Authentication failed';
         setError('❌ Authentication Error\n\n' + errorMsg);
         setUser(null);
@@ -301,6 +327,137 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     }
   };
 
+  // Register tutor (creates new school)
+  const registerTutor = async (data: TutorRegistrationData) => {
+    console.log('[AuthProvider] Registering tutor:', { school_name: data.school_name });
+
+    // Get Telegram init data
+    let initData: string | undefined = undefined;
+
+    if (DEV_MODE) {
+      initData = DEV_INIT_DATA;
+    } else {
+      initData = window.Telegram?.WebApp?.initData;
+      if (!initData || initData.length === 0) {
+        throw new Error('Telegram init data not available');
+      }
+    }
+
+    try {
+      const response = await api.post<AuthResponse>('/auth/register-tutor', data, {
+        headers: {
+          'X-Telegram-Init-Data': initData,
+        },
+      });
+
+      const { access_token, refresh_token, user: registeredUser } = response.data;
+
+      // Save tokens
+      localStorage.setItem('accessToken', access_token);
+      localStorage.setItem('refreshToken', refresh_token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+
+      // Extract tenant_id from JWT
+      const payload = parseJwt(access_token);
+      const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
+
+      console.log('[AuthProvider] Tutor registration successful:', {
+        user: registeredUser.display_name,
+        role: registeredUser.role,
+        tenant_id: extractedTenantId,
+      });
+
+      setUser(registeredUser);
+      setTenantId(extractedTenantId);
+
+      // Setup auto-refresh
+      setupTokenRefresh(access_token);
+
+      // Reload to apply new context
+      window.location.href = '/';
+    } catch (error: any) {
+      console.error('[AuthProvider] Tutor registration failed:', error);
+      throw error;
+    }
+  };
+
+  // Register student (joins existing school with invite code)
+  const registerStudent = async (data: StudentRegistrationData) => {
+    console.log('[AuthProvider] Registering student with invite token');
+
+    // Get Telegram init data
+    let initData: string | undefined = undefined;
+
+    if (DEV_MODE) {
+      initData = DEV_INIT_DATA;
+    } else {
+      initData = window.Telegram?.WebApp?.initData;
+      if (!initData || initData.length === 0) {
+        throw new Error('Telegram init data not available');
+      }
+    }
+
+    try {
+      const response = await api.post<AuthResponse>('/auth/register-student', data, {
+        headers: {
+          'X-Telegram-Init-Data': initData,
+        },
+      });
+
+      const { access_token, refresh_token, user: registeredUser } = response.data;
+
+      // Save tokens
+      localStorage.setItem('accessToken', access_token);
+      localStorage.setItem('refreshToken', refresh_token);
+      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+
+      // Extract tenant_id from JWT
+      const payload = parseJwt(access_token);
+      const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
+
+      console.log('[AuthProvider] Student registration successful:', {
+        user: registeredUser.display_name,
+        role: registeredUser.role,
+        tenant_id: extractedTenantId,
+      });
+
+      setUser(registeredUser);
+      setTenantId(extractedTenantId);
+
+      // Setup auto-refresh
+      setupTokenRefresh(access_token);
+
+      // Reload to apply new context
+      window.location.href = '/';
+    } catch (error: any) {
+      console.error('[AuthProvider] Student registration failed:', error);
+      throw error;
+    }
+  };
+
+  // Logout function
+  const logout = () => {
+    console.log('[AuthProvider] Logging out');
+
+    // Clear tokens
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    delete api.defaults.headers.common['Authorization'];
+
+    // Clear state
+    setUser(null);
+    setTenantId(null);
+
+    // Clear refresh timer
+    if (refreshTimerRef.current) {
+      window.clearTimeout(refreshTimerRef.current);
+      refreshTimerRef.current = null;
+    }
+
+    // Reload page to show registration flow
+    window.location.href = '/';
+  };
+
   const isSuperAdmin = user?.role === 'admin';
 
   const value = {
@@ -310,6 +467,9 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     tenantId,
     isSuperAdmin,
     switchTenant,
+    registerTutor,
+    registerStudent,
+    logout,
   };
 
   if (error) {
