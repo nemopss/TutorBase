@@ -4,10 +4,11 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.dependencies import CurrentTenant
 from database import crud
 from database import crud as crud_module
 from tests import factories
-from tests.api.utils import make_auth_headers
+from tests.api.utils import get_auth_headers
 
 
 async def _bootstrap_reminder(session: AsyncSession):
@@ -40,9 +41,9 @@ async def test_list_reminders_requires_auth(client: AsyncClient):
 
 
 @pytest.mark.asyncio
-async def test_list_reminders(client: AsyncClient, db_session: AsyncSession):
+async def test_list_reminders(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     learner, package, _, _, instance = await _bootstrap_reminder(db_session)
-    headers, _ = await make_auth_headers(db_session)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
 
     response = await client.get("/api/v1/reminders", headers=headers)
     assert response.status_code == 200
@@ -53,7 +54,7 @@ async def test_list_reminders(client: AsyncClient, db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_list_reminders_filters(client: AsyncClient, db_session: AsyncSession):
+async def test_list_reminders_filters(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     learner, package, lesson, rule, _ = await _bootstrap_reminder(db_session)
     await factories.create_reminder_instance(
         db_session,
@@ -66,7 +67,7 @@ async def test_list_reminders_filters(client: AsyncClient, db_session: AsyncSess
     )
     await db_session.commit()
 
-    headers, _ = await make_auth_headers(db_session)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
     response = await client.get(
         "/api/v1/reminders",
         params={"status": "delivered"},
@@ -79,9 +80,9 @@ async def test_list_reminders_filters(client: AsyncClient, db_session: AsyncSess
 
 
 @pytest.mark.asyncio
-async def test_list_reminders_for_package(client: AsyncClient, db_session: AsyncSession):
+async def test_list_reminders_for_package(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     _, package, _, _, _ = await _bootstrap_reminder(db_session)
-    headers, _ = await make_auth_headers(db_session)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
 
     response = await client.get(f"/api/v1/reminders/packages/{package.id}", headers=headers)
     assert response.status_code == 200
@@ -89,9 +90,9 @@ async def test_list_reminders_for_package(client: AsyncClient, db_session: Async
 
 
 @pytest.mark.asyncio
-async def test_update_reminder(client: AsyncClient, db_session: AsyncSession):
+async def test_update_reminder(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     _, _, _, _, instance = await _bootstrap_reminder(db_session)
-    headers, _ = await make_auth_headers(db_session)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
 
     payload = {"status": "delivered", "active": False, "comment": "Sent manually"}
     response = await client.patch(f"/api/v1/reminders/{instance.id}", json=payload, headers=headers)
@@ -101,33 +102,33 @@ async def test_update_reminder(client: AsyncClient, db_session: AsyncSession):
     assert data["active"] is False
     assert data["comment"] == "Sent manually"
 
-    refreshed = await crud.get_reminder_instance(db_session, instance.id)
+    refreshed = await crud.get_reminder_instance(db_session, current_tenant, instance.id)
     assert refreshed is not None
     assert refreshed.status == "delivered"
 
 
 @pytest.mark.asyncio
-async def test_update_reminder_not_found(client: AsyncClient, db_session: AsyncSession):
-    headers, _ = await make_auth_headers(db_session)
+async def test_update_reminder_not_found(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
+    headers, _ = await get_auth_headers(db_session, current_tenant)
     response = await client.patch("/api/v1/reminders/999", json={"status": "delivered"}, headers=headers)
     assert response.status_code == 404
 
 
 @pytest.mark.asyncio
-async def test_update_reminder_invalid_payload(client: AsyncClient, db_session: AsyncSession):
+async def test_update_reminder_invalid_payload(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     _, _, _, _, instance = await _bootstrap_reminder(db_session)
-    headers, _ = await make_auth_headers(db_session)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
     response = await client.patch(
         f"/api/v1/reminders/{instance.id}",
         json={"status": ""},
         headers=headers,
     )
-    assert response.status_code == 200  # empty status keeps old
+    assert response.status_code == 200
 
 
 @pytest.mark.asyncio
-async def test_list_reminders_internal_error(monkeypatch, client: AsyncClient, db_session: AsyncSession):
-    headers, _ = await make_auth_headers(db_session)
+async def test_list_reminders_internal_error(monkeypatch, client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
+    headers, _ = await get_auth_headers(db_session, current_tenant)
 
     async def boom(*args, **kwargs):
         raise RuntimeError("redis down")
@@ -138,8 +139,8 @@ async def test_list_reminders_internal_error(monkeypatch, client: AsyncClient, d
 
 
 @pytest.mark.asyncio
-async def test_list_reminders_for_package_internal_error(monkeypatch, client: AsyncClient, db_session: AsyncSession):
-    headers, _ = await make_auth_headers(db_session)
+async def test_list_reminders_for_package_internal_error(monkeypatch, client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
+    headers, _ = await get_auth_headers(db_session, current_tenant)
 
     async def boom(*args, **kwargs):
         raise RuntimeError("db down")

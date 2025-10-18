@@ -8,6 +8,7 @@ from database import crud
 from database.models import LessonPackageTemplate
 from services.dto import TemplateDTO
 from services.exceptions import NotFoundError
+from api.dependencies import CurrentTenant
 
 
 def _build_template_dto(template: LessonPackageTemplate) -> TemplateDTO:
@@ -22,20 +23,21 @@ def _build_template_dto(template: LessonPackageTemplate) -> TemplateDTO:
     )
 
 
-async def get_template(session: AsyncSession, template_id: int) -> TemplateDTO:
-    template = await crud.get_lesson_package_template(session, template_id)
+async def get_template(session: AsyncSession, current_tenant: CurrentTenant, template_id: int) -> TemplateDTO:
+    template = await crud.get_lesson_package_template(session, current_tenant, template_id)
     if not template:
         raise NotFoundError(f"Template {template_id} not found")
     return _build_template_dto(template)
 
 
-async def list_templates(session: AsyncSession) -> list[TemplateDTO]:
-    templates = await crud.fetch_lesson_package_templates(session)
+async def list_templates(session: AsyncSession, current_tenant: CurrentTenant) -> list[TemplateDTO]:
+    templates = await crud.fetch_lesson_package_templates(session, current_tenant)
     return [_build_template_dto(tpl) for tpl in templates]
 
 
 async def create_template(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     *,
     name: str,
     description: Optional[str] = None,
@@ -45,6 +47,7 @@ async def create_template(
 ) -> TemplateDTO:
     template = await crud.create_lesson_package_template(
         session,
+        current_tenant,
         name=name,
         description=description,
         lesson_count=lesson_count,
@@ -58,6 +61,7 @@ async def create_template(
 
 async def update_template(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     template_id: int,
     *,
     name: Optional[str] = None,
@@ -66,7 +70,7 @@ async def update_template(
     duration_days: Optional[int] = None,
     default_config: Optional[dict] = None,
 ) -> TemplateDTO:
-    template = await crud.get_lesson_package_template(session, template_id)
+    template = await crud.get_lesson_package_template(session, current_tenant, template_id)
     if not template:
         raise NotFoundError(f"Template {template_id} not found")
     await crud.update_lesson_package_template(
@@ -83,20 +87,21 @@ async def update_template(
     return _build_template_dto(template)
 
 
-async def delete_template(session: AsyncSession, template_id: int) -> None:
-    template = await crud.get_lesson_package_template(session, template_id)
+async def delete_template(session: AsyncSession, current_tenant: CurrentTenant, template_id: int) -> None:
+    template = await crud.get_lesson_package_template(session, current_tenant, template_id)
     if not template:
         raise NotFoundError(f"Template {template_id} not found")
     await crud.delete_lesson_package_template(session, template)
 
 
-async def duplicate_template(session: AsyncSession, template_id: int, *, name: Optional[str] = None) -> TemplateDTO:
-    template = await crud.get_lesson_package_template(session, template_id)
+async def duplicate_template(session: AsyncSession, current_tenant: CurrentTenant, template_id: int, *, name: Optional[str] = None) -> TemplateDTO:
+    template = await crud.get_lesson_package_template(session, current_tenant, template_id)
     if not template:
         raise NotFoundError(f"Template {template_id} not found")
     new_name = name or f"{template.name} (копия)"
     clone = await crud.create_lesson_package_template(
         session,
+        current_tenant,
         name=new_name,
         description=template.description,
         lesson_count=template.lesson_count,

@@ -5,7 +5,7 @@ from datetime import datetime, time, date
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, admin_or_teacher_required, admin_required, get_current_user
+from api.dependencies import get_session, admin_or_teacher_required, admin_required, get_current_tenant, CurrentTenant
 from api.schemas.packages import (
     PackageCreateRequest,
     PackageListResponse,
@@ -56,22 +56,22 @@ def _parse_start_date(value: datetime | str | None) -> datetime | None:
                 status_code=status.HTTP_400_BAD_REQUEST,
                 detail="Invalid start_date format. Use YYYY-MM-DD.",
             ) from exc
-    # If it's already a datetime, return as-is
     return value
 
 
 @router.get("", response_model=PackageListResponse)
-async def list_packages(  # pragma: no cover - thin wrapper
+async def list_packages(
     limit: int = Query(10, ge=1, le=1000),
     offset: int = Query(0, ge=0),
     learner_id: int | None = None,
     status_filter: str | None = None,
     search: str | None = None,
     session: AsyncSession = Depends(get_session),
-    user=Depends(get_current_user),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
 ) -> PackageListResponse:
     packages, total = await package_service.list_packages(
         session,
+        current_tenant,
         limit=limit,
         offset=offset,
         learner_id=learner_id,
@@ -88,10 +88,10 @@ async def list_packages(  # pragma: no cover - thin wrapper
 async def get_package_endpoint(
     package_id: int,
     session: AsyncSession = Depends(get_session),
-    user=Depends(get_current_user),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
 ) -> PackageResponse:
     try:
-        package = await package_service.get_package(session, package_id)
+        package = await package_service.get_package(session, current_tenant, package_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_response(package)
@@ -101,16 +101,18 @@ async def get_package_endpoint(
 async def create_package_endpoint(
     payload: PackageCreateRequest,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> PackageResponse:
     try:
         start_local = _parse_start_date(payload.start_date)
         if payload.template_id is not None:
             if payload.start_date is None:
                 raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_date required for template")
-            await template_service.get_template(session, payload.template_id)
+            await template_service.get_template(session, current_tenant, payload.template_id)
             package = await package_service.create_package_from_template(
                 session,
+                current_tenant,
                 learner_id=payload.learner_id,
                 template_id=payload.template_id,
                 title=payload.title,
@@ -121,6 +123,7 @@ async def create_package_endpoint(
         else:
             package = await package_service.create_package(
                 session,
+                current_tenant,
                 learner_id=payload.learner_id,
                 title=payload.title,
                 notes=payload.notes,
@@ -140,11 +143,13 @@ async def update_package_endpoint(
     package_id: int,
     payload: PackageUpdateRequest,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> PackageResponse:
     try:
         package = await package_service.update_package(
             session,
+            current_tenant,
             package_id,
             title=payload.title,
             status=payload.status,
@@ -164,10 +169,11 @@ async def update_package_endpoint(
 async def delete_package_endpoint(
     package_id: int,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_required),
 ) -> Response:
     try:
-        await package_service.delete_package(session, package_id)
+        await package_service.delete_package(session, current_tenant, package_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return Response(status_code=status.HTTP_204_NO_CONTENT)
@@ -176,12 +182,13 @@ async def delete_package_endpoint(
 async def regenerate_package_endpoint(
     package_id: int,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> MessageResponse:
     try:
-        await package_service.regenerate_reminders_for_package(session, package_id)
+        await package_service.regenerate_reminders_for_package(session, current_tenant, package_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    package = await package_service.get_package(session, package_id)
+    package = await package_service.get_package(session, current_tenant, package_id)
     return MessageResponse(detail=f"Reminders regenerated for package '{package.title}'")

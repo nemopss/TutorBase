@@ -18,7 +18,7 @@ const TIMEZONE_OPTIONS = [
 ];
 
 const Settings: React.FC = () => {
-  const { user } = useAuth();
+  const { user, logout } = useAuth();
   const [loading, setLoading] = useState(false);
   const [form] = Form.useForm();
   const { mode, setMode } = useThemeMode();
@@ -41,13 +41,13 @@ const Settings: React.FC = () => {
 
   return (
     <div>
-      <PageHeader 
+      <PageHeader
         title="Settings"
         subtitle="Manage your profile and preferences"
       />
-      
+
       {/* Profile Section */}
-      <Card 
+      <Card
         title={
           <Space>
             <UserOutlined />
@@ -76,7 +76,7 @@ const Settings: React.FC = () => {
       </Card>
 
       {/* Preferences Section */}
-      <Card 
+      <Card
         title={
           <Space>
             <GlobalOutlined />
@@ -154,13 +154,14 @@ const Settings: React.FC = () => {
       </Card>
 
       {/* Appearance Section */}
-      <Card 
+      <Card
         title={
           <Space>
             <BgColorsOutlined />
             <span>Appearance</span>
           </Space>
         }
+        style={{ marginBottom: 24 }}
       >
         <Form layout="vertical">
           <Form.Item label="Theme" help="Choose how the interface should look in the mini-app">
@@ -178,6 +179,24 @@ const Settings: React.FC = () => {
             Switch to «Auto» to sync with Telegram again. The change applies immediately.
           </Text>
         </Form>
+      </Card>
+
+      {/* Account Section */}
+      <Card title="Account">
+        <Space direction="vertical" size="large" style={{ width: '100%' }}>
+          <div>
+            <Title level={5} style={{ marginBottom: 8 }}>Sign Out</Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+              Sign out of your account. You'll need to register again to access the app.
+            </Text>
+            <Button
+              danger
+              onClick={logout}
+            >
+              Sign Out
+            </Button>
+          </div>
+        </Space>
       </Card>
     </div>
   );

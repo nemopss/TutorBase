@@ -3,7 +3,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status as http_status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, admin_or_teacher_required
+from api.dependencies import get_session, admin_or_teacher_required, get_current_tenant, CurrentTenant
 from api.schemas import (
     ReminderListResponse,
     ReminderResponse,
@@ -48,11 +48,13 @@ async def list_reminders(
     package_id: int | None = Query(None),
     search: str | None = Query(None),
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> ReminderListResponse:
     try:
         instances, total = await crud.fetch_reminder_instances_paginated(
             session,
+            current_tenant,
             limit=limit,
             offset=offset,
             status=status_filter,
@@ -69,10 +71,11 @@ async def list_reminders(
 async def list_reminders_for_package(
     package_id: int,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> ReminderListResponse:
     try:
-        instances = await crud.fetch_reminder_instances_for_package(session, package_id)
+        instances = await crud.fetch_reminder_instances_for_package(session, current_tenant, package_id)
     except Exception as exc:
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
     return ReminderListResponse(total=len(instances), items=[_to_response(instance) for instance in instances])
@@ -83,9 +86,10 @@ async def update_reminder(
     reminder_id: int,
     payload: ReminderUpdateRequest,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> ReminderResponse:
-    instance = await crud.get_reminder_instance(session, reminder_id)
+    instance = await crud.get_reminder_instance(session, current_tenant, reminder_id)
     if not instance:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Reminder not found")
 
@@ -100,7 +104,7 @@ async def update_reminder(
     except Exception as exc:
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
 
-    refreshed = await crud.get_reminder_instance(session, reminder_id)
+    refreshed = await crud.get_reminder_instance(session, current_tenant, reminder_id)
     if not refreshed:
         raise HTTPException(status_code=http_status.HTTP_404_NOT_FOUND, detail="Reminder not found")
     return _to_response(refreshed)

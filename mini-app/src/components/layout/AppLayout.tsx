@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Layout, Menu, Drawer, Button, type MenuProps } from 'antd';
+import { Layout, Menu, Drawer, Button, Space, type MenuProps } from 'antd';
 import { Link, useLocation } from 'react-router-dom';
 import {
   HomeOutlined,
@@ -11,10 +11,13 @@ import {
   CalendarOutlined,
   MenuOutlined,
   TeamOutlined,
-  CrownOutlined
+  CrownOutlined,
+  MailOutlined
 } from '@ant-design/icons';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { useAuth } from '../../auth/AuthProvider';
+import TenantSwitcher from '../common/TenantSwitcher';
+import TenantIndicator from '../common/TenantIndicator';
 
 const { Sider, Content } = Layout;
 
@@ -61,6 +64,12 @@ const baseMenuItems: NonNullable<MenuProps['items']> = [
   },
 ];
 
+const inviteCodesMenuItem: NonNullable<MenuProps['items']>[number] = {
+  key: '/invite-codes',
+  icon: <MailOutlined />,
+  label: <Link to="/invite-codes">Invite Codes</Link>,
+};
+
 const adminMenuItem: NonNullable<MenuProps['items']>[number] = {
   key: '/admin',
   icon: <CrownOutlined />,
@@ -79,14 +88,29 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
+  const hasStaffAccess = user?.role === 'admin' || user?.role === 'teacher';
 
   const menuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
     const items = [...baseMenuItems];
+
+    // Add Invite Codes for teachers and admins
+    if (hasStaffAccess) {
+      // Insert before Settings
+      const settingsIndex = items.findIndex(item => item?.key === '/settings');
+      if (settingsIndex !== -1) {
+        items.splice(settingsIndex, 0, inviteCodesMenuItem);
+      } else {
+        items.push(inviteCodesMenuItem);
+      }
+    }
+
+    // Add Admin menu for admins only
     if (isAdmin) {
       items.push(adminMenuItem);
     }
+
     return items;
-  }, [isAdmin]);
+  }, [isAdmin, hasStaffAccess]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -107,6 +131,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       }}>
         📚 TutorBase
       </div>
+
+      {/* Tenant Switcher for Super Admins */}
+      {isAdmin && (
+        <div style={{
+          padding: '16px',
+          borderBottom: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+        }}>
+          <TenantSwitcher />
+        </div>
+      )}
 
       <Menu
         selectedKeys={[location.pathname]}
@@ -141,11 +175,25 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             left: 0,
             top: 0,
             bottom: 0,
+            display: 'flex',
+            flexDirection: 'column',
           }}
           trigger={null}
           theme={isDark ? 'dark' : 'light'}
         >
-          {menuContent}
+          <div style={{ flex: 1, overflow: 'auto' }}>
+            {menuContent}
+          </div>
+          {/* Tenant Indicator at bottom of sidebar */}
+          {isAdmin && (
+            <div style={{
+              padding: '16px',
+              borderTop: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+              background: isDark ? '#1f1f1f' : '#fafafa',
+            }}>
+              <TenantIndicator />
+            </div>
+          )}
         </Sider>
       )}
 
@@ -176,15 +224,19 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             borderBottom: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
             display: 'flex',
             alignItems: 'center',
+            justifyContent: 'space-between',
             gap: '12px',
           }}>
-            <Button
-              type="text"
-              icon={<MenuOutlined />}
-              onClick={() => setDrawerVisible(true)}
-              style={{ fontSize: '18px' }}
-            />
-            <span style={{ fontSize: '18px', fontWeight: 600 }}>TutorBase</span>
+            <Space>
+              <Button
+                type="text"
+                icon={<MenuOutlined />}
+                onClick={() => setDrawerVisible(true)}
+                style={{ fontSize: '18px' }}
+              />
+              <span style={{ fontSize: '18px', fontWeight: 600 }}>TutorBase</span>
+            </Space>
+            <TenantIndicator />
           </div>
         )}
 

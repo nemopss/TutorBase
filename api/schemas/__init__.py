@@ -1,4 +1,12 @@
-from .auth import WebAppLoginRequest, RefreshRequest, TokenPairResponse, UserPayload
+from .auth import WebAppLoginRequest, RefreshRequest, SwitchTenantRequest, TokenPairResponse, UserPayload
+from .registration import (
+    TutorRegistrationRequest,
+    StudentRegistrationRequest,
+    InviteTokenRequest,
+    InviteTokenResponse,
+    InviteTokenListResponse,
+    RegistrationResponse,
+)
 from .packages import (
     PackageCreateRequest,
     PackageListResponse,
@@ -30,16 +38,29 @@ from .metrics import (
 )
 from .common import MessageResponse
 from .users import (
-    UserItem,
+    UserResponse,
     UserListResponse,
-    UpdateUserRoleRequest,
+    UserRoleUpdateRequest,
+)
+from .tenants import (
+    TenantCreate,
+    TenantUpdate,
+    TenantResponse,
+    TenantListResponse,
 )
 
 __all__ = [
     "WebAppLoginRequest",
     "RefreshRequest",
+    "SwitchTenantRequest",
     "TokenPairResponse",
     "UserPayload",
+    "TutorRegistrationRequest",
+    "StudentRegistrationRequest",
+    "InviteTokenRequest",
+    "InviteTokenResponse",
+    "InviteTokenListResponse",
+    "RegistrationResponse",
     "PackageCreateRequest",
     "PackageListResponse",
     "PackageResponse",
@@ -60,7 +81,11 @@ __all__ = [
     "DailyMetricsResponse",
     "DailyPoint",
     "MessageResponse",
-    "UserItem",
+    "UserResponse",
     "UserListResponse",
-    "UpdateUserRoleRequest",
+    "UserRoleUpdateRequest",
+    "TenantCreate",
+    "TenantUpdate",
+    "TenantResponse",
+    "TenantListResponse",
 ]

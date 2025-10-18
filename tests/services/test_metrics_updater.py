@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 import pytest
 
 from api import metrics_updater
+from api.dependencies import CurrentTenant
 from database import crud
 from tests import factories
 
@@ -36,10 +37,11 @@ class DummySessionCtx:
 
 
 @pytest.mark.asyncio
-async def test_update_gauge_metrics(monkeypatch, db_session):
+async def test_update_gauge_metrics(monkeypatch, db_session, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     package = await crud.create_lesson_package(
         db_session,
+        current_tenant,
         learner=learner,
         title="Active",
         status="active",
@@ -48,6 +50,7 @@ async def test_update_gauge_metrics(monkeypatch, db_session):
     await db_session.flush()
     await crud.create_lesson(
         db_session,
+        current_tenant,
         package,
         scheduled_at=datetime.now(timezone.utc),
         status="scheduled",

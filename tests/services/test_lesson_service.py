@@ -3,13 +3,14 @@ from datetime import datetime, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.dependencies import CurrentTenant
 from services import lesson_service
 from services.exceptions import NotFoundError
 from tests import factories
 
 
 @pytest.mark.asyncio
-async def test_create_and_get_lesson(db_session: AsyncSession):
+async def test_create_and_get_lesson(db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session, display_name="Service Student")
     package = await factories.create_package(db_session, learner=learner)
     await db_session.flush()
@@ -17,6 +18,7 @@ async def test_create_and_get_lesson(db_session: AsyncSession):
 
     dto = await lesson_service.create_lesson(
         db_session,
+        current_tenant,
         package_id=package.id,
         scheduled_at=scheduled,
         duration_minutes=45,
@@ -29,24 +31,25 @@ async def test_create_and_get_lesson(db_session: AsyncSession):
     assert dto.duration_minutes == 45
     assert dto.sequence_index == 1
 
-    fetched = await lesson_service.get_lesson(db_session, dto.id)
+    fetched = await lesson_service.get_lesson(db_session, current_tenant, dto.id)
     assert fetched.id == dto.id
     assert fetched.package_title == package.title
 
 
 @pytest.mark.asyncio
-async def test_create_lesson_missing_package_raises(db_session: AsyncSession):
+async def test_create_lesson_missing_package_raises(db_session: AsyncSession, current_tenant: CurrentTenant):
     scheduled = datetime(2024, 5, 1, 9, 0, tzinfo=timezone.utc)
     with pytest.raises(NotFoundError):
         await lesson_service.create_lesson(
             db_session,
+            current_tenant,
             package_id=999,
             scheduled_at=scheduled,
         )
 
 
 @pytest.mark.asyncio
-async def test_update_lesson(db_session: AsyncSession):
+async def test_update_lesson(db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)
     lesson = await factories.create_lesson(
@@ -58,6 +61,7 @@ async def test_update_lesson(db_session: AsyncSession):
 
     dto = await lesson_service.update_lesson(
         db_session,
+        current_tenant,
         lesson_id=lesson.id,
         status="completed",
         duration_minutes=80,
@@ -70,38 +74,38 @@ async def test_update_lesson(db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_update_lesson_missing_raises(db_session: AsyncSession):
+async def test_update_lesson_missing_raises(db_session: AsyncSession, current_tenant: CurrentTenant):
     with pytest.raises(NotFoundError):
-        await lesson_service.update_lesson(db_session, lesson_id=999, status="completed")
+        await lesson_service.update_lesson(db_session, current_tenant, lesson_id=999, status="completed")
 
 
 @pytest.mark.asyncio
-async def test_delete_lesson(db_session: AsyncSession):
+async def test_delete_lesson(db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)
     lesson = await factories.create_lesson(db_session, package=package)
     await db_session.flush()
 
-    await lesson_service.delete_lesson(db_session, lesson.id)
+    await lesson_service.delete_lesson(db_session, current_tenant, lesson.id)
     with pytest.raises(NotFoundError):
-        await lesson_service.get_lesson(db_session, lesson.id)
+        await lesson_service.get_lesson(db_session, current_tenant, lesson.id)
 
 
 @pytest.mark.asyncio
-async def test_list_lessons(db_session: AsyncSession):
+async def test_list_lessons(db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)
     await factories.create_lesson(db_session, package=package, sequence_index=1)
     await factories.create_lesson(db_session, package=package, sequence_index=2)
     await db_session.flush()
 
-    lessons = await lesson_service.list_lessons(db_session, package.id)
+    lessons = await lesson_service.list_lessons(db_session, current_tenant, package.id)
     assert len(lessons) == 2
     assert {lesson.sequence_index for lesson in lessons} == {1, 2}
 
 
 @pytest.mark.asyncio
-async def test_list_all_lessons(db_session: AsyncSession):
+async def test_list_all_lessons(db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session, display_name="Global Student")
     package = await factories.create_package(db_session, learner=learner, title="Global Package")
     await factories.create_lesson(db_session, package=package, sequence_index=1)
@@ -109,6 +113,7 @@ async def test_list_all_lessons(db_session: AsyncSession):
 
     lessons, total = await lesson_service.list_all_lessons(
         db_session,
+        current_tenant,
         search="Global",
         limit=10,
         offset=0,

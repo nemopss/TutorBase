@@ -6,9 +6,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.dependencies import CurrentTenant
 from database import crud
 from tests import factories
-from tests.api.utils import make_auth_headers
+from tests.api.utils import get_auth_headers
 
 
 async def _prepare_data(session: AsyncSession):
@@ -41,9 +42,9 @@ async def _prepare_data(session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_metrics_summary(client: AsyncClient, db_session: AsyncSession):
+async def test_metrics_summary(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     await _prepare_data(db_session)
-    headers, _ = await make_auth_headers(db_session)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
 
     response = await client.get("/api/v1/metrics/summary", headers=headers)
     assert response.status_code == 200
@@ -54,9 +55,9 @@ async def test_metrics_summary(client: AsyncClient, db_session: AsyncSession):
 
 
 @pytest.mark.asyncio
-async def test_lessons_daily_metrics(client: AsyncClient, db_session: AsyncSession):
+async def test_lessons_daily_metrics(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     lesson1, lesson2 = await _prepare_data(db_session)
-    headers, _ = await make_auth_headers(db_session)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
 
     response = await client.get("/api/v1/metrics/lessons/daily", headers=headers)
     assert response.status_code == 200
@@ -66,9 +67,9 @@ async def test_lessons_daily_metrics(client: AsyncClient, db_session: AsyncSessi
 
 
 @pytest.mark.asyncio
-async def test_reminders_daily_metrics(client: AsyncClient, db_session: AsyncSession):
+async def test_reminders_daily_metrics(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     await _prepare_data(db_session)
-    headers, _ = await make_auth_headers(db_session)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
 
     response = await client.get("/api/v1/metrics/reminders/daily", headers=headers)
     assert response.status_code == 200

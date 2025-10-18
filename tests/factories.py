@@ -8,12 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import (
     BotUser,
+    InviteToken,
     Learner,
     Lesson,
     LessonPackage,
     LessonPackageTemplate,
     ReminderRule,
     ReminderInstance,
+    Tenant,
+    User,
 )
 
 _sequence = count(1)
@@ -60,6 +63,7 @@ async def create_learner(
     notes: Optional[str] = None,
     chat_id: Optional[int] = None,
     notifications_enabled: bool = True,
+    tenant_id: int = 1,
 ) -> Learner:
     bot_user = await create_bot_user(session, chat_id=chat_id)
     now = _utc_now()
@@ -70,6 +74,7 @@ async def create_learner(
         notes=notes,
         notifications_enabled=notifications_enabled,
         created_at=now,
+        tenant_id=tenant_id,
     )
     session.add(learner)
     return learner
@@ -82,6 +87,7 @@ async def create_template(
     lesson_count: int = 4,
     duration_days: Optional[int] = None,
     default_timezone: str = "Europe/Moscow",
+    tenant_id: int = 1,
 ) -> LessonPackageTemplate:
     suffix = _next_suffix()
     now = _utc_now()
@@ -99,6 +105,7 @@ async def create_template(
         },
         created_at=now,
         updated_at=now,
+        tenant_id=tenant_id,
     )
     session.add(template)
     return template
@@ -114,6 +121,7 @@ async def create_package(
     start_offset_days: int = 0,
     total_lessons: Optional[int] = None,
     notes: Optional[str] = None,
+    tenant_id: int = 1,
 ) -> LessonPackage:
     suffix = _next_suffix()
     now = _utc_now()
@@ -129,6 +137,7 @@ async def create_package(
         notes=notes,
         created_at=now,
         updated_at=now,
+        tenant_id=tenant_id,
     )
     session.add(package)
     return package
@@ -142,6 +151,7 @@ async def create_lesson(
     status: str = "scheduled",
     duration_minutes: Optional[int] = None,
     sequence_index: Optional[int] = None,
+    tenant_id: int = 1,
 ) -> Lesson:
     suffix = _next_suffix()
     now = _utc_now()
@@ -153,6 +163,7 @@ async def create_lesson(
         sequence_index=sequence_index or suffix,
         created_at=now,
         updated_at=now,
+        tenant_id=tenant_id,
     )
     session.add(lesson)
     return lesson
@@ -167,6 +178,7 @@ async def create_reminder_rule(
     channel: str = "telegram",
     active: bool = True,
     config: Optional[dict] = None,
+    tenant_id: int = 1,
 ) -> ReminderRule:
     rule = ReminderRule(
         package=package,
@@ -177,6 +189,7 @@ async def create_reminder_rule(
         active=active,
         created_at=_utc_now(),
         updated_at=_utc_now(),
+        tenant_id=tenant_id,
     )
     session.add(rule)
     return rule
@@ -194,6 +207,7 @@ async def create_reminder_instance(
     active: bool = True,
     payload: Optional[dict] = None,
     chat_identifier: Optional[str] = None,
+    tenant_id: int = 1,
 ) -> ReminderInstance:
     instance = ReminderInstance(
         rule=rule,
@@ -207,9 +221,80 @@ async def create_reminder_instance(
         chat_identifier=chat_identifier,
         created_at=_utc_now(),
         updated_at=_utc_now(),
+        tenant_id=tenant_id,
     )
     session.add(instance)
     return instance
+
+
+async def create_tenant(
+    session: AsyncSession,
+    *,
+    name: Optional[str] = None,
+    slug: Optional[str] = None,
+    contact_email: Optional[str] = None,
+    is_active: bool = True,
+) -> Tenant:
+    suffix = _next_suffix()
+    now = _utc_now()
+    tenant = Tenant(
+        name=name or f"Tenant {suffix}",
+        slug=slug or f"tenant-{suffix}",
+        contact_email=contact_email or f"tenant{suffix}@example.com",
+        is_active=is_active,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(tenant)
+    return tenant
+
+
+async def create_user(
+    session: AsyncSession,
+    *,
+    telegram_id: Optional[int] = None,
+    username: Optional[str] = None,
+    display_name: Optional[str] = None,
+    role: str = "viewer",
+    tenant_id: Optional[int] = None,
+) -> User:
+    suffix = _next_suffix()
+    now = _utc_now()
+    user = User(
+        telegram_id=telegram_id or (100_000 + suffix),
+        username=username or f"user{suffix}",
+        display_name=display_name or f"User {suffix}",
+        role=role,
+        tenant_id=tenant_id,
+        last_login_at=now,
+    )
+    session.add(user)
+    return user
+
+
+async def create_invite_token(
+    session: AsyncSession,
+    *,
+    tenant_id: int,
+    created_by_user_id: int,
+    token: Optional[str] = None,
+    expires_at: Optional[datetime] = None,
+    used_at: Optional[datetime] = None,
+) -> InviteToken:
+    import secrets
+    now = _utc_now()
+    
+    invite_token = InviteToken(
+        tenant_id=tenant_id,
+        token=token or secrets.token_urlsafe(32),
+        expires_at=expires_at or (now + timedelta(days=30)),
+        used_at=used_at,
+        created_by_user_id=created_by_user_id,
+        created_at=now,
+    )
+    session.add(invite_token)
+    await session.flush()  # Ensure we get the ID
+    return invite_token
 
 
 __all__ = [
@@ -220,4 +305,7 @@ __all__ = [
     "create_lesson",
     "create_reminder_rule",
     "create_reminder_instance",
+    "create_tenant",
+    "create_user",
+    "create_invite_token",
 ]

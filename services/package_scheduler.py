@@ -1,5 +1,3 @@
-"""Utilities for generating reminder rules and instances for lesson packages."""
-
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -9,6 +7,7 @@ from typing import Iterable, Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from zoneinfo import ZoneInfo
 
+from api.dependencies import CurrentTenant
 from database import crud
 from database.models import LessonPackage, Lesson, ReminderRule
 from services.reminder_definitions import (
@@ -39,15 +38,14 @@ class _ReminderSchedule:
     active: bool
 
 
-async def regenerate_package_reminders(session: AsyncSession, package: LessonPackage) -> None:
+async def regenerate_package_reminders(session: AsyncSession, current_tenant: CurrentTenant, package: LessonPackage) -> None:
     """Rebuild reminder rules and instances for the package based on its lessons."""
     package_id = package.id
-    package = await crud.get_lesson_package(session, package_id)
+    package = await crud.get_lesson_package(session, current_tenant, package_id)
     if package is None:
         raise ValueError(f"Package #{package_id} not found")
 
     if not package.learner:
-        # Nothing to schedule without learner metadata
         return
 
     await _clear_existing(session, package)
@@ -61,19 +59,18 @@ async def regenerate_package_reminders(session: AsyncSession, package: LessonPac
     chat_identifier = _preferred_chat_identifier(package)
 
     for lesson in lessons:
-        await _create_lesson_confirm(session, package, lesson, tz, chat_identifier, now_utc)
-        await _create_lesson_day_before_confirm(session, package, lesson, tz, chat_identifier, now_utc)
-        await _create_homework_reminder(session, package, lesson, tz, chat_identifier, now_utc)
+        await _create_lesson_confirm(session, current_tenant, package, lesson, tz, chat_identifier, now_utc)
+        await _create_lesson_day_before_confirm(session, current_tenant, package, lesson, tz, chat_identifier, now_utc)
+        await _create_homework_reminder(session, current_tenant, package, lesson, tz, chat_identifier, now_utc)
 
     if lessons:
         last_lesson = lessons[-1]
-        await _create_payment_reminders(session, package, last_lesson, tz, chat_identifier, now_utc)
+        await _create_payment_reminders(session, current_tenant, package, last_lesson, tz, chat_identifier, now_utc)
 
-    await _create_package_renewal(session, package, lessons, tz, chat_identifier, now_utc)
+    await _create_package_renewal(session, current_tenant, package, lessons, tz, chat_identifier, now_utc)
 
 
 async def _clear_existing(session: AsyncSession, package: LessonPackage) -> None:
-    # Delete rules (instances cascade)
     for rule in list(package.reminder_rules or []):
         await session.delete(rule)
     for instance in list(package.reminder_instances or []):
@@ -100,6 +97,7 @@ def _preferred_chat_identifier(package: LessonPackage) -> Optional[str]:
 
 async def _create_lesson_confirm(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     package: LessonPackage,
     lesson: Lesson,
     tz: ZoneInfo,
@@ -108,6 +106,7 @@ async def _create_lesson_confirm(
 ) -> None:
     rule = await crud.create_reminder_rule(
         session,
+        current_tenant,
         package=package,
         lesson=lesson,
         reminder_type=REMINDER_TYPE_LESSON_CONFIRM,
@@ -125,6 +124,7 @@ async def _create_lesson_confirm(
 
     await crud.create_reminder_instance(
         session,
+        current_tenant,
         rule=rule,
         package=package,
         learner=package.learner,
@@ -139,6 +139,7 @@ async def _create_lesson_confirm(
 
 async def _create_lesson_day_before_confirm(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     package: LessonPackage,
     lesson: Lesson,
     tz: ZoneInfo,
@@ -147,6 +148,7 @@ async def _create_lesson_day_before_confirm(
 ) -> None:
     rule = await crud.create_reminder_rule(
         session,
+        current_tenant,
         package=package,
         lesson=lesson,
         reminder_type=REMINDER_TYPE_LESSON_DAY_BEFORE,
@@ -167,6 +169,7 @@ async def _create_lesson_day_before_confirm(
 
     await crud.create_reminder_instance(
         session,
+        current_tenant,
         rule=rule,
         package=package,
         learner=package.learner,
@@ -181,6 +184,7 @@ async def _create_lesson_day_before_confirm(
 
 async def _create_homework_reminder(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     package: LessonPackage,
     lesson: Lesson,
     tz: ZoneInfo,
@@ -189,6 +193,7 @@ async def _create_homework_reminder(
 ) -> None:
     rule = await crud.create_reminder_rule(
         session,
+        current_tenant,
         package=package,
         lesson=lesson,
         reminder_type=REMINDER_TYPE_HOMEWORK,
@@ -209,6 +214,7 @@ async def _create_homework_reminder(
 
     await crud.create_reminder_instance(
         session,
+        current_tenant,
         rule=rule,
         package=package,
         learner=package.learner,
@@ -223,6 +229,7 @@ async def _create_homework_reminder(
 
 async def _create_payment_reminders(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     package: LessonPackage,
     last_lesson: Lesson,
     tz: ZoneInfo,
@@ -235,6 +242,7 @@ async def _create_payment_reminders(
     ):
         rule = await crud.create_reminder_rule(
             session,
+            current_tenant,
             package=package,
             lesson=None,
             reminder_type=reminder_type,
@@ -250,6 +258,7 @@ async def _create_payment_reminders(
 
         await crud.create_reminder_instance(
             session,
+            current_tenant,
             rule=rule,
             package=package,
             learner=package.learner,
@@ -264,6 +273,7 @@ async def _create_payment_reminders(
 
 async def _create_package_renewal(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     package: LessonPackage,
     lessons: Iterable[Lesson],
     tz: ZoneInfo,
@@ -280,6 +290,7 @@ async def _create_package_renewal(
 
     rule = await crud.create_reminder_rule(
         session,
+        current_tenant,
         package=package,
         lesson=None,
         reminder_type=REMINDER_TYPE_PACKAGE_RENEWAL,
@@ -295,6 +306,7 @@ async def _create_package_renewal(
 
     await crud.create_reminder_instance(
         session,
+        current_tenant,
         rule=rule,
         package=package,
         learner=package.learner,

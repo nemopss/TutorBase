@@ -3,19 +3,20 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import admin_required, get_session
-from api.schemas.users import UpdateUserRoleRequest, UserItem, UserListResponse
+from api.dependencies import get_session, admin_required, get_current_tenant, CurrentTenant, get_current_user
+from api.schemas import UserListResponse, UserResponse, UserRoleUpdateRequest
 from database import crud
+from database.models import User
 
 router = APIRouter()
 
 
-def _serialize_user(user) -> UserItem:
-    return UserItem(
+def _to_response(user) -> UserResponse:
+    return UserResponse(
         id=user.id,
-        display_name=user.display_name,
-        username=user.username,
         telegram_id=user.telegram_id,
+        username=user.username,
+        display_name=user.display_name,
         role=user.role,
         created_at=user.created_at,
         updated_at=user.updated_at,
@@ -23,25 +24,37 @@ def _serialize_user(user) -> UserItem:
     )
 
 
+@router.get("/me", response_model=UserResponse)
+async def get_current_user_info(
+    current_user: User = Depends(get_current_user),
+) -> UserResponse:
+    """Get current authenticated user information"""
+    return _to_response(current_user)
+
+
 @router.get("", response_model=UserListResponse)
 async def list_users(
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_required),
 ) -> UserListResponse:
-    users = await crud.list_users(session)
-    return UserListResponse(users=[_serialize_user(item) for item in users])
+    users = await crud.list_users(session, current_tenant)
+    return UserListResponse(users=[_to_response(u) for u in users])
 
 
-@router.patch("/{user_id}/role", response_model=UserItem)
+@router.patch("/{user_id}/role", response_model=UserResponse)
 async def update_user_role(
     user_id: int,
-    payload: UpdateUserRoleRequest,
+    payload: UserRoleUpdateRequest,
     session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_required),
-) -> UserItem:
+) -> UserResponse:
     user = await crud.get_user(session, user_id)
-    if user is None:
+    if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
-    user = await crud.update_user_login_metadata(session, user, role=payload.role)
-    return _serialize_user(user)
+    user.role = payload.role
+    session.add(user)
+    await session.commit()
+    return _to_response(user)

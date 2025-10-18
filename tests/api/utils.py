@@ -2,13 +2,15 @@ from __future__ import annotations
 
 import random
 
+from api.dependencies import CurrentTenant
 from api.security import create_access_token
 from database import crud
 from sqlalchemy.ext.asyncio import AsyncSession
 
 
-async def make_auth_headers(
+async def get_auth_headers(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     *,
     role: str = "admin",
     telegram_id: int | None = None,
@@ -20,6 +22,7 @@ async def make_auth_headers(
 
     user = await crud.create_user(
         session,
+        current_tenant,
         telegram_id=telegram_id,
         username=username,
         display_name=display_name,
@@ -32,6 +35,7 @@ async def make_auth_headers(
             "sub": str(user.id),
             "role": user.role,
             "telegram_id": user.telegram_id,
+            "tenant_id": user.tenant_id,
         }
     )
     return {"Authorization": f"Bearer {token}"}, user.id

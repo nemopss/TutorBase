@@ -16,6 +16,10 @@ import Lessons from './pages/Lessons';
 import Learners from './pages/Learners';
 import Admin from './pages/Admin';
 import AccessDenied from './pages/AccessDenied';
+import RoleSelectionScreen from './pages/RoleSelectionScreen';
+import TutorRegistrationForm from './pages/TutorRegistrationForm';
+import StudentRegistrationForm from './pages/StudentRegistrationForm';
+import InviteCodes from './pages/InviteCodes';
 
 function App() {
   const { isLoading, isAuthenticated, user } = useAuth();
@@ -28,7 +32,7 @@ function App() {
     if (!tg) return;
 
     tg.ready();
-    
+
     tg.BackButton?.hide();
 
     // Принудительно разворачиваем приложение только для устройств, где это необходимо
@@ -37,10 +41,10 @@ function App() {
     } else if (!tg.isExpanded) {
       tg.expand();
     }
-    
+
     // Включаем кнопку закрытия для возможности свернуть
     tg.enableClosingConfirmation();
-    
+
     // Устанавливаем цвет заголовка
     if (tg.setHeaderColor) {
       tg.setHeaderColor(resolvedTheme === 'dark' ? '#191919' : '#ffffff');
@@ -112,8 +116,18 @@ function App() {
     return <div>Loading...</div>;
   }
 
+  // If not authenticated, show registration flow
   if (!isAuthenticated) {
-    return <div>Authentication Error! Please reload the app.</div>;
+    return (
+      <ConfigProvider theme={antdTheme}>
+        <Routes>
+          <Route path="/" element={<RoleSelectionScreen />} />
+          <Route path="/register/tutor" element={<TutorRegistrationForm />} />
+          <Route path="/register/student" element={<StudentRegistrationForm />} />
+          <Route path="*" element={<Navigate to="/" replace />} />
+        </Routes>
+      </ConfigProvider>
+    );
   }
 
   if (!hasStaffAccess) {
@@ -132,6 +146,7 @@ function App() {
           <Route path="/templates" element={<Templates />} />
           <Route path="/reminders" element={<Reminders />} />
           <Route path="/analytics" element={<Analytics />} />
+          <Route path="/invite-codes" element={<InviteCodes />} />
           <Route path="/settings" element={<Settings />} />
           {isAdmin && <Route path="/admin" element={<Admin />} />}
           <Route path="*" element={<Navigate to="/" replace />} />

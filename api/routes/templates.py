@@ -1,15 +1,10 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status, Response
+from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, admin_or_teacher_required, admin_required, get_current_user
-from api.schemas import (
-    TemplateCreateRequest,
-    TemplateListResponse,
-    TemplateResponse,
-    TemplateUpdateRequest,
-)
+from api.dependencies import get_session, admin_or_teacher_required, get_current_tenant, CurrentTenant
+from api.schemas import TemplateListResponse, TemplateResponse, TemplateCreateRequest, TemplateUpdateRequest, MessageResponse
 from services import template_service
 from services.dto import TemplateDTO
 from services.exceptions import NotFoundError
@@ -24,28 +19,28 @@ def _to_response(dto: TemplateDTO) -> TemplateResponse:
         description=dto.description,
         lesson_count=dto.lesson_count,
         duration_days=dto.duration_days,
+        default_config=dto.default_config,
         timezone=dto.timezone,
-        default_config=dto.default_config or {},
     )
 
 
 @router.get("", response_model=TemplateListResponse)
 async def list_templates(
     session: AsyncSession = Depends(get_session),
-    user=Depends(get_current_user),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
 ) -> TemplateListResponse:
-    templates = await template_service.list_templates(session)
-    return TemplateListResponse(total=len(templates), items=[_to_response(tpl) for tpl in templates])
+    templates = await template_service.list_templates(session, current_tenant)
+    return TemplateListResponse(items=[_to_response(tpl) for tpl in templates], total=len(templates))
 
 
 @router.get("/{template_id}", response_model=TemplateResponse)
 async def get_template_endpoint(
     template_id: int,
     session: AsyncSession = Depends(get_session),
-    user=Depends(get_current_user),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
 ) -> TemplateResponse:
     try:
-        template = await template_service.get_template(session, template_id)
+        template = await template_service.get_template(session, current_tenant, template_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_response(template)
@@ -55,10 +50,12 @@ async def get_template_endpoint(
 async def create_template_endpoint(
     payload: TemplateCreateRequest,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> TemplateResponse:
     template = await template_service.create_template(
         session,
+        current_tenant,
         name=payload.name,
         description=payload.description,
         lesson_count=payload.lesson_count,
@@ -73,11 +70,13 @@ async def update_template_endpoint(
     template_id: int,
     payload: TemplateUpdateRequest,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> TemplateResponse:
     try:
         template = await template_service.update_template(
             session,
+            current_tenant,
             template_id,
             name=payload.name,
             description=payload.description,
@@ -94,12 +93,13 @@ async def update_template_endpoint(
 async def delete_template_endpoint(
     template_id: int,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ):
     try:
-        await template_service.delete_template(session, template_id)
+        await template_service.delete_template(session, current_tenant, template_id)
     except NotFoundError as exc:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc))
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
@@ -107,10 +107,11 @@ async def delete_template_endpoint(
 async def duplicate_template_endpoint(
     template_id: int,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> TemplateResponse:
     try:
-        template = await template_service.duplicate_template(session, template_id)
+        template = await template_service.duplicate_template(session, current_tenant, template_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     return _to_response(template)
