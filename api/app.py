@@ -10,7 +10,7 @@ from api.routes import auth, packages, lessons, templates, reminders, metrics, l
 from api.metrics_updater import lifespan_with_metrics
 
 APP_TITLE = "App API"
-APP_VERSION = "0.1.1"
+APP_VERSION = "0.1.2"
 API_PREFIX = "/api/v1"
 
 # Rate limiter instance
