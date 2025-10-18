@@ -199,3 +199,66 @@ async def super_admin_user(db_session: AsyncSession) -> User:
     )
     await db_session.commit()
     return user
+
+
+
+# --- User Role Fixtures for Testing --- #
+
+@pytest.fixture
+async def teacher_user(db_session: AsyncSession, tenant_1: Tenant) -> User:
+    """Create a teacher user for testing."""
+    user = await crud.create_user(
+        db_session,
+        CurrentTenant(tenant_id=tenant_1.id, is_super_admin=False, tenant=tenant_1),
+        telegram_id=random.randint(40001, 50000),
+        display_name="Teacher User",
+        role="teacher",
+        tenant_id=tenant_1.id,
+        username=f"teacher_{random.randint(1, 1000)}",
+    )
+    await db_session.commit()
+    return user
+
+
+@pytest.fixture
+async def viewer_user(db_session: AsyncSession, tenant_1: Tenant) -> User:
+    """Create a viewer (student) user for testing."""
+    user = await crud.create_user(
+        db_session,
+        CurrentTenant(tenant_id=tenant_1.id, is_super_admin=False, tenant=tenant_1),
+        telegram_id=random.randint(50001, 60000),
+        display_name="Viewer User",
+        role="viewer",
+        tenant_id=tenant_1.id,
+        username=f"viewer_{random.randint(1, 1000)}",
+    )
+    await db_session.commit()
+    return user
+
+
+@pytest.fixture
+async def teacher_token(teacher_user: User) -> str:
+    """Generate JWT token for teacher user."""
+    from api.security import create_access_token
+    
+    token_payload = {
+        "sub": str(teacher_user.id),
+        "role": teacher_user.role,
+        "telegram_id": teacher_user.telegram_id,
+        "tenant_id": teacher_user.tenant_id,
+    }
+    return create_access_token(token_payload)
+
+
+@pytest.fixture
+async def viewer_token(viewer_user: User) -> str:
+    """Generate JWT token for viewer user."""
+    from api.security import create_access_token
+    
+    token_payload = {
+        "sub": str(viewer_user.id),
+        "role": viewer_user.role,
+        "telegram_id": viewer_user.telegram_id,
+        "tenant_id": viewer_user.tenant_id,
+    }
+    return create_access_token(token_payload)

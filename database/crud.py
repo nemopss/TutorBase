@@ -15,6 +15,7 @@ from database.models import (
     Application,
     Student,
     BotUser,
+    InviteToken,
     Learner,
     LessonPackageTemplate,
     LessonPackage,
@@ -1290,3 +1291,104 @@ async def update_tenant(
 async def delete_tenant(session: AsyncSession, tenant: Tenant) -> None:
     await session.delete(tenant)
 
+
+
+# ============================================================================
+# INVITE TOKEN OPERATIONS
+# ============================================================================
+
+async def create_invite_token(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    created_by_user_id: int,
+    expires_in_days: int = 30,
+) -> InviteToken:
+    """Create a new invite token for a tenant."""
+    import secrets
+    from datetime import timedelta
+    
+    if current_tenant.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super-admins cannot create invite tokens"
+        )
+    
+    # Generate cryptographically secure token
+    token = secrets.token_urlsafe(32)
+    expires_at = datetime.now(timezone.utc) + timedelta(days=expires_in_days)
+    
+    invite_token = InviteToken(
+        tenant_id=current_tenant.tenant_id,
+        token=token,
+        expires_at=expires_at,
+        created_by_user_id=created_by_user_id,
+    )
+    
+    session.add(invite_token)
+    await session.flush()
+    return invite_token
+
+
+async def get_invite_token_by_token(
+    session: AsyncSession,
+    token: str,
+) -> Optional[InviteToken]:
+    """Get invite token by token string (no tenant filtering - needed for registration)."""
+    stmt = (
+        select(InviteToken)
+        .options(
+            selectinload(InviteToken.tenant),
+            selectinload(InviteToken.created_by)
+        )
+        .where(InviteToken.token == token)
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def mark_invite_token_as_used(
+    session: AsyncSession,
+    invite_token: InviteToken,
+) -> InviteToken:
+    """Mark an invite token as used."""
+    invite_token.used_at = datetime.now(timezone.utc)
+    await session.flush()
+    return invite_token
+
+
+async def list_invite_tokens(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[InviteToken], int]:
+    """List invite tokens for a tenant."""
+    if current_tenant.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super-admins cannot list invite tokens"
+        )
+    
+    # Count query
+    count_query = select(func.count()).select_from(InviteToken)
+    count_query = count_query.where(InviteToken.tenant_id == current_tenant.tenant_id)
+    total = (await session.execute(count_query)).scalar_one()
+    
+    if total == 0:
+        return [], 0
+    
+    # Data query
+    stmt = (
+        select(InviteToken)
+        .options(
+            selectinload(InviteToken.created_by)
+        )
+        .where(InviteToken.tenant_id == current_tenant.tenant_id)
+        .order_by(InviteToken.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    
+    result = await session.execute(stmt)
+    tokens = result.scalars().all()
+    return tokens, total

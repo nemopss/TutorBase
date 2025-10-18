@@ -53,6 +53,7 @@ class User(Base):
     tenant = relationship('Tenant', back_populates='users')
     updated_packages = relationship('LessonPackage', back_populates='updated_by')
     updated_lessons = relationship('Lesson', back_populates='updated_by')
+    created_invite_tokens = relationship('InviteToken', back_populates='created_by')
 
 class Application(Base):
     __tablename__ = 'applications'
@@ -67,6 +68,38 @@ class Application(Base):
     contact = Column(Text)
 
     tenant = relationship('Tenant', back_populates='applications')
+
+
+class InviteToken(Base):
+    __tablename__ = 'invite_tokens'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
+    token = Column(String, nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_by_user_id = Column(Integer, ForeignKey('users.id'), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    
+    # Relationships
+    tenant = relationship('Tenant', back_populates='invite_tokens')
+    created_by = relationship('User', back_populates='created_invite_tokens')
+    
+    @property
+    def is_expired(self) -> bool:
+        """Check if the invite token has expired."""
+        return datetime.now(timezone.utc) > self.expires_at
+    
+    @property
+    def is_used(self) -> bool:
+        """Check if the invite token has been used."""
+        return self.used_at is not None
+    
+    @property
+    def is_valid(self) -> bool:
+        """Check if the invite token is valid (not expired and not used)."""
+        return not self.is_expired and not self.is_used
+
 
 class Student(Base):
     __tablename__ = 'students'
@@ -252,5 +285,6 @@ class Tenant(Base):
     reminder_rules = relationship('ReminderRule', back_populates='tenant')
     reminder_instances = relationship('ReminderInstance', back_populates='tenant')
     applications = relationship('Application', back_populates='tenant')
+    invite_tokens = relationship('InviteToken', back_populates='tenant')
 
 

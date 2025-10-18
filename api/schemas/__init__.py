@@ -1,4 +1,12 @@
 from .auth import WebAppLoginRequest, RefreshRequest, SwitchTenantRequest, TokenPairResponse, UserPayload
+from .registration import (
+    TutorRegistrationRequest,
+    StudentRegistrationRequest,
+    InviteTokenRequest,
+    InviteTokenResponse,
+    InviteTokenListResponse,
+    RegistrationResponse,
+)
 from .packages import (
     PackageCreateRequest,
     PackageListResponse,
@@ -47,6 +55,12 @@ __all__ = [
     "SwitchTenantRequest",
     "TokenPairResponse",
     "UserPayload",
+    "TutorRegistrationRequest",
+    "StudentRegistrationRequest",
+    "InviteTokenRequest",
+    "InviteTokenResponse",
+    "InviteTokenListResponse",
+    "RegistrationResponse",
     "PackageCreateRequest",
     "PackageListResponse",
     "PackageResponse",

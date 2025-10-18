@@ -8,12 +8,15 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import (
     BotUser,
+    InviteToken,
     Learner,
     Lesson,
     LessonPackage,
     LessonPackageTemplate,
     ReminderRule,
     ReminderInstance,
+    Tenant,
+    User,
 )
 
 _sequence = count(1)
@@ -224,6 +227,76 @@ async def create_reminder_instance(
     return instance
 
 
+async def create_tenant(
+    session: AsyncSession,
+    *,
+    name: Optional[str] = None,
+    slug: Optional[str] = None,
+    contact_email: Optional[str] = None,
+    is_active: bool = True,
+) -> Tenant:
+    suffix = _next_suffix()
+    now = _utc_now()
+    tenant = Tenant(
+        name=name or f"Tenant {suffix}",
+        slug=slug or f"tenant-{suffix}",
+        contact_email=contact_email or f"tenant{suffix}@example.com",
+        is_active=is_active,
+        created_at=now,
+        updated_at=now,
+    )
+    session.add(tenant)
+    return tenant
+
+
+async def create_user(
+    session: AsyncSession,
+    *,
+    telegram_id: Optional[int] = None,
+    username: Optional[str] = None,
+    display_name: Optional[str] = None,
+    role: str = "viewer",
+    tenant_id: Optional[int] = None,
+) -> User:
+    suffix = _next_suffix()
+    now = _utc_now()
+    user = User(
+        telegram_id=telegram_id or (100_000 + suffix),
+        username=username or f"user{suffix}",
+        display_name=display_name or f"User {suffix}",
+        role=role,
+        tenant_id=tenant_id,
+        last_login_at=now,
+    )
+    session.add(user)
+    return user
+
+
+async def create_invite_token(
+    session: AsyncSession,
+    *,
+    tenant_id: int,
+    created_by_user_id: int,
+    token: Optional[str] = None,
+    expires_at: Optional[datetime] = None,
+    used_at: Optional[datetime] = None,
+) -> InviteToken:
+    import secrets
+    now = _utc_now()
+    
+    invite_token = InviteToken(
+        tenant_id=tenant_id,
+        token=token or secrets.token_urlsafe(32),
+        expires_at=expires_at or (now + timedelta(days=30)),
+        used_at=used_at,
+        created_by_user_id=created_by_user_id,
+        created_at=now,
+    )
+    session.add(invite_token)
+    await session.flush()  # Ensure we get the ID
+    return invite_token
+
+
 __all__ = [
     "create_bot_user",
     "create_learner",
@@ -232,4 +305,7 @@ __all__ = [
     "create_lesson",
     "create_reminder_rule",
     "create_reminder_instance",
+    "create_tenant",
+    "create_user",
+    "create_invite_token",
 ]
