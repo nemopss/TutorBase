@@ -5,6 +5,7 @@ from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.dependencies import CurrentTenant
 from database import crud
 from database.models import LessonPackage, LessonPackageTemplate
 from services.dto import LessonPackageDTO, PackageProgress
@@ -42,22 +43,22 @@ def _build_package_dto(package: LessonPackage) -> LessonPackageDTO:
     )
 
 
-async def get_package(session: AsyncSession, package_id: int) -> LessonPackageDTO:
-    package = await crud.get_lesson_package(session, package_id)
+async def get_package(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> LessonPackageDTO:
+    package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
     return _build_package_dto(package)
 
 
-async def regenerate_reminders_for_package(session: AsyncSession, package_id: int) -> None:
-    package = await crud.get_lesson_package(session, package_id)
+async def regenerate_reminders_for_package(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> None:
+    package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
     await regenerate_package_reminders(session, package)
 
 
-async def sync_metrics(session: AsyncSession, package_id: int) -> LessonPackageDTO:
-    package, _ = await sync_package_metrics(session, package_id)
+async def sync_metrics(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> LessonPackageDTO:
+    package, _ = await sync_package_metrics(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
     return _build_package_dto(package)
@@ -65,6 +66,7 @@ async def sync_metrics(session: AsyncSession, package_id: int) -> LessonPackageD
 
 async def list_packages(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     *,
     limit: int,
     offset: int,
@@ -74,6 +76,7 @@ async def list_packages(
 ) -> tuple[list[LessonPackageDTO], int]:
     packages, total = await crud.fetch_lesson_packages_paginated(
         session, 
+        current_tenant,
         limit=limit, 
         offset=offset,
         learner_id=learner_id,
@@ -86,6 +89,7 @@ async def list_packages(
 
 async def create_package(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     *,
     learner_id: int,
     title: str,
@@ -95,18 +99,19 @@ async def create_package(
     start_date: Optional[datetime] = None,
     total_lessons: Optional[int] = None,
 ) -> LessonPackageDTO:
-    learner = await crud.get_learner(session, learner_id)
+    learner = await crud.get_learner(session, current_tenant, learner_id)
     if not learner:
         raise NotFoundError(f"Learner {learner_id} not found")
 
     template: Optional[LessonPackageTemplate] = None
     if template_id is not None:
-        template = await crud.get_lesson_package_template(session, template_id)
+        template = await crud.get_lesson_package_template(session, current_tenant, template_id)
         if not template:
             raise NotFoundError(f"Template {template_id} not found")
 
     package = await crud.create_lesson_package(
         session,
+        current_tenant,
         learner=learner,
         template=template,
         title=title,
@@ -118,10 +123,9 @@ async def create_package(
     )
 
     await session.flush([package])
-    await regenerate_package_reminders(session, package)
+    await regenerate_package_reminders(session, current_tenant, package)    
     await session.flush([package])
     
-    # Track metric
     if packages_created_total:
         packages_created_total.labels(learner_id=learner_id).inc()
     
@@ -130,6 +134,7 @@ async def create_package(
 
 async def create_package_from_template(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     *,
     learner_id: int,
     template_id: int,
@@ -138,8 +143,8 @@ async def create_package_from_template(
     start_local: datetime,
     status: str = 'draft',
 ) -> LessonPackageDTO:
-    learner = await crud.get_learner(session, learner_id)
-    template = await crud.get_lesson_package_template(session, template_id)
+    learner = await crud.get_learner(session, current_tenant, learner_id)
+    template = await crud.get_lesson_package_template(session, current_tenant, template_id)
     if not learner or not template:
         raise NotFoundError("Learner or template not found")
 
@@ -151,6 +156,7 @@ async def create_package_from_template(
     start_utc = localized_start.astimezone(timezone.utc)
     package = await crud.create_lesson_package(
         session,
+        current_tenant,
         learner=learner,
         template=template,
         title=title,
@@ -162,11 +168,10 @@ async def create_package_from_template(
     )
 
     await session.flush([package])
-    await generate_lessons_from_template(session, package, template, localized_start)
-    await sync_package_metrics(session, package.id)
-    await regenerate_package_reminders(session, package)
+    await generate_lessons_from_template(session, current_tenant, package, template, localized_start)
+    await sync_package_metrics(session, current_tenant, package.id)
+    await regenerate_package_reminders(session, current_tenant, package)
     
-    # Track metric
     if packages_created_total:
         packages_created_total.labels(learner_id=learner_id).inc()
     
@@ -175,6 +180,7 @@ async def create_package_from_template(
 
 async def update_package(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     package_id: int,
     *,
     title: Optional[str] = None,
@@ -184,7 +190,7 @@ async def update_package(
     end_date: Optional[datetime] = None,
     total_lessons: Optional[int] = None,
 ) -> LessonPackageDTO:
-    package = await crud.get_lesson_package(session, package_id)
+    package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
 
@@ -203,12 +209,12 @@ async def update_package(
         package.total_lessons = total_lessons
 
     await session.flush([package])
-    await sync_package_metrics(session, package_id)
+    await sync_package_metrics(session, current_tenant, package_id)
     return _build_package_dto(package)
 
 
-async def delete_package(session: AsyncSession, package_id: int) -> None:
-    package = await crud.get_lesson_package(session, package_id)
+async def delete_package(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> None:
+    package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
     await crud.delete_lesson_package(session, package)

@@ -3,14 +3,19 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, get_current_user, admin_or_teacher_required
+from api.dependencies import (
+    get_session,
+    admin_or_teacher_required,
+    get_current_tenant,
+    CurrentTenant,
+)
 from api.schemas.learners import (
     LearnerListResponse,
     LearnerResponse,
     CreateLearnerFromChatIdRequest,
     UpdateLearnerNotificationsRequest,
 )
-from database import crud
+from services import learner_service
 
 router = APIRouter()
 
@@ -18,9 +23,10 @@ router = APIRouter()
 @router.get("", response_model=LearnerListResponse)
 async def list_all_learners(
     session: AsyncSession = Depends(get_session),
-    user=Depends(get_current_user),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
 ) -> LearnerListResponse:
-    learners = await crud.fetch_all_learners(session)
+    """Lists all learners for the current tenant."""
+    learners = await learner_service.get_all_learners(session, current_tenant)
     items = []
     for learner in learners:
         chat_id = learner.bot_user.chat_id if learner.bot_user else None
@@ -39,18 +45,19 @@ async def list_all_learners(
 async def create_learner_from_chat_id(
     request: CreateLearnerFromChatIdRequest,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    # We still need role check, but get tenant context separately
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
 ) -> LearnerResponse:
-    """Create a new learner from Telegram chat_id"""
-    learner = await crud.create_learner_from_chat_id(
+    """Create a new learner from Telegram chat_id."""
+    learner = await learner_service.create_learner_from_chat_id(
         session,
+        current_tenant,
         chat_id=request.chat_id,
         display_name=request.display_name,
         notes=request.notes,
         notifications_enabled=request.notifications_enabled,
     )
-    await session.flush()
-    await session.refresh(learner, attribute_names=["bot_user"])
     
     return LearnerResponse(
         id=learner.id,
@@ -65,18 +72,18 @@ async def update_learner_notifications(
     learner_id: int,
     request: UpdateLearnerNotificationsRequest,
     session: AsyncSession = Depends(get_session),
-    user=Depends(admin_or_teacher_required),
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
 ) -> LearnerResponse:
-    """Enable or disable notifications for a learner"""
-    learner = await crud.get_learner(session, learner_id)
-    if not learner:
-        raise HTTPException(status_code=404, detail="Learner not found")
-    
-    await crud.update_learner(
+    """Enable or disable notifications for a learner."""
+    learner = await learner_service.update_learner_notifications(
         session,
-        learner,
+        current_tenant,
+        learner_id=learner_id,
         notifications_enabled=request.notifications_enabled,
     )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
     
     chat_id = learner.bot_user.chat_id if learner.bot_user else None
     return LearnerResponse(

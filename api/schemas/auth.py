@@ -14,6 +14,10 @@ class RefreshRequest(BaseModel):
     refresh_token: str
 
 
+class SwitchTenantRequest(BaseModel):
+    tenant_id: Optional[int] = Field(None, description="Tenant ID to switch to, or null for global context")
+
+
 class UserPayload(BaseModel):
     id: int
     role: str

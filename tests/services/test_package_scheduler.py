@@ -6,6 +6,7 @@ import pytest
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.dependencies import CurrentTenant
 from services.package_scheduler import regenerate_package_reminders
 from services.reminder_definitions import (
     REMINDER_TYPE_LESSON_CONFIRM,
@@ -20,7 +21,7 @@ from tests import factories
 
 
 @pytest.mark.asyncio
-async def test_regenerate_package_reminders_creates_rules_and_instances(db_session: AsyncSession):
+async def test_regenerate_package_reminders_creates_rules_and_instances(db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session, display_name="Schedule Student")
     package = await factories.create_package(db_session, learner=learner)
     lesson1 = await factories.create_lesson(
@@ -37,9 +38,9 @@ async def test_regenerate_package_reminders_creates_rules_and_instances(db_sessi
     )
     await db_session.flush()
 
-    await regenerate_package_reminders(db_session, package)
+    await regenerate_package_reminders(db_session, current_tenant, package)
 
-    refreshed = await crud.get_lesson_package(db_session, package.id)
+    refreshed = await crud.get_lesson_package(db_session, current_tenant, package.id)
     rules = refreshed.reminder_rules or []
     instances = refreshed.reminder_instances or []
 
@@ -54,26 +55,26 @@ async def test_regenerate_package_reminders_creates_rules_and_instances(db_sessi
 
 
 @pytest.mark.asyncio
-async def test_regenerate_package_reminders_without_lessons(db_session: AsyncSession):
+async def test_regenerate_package_reminders_without_lessons(db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)
     await db_session.flush()
 
-    await regenerate_package_reminders(db_session, package)
-    refreshed = await crud.get_lesson_package(db_session, package.id)
+    await regenerate_package_reminders(db_session, current_tenant, package)
+    refreshed = await crud.get_lesson_package(db_session, current_tenant, package.id)
     assert not refreshed.reminder_rules
 
 
 @pytest.mark.asyncio
-async def test_regenerate_package_reminders_missing_package_raises(monkeypatch, db_session: AsyncSession):
+async def test_regenerate_package_reminders_missing_package_raises(monkeypatch, db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)
     await db_session.flush()
 
-    async def fake_get_package(session, package_id):
+    async def fake_get_package(session, current_tenant, package_id):
         return None
 
     monkeypatch.setattr(crud, "get_lesson_package", fake_get_package)
 
     with pytest.raises(ValueError):
-        await regenerate_package_reminders(db_session, package)
+        await regenerate_package_reminders(db_session, current_tenant, package)

@@ -9,7 +9,7 @@ from pydantic import BaseModel
 UserRole = Literal["admin", "teacher", "viewer"]
 
 
-class UserItem(BaseModel):
+class UserResponse(BaseModel):
     id: int
     display_name: str
     username: Optional[str]
@@ -21,8 +21,8 @@ class UserItem(BaseModel):
 
 
 class UserListResponse(BaseModel):
-    users: list[UserItem]
+    users: list[UserResponse]
 
 
-class UpdateUserRoleRequest(BaseModel):
+class UserRoleUpdateRequest(BaseModel):
     role: UserRole

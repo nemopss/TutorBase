@@ -7,9 +7,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from api.dependencies import get_session
+from api.dependencies import get_session, get_current_tenant, CurrentTenant, get_current_user
+from database.models import Tenant, User
 from api.schemas import (
     RefreshRequest,
+    SwitchTenantRequest,
     TokenPairResponse,
     UserPayload,
     WebAppLoginRequest,
@@ -29,6 +31,18 @@ from database import crud
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 
+# Helper function to apply rate limiting conditionally
+def rate_limit(limit_string: str):
+    """Apply rate limiting only in production mode."""
+    if config.DEV_MODE:
+        # In dev mode, return a no-op decorator
+        def decorator(func):
+            return func
+        return decorator
+    else:
+        # In production, apply actual rate limiting
+        return limiter.limit(limit_string)
+
 
 def _build_display_name(user_payload: Dict[str, object]) -> str:
     first_name = user_payload.get("first_name") or ""
@@ -43,7 +57,7 @@ def _build_display_name(user_payload: Dict[str, object]) -> str:
     return f"tg:{telegram_id}" if telegram_id is not None else "Telegram User"
 
 
-async def _persist_user(session: AsyncSession, user_data: Dict[str, object]):
+async def _persist_user(session: AsyncSession, current_tenant: CurrentTenant, user_data: Dict[str, object]):
     telegram_id = int(user_data["id"])
     username = user_data.get("username")
     display_name = _build_display_name(user_data)
@@ -54,13 +68,9 @@ async def _persist_user(session: AsyncSession, user_data: Dict[str, object]):
     default_role = "admin" if is_admin else "viewer"
 
     if user is None:
-        user = await crud.create_user(
-            session,
-            telegram_id=telegram_id,
-            username=username,
-            display_name=display_name,
-            role=default_role,
-        )
+        # НОВЫЙ ПОЛЬЗОВАТЕЛЬ - требуется регистрация!
+        # Возвращаем None, чтобы login endpoint мог обработать это
+        return None
     else:
         role_update = "admin" if is_admin and user.role != "admin" else None
         user = await crud.update_user_login_metadata(
@@ -76,12 +86,18 @@ async def _persist_user(session: AsyncSession, user_data: Dict[str, object]):
 
 
 @router.post("/login", response_model=TokenPairResponse)
-@limiter.limit("5/minute")  # Protect against brute force
+@rate_limit("5/minute")  # Protect against brute force (disabled in dev mode)
 async def login(
     request: Request,
     payload: WebAppLoginRequest,
     session: AsyncSession = Depends(get_session),
-) -> TokenPairResponse:
+) -> TokenPairResponse:    # This endpoint is special: it creates the user, so tenant context doesn't exist yet.
+    # We create a placeholder context. A super_admin will be created without a tenant,
+    # and a regular user will be assigned to the default tenant (id=1).
+    # This logic is handled inside crud.create_user.
+    # For the purpose of satisfying the dependency, we can create a temporary one.
+    # NOTE: This is a simplification for the login flow.
+    current_tenant = CurrentTenant(tenant_id=None, is_super_admin=True)
     init_payload: Dict[str, object]
     if config.DEV_MODE and payload.init_data == config.DEV_INIT_DATA:
         logging.getLogger(__name__).info("DEV_MODE active – using mock Telegram payload")
@@ -106,12 +122,21 @@ async def login(
     if telegram_id is None:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Missing user id")
 
-    user = await _persist_user(session, user_block)
+    user = await _persist_user(session, current_tenant, user_block)
+
+    # НОВЫЙ ПОЛЬЗОВАТЕЛЬ - требуется регистрация
+    if user is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="User not registered. Please complete registration first.",
+            headers={"X-Registration-Required": "true"}
+        )
 
     token_payload = {
         "sub": str(user.id),
         "role": user.role,
         "telegram_id": user.telegram_id,
+        "tenant_id": user.tenant_id,
     }
 
     access_token = create_access_token(token_payload)
@@ -135,7 +160,7 @@ async def login(
 
 
 @router.post("/refresh", response_model=TokenPairResponse)
-@limiter.limit("10/minute")  # Allow more refreshes than login attempts
+@rate_limit("10/minute")  # Allow more refreshes than login attempts (disabled in dev mode)
 async def refresh(
     request: Request,
     payload: RefreshRequest,
@@ -158,6 +183,7 @@ async def refresh(
         "sub": str(user.id),
         "role": user.role,
         "telegram_id": user.telegram_id,
+        "tenant_id": user.tenant_id,
     }
 
     access_token = create_access_token(reference_payload)
@@ -172,6 +198,69 @@ async def refresh(
         last_login_at=user.last_login_at,
     )
 
+    return TokenPairResponse(
+        access_token=access_token,
+        refresh_token=refresh_token,
+        expires_in=config.JWT_ACCESS_EXPIRES_SECONDS,
+        user=user_response,
+    )
+
+
+@router.post("/switch-tenant", response_model=TokenPairResponse)
+@rate_limit("10/minute")  # Prevent abuse of tenant switching (disabled in dev mode)
+async def switch_tenant(
+    request: Request,
+    payload: SwitchTenantRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> TokenPairResponse:
+    """
+    Switch tenant context for super-admins.
+    This is a critical security endpoint - only super-admins can use it.
+    """
+    if current_user.role != 'admin':
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only super-admins can switch tenant context"
+        )
+    
+    target_tenant_id = payload.tenant_id
+    target_tenant = None
+    
+    # If switching to a specific tenant, validate it exists and is active
+    if target_tenant_id is not None:
+        target_tenant = await session.get(Tenant, target_tenant_id)
+        if not target_tenant:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail=f"Tenant {target_tenant_id} not found"
+            )
+        if not target_tenant.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail=f"Tenant {target_tenant_id} is inactive"
+            )
+    
+    # Create new tokens with the target tenant context
+    token_payload = {
+        "sub": str(current_user.id),
+        "role": current_user.role,
+        "telegram_id": current_user.telegram_id,
+        "tenant_id": target_tenant_id,  # This is the key change
+    }
+    
+    access_token = create_access_token(token_payload)
+    refresh_token = create_refresh_token(token_payload)
+    
+    user_response = UserPayload(
+        id=current_user.id,
+        role=current_user.role,
+        display_name=current_user.display_name,
+        username=current_user.username,
+        telegram_id=current_user.telegram_id,
+        last_login_at=current_user.last_login_at,
+    )
+    
     return TokenPairResponse(
         access_token=access_token,
         refresh_token=refresh_token,

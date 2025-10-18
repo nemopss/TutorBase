@@ -41,6 +41,7 @@ class User(Base):
     __tablename__ = 'users'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=True, index=True)
     telegram_id = Column(BigInteger, unique=True)
     username = Column(String)
     display_name = Column(String, nullable=False)
@@ -49,6 +50,7 @@ class User(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     last_login_at = Column(DateTime(timezone=True))
 
+    tenant = relationship('Tenant', back_populates='users')
     updated_packages = relationship('LessonPackage', back_populates='updated_by')
     updated_lessons = relationship('Lesson', back_populates='updated_by')
 
@@ -56,12 +58,15 @@ class Application(Base):
     __tablename__ = 'applications'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
     name = Column(Text)
     language = Column(Text)
     level = Column(Text)
     preferred_time = Column(Text)
     contact = Column(Text)
+
+    tenant = relationship('Tenant', back_populates='applications')
 
 class Student(Base):
     __tablename__ = 'students'
@@ -76,19 +81,27 @@ class Learner(Base):
     __tablename__ = 'learners'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
     bot_user_id = Column(Integer, ForeignKey('bot_users.id', ondelete='CASCADE'), nullable=False, unique=True)
     display_name = Column(String, nullable=False)
     notes = Column(Text)
     notifications_enabled = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
 
+    tenant = relationship('Tenant', back_populates='learners')
     bot_user = relationship('BotUser', back_populates='learner', lazy='joined')
     packages = relationship('LessonPackage', back_populates='learner', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        Index('ix_learners_tenant_display_name', 'tenant_id', 'display_name'),
+        Index('ix_learners_tenant_created', 'tenant_id', 'created_at'),
+    )
 
 class LessonPackageTemplate(Base):
     __tablename__ = 'lesson_package_templates'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
     name = Column(String, nullable=False, unique=True)
     description = Column(Text)
     lesson_count = Column(Integer)
@@ -98,6 +111,7 @@ class LessonPackageTemplate(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
 
+    tenant = relationship('Tenant', back_populates='lesson_package_templates')
     packages = relationship('LessonPackage', back_populates='template')
 
 
@@ -105,6 +119,7 @@ class LessonPackage(Base):
     __tablename__ = 'lesson_packages'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
     learner_id = Column(Integer, ForeignKey('learners.id', ondelete='CASCADE'), nullable=False)
     template_id = Column(Integer, ForeignKey('lesson_package_templates.id', ondelete='SET NULL'))
     title = Column(String, nullable=False)
@@ -117,6 +132,8 @@ class LessonPackage(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
+
+    tenant = relationship('Tenant', back_populates='lesson_packages')
 
     learner = relationship('Learner', back_populates='packages')
     template = relationship('LessonPackageTemplate', back_populates='packages')
@@ -134,6 +151,7 @@ class Lesson(Base):
     __tablename__ = 'lessons'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
     package_id = Column(Integer, ForeignKey('lesson_packages.id', ondelete='CASCADE'), nullable=False)
     scheduled_at = Column(DateTime(timezone=True), nullable=False)
     duration_minutes = Column(Integer)
@@ -145,6 +163,8 @@ class Lesson(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'))
 
+    tenant = relationship('Tenant', back_populates='lessons')
+
     package = relationship('LessonPackage', back_populates='lessons')
     reminder_rules = relationship('ReminderRule', back_populates='lesson', cascade='all, delete-orphan')
     reminder_instances = relationship('ReminderInstance', back_populates='lesson', cascade='all, delete-orphan')
@@ -152,6 +172,8 @@ class Lesson(Base):
 
     __table_args__ = (
         Index('ix_lessons_package_scheduled_at', 'package_id', 'scheduled_at'),
+        Index('ix_lessons_tenant_scheduled', 'tenant_id', 'scheduled_at'),
+        Index('ix_lessons_tenant_status', 'tenant_id', 'status'),
     )
 
 
@@ -159,6 +181,7 @@ class ReminderRule(Base):
     __tablename__ = 'reminder_rules'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
     package_id = Column(Integer, ForeignKey('lesson_packages.id', ondelete='CASCADE'))
     lesson_id = Column(Integer, ForeignKey('lessons.id', ondelete='CASCADE'))
     reminder_type = Column(String(32), nullable=False)
@@ -167,6 +190,8 @@ class ReminderRule(Base):
     active = Column(Boolean, nullable=False, default=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant', back_populates='reminder_rules')
 
     package = relationship('LessonPackage', back_populates='reminder_rules')
     lesson = relationship('Lesson', back_populates='reminder_rules')
@@ -177,6 +202,7 @@ class ReminderInstance(Base):
     __tablename__ = 'reminder_instances'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
     rule_id = Column(Integer, ForeignKey('reminder_rules.id', ondelete='CASCADE'), nullable=False)
     package_id = Column(Integer, ForeignKey('lesson_packages.id', ondelete='CASCADE'), nullable=False)
     lesson_id = Column(Integer, ForeignKey('lessons.id', ondelete='CASCADE'))
@@ -194,7 +220,37 @@ class ReminderInstance(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
 
+    tenant = relationship('Tenant', back_populates='reminder_instances')
+
     rule = relationship('ReminderRule', back_populates='instances')
     package = relationship('LessonPackage', back_populates='reminder_instances')
     lesson = relationship('Lesson', back_populates='reminder_instances')
     learner = relationship('Learner')
+
+    __table_args__ = (
+        Index('ix_reminder_instances_tenant_scheduled', 'tenant_id', 'scheduled_for'),
+        Index('ix_reminder_instances_tenant_status_active', 'tenant_id', 'status', 'active'),
+        Index('ix_reminder_instances_active_scheduled', 'active', 'scheduled_for'),  # For global queries
+    )
+
+class Tenant(Base):
+    __tablename__ = 'tenants'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name = Column(String, nullable=False, unique=True)
+    slug = Column(String, unique=True, nullable=False)
+    contact_email = Column(String)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    users = relationship('User', back_populates='tenant')
+    learners = relationship('Learner', back_populates='tenant')
+    lesson_package_templates = relationship('LessonPackageTemplate', back_populates='tenant')
+    lesson_packages = relationship('LessonPackage', back_populates='tenant')
+    lessons = relationship('Lesson', back_populates='tenant')
+    reminder_rules = relationship('ReminderRule', back_populates='tenant')
+    reminder_instances = relationship('ReminderInstance', back_populates='tenant')
+    applications = relationship('Application', back_populates='tenant')
+
+

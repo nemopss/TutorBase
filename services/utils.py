@@ -6,7 +6,7 @@ from typing import Optional, Sequence
 
 from zoneinfo import ZoneInfo
 
-from sqlalchemy.ext.asyncio import AsyncSession
+from api.dependencies import CurrentTenant
 
 from database import crud
 from database.models import Lesson, LessonPackage, LessonPackageTemplate
@@ -30,9 +30,10 @@ def lesson_stats(lessons: Sequence[Lesson]) -> tuple[int, int, int]:
 
 async def sync_package_metrics(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     package_id: int,
 ) -> tuple[Optional[LessonPackage], list[Lesson]]:
-    package = await crud.get_lesson_package(session, package_id)
+    package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         return None, []
 
@@ -56,6 +57,7 @@ async def sync_package_metrics(
 
 async def generate_lessons_from_template(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     package: LessonPackage,
     template: LessonPackageTemplate,
     start_date: datetime,
@@ -74,6 +76,7 @@ async def generate_lessons_from_template(
         scheduled_utc = candidate.astimezone(timezone.utc)
         await crud.create_lesson(
             session,
+            current_tenant,
             package,
             scheduled_at=scheduled_utc,
             sequence_index=sequence,

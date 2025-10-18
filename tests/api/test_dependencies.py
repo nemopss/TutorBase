@@ -23,9 +23,10 @@ async def test_get_current_user_invalid_token(db_session):
 
 
 @pytest.mark.asyncio
-async def test_get_current_user_success(db_session):
+async def test_get_current_user_success(db_session, current_tenant):
     user = await crud.create_user(
         db_session,
+        current_tenant,
         telegram_id=1,
         username="valid",
         display_name="Valid",
@@ -39,10 +40,11 @@ async def test_get_current_user_success(db_session):
 
 
 @pytest.mark.asyncio
-async def test_require_roles_forbidden(db_session):
+async def test_require_roles_forbidden(db_session, current_tenant):
     checker = require_roles("admin")
     user = await crud.create_user(
         db_session,
+        current_tenant,
         telegram_id=2,
         username="viewer",
         display_name="Viewer",

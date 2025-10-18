@@ -60,6 +60,7 @@ async def create_learner(
     notes: Optional[str] = None,
     chat_id: Optional[int] = None,
     notifications_enabled: bool = True,
+    tenant_id: int = 1,
 ) -> Learner:
     bot_user = await create_bot_user(session, chat_id=chat_id)
     now = _utc_now()
@@ -70,6 +71,7 @@ async def create_learner(
         notes=notes,
         notifications_enabled=notifications_enabled,
         created_at=now,
+        tenant_id=tenant_id,
     )
     session.add(learner)
     return learner
@@ -82,6 +84,7 @@ async def create_template(
     lesson_count: int = 4,
     duration_days: Optional[int] = None,
     default_timezone: str = "Europe/Moscow",
+    tenant_id: int = 1,
 ) -> LessonPackageTemplate:
     suffix = _next_suffix()
     now = _utc_now()
@@ -99,6 +102,7 @@ async def create_template(
         },
         created_at=now,
         updated_at=now,
+        tenant_id=tenant_id,
     )
     session.add(template)
     return template
@@ -114,6 +118,7 @@ async def create_package(
     start_offset_days: int = 0,
     total_lessons: Optional[int] = None,
     notes: Optional[str] = None,
+    tenant_id: int = 1,
 ) -> LessonPackage:
     suffix = _next_suffix()
     now = _utc_now()
@@ -129,6 +134,7 @@ async def create_package(
         notes=notes,
         created_at=now,
         updated_at=now,
+        tenant_id=tenant_id,
     )
     session.add(package)
     return package
@@ -142,6 +148,7 @@ async def create_lesson(
     status: str = "scheduled",
     duration_minutes: Optional[int] = None,
     sequence_index: Optional[int] = None,
+    tenant_id: int = 1,
 ) -> Lesson:
     suffix = _next_suffix()
     now = _utc_now()
@@ -153,6 +160,7 @@ async def create_lesson(
         sequence_index=sequence_index or suffix,
         created_at=now,
         updated_at=now,
+        tenant_id=tenant_id,
     )
     session.add(lesson)
     return lesson
@@ -167,6 +175,7 @@ async def create_reminder_rule(
     channel: str = "telegram",
     active: bool = True,
     config: Optional[dict] = None,
+    tenant_id: int = 1,
 ) -> ReminderRule:
     rule = ReminderRule(
         package=package,
@@ -177,6 +186,7 @@ async def create_reminder_rule(
         active=active,
         created_at=_utc_now(),
         updated_at=_utc_now(),
+        tenant_id=tenant_id,
     )
     session.add(rule)
     return rule
@@ -194,6 +204,7 @@ async def create_reminder_instance(
     active: bool = True,
     payload: Optional[dict] = None,
     chat_identifier: Optional[str] = None,
+    tenant_id: int = 1,
 ) -> ReminderInstance:
     instance = ReminderInstance(
         rule=rule,
@@ -207,6 +218,7 @@ async def create_reminder_instance(
         chat_identifier=chat_identifier,
         created_at=_utc_now(),
         updated_at=_utc_now(),
+        tenant_id=tenant_id,
     )
     session.add(instance)
     return instance

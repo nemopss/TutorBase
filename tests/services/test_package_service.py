@@ -5,6 +5,7 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
+from api.dependencies import CurrentTenant
 from database import crud
 from tests import factories
 from utils.timezone import DEFAULT_TZ
@@ -13,7 +14,7 @@ from services.exceptions import NotFoundError
 
 
 @pytest.mark.asyncio
-async def test_create_package_from_template_generates_lessons_and_reminders(db_session):
+async def test_create_package_from_template_generates_lessons_and_reminders(db_session, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     template = await factories.create_template(db_session, lesson_count=3)
     await db_session.flush()
@@ -21,6 +22,7 @@ async def test_create_package_from_template_generates_lessons_and_reminders(db_s
 
     dto = await package_service.create_package_from_template(
         db_session,
+        current_tenant,
         learner_id=learner.id,
         template_id=template.id,
         title="Winter Intensive",
@@ -29,20 +31,18 @@ async def test_create_package_from_template_generates_lessons_and_reminders(db_s
         status="active",
     )
 
-    # Fetch persisted package with eager relationships
-    package = await crud.get_lesson_package(db_session, dto.id)
+    package = await crud.get_lesson_package(db_session, current_tenant, dto.id)
     assert package is not None
 
     assert dto.total_lessons == template.lesson_count
     assert len(package.lessons) == template.lesson_count
 
-    # Ensure reminders were generated for each lesson (confirm + day-before + homework)
     reminder_types = {instance.rule.reminder_type for instance in package.reminder_instances}
     assert reminder_types, "Expected reminder instances to be generated"
 
 
 @pytest.mark.asyncio
-async def test_update_package_normalizes_dates_to_utc(db_session):
+async def test_update_package_normalizes_dates_to_utc(db_session, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner, status="draft")
     await db_session.flush()
@@ -50,6 +50,7 @@ async def test_update_package_normalizes_dates_to_utc(db_session):
     new_start_local = datetime(2024, 2, 1, 15, 30, tzinfo=ZoneInfo("Europe/Moscow"))
     dto = await package_service.update_package(
         db_session,
+        current_tenant,
         package.id,
         status="active",
         notes="Updated via service",
@@ -61,20 +62,21 @@ async def test_update_package_normalizes_dates_to_utc(db_session):
     assert dto.start_date is not None
     assert dto.start_date.tzinfo == DEFAULT_TZ
 
-    persisted = await crud.get_lesson_package(db_session, package.id)
+    persisted = await crud.get_lesson_package(db_session, current_tenant, package.id)
     assert persisted is not None
     assert persisted.start_date is not None
     assert persisted.start_date.tzinfo == timezone.utc
 
 
 @pytest.mark.asyncio
-async def test_get_and_list_packages(db_session):
+async def test_get_and_list_packages(db_session, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session, display_name="Package Learner")
     await factories.create_package(db_session, learner=learner, title="Alpha Package", status="active")
     await db_session.flush()
 
     packages, total = await package_service.list_packages(
         db_session,
+        current_tenant,
         limit=10,
         offset=0,
         learner_id=learner.id,
@@ -84,46 +86,48 @@ async def test_get_and_list_packages(db_session):
     assert total == 1
     assert packages[0].learner_name == "Package Learner"
 
-    fetched = await package_service.get_package(db_session, packages[0].id)
+    fetched = await package_service.get_package(db_session, current_tenant, packages[0].id)
     assert fetched.id == packages[0].id
 
 
 @pytest.mark.asyncio
-async def test_delete_package(db_session):
+async def test_delete_package(db_session, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)
     await db_session.flush()
 
-    await package_service.delete_package(db_session, package.id)
+    await package_service.delete_package(db_session, current_tenant, package.id)
     with pytest.raises(NotFoundError):
-        await package_service.get_package(db_session, package.id)
+        await package_service.get_package(db_session, current_tenant, package.id)
 
 
 @pytest.mark.asyncio
-async def test_package_not_found_raises(db_session):
+async def test_package_not_found_raises(db_session, current_tenant: CurrentTenant):
     with pytest.raises(NotFoundError):
-        await package_service.get_package(db_session, 999)
+        await package_service.get_package(db_session, current_tenant, 999)
 
     with pytest.raises(NotFoundError):
-        await package_service.delete_package(db_session, 999)
+        await package_service.delete_package(db_session, current_tenant, 999)
 
 
 @pytest.mark.asyncio
-async def test_create_package_missing_learner(db_session):
+async def test_create_package_missing_learner(db_session, current_tenant: CurrentTenant):
     with pytest.raises(NotFoundError):
         await package_service.create_package(
             db_session,
+            current_tenant,
             learner_id=999,
             title="Missing learner",
         )
 
 
 @pytest.mark.asyncio
-async def test_create_package_from_template_missing_template(db_session):
+async def test_create_package_from_template_missing_template(db_session, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     with pytest.raises(NotFoundError):
         await package_service.create_package_from_template(
             db_session,
+            current_tenant,
             learner_id=learner.id,
             template_id=999,
             title="Test",
@@ -132,7 +136,7 @@ async def test_create_package_from_template_missing_template(db_session):
         )
 
 @pytest.mark.asyncio
-async def test_create_package_happy_path(db_session):
+async def test_create_package_happy_path(db_session, current_tenant: CurrentTenant):
     """Tests successful creation of a simple lesson package."""
     learner = await factories.create_learner(db_session)
     await db_session.flush()
@@ -143,6 +147,7 @@ async def test_create_package_happy_path(db_session):
 
     dto = await package_service.create_package(
         db_session,
+        current_tenant,
         learner_id=learner.id,
         title=title,
         notes=notes,
@@ -150,7 +155,6 @@ async def test_create_package_happy_path(db_session):
         total_lessons=total_lessons,
     )
 
-    # 1. Check the returned DTO
     assert dto.id is not None
     assert dto.title == title
     assert dto.notes == notes
@@ -158,8 +162,7 @@ async def test_create_package_happy_path(db_session):
     assert dto.status == "active"
     assert dto.total_lessons == total_lessons
 
-    # 2. Check the persisted data in the database
-    persisted_package = await crud.get_lesson_package(db_session, dto.id)
+    persisted_package = await crud.get_lesson_package(db_session, current_tenant, dto.id)
     assert persisted_package is not None
     assert persisted_package.title == title
     assert persisted_package.learner_id == learner.id

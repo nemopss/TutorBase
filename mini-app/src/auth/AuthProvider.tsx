@@ -6,18 +6,19 @@ import api from '../services/api';
 const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
 const DEV_INIT_DATA = import.meta.env.VITE_DEV_INIT_DATA ?? 'dev';
 
-// Decode JWT token to get expiration time
-const parseJwt = (token: string): { exp?: number } | null => {
+// Decode JWT token to get expiration time and tenant_id
+const parseJwt = (token: string): { exp?: number; tenant_id?: number | null; role?: string } | null => {
   try {
     const base64Url = token.split('.')[1];
     const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
     const jsonPayload = decodeURIComponent(
-      window.atob(base64).split('').map(c => 
+      window.atob(base64).split('').map(c =>
         '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
       ).join('')
     );
     return JSON.parse(jsonPayload);
   } catch (e) {
+    console.error('Failed to parse JWT:', e);
     return null;
   }
 };
@@ -27,18 +28,24 @@ interface User {
   id: number;
   display_name: string;
   role: string;
+  telegram_id?: number;
+  last_login_at?: string;
 }
 
 interface AuthResponse {
   access_token: string;
   refresh_token: string;
   user: User;
+  expires_in?: number;
 }
 
 interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: User | null;
+  tenantId: number | null;
+  isSuperAdmin: boolean;
+  switchTenant: (tenantId: number | null) => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -54,6 +61,7 @@ export const useAuth = () => {
 
 export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
+  const [tenantId, setTenantId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const refreshTimerRef = useRef<number | null>(null);
@@ -61,6 +69,63 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   useEffect(() => {
     const login = async () => {
       try {
+        // Check if we already have a valid token in localStorage
+        const existingToken = localStorage.getItem('accessToken');
+        const existingRefreshToken = localStorage.getItem('refreshToken');
+
+        if (existingToken && existingRefreshToken) {
+          console.log('[AuthProvider] Found existing token, checking validity...');
+
+          // Try to decode and check expiration
+          const payload = parseJwt(existingToken);
+          const now = Math.floor(Date.now() / 1000);
+
+          if (payload?.exp && payload.exp > now) {
+            // Token is still valid, use it
+            console.log('[AuthProvider] Using existing valid token:', {
+              tenant_id: payload.tenant_id,
+              role: payload.role,
+              expires_in: payload.exp - now
+            });
+
+            // Set up API with existing token
+            api.defaults.headers.common['Authorization'] = `Bearer ${existingToken}`;
+
+            // We need to get user info - try to fetch from API or decode from token
+            // For now, we'll fetch the current user
+            try {
+              const userResponse = await api.get<User>('/users/me');
+              const user = userResponse.data;
+
+              const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
+
+              console.log('[AuthProvider] Restored session:', {
+                user: user.display_name,
+                role: user.role,
+                tenant_id: extractedTenantId
+              });
+
+              setUser(user);
+              setTenantId(extractedTenantId);
+              setIsLoading(false);
+
+              // Setup auto-refresh
+              setupTokenRefresh(existingToken);
+              return;
+            } catch (err) {
+              console.log('[AuthProvider] Failed to restore session, will re-login:', err);
+              // Token might be invalid, continue with normal login
+              localStorage.removeItem('accessToken');
+              localStorage.removeItem('refreshToken');
+            }
+          } else {
+            console.log('[AuthProvider] Existing token expired, will re-login');
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+          }
+        }
+
+        // No valid token, proceed with normal login
         let initData: string | undefined = undefined;
 
         if (DEV_MODE) {
@@ -102,9 +167,21 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         // Настраиваем заголовок по умолчанию для всех запросов
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
+        // Extract tenant_id from JWT
+        const payload = parseJwt(access_token);
+        const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
+
+        console.log('[AuthProvider] Login successful:', {
+          user: user.display_name,
+          role: user.role,
+          tenant_id: extractedTenantId,
+          jwt_payload: payload
+        });
+
         setUser(user);
+        setTenantId(extractedTenantId);
         setIsLoading(false);
-        
+
         // Setup auto-refresh 5 minutes before expiration
         setupTokenRefresh(access_token);
       } catch (err: any) {
@@ -121,7 +198,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     };
 
     login();
-    
+
     // Cleanup timer on unmount
     return () => {
       if (refreshTimerRef.current) {
@@ -129,39 +206,50 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       }
     };
   }, []);
-  
+
   // Auto-refresh token before expiration
   const setupTokenRefresh = (accessToken: string) => {
     const payload = parseJwt(accessToken);
     if (!payload?.exp) return;
-    
+
     const now = Math.floor(Date.now() / 1000);
     const expiresIn = payload.exp - now;
-    
+
     // Refresh 5 minutes (300 seconds) before expiration
     const refreshIn = Math.max(0, expiresIn - 300);
-    
+
     if (refreshTimerRef.current) {
       window.clearTimeout(refreshTimerRef.current);
     }
-    
+
     refreshTimerRef.current = window.setTimeout(async () => {
       try {
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) return;
-        
+
         const response = await api.post<AuthResponse>('/auth/refresh', {
           refresh_token: refreshToken
         });
-        
+
         const { access_token, refresh_token: newRefreshToken, user: updatedUser } = response.data;
-        
+
         localStorage.setItem('accessToken', access_token);
         localStorage.setItem('refreshToken', newRefreshToken);
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-        
+
+        // Extract tenant_id from new JWT
+        const payload = parseJwt(access_token);
+        const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
+
+        console.log('[AuthProvider] Token refreshed:', {
+          user: updatedUser.display_name,
+          tenant_id: extractedTenantId,
+          jwt_payload: payload
+        });
+
         setUser(updatedUser);
-        
+        setTenantId(extractedTenantId);
+
         // Schedule next refresh
         setupTokenRefresh(access_token);
       } catch (err) {
@@ -171,10 +259,57 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     }, refreshIn * 1000);
   };
 
+  // Switch tenant context (super-admin only)
+  const switchTenant = async (targetTenantId: number | null) => {
+    console.log('[AuthProvider] Switching tenant:', { from: tenantId, to: targetTenantId });
+
+    try {
+      const response = await api.post<AuthResponse>('/auth/switch-tenant', {
+        tenant_id: targetTenantId
+      });
+
+      const { access_token, refresh_token: newRefreshToken, user: updatedUser } = response.data;
+
+      // Extract tenant_id from new JWT BEFORE updating state
+      const payload = parseJwt(access_token);
+      const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
+
+      console.log('[AuthProvider] Tenant switch successful:', {
+        requested: targetTenantId,
+        jwt_tenant_id: extractedTenantId,
+        jwt_payload: payload,
+        user: updatedUser.display_name
+      });
+
+      // Update tokens
+      localStorage.setItem('accessToken', access_token);
+      localStorage.setItem('refreshToken', newRefreshToken);
+      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+
+      setUser(updatedUser);
+      setTenantId(extractedTenantId);
+
+      // Setup new refresh timer
+      setupTokenRefresh(access_token);
+
+      // Reload the page to refresh all data
+      console.log('[AuthProvider] Reloading page to apply new tenant context...');
+      window.location.reload();
+    } catch (err: any) {
+      console.error('[AuthProvider] Tenant switch failed:', err);
+      throw new Error(err?.response?.data?.detail || 'Failed to switch tenant');
+    }
+  };
+
+  const isSuperAdmin = user?.role === 'admin';
+
   const value = {
     isAuthenticated: !!user,
     isLoading,
     user,
+    tenantId,
+    isSuperAdmin,
+    switchTenant,
   };
 
   if (error) {
@@ -196,16 +331,16 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
           boxShadow: '0 2px 8px rgba(0,0,0,0.1)',
           maxWidth: '400px'
         }}>
-          <pre style={{ 
-            whiteSpace: 'pre-wrap', 
-            fontSize: '14px', 
+          <pre style={{
+            whiteSpace: 'pre-wrap',
+            fontSize: '14px',
             lineHeight: '1.6',
             color: '#333',
             margin: 0,
             fontFamily: 'monospace'
           }}>{error}</pre>
-          <button 
-            onClick={() => window.location.reload()} 
+          <button
+            onClick={() => window.location.reload()}
             style={{
               marginTop: '20px',
               padding: '10px 20px',

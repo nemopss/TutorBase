@@ -6,6 +6,7 @@ from typing import Optional
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, delete
 
+from api.dependencies import CurrentTenant
 from database import crud
 from database.models import Lesson
 from services.dto import LessonDTO
@@ -33,8 +34,8 @@ def _build_lesson_dto(lesson: Lesson) -> LessonDTO:
     )
 
 
-async def get_lesson(session: AsyncSession, lesson_id: int) -> LessonDTO:
-    lesson = await crud.get_lesson(session, lesson_id)
+async def get_lesson(session: AsyncSession, current_tenant: CurrentTenant, lesson_id: int) -> LessonDTO:
+    lesson = await crud.get_lesson(session, current_tenant, lesson_id)
     if not lesson:
         raise NotFoundError(f"Lesson {lesson_id} not found")
     return _build_lesson_dto(lesson)
@@ -42,6 +43,7 @@ async def get_lesson(session: AsyncSession, lesson_id: int) -> LessonDTO:
 
 async def update_lesson(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     lesson_id: int,
     *,
     scheduled_at: Optional[datetime] = None,
@@ -50,7 +52,7 @@ async def update_lesson(
     teacher_notes: Optional[str] = None,
     homework_due_at: Optional[datetime] = None,
 ) -> LessonDTO:
-    lesson = await crud.get_lesson(session, lesson_id)
+    lesson = await crud.get_lesson(session, current_tenant, lesson_id)
     if not lesson:
         raise NotFoundError(f"Lesson {lesson_id} not found")
 
@@ -66,36 +68,26 @@ async def update_lesson(
         lesson.homework_due_at = homework_due_at
 
     await session.flush([lesson])
-    await sync_package_metrics(session, lesson.package_id)
+    await sync_package_metrics(session, current_tenant, lesson.package_id)
     return _build_lesson_dto(lesson)
 
 
-# async def delete_lesson(session: AsyncSession, lesson_id: int) -> None:
-#     lesson = await crud.get_lesson(session, lesson_id)
-#     if not lesson:
-#         raise NotFoundError(f"Lesson {lesson_id} not found")
-#     package_id = lesson.package_id
-#     await crud.delete_lesson(session, lesson)
-#     await sync_package_metrics(session, package_id)
-
-async def delete_lesson(session: AsyncSession, lesson_id: int) -> int:  # возврат package_id
-    # Минимальный запрос: только package_id и проверка существования
-    stmt = select(Lesson.package_id).where(Lesson.id == lesson_id)
-    result = await session.execute(stmt)
-    package_id = result.scalar_one_or_none()
-    if not package_id:
+async def delete_lesson(session: AsyncSession, current_tenant: CurrentTenant, lesson_id: int) -> int:  # возврат package_id
+    lesson = await crud.get_lesson(session, current_tenant, lesson_id)
+    if not lesson:
         raise NotFoundError(f"Lesson {lesson_id} not found")
+    package_id = lesson.package_id
     
-    # Удаление
     delete_stmt = delete(Lesson).where(Lesson.id == lesson_id)
     await session.execute(delete_stmt)
-    await sync_package_metrics(session, package_id)
+    await sync_package_metrics(session, current_tenant, package_id)
     await session.commit()
-    return package_id  # Возвращаем для использования в эндпоинте
+    return package_id
 
 
 async def create_lesson(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     package_id: int,
     *,
     scheduled_at: datetime,
@@ -105,12 +97,13 @@ async def create_lesson(
     homework_due_at: Optional[datetime] = None,
     sequence_index: Optional[int] = None,
 ) -> LessonDTO:
-    package = await crud.get_lesson_package(session, package_id)
+    package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
 
     lesson = await crud.create_lesson(
         session,
+        current_tenant,
         package,
         scheduled_at=scheduled_at,
         duration_minutes=duration_minutes,
@@ -119,20 +112,21 @@ async def create_lesson(
         homework_due_at=homework_due_at,
         sequence_index=sequence_index,
     )
-    await sync_package_metrics(session, package_id)
+    await sync_package_metrics(session, current_tenant, package_id)
     return _build_lesson_dto(lesson)
 
 
-async def list_lessons(session: AsyncSession, package_id: int) -> list[LessonDTO]:
-    package = await crud.get_lesson_package(session, package_id)
+async def list_lessons(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> list[LessonDTO]:
+    package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
-    lessons = await crud.fetch_lessons_for_package(session, package_id)
+    lessons = await crud.fetch_lessons_for_package(session, current_tenant, package_id)
     return [_build_lesson_dto(lesson) for lesson in lessons]
 
 
 async def list_all_lessons(
     session: AsyncSession,
+    current_tenant: CurrentTenant,
     *, 
     status: Optional[str] = None, 
     search: Optional[str] = None,
@@ -143,6 +137,7 @@ async def list_all_lessons(
 ) -> tuple[list[LessonDTO], int]:
     lessons, total = await crud.list_all_lessons(
         session, 
+        current_tenant,
         status=status, 
         search=search,
         limit=limit, 
