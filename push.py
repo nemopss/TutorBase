@@ -1,0 +1,1 @@
+# Misc file for updating docker registries
