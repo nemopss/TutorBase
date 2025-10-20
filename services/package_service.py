@@ -54,7 +54,7 @@ async def regenerate_reminders_for_package(session: AsyncSession, current_tenant
     package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
-    await regenerate_package_reminders(session, package)
+    await regenerate_package_reminders(session, current_tenant, package)
 
 
 async def sync_metrics(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> LessonPackageDTO:
