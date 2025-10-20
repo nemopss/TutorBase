@@ -33,14 +33,17 @@ jobs:
               - 'requirements.txt'
               - 'alembic/**'
               - 'database/**'
+              - 'push.py'
             api:
               - 'Dockerfile.api'
               - 'api/**'
               - 'alembic/**'
               - 'database/**'
               - 'requirements.txt'
+              - 'push.py'
             app:
               - 'mini-app/**'
+              - 'push.py'
             nginx:
               - 'nginx/**'
             compose:
