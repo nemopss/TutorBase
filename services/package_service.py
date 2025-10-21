@@ -1,3 +1,33 @@
+"""Service for managing lesson packages in the system.
+
+This module contains business logic for working with lesson packages (LessonPackage),
+including creation, updates, deletion, and metrics synchronization. Packages can be
+created manually or generated from templates (LessonPackageTemplate).
+
+Key components:
+    - get_package: Retrieve a package by ID
+    - list_packages: Get list of packages with filtering and pagination
+    - create_package: Create a new package manually (without auto-generating lessons)
+    - create_package_from_template: Create package from template with automatic lesson generation
+    - update_package: Update package parameters
+    - delete_package: Delete a package and all related data
+    - sync_metrics: Synchronize package metrics (lesson count, progress)
+    - regenerate_reminders_for_package: Regenerate all reminders for a package
+
+Relationships with other services:
+    - lesson_service: Manages lessons within packages
+    - learner_service: Links packages to learners
+    - template_service: Uses templates for package creation
+    - package_scheduler: Generates reminders for packages
+    - utils: Helper functions for lesson generation and metrics synchronization
+
+Business logic:
+    - Packages track lesson progress (total, completed, cancelled)
+    - Metrics are automatically synchronized when lessons change
+    - Reminders are regenerated when package schedule changes
+    - All timestamps are normalized to the default timezone
+    - Prometheus metrics track package creation
+"""
 from __future__ import annotations
 
 from datetime import datetime, timezone
@@ -24,6 +54,17 @@ except ImportError:
 
 
 def _build_package_dto(package: LessonPackage) -> LessonPackageDTO:
+    """Convert LessonPackage model to DTO for data transfer.
+
+    Calculate lesson statistics (total, completed, cancelled) and build data
+    transfer object with timestamps normalized to local timezone.
+
+    Args:
+        package: Lesson package model from database
+
+    Returns:
+        LessonPackageDTO with package data and calculated progress
+    """
     total, completed, cancelled = lesson_stats(package.lessons or [])
     learner_name = package.learner.display_name if package.learner else None
     
@@ -44,6 +85,19 @@ def _build_package_dto(package: LessonPackage) -> LessonPackageDTO:
 
 
 async def get_package(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> LessonPackageDTO:
+    """Retrieve a lesson package by ID.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        package_id: Lesson package ID
+
+    Returns:
+        LessonPackageDTO with package data and progress
+
+    Raises:
+        NotFoundError: If package with specified ID is not found
+    """
     package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
@@ -51,6 +105,19 @@ async def get_package(session: AsyncSession, current_tenant: CurrentTenant, pack
 
 
 async def regenerate_reminders_for_package(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> None:
+    """Regenerate all reminders for a lesson package.
+
+    Delete existing reminders and create new ones based on current package
+    and lesson state. Used when schedule or package parameters change.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        package_id: Lesson package ID
+
+    Raises:
+        NotFoundError: If package with specified ID is not found
+    """
     package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
@@ -58,6 +125,23 @@ async def regenerate_reminders_for_package(session: AsyncSession, current_tenant
 
 
 async def sync_metrics(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> LessonPackageDTO:
+    """Synchronize package metrics based on lesson state.
+
+    Recalculate lesson count, statuses (completed, cancelled) and update
+    total_lessons, completed_lessons, cancelled_lessons fields in package model.
+    Called after lessons in the package are modified.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        package_id: Lesson package ID
+
+    Returns:
+        LessonPackageDTO with updated metrics
+
+    Raises:
+        NotFoundError: If package with specified ID is not found
+    """
     package, _ = await sync_package_metrics(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
@@ -74,6 +158,23 @@ async def list_packages(
     status: Optional[str] = None,
     search: Optional[str] = None,
 ) -> tuple[list[LessonPackageDTO], int]:
+    """Get list of lesson packages with filtering and pagination.
+
+    Supports filtering by learner, status, and text search by title.
+    Returns list of packages and total count for pagination.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        limit: Maximum number of packages in result
+        offset: Offset for pagination
+        learner_id: Filter by learner ID (optional)
+        status: Filter by package status (draft, active, completed, cancelled)
+        search: Text search by package title (optional)
+
+    Returns:
+        Tuple of list of LessonPackageDTO and total package count
+    """
     packages, total = await crud.fetch_lesson_packages_paginated(
         session, 
         current_tenant,
@@ -99,6 +200,33 @@ async def create_package(
     start_date: Optional[datetime] = None,
     total_lessons: Optional[int] = None,
 ) -> LessonPackageDTO:
+    """Create a new lesson package manually (without auto-generating lessons).
+
+    Create an empty package with specified parameters. Lessons must be added
+    separately via lesson_service. If template_id is specified, package will be
+    linked to template, but lessons will not be created automatically (use
+    create_package_from_template for that).
+
+    After creation, reminders are automatically generated for the package and
+    Prometheus metrics are updated.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        learner_id: ID of learner who owns the package
+        title: Package title
+        notes: Additional notes (optional)
+        status: Package status (default 'draft')
+        template_id: Template ID for linking (optional, without lesson auto-generation)
+        start_date: Package start date (optional)
+        total_lessons: Planned number of lessons (optional)
+
+    Returns:
+        LessonPackageDTO with created package data
+
+    Raises:
+        NotFoundError: If learner or template not found
+    """
     learner = await crud.get_learner(session, current_tenant, learner_id)
     if not learner:
         raise NotFoundError(f"Learner {learner_id} not found")
@@ -143,6 +271,35 @@ async def create_package_from_template(
     start_local: datetime,
     status: str = 'draft',
 ) -> LessonPackageDTO:
+    """Create lesson package from template with automatic lesson generation.
+
+    Create package and automatically generate all lessons according to template
+    rules (lesson count, schedule, duration). After creation, synchronize package
+    metrics and create reminders for all lessons.
+
+    Business logic:
+        1. Create package with parameters from template
+        2. Generate lessons by template schedule (generate_lessons_from_template)
+        3. Synchronize package metrics (lesson count)
+        4. Create reminders for all lessons
+        5. Update Prometheus metrics
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        learner_id: ID of learner who owns the package
+        template_id: Template ID for lesson generation
+        title: Package title
+        notes: Additional notes (optional)
+        start_local: Package start date in local timezone
+        status: Package status (default 'draft')
+
+    Returns:
+        LessonPackageDTO with created package data and generated lessons
+
+    Raises:
+        NotFoundError: If learner or template not found
+    """
     learner = await crud.get_learner(session, current_tenant, learner_id)
     template = await crud.get_lesson_package_template(session, current_tenant, template_id)
     if not learner or not template:
@@ -190,6 +347,31 @@ async def update_package(
     end_date: Optional[datetime] = None,
     total_lessons: Optional[int] = None,
 ) -> LessonPackageDTO:
+    """Update parameters of existing lesson package.
+
+    Update specified package fields. All parameters are optional - only passed
+    values are updated. After update, package metrics are automatically synchronized.
+
+    Note: Changing dates does not affect existing lessons. To change lesson
+    schedule, use lesson_service.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        package_id: Package ID to update
+        title: New package title (optional)
+        status: New package status (optional)
+        notes: New notes (optional)
+        start_date: New start date in local timezone (optional)
+        end_date: New end date in local timezone (optional)
+        total_lessons: New planned lesson count (optional)
+
+    Returns:
+        LessonPackageDTO with updated package data
+
+    Raises:
+        NotFoundError: If package with specified ID is not found
+    """
     package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
@@ -214,6 +396,19 @@ async def update_package(
 
 
 async def delete_package(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> None:
+    """Delete lesson package and all related data.
+
+    Delete package along with all its lessons and reminders. Operation is
+    irreversible. Use with caution.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        package_id: Package ID to delete
+
+    Raises:
+        NotFoundError: If package with specified ID is not found
+    """
     package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")

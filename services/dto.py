@@ -1,3 +1,16 @@
+"""Data Transfer Objects for service layer.
+
+This module contains DTO classes used to transfer data between layers
+(database -> service -> API). DTOs provide a clean interface and decouple
+database models from API responses.
+
+DTOs:
+    - LearnerDTO: Learner data for display
+    - LessonDTO: Lesson data with package and learner info
+    - PackageProgress: Progress metrics for lesson packages
+    - LessonPackageDTO: Package data with progress
+    - TemplateDTO: Template data for package creation
+"""
 from __future__ import annotations
 
 from dataclasses import dataclass
@@ -7,12 +20,36 @@ from typing import Optional
 
 @dataclass
 class LearnerDTO:
+    """Learner data transfer object.
+    
+    Attributes:
+        id: Learner ID
+        display_name: Learner display name
+    """
     id: int
     display_name: str
 
 
 @dataclass(slots=True)
 class LessonDTO:
+    """Lesson data transfer object.
+    
+    Contains lesson data with related package and learner information
+    for display in API responses.
+    
+    Attributes:
+        id: Lesson ID
+        package_id: Parent package ID
+        package_title: Package title for display
+        learner_name: Learner name for display
+        scheduled_at: Scheduled datetime in local timezone
+        status: Lesson status (scheduled, completed, cancelled, missed)
+        duration_minutes: Lesson duration in minutes
+        sequence_index: Order in package
+        teacher_notes: Notes from teacher
+        homework_due_at: Homework deadline in local timezone
+        timezone: Timezone for datetime display
+    """
     id: int
     package_id: int
     package_title: Optional[str]
@@ -28,6 +65,16 @@ class LessonDTO:
 
 @dataclass(slots=True)
 class PackageProgress:
+    """Package progress metrics.
+    
+    Tracks lesson completion statistics for a package.
+    Used to display progress indicators in UI.
+    
+    Attributes:
+        total: Total number of lessons in package
+        completed: Number of completed lessons
+        cancelled: Number of cancelled lessons
+    """
     total: int
     completed: int
     cancelled: int
@@ -35,6 +82,25 @@ class PackageProgress:
 
 @dataclass(slots=True)
 class LessonPackageDTO:
+    """Lesson package data transfer object.
+    
+    Contains package data with progress metrics and learner information
+    for display in API responses and UI.
+    
+    Attributes:
+        id: Package ID
+        learner_id: ID of learner assigned to package
+        learner_name: Learner display name
+        template_id: ID of template used to create package (if any)
+        title: Package title/name
+        status: Package status (active, completed, cancelled)
+        start_date: Package start date in local timezone
+        end_date: Package end date in local timezone
+        timezone: Timezone for datetime display
+        notes: Additional notes about package
+        total_lessons: Total number of lessons in package
+        progress: Progress metrics (total, completed, cancelled)
+    """
     id: int
     learner_id: int
     learner_name: Optional[str]
@@ -51,6 +117,21 @@ class LessonPackageDTO:
 
 @dataclass(slots=True)
 class TemplateDTO:
+    """Template data transfer object.
+    
+    Contains template configuration for creating lesson packages.
+    Templates define default settings for package creation including
+    lesson count, schedule, and reminder rules.
+    
+    Attributes:
+        id: Template ID
+        name: Template name for display
+        description: Detailed description of template purpose
+        lesson_count: Default number of lessons in packages created from template
+        duration_days: Default duration in days for package schedule
+        timezone: Default timezone for lesson scheduling
+        default_config: Additional configuration as JSON (lesson frequency, reminders, etc.)
+    """
     id: int
     name: str
     description: Optional[str]

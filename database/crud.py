@@ -1,3 +1,21 @@
+"""CRUD operations for all database models.
+
+This module contains Create, Read, Update, Delete operations for all entities
+in the system. All operations support multi-tenancy through CurrentTenant context.
+
+Function groups:
+    - Applications: add_application, fetch_*_applications, delete_all_applications
+    - Students: add_student, get_all_students, get_student, delete_student (legacy)
+    - Users: get_user, create_user, update_user_login_metadata, list_users
+    - BotUsers: upsert_bot_user, get_bot_user, get_bot_user_by_chat_id
+    - Learners: create_learner, get_learner, update_learner, delete_learner, fetch_*_learners
+    - Templates: create_lesson_package_template, get_lesson_package_template, fetch_*
+    - Packages: add_lesson_package, get_lesson_package, update_lesson_package, delete_*
+    - Lessons: add_lesson, get_lesson, update_lesson, delete_lesson, fetch_*_lessons
+    - Reminders: create_reminder_rule, get_reminder_*, fetch_*_reminders, update_*
+    - Tenants: create_tenant, get_tenant, list_tenants
+    - InviteTokens: create_invite_token, get_invite_token, validate_and_use_token
+"""
 from __future__ import annotations
 from datetime import datetime, timezone, date
 from email.mime import base
@@ -34,7 +52,22 @@ from database.validators import (
 )
 
 
+# ============================================================================
+# Application CRUD Operations
+# ============================================================================
+
+
 async def add_application(session: AsyncSession, current_tenant: CurrentTenant, app_data: dict, tenant_id: Optional[int] = None):
+    """Add new student application.
+    
+    Super admins can specify tenant_id, otherwise uses current tenant.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        app_data: Application data dictionary
+        tenant_id: Optional tenant ID (super admin only)
+    """
     if current_tenant.is_super_admin and tenant_id is not None:
         final_tenant_id = tenant_id
     else:
@@ -45,6 +78,16 @@ async def add_application(session: AsyncSession, current_tenant: CurrentTenant, 
 
 
 async def fetch_last_n_applications(session: AsyncSession, current_tenant: CurrentTenant, n: int = 20):
+    """Fetch last N applications ordered by ID descending.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        n: Number of applications to fetch
+        
+    Returns:
+        List of Application objects
+    """
     query = select(Application).order_by(Application.id.desc())
     if current_tenant.tenant_id is not None:
         query = query.where(Application.tenant_id == current_tenant.tenant_id)
@@ -54,6 +97,15 @@ async def fetch_last_n_applications(session: AsyncSession, current_tenant: Curre
 
 
 async def fetch_all_applications(session: AsyncSession, current_tenant: CurrentTenant):
+    """Fetch all applications ordered by ID ascending.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        
+    Returns:
+        List of all Application objects
+    """
     query = select(Application).order_by(Application.id.asc())
     if current_tenant.tenant_id is not None:
         query = query.where(Application.tenant_id == current_tenant.tenant_id)
@@ -62,6 +114,15 @@ async def fetch_all_applications(session: AsyncSession, current_tenant: CurrentT
 
 
 async def fetch_applications_count(session: AsyncSession, current_tenant: CurrentTenant):
+    """Get total count of applications.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        
+    Returns:
+        Total number of applications
+    """
     query = select(func.count()).select_from(Application)
     if current_tenant.tenant_id is not None:
         query = query.where(Application.tenant_id == current_tenant.tenant_id)
@@ -70,7 +131,18 @@ async def fetch_applications_count(session: AsyncSession, current_tenant: Curren
 
 
 async def fetch_applications_stats(session: AsyncSession, current_tenant: CurrentTenant) -> dict:
-    """Return aggregate statistics for applications."""
+    """Get aggregate statistics for applications.
+    
+    Calculates statistics by language, by month, and recent applications.
+    Handles both SQLite and PostgreSQL date formatting.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        
+    Returns:
+        Dictionary with keys: total, by_language, by_month, recent
+    """
     base_query = select(Application)
     if current_tenant.tenant_id is not None:
         base_query = base_query.where(Application.tenant_id == current_tenant.tenant_id)
@@ -113,9 +185,14 @@ async def fetch_applications_stats(session: AsyncSession, current_tenant: Curren
 
 
 async def delete_all_applications(session: AsyncSession, current_tenant: CurrentTenant):
-    """
-    DANGEROUS: Delete all applications. Only super-admins can delete across all tenants.
+    """Delete all applications (DANGEROUS operation).
+    
+    Super-admins can delete across all tenants.
     Regular users can only delete from their own tenant.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
     """
     query = select(Application)
     if current_tenant.tenant_id is not None:
@@ -126,35 +203,91 @@ async def delete_all_applications(session: AsyncSession, current_tenant: Current
         await session.delete(app)
 
 
+# ============================================================================
+# Student CRUD Operations (Legacy)
+# ============================================================================
+
+
 async def add_student(session: AsyncSession, name: str, story: str, photo_file_id: str | None = None):
+    """Add new student (legacy model).
+    
+    Args:
+        session: Async database session
+        name: Student name
+        story: Student story/description
+        photo_file_id: Telegram file ID for photo
+    """
     new_student = Student(name=name, story=story, photo_file_id=photo_file_id)
     session.add(new_student)
 
 
 async def get_all_students(session: AsyncSession):
+    """Get all students ordered by name (legacy model).
+    
+    Args:
+        session: Async database session
+        
+    Returns:
+        List of Student objects
+    """
     query = select(Student).order_by(Student.name)
     result = await session.execute(query)
     return result.scalars().all()
 
 
 async def get_student(session: AsyncSession, student_id: int):
+    """Get student by ID (legacy model).
+    
+    Args:
+        session: Async database session
+        student_id: Student ID
+        
+    Returns:
+        Student object or None
+    """
     return await session.get(Student, student_id)
 
 
 async def delete_student(session: AsyncSession, student_id: int):
+    """Delete student by ID (legacy model).
+    
+    Args:
+        session: Async database session
+        student_id: Student ID to delete
+    """
     student = await session.get(Student, student_id)
     if student:
         await session.delete(student)
 
 
-# --- Users ------------------------------------------------------------------
+# ============================================================================
+# User CRUD Operations
+# ============================================================================
 
 
 async def get_user(session: AsyncSession, user_id: int) -> User | None:
+    """Get user by ID.
+    
+    Args:
+        session: Async database session
+        user_id: User ID
+        
+    Returns:
+        User object or None
+    """
     return await session.get(User, user_id)
 
 
 async def get_user_by_telegram_id(session: AsyncSession, telegram_id: int) -> User | None:
+    """Get user by Telegram ID.
+    
+    Args:
+        session: Async database session
+        telegram_id: Telegram user ID
+        
+    Returns:
+        User object or None
+    """
     stmt = select(User).where(User.telegram_id == telegram_id)
     return (await session.execute(stmt)).scalar_one_or_none()
 
@@ -169,6 +302,26 @@ async def create_user(
     role: str = "viewer",
     tenant_id: Optional[int] = None,
 ) -> User:
+    """Create new system user.
+    
+    Validates input and assigns tenant based on permissions.
+    Super-admins can create users for any tenant or global admins.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        telegram_id: Optional Telegram ID for linking
+        username: Optional username
+        display_name: Display name (required)
+        role: User role (viewer, teacher, admin)
+        tenant_id: Optional tenant ID (super admin only)
+        
+    Returns:
+        Created User object
+        
+    Raises:
+        ValueError: If validation fails
+    """
     # Validation
     VALID_ROLES = ["viewer", "teacher", "admin"]
     
@@ -210,6 +363,21 @@ async def update_user_login_metadata(
     role: str | None = None,
     last_login_at: datetime | None = None,
 ) -> User:
+    """Update user login metadata and profile.
+    
+    Updates user information and last login timestamp.
+    
+    Args:
+        session: Async database session
+        user: User object to update
+        username: New username
+        display_name: New display name
+        role: New role
+        last_login_at: Last login timestamp (defaults to now)
+        
+    Returns:
+        Updated User object
+    """
     now = datetime.now(timezone.utc)
     if username is not None:
         user.username = username
@@ -227,6 +395,15 @@ async def update_user_login_metadata(
 
 
 async def list_users(session: AsyncSession, current_tenant: CurrentTenant) -> list[User]:
+    """List all users for current tenant.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        
+    Returns:
+        List of User objects ordered by creation date
+    """
     stmt = select(User).order_by(User.created_at.asc())
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(User.tenant_id == current_tenant.tenant_id)
@@ -234,10 +411,24 @@ async def list_users(session: AsyncSession, current_tenant: CurrentTenant) -> li
     return result.scalars().all()
 
 
-# --- Bot users & learners ---------------------------------------------------
+# ============================================================================
+# BotUser CRUD Operations
+# ============================================================================
 
 
 async def upsert_bot_user(session: AsyncSession, user: AiogramUser) -> BotUser:
+    """Create or update bot user from Telegram user.
+    
+    Updates existing user or creates new one based on chat_id.
+    Updates last_seen_at timestamp on every call.
+    
+    Args:
+        session: Async database session
+        user: Aiogram User object from Telegram
+        
+    Returns:
+        BotUser object (created or updated)
+    """
     now_utc = datetime.now(timezone.utc)
     stmt = select(BotUser).where(BotUser.chat_id == user.id)
     existing = (await session.execute(stmt)).scalar_one_or_none()
@@ -281,10 +472,25 @@ async def fetch_available_bot_users(
     offset: int,
     search: Optional[str] = None,
 ) -> tuple[list[BotUser], int]:
+    """Fetch bot users not yet linked to learners with pagination.
+    
+    Searches across username, first_name, last_name, and chat_id.
+    
+    Args:
+        session: Async database session
+        limit: Maximum number of results
+        offset: Number of results to skip
+        search: Optional search string
+        
+    Returns:
+        Tuple of (list of BotUser objects, total count)
+    """
     base_query = select(BotUser).outerjoin(Learner).where(Learner.id.is_(None))
 
     if search:
-        pattern = f"%{search.lower()}%"
+        from database.validators import escape_like_pattern
+        escaped_search = escape_like_pattern(search.lower())
+        pattern = f"%{escaped_search}%"
         chat_id_expr = cast(BotUser.chat_id, String)
         base_query = base_query.where(
             or_(
@@ -304,6 +510,11 @@ async def fetch_available_bot_users(
     return rows, total
 
 
+# ============================================================================
+# Learner CRUD Operations
+# ============================================================================
+
+
 async def fetch_learners_paginated(
     session: AsyncSession,
     current_tenant: CurrentTenant,
@@ -311,6 +522,20 @@ async def fetch_learners_paginated(
     limit: int,
     offset: int,
 ) -> tuple[list[Learner], int]:
+    """Fetch learners with pagination and tenant filtering.
+    
+    Super-admins in global context see all learners.
+    Regular users and switched super-admins see only their tenant's learners.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        limit: Maximum number of results
+        offset: Number of results to skip
+        
+    Returns:
+        Tuple of (list of Learner objects with bot_user loaded, total count)
+    """
     base_query = select(Learner)
 
     # Apply tenant filter:
@@ -350,6 +575,21 @@ async def create_learner(
     notes: Optional[str] = None,
     tenant_id: Optional[int] = None,
 ) -> Learner:
+    """Create new learner linked to bot user.
+    
+    Super-admins can specify tenant_id, otherwise uses current tenant.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        bot_user_id: ID of bot user to link
+        display_name: Display name for learner
+        notes: Optional notes about learner
+        tenant_id: Optional tenant ID (super admin only)
+        
+    Returns:
+        Created Learner object
+    """
     now_utc = datetime.now(timezone.utc)
 
     if current_tenant.is_super_admin and tenant_id is not None:
@@ -369,15 +609,45 @@ async def create_learner(
 
 
 async def get_bot_user(session: AsyncSession, bot_user_id: int) -> BotUser | None:
+    """Get bot user by ID.
+    
+    Args:
+        session: Async database session
+        bot_user_id: Bot user ID
+        
+    Returns:
+        BotUser object or None
+    """
     return await session.get(BotUser, bot_user_id)
 
 
 async def get_bot_user_by_chat_id(session: AsyncSession, chat_id: int) -> BotUser | None:
+    """Get bot user by Telegram chat ID.
+    
+    Args:
+        session: Async database session
+        chat_id: Telegram chat ID
+        
+    Returns:
+        BotUser object or None
+    """
     stmt = select(BotUser).where(BotUser.chat_id == chat_id)
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
 async def get_learner(session: AsyncSession, current_tenant: CurrentTenant, learner_id: int) -> Learner | None:
+    """Get learner by ID with tenant filtering.
+    
+    Eager loads bot_user relationship.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        learner_id: Learner ID
+        
+    Returns:
+        Learner object with bot_user loaded or None
+    """
     stmt = select(Learner).options(selectinload(Learner.bot_user)).where(Learner.id == learner_id)
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(Learner.tenant_id == current_tenant.tenant_id)
@@ -385,6 +655,16 @@ async def get_learner(session: AsyncSession, current_tenant: CurrentTenant, lear
 
 
 async def get_learner_by_bot_user(session: AsyncSession, current_tenant: CurrentTenant, bot_user_id: int) -> Learner | None:
+    """Get learner by bot user ID with tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        bot_user_id: Bot user ID
+        
+    Returns:
+        Learner object or None
+    """
     stmt = select(Learner).where(Learner.bot_user_id == bot_user_id)
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(Learner.tenant_id == current_tenant.tenant_id)
@@ -400,9 +680,23 @@ async def update_learner(
     notes: Optional[str] = None,
     notifications_enabled: Optional[bool] = None,
 ) -> Learner:
-    """
-    Update learner with tenant validation.
-    Critical: Ensure the learner belongs to the current tenant context.
+    """Update learner with tenant validation.
+    
+    Validates that learner belongs to current tenant before updating.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        learner: Learner object to update
+        display_name: New display name
+        notes: New notes
+        notifications_enabled: Enable/disable notifications
+        
+    Returns:
+        Updated Learner object
+        
+    Raises:
+        ValueError: If learner doesn't belong to current tenant
     """
     # Security check: Ensure learner belongs to current tenant
     if not current_tenant.is_super_admin and learner.tenant_id != current_tenant.tenant_id:
@@ -419,9 +713,18 @@ async def update_learner(
 
 
 async def delete_learner(session: AsyncSession, current_tenant: CurrentTenant, learner: Learner) -> None:
-    """
-    Delete learner with tenant validation.
-    Critical: Ensure the learner belongs to the current tenant context.
+    """Delete learner with tenant validation.
+    
+    Validates that learner belongs to current tenant before deletion.
+    Cascades to delete related packages, lessons, and reminders.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        learner: Learner object to delete
+        
+    Raises:
+        ValueError: If learner doesn't belong to current tenant
     """
     # Security check: Ensure learner belongs to current tenant
     if not current_tenant.is_super_admin and learner.tenant_id != current_tenant.tenant_id:
@@ -431,6 +734,17 @@ async def delete_learner(session: AsyncSession, current_tenant: CurrentTenant, l
 
 
 async def fetch_all_learners(session: AsyncSession, current_tenant: CurrentTenant) -> list[Learner]:
+    """Fetch all learners with tenant filtering.
+    
+    Eager loads bot_user relationship and orders by display name.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        
+    Returns:
+        List of Learner objects with bot_user loaded
+    """
     stmt = (
         select(Learner)
         .options(selectinload(Learner.bot_user))
@@ -453,7 +767,23 @@ async def create_learner_from_chat_id(
     notifications_enabled: bool = True,
     tenant_id: Optional[int] = None,
 ) -> Learner:
-    """Create a learner directly from chat_id, creating BotUser if needed."""
+    """Create learner from Telegram chat ID.
+    
+    Creates or finds BotUser by chat_id, then creates Learner linked to it.
+    Super-admins can specify tenant_id.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        chat_id: Telegram chat ID
+        display_name: Display name for learner
+        notes: Optional notes
+        notifications_enabled: Enable notifications (default True)
+        tenant_id: Optional tenant ID (super admin only)
+        
+    Returns:
+        Created Learner object
+    """
     # Validation
     chat_id = ensure_positive_int(chat_id, "chat_id")
     display_name = ensure_non_empty(display_name, "display_name", max_len=255)
@@ -505,7 +835,9 @@ async def create_learner_from_chat_id(
     return learner
 
 
-# --- Lesson packages & lessons ---------------------------------------------
+# ============================================================================
+# LessonPackageTemplate CRUD Operations
+# ============================================================================
 
 
 async def create_lesson_package_template(
@@ -520,6 +852,27 @@ async def create_lesson_package_template(
     default_config: Optional[dict] = None,
     tenant_id: Optional[int] = None,
 ) -> LessonPackageTemplate:
+    """Create new lesson package template.
+    
+    Validates input and assigns tenant. Super-admins can specify tenant_id.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        name: Template name (required, unique)
+        description: Template description
+        lesson_count: Default number of lessons
+        duration_days: Default duration in days
+        default_timezone: Default timezone for lessons
+        default_config: JSON configuration
+        tenant_id: Optional tenant ID (super admin only)
+        
+    Returns:
+        Created LessonPackageTemplate object
+        
+    Raises:
+        ValueError: If validation fails
+    """
     # Validation
     name = ensure_non_empty(name, "name", max_len=255)
     lesson_count = ensure_positive_int_or_none(lesson_count, "lesson_count")
@@ -545,6 +898,16 @@ async def create_lesson_package_template(
 
 
 async def get_lesson_package_template(session: AsyncSession, current_tenant: CurrentTenant, template_id: int) -> LessonPackageTemplate | None:
+    """Get lesson package template by ID with tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        template_id: Template ID
+        
+    Returns:
+        LessonPackageTemplate object or None
+    """
     stmt = select(LessonPackageTemplate).where(LessonPackageTemplate.id == template_id)
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(LessonPackageTemplate.tenant_id == current_tenant.tenant_id)
@@ -552,6 +915,15 @@ async def get_lesson_package_template(session: AsyncSession, current_tenant: Cur
 
 
 async def fetch_lesson_package_templates(session: AsyncSession, current_tenant: CurrentTenant) -> list[LessonPackageTemplate]:
+    """Fetch all lesson package templates with tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        
+    Returns:
+        List of LessonPackageTemplate objects ordered by name
+    """
     stmt = select(LessonPackageTemplate).order_by(LessonPackageTemplate.name.asc())
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(LessonPackageTemplate.tenant_id == current_tenant.tenant_id)
@@ -569,6 +941,21 @@ async def update_lesson_package_template(
     default_timezone: Optional[str] = None,
     default_config: Optional[dict] = None,
 ) -> LessonPackageTemplate:
+    """Update lesson package template.
+    
+    Args:
+        session: Async database session
+        template: Template object to update
+        name: New name
+        description: New description
+        lesson_count: New lesson count
+        duration_days: New duration
+        default_timezone: New timezone
+        default_config: New configuration
+        
+    Returns:
+        Updated LessonPackageTemplate object
+    """
     if name is not None:
         template.name = name
     if description is not None:
@@ -586,7 +973,18 @@ async def update_lesson_package_template(
 
 
 async def delete_lesson_package_template(session: AsyncSession, template: LessonPackageTemplate) -> None:
+    """Delete lesson package template.
+    
+    Args:
+        session: Async database session
+        template: Template object to delete
+    """
     await session.delete(template)
+
+
+# ============================================================================
+# LessonPackage CRUD Operations
+# ============================================================================
 
 
 async def create_lesson_package(
@@ -604,6 +1002,31 @@ async def create_lesson_package(
     notes: Optional[str] = None,
     tenant_id: Optional[int] = None,
 ) -> LessonPackage:
+    """Create new lesson package for learner.
+    
+    Validates input and assigns tenant. Can be created from template.
+    Super-admins can specify tenant_id.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        learner: Learner object for this package
+        title: Package title
+        template: Optional template to use
+        status: Package status (draft, active, completed, cancelled)
+        start_date: Package start date
+        end_date: Package end date
+        timezone_name: Timezone for lessons
+        total_lessons: Total number of lessons
+        notes: Package notes
+        tenant_id: Optional tenant ID (super admin only)
+        
+    Returns:
+        Created LessonPackage object
+        
+    Raises:
+        ValueError: If validation fails
+    """
     # Validation
     VALID_PACKAGE_STATUSES = ["draft", "active", "completed", "cancelled"]
     
@@ -636,6 +1059,14 @@ async def create_lesson_package(
 
 
 async def delete_lesson_package(session: AsyncSession, package: LessonPackage) -> None:
+    """Delete lesson package.
+    
+    Cascades to delete all lessons and reminders in package.
+    
+    Args:
+        session: Async database session
+        package: Package object to delete
+    """
     await session.delete(package)
 
 
@@ -644,6 +1075,18 @@ async def update_lesson_package(
     package: LessonPackage,
     **fields,
 ) -> LessonPackage:
+    """Update lesson package fields.
+    
+    Dynamically updates any provided fields. Handles timezone_name -> timezone mapping.
+    
+    Args:
+        session: Async database session
+        package: Package object to update
+        **fields: Fields to update
+        
+    Returns:
+        Updated LessonPackage object
+    """
     rename_mapping = {
         'timezone_name': 'timezone',
     }
@@ -656,6 +1099,19 @@ async def update_lesson_package(
 
 
 async def get_lesson_package(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> LessonPackage | None:
+    """Get lesson package by ID with all relationships loaded.
+    
+    Eager loads learner (with bot_user), template, lessons, reminder rules and instances.
+    Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        package_id: Package ID
+        
+    Returns:
+        LessonPackage object with all relationships loaded or None
+    """
     stmt = (
         select(LessonPackage)
         .options(
@@ -678,6 +1134,19 @@ async def fetch_lesson_packages_for_learner(
     current_tenant: CurrentTenant,
     learner_id: int,
 ) -> list[LessonPackage]:
+    """Fetch all lesson packages for specific learner.
+    
+    Eager loads learner (with bot_user) and template.
+    Orders by creation date descending. Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        learner_id: Learner ID
+        
+    Returns:
+        List of LessonPackage objects for the learner
+    """
     stmt = (
         select(LessonPackage)
         .options(
@@ -693,6 +1162,11 @@ async def fetch_lesson_packages_for_learner(
     return (await session.execute(stmt)).scalars().all()
 
 
+# ============================================================================
+# Lesson CRUD Operations
+# ============================================================================
+
+
 async def create_lesson(
     session: AsyncSession,
     current_tenant: CurrentTenant,
@@ -706,6 +1180,28 @@ async def create_lesson(
     homework_due_at: Optional[datetime] = None,
     tenant_id: Optional[int] = None,
 ) -> Lesson:
+    """Create new lesson in package.
+    
+    Validates input and assigns tenant. Super-admins can specify tenant_id.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        package: Parent lesson package
+        scheduled_at: Scheduled datetime for lesson
+        duration_minutes: Lesson duration in minutes
+        status: Lesson status (scheduled, completed, cancelled, rescheduled)
+        sequence_index: Order in package
+        teacher_notes: Notes from teacher
+        homework_due_at: Homework deadline
+        tenant_id: Optional tenant ID (super admin only)
+        
+    Returns:
+        Created Lesson object
+        
+    Raises:
+        ValueError: If validation fails
+    """
     # Validation
     VALID_LESSON_STATUSES = ["scheduled", "completed", "cancelled", "rescheduled"]
     
@@ -733,6 +1229,19 @@ async def create_lesson(
 
 
 async def get_lesson(session: AsyncSession, current_tenant: CurrentTenant, lesson_id: int) -> Lesson | None:
+    """Get lesson by ID with relationships loaded.
+    
+    Eager loads package (with learner) and reminder rules.
+    Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        lesson_id: Lesson ID
+        
+    Returns:
+        Lesson object with relationships loaded or None
+    """
     stmt = (
         select(Lesson)
         .options(
@@ -748,6 +1257,14 @@ async def get_lesson(session: AsyncSession, current_tenant: CurrentTenant, lesso
 
 
 async def delete_lesson(session: AsyncSession, lesson: Lesson) -> None:
+    """Delete lesson.
+    
+    Cascades to delete related reminder rules and instances.
+    
+    Args:
+        session: Async database session
+        lesson: Lesson object to delete
+    """
     await session.delete(lesson)
 
 
@@ -761,6 +1278,23 @@ async def fetch_lesson_packages_paginated(
     status: Optional[str] = None,
     search: Optional[str] = None,
 ) -> tuple[list[LessonPackage], int]:
+    """Fetch lesson packages with pagination and filtering.
+    
+    Supports filtering by learner, status, and search (title or learner name).
+    Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        limit: Maximum number of results
+        offset: Number of results to skip
+        learner_id: Optional learner ID filter
+        status: Optional status filter
+        search: Optional search string for title or learner name
+        
+    Returns:
+        Tuple of (list of LessonPackage objects, total count)
+    """
     base_query = select(LessonPackage)
     if current_tenant.tenant_id is not None:
         base_query = base_query.where(LessonPackage.tenant_id == current_tenant.tenant_id)
@@ -770,7 +1304,9 @@ async def fetch_lesson_packages_paginated(
     if status is not None:
         base_query = base_query.where(LessonPackage.status == status)
     if search:
-        pattern = f"%{search}%"
+        from database.validators import escape_like_pattern
+        escaped_search = escape_like_pattern(search)
+        pattern = f"%{escaped_search}%"
         base_query = base_query.join(LessonPackage.learner).where(
             or_(
                 LessonPackage.title.ilike(pattern),
@@ -798,6 +1334,19 @@ async def fetch_lesson_packages_paginated(
 
 
 async def fetch_lessons_for_package(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> list[Lesson]:
+    """Fetch all lessons for specific package.
+    
+    Eager loads package relationship. Orders by scheduled time ascending.
+    Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        package_id: Package ID
+        
+    Returns:
+        List of Lesson objects for the package
+    """
     stmt = (
         select(Lesson)
         .options(selectinload(Lesson.package))
@@ -821,6 +1370,24 @@ async def list_all_lessons(
     sort_by: str = 'scheduled_at',
     sort_order: str = 'asc',
 ) -> tuple[list[Lesson], int]:
+    """List all lessons with filtering, search, and sorting.
+    
+    Supports filtering by status, searching by date/package/learner,
+    and sorting by any lesson field. Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        status: Optional status filter
+        search: Optional search string (date, package title, or learner name)
+        limit: Maximum number of results
+        offset: Number of results to skip
+        sort_by: Field to sort by (default: scheduled_at)
+        sort_order: Sort order (asc or desc)
+        
+    Returns:
+        Tuple of (list of Lesson objects with package and learner loaded, total count)
+    """
     stmt = (
         select(Lesson)
         .options(
@@ -854,7 +1421,9 @@ async def list_all_lessons(
         if parsed_date is not None:
             conditions.append(func.date(Lesson.scheduled_at) == parsed_date.isoformat())
         else:
-            pattern = f"%{search_term.lower()}%"
+            from database.validators import escape_like_pattern
+            escaped_search = escape_like_pattern(search_term.lower())
+            pattern = f"%{escaped_search}%"
             needs_package_join = True
             needs_learner_join = True
             conditions.append(
@@ -890,7 +1459,9 @@ async def list_all_lessons(
     return result.scalars().all(), total
 
 
-# --- Reminder rules & instances -------------------------------------------
+# ============================================================================
+# Reminder CRUD Operations
+# ============================================================================
 
 
 async def create_reminder_rule(
@@ -905,6 +1476,25 @@ async def create_reminder_rule(
     active: bool = True,
     tenant_id: Optional[int] = None,
 ) -> ReminderRule:
+    """Create new reminder rule.
+    
+    Rules can be package-level or lesson-specific.
+    Super-admins can specify tenant_id.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        package: Parent lesson package
+        lesson: Optional specific lesson
+        reminder_type: Type of reminder
+        config: JSON configuration for reminder
+        channel: Notification channel (default: telegram)
+        active: Whether rule is active
+        tenant_id: Optional tenant ID (super admin only)
+        
+    Returns:
+        Created ReminderRule object
+    """
     if current_tenant.is_super_admin and tenant_id is not None:
         final_tenant_id = tenant_id
     else:
@@ -924,6 +1514,16 @@ async def create_reminder_rule(
 
 
 async def get_reminder_rule(session: AsyncSession, current_tenant: CurrentTenant, rule_id: int) -> ReminderRule | None:
+    """Get reminder rule by ID with tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        rule_id: Rule ID
+        
+    Returns:
+        ReminderRule object or None
+    """
     stmt = select(ReminderRule).where(ReminderRule.id == rule_id)
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(ReminderRule.tenant_id == current_tenant.tenant_id)
@@ -946,6 +1546,29 @@ async def create_reminder_instance(
     active: bool = True,
     tenant_id: Optional[int] = None,
 ) -> ReminderInstance:
+    """Create new reminder instance.
+    
+    Instances are scheduled reminders to be sent to learners.
+    Super-admins can specify tenant_id.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        rule: Parent reminder rule
+        package: Related lesson package
+        learner: Learner to receive reminder
+        scheduled_for: When to send reminder
+        lesson: Optional specific lesson
+        status: Instance status (default: scheduled)
+        payload: JSON data for reminder content
+        chat_identifier: Telegram chat ID
+        comment: Additional comment
+        active: Whether instance is active
+        tenant_id: Optional tenant ID (super admin only)
+        
+    Returns:
+        Created ReminderInstance object
+    """
     if current_tenant.is_super_admin and tenant_id is not None:
         final_tenant_id = tenant_id
     else:
@@ -974,6 +1597,19 @@ async def fetch_reminder_instances_due(
     *,
     statuses: Optional[list[str]] = None,
 ) -> list[ReminderInstance]:
+    """Fetch reminder instances that are due for sending.
+    
+    Finds active instances scheduled before now_utc with specified statuses.
+    Eager loads all relationships. No tenant filtering (global query).
+    
+    Args:
+        session: Async database session
+        now_utc: Current UTC datetime
+        statuses: List of statuses to include (default: scheduled, pending)
+        
+    Returns:
+        List of ReminderInstance objects due for sending
+    """
     if statuses is None:
         statuses = ["scheduled", "pending"]
     stmt = (
@@ -1006,6 +1642,24 @@ async def set_reminder_instance_status(
     last_decline_reason: Optional[str] = None,
     comment: Optional[str] = None,
 ) -> ReminderInstance:
+    """Update reminder instance status and metadata.
+    
+    Updates status and optionally other fields like response data.
+    
+    Args:
+        session: Async database session
+        instance: ReminderInstance object to update
+        status: New status
+        active: New active state
+        last_notified_at: Last notification timestamp
+        last_response: Last response from learner
+        last_response_at: Last response timestamp
+        last_decline_reason: Reason if declined
+        comment: Additional comment
+        
+    Returns:
+        Updated ReminderInstance object
+    """
     instance.status = status
     if active is not None:
         instance.active = active
@@ -1024,6 +1678,19 @@ async def set_reminder_instance_status(
 
 
 async def get_reminder_instance(session: AsyncSession, current_tenant: CurrentTenant, instance_id: int) -> ReminderInstance | None:
+    """Get reminder instance by ID with relationships loaded.
+    
+    Eager loads rule, package, learner, and lesson.
+    Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        instance_id: Instance ID
+        
+    Returns:
+        ReminderInstance object with relationships loaded or None
+    """
     stmt = (
         select(ReminderInstance)
         .options(
@@ -1045,6 +1712,19 @@ async def fetch_reminder_instances_for_package(
     current_tenant: CurrentTenant,
     package_id: int,
 ) -> list[ReminderInstance]:
+    """Fetch all reminder instances for specific package.
+    
+    Eager loads rule, package, learner, and lesson.
+    Orders by scheduled time. Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        package_id: Package ID
+        
+    Returns:
+        List of ReminderInstance objects for the package
+    """
     stmt = (
         select(ReminderInstance)
         .options(
@@ -1067,6 +1747,18 @@ async def fetch_reminder_instances_count(
     current_tenant: CurrentTenant,
     status: Optional[str] = None,
 ) -> int:
+    """Get count of reminder instances with optional status filter.
+    
+    Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        status: Optional status filter
+        
+    Returns:
+        Count of reminder instances
+    """
     stmt = select(func.count()).select_from(ReminderInstance)
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(ReminderInstance.tenant_id == current_tenant.tenant_id)
@@ -1088,6 +1780,25 @@ async def fetch_reminder_instances_paginated(
     package_id: Optional[int] = None,
     search: Optional[str] = None,
 ) -> tuple[list[ReminderInstance], int]:
+    """Fetch reminder instances with pagination and filtering.
+    
+    Supports filtering by status, reminder_type, package_id, and search.
+    Search looks in comment, package title, and learner name.
+    Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        limit: Maximum number of results
+        offset: Number of results to skip
+        status: Optional status filter
+        reminder_type: Optional reminder type filter
+        package_id: Optional package ID filter
+        search: Optional search string
+        
+    Returns:
+        Tuple of (list of ReminderInstance objects, total count)
+    """
     # Build base query with eager loading
     stmt = (
         select(ReminderInstance)
@@ -1125,10 +1836,12 @@ async def fetch_reminder_instances_paginated(
         conditions.append(ReminderInstance.package_id == package_id)
     
     if search is not None:
+        from database.validators import escape_like_pattern
         needs_package_join = True
         needs_learner_join = True
         # Search in comment, package title, and learner name
-        search_pattern = f"%{search}%"
+        escaped_search = escape_like_pattern(search)
+        search_pattern = f"%{escaped_search}%"
         search_condition = or_(
             ReminderInstance.comment.ilike(search_pattern),
             LessonPackage.title.ilike(search_pattern),
@@ -1167,7 +1880,21 @@ async def fetch_reminder_instances_paginated(
     return instances, total
 
 
+# ============================================================================
+# Statistics Functions
+# ============================================================================
+
+
 async def count_lessons_by_status(session: AsyncSession, current_tenant: CurrentTenant) -> dict[str, int]:
+    """Get count of lessons grouped by status.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        
+    Returns:
+        Dictionary mapping status to count
+    """
     stmt = select(Lesson.status, func.count()).group_by(Lesson.status)
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(Lesson.tenant_id == current_tenant.tenant_id)
@@ -1176,6 +1903,15 @@ async def count_lessons_by_status(session: AsyncSession, current_tenant: Current
 
 
 async def count_reminders_by_status(session: AsyncSession, current_tenant: CurrentTenant) -> dict[str, int]:
+    """Get count of reminder instances grouped by status.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        
+    Returns:
+        Dictionary mapping status to count
+    """
     stmt = select(ReminderInstance.status, func.count()).group_by(ReminderInstance.status)
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(ReminderInstance.tenant_id == current_tenant.tenant_id)
@@ -1190,6 +1926,17 @@ async def lessons_daily_stats(
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
 ) -> list[tuple[str, int]]:
+    """Get daily lesson counts with optional date range.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        from_date: Optional start date filter
+        to_date: Optional end date filter
+        
+    Returns:
+        List of tuples (date_string, count) ordered by date
+    """
     stmt = select(func.date(Lesson.scheduled_at), func.count()).group_by(func.date(Lesson.scheduled_at)).order_by(func.date(Lesson.scheduled_at))
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(Lesson.tenant_id == current_tenant.tenant_id)
@@ -1209,6 +1956,17 @@ async def reminders_daily_stats(
     from_date: Optional[datetime] = None,
     to_date: Optional[datetime] = None,
 ) -> list[tuple[str, int]]:
+    """Get daily reminder instance counts with optional date range.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        from_date: Optional start date filter
+        to_date: Optional end date filter
+        
+    Returns:
+        List of tuples (date_string, count) ordered by date
+    """
     stmt = select(func.date(ReminderInstance.scheduled_for), func.count()).group_by(func.date(ReminderInstance.scheduled_for)).order_by(func.date(ReminderInstance.scheduled_for))
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(ReminderInstance.tenant_id == current_tenant.tenant_id)
@@ -1221,7 +1979,9 @@ async def reminders_daily_stats(
     return [(row[0], row[1]) for row in result.all() if row[0] is not None]
 
 
-# --- Tenants ----------------------------------------------------------------
+# ============================================================================
+# Tenant CRUD Operations
+# ============================================================================
 
 
 async def create_tenant(
@@ -1232,6 +1992,18 @@ async def create_tenant(
     contact_email: Optional[str] = None,
     is_active: bool = True,
 ) -> Tenant:
+    """Create new tenant.
+    
+    Args:
+        session: Async database session
+        name: Tenant name
+        slug: URL-friendly unique identifier
+        contact_email: Contact email
+        is_active: Whether tenant is active
+        
+    Returns:
+        Created Tenant object
+    """
     now = datetime.now(timezone.utc)
     tenant = Tenant(
         name=name,
@@ -1246,10 +2018,28 @@ async def create_tenant(
 
 
 async def get_tenant(session: AsyncSession, tenant_id: int) -> Tenant | None:
+    """Get tenant by ID.
+    
+    Args:
+        session: Async database session
+        tenant_id: Tenant ID
+        
+    Returns:
+        Tenant object or None
+    """
     return await session.get(Tenant, tenant_id)
 
 
 async def get_tenant_by_slug(session: AsyncSession, slug: str) -> Tenant | None:
+    """Get tenant by slug.
+    
+    Args:
+        session: Async database session
+        slug: Tenant slug
+        
+    Returns:
+        Tenant object or None
+    """
     stmt = select(Tenant).where(Tenant.slug == slug)
     return (await session.execute(stmt)).scalar_one_or_none()
 
@@ -1260,6 +2050,16 @@ async def list_tenants(
     limit: int = 100,
     offset: int = 0,
 ) -> tuple[list[Tenant], int]:
+    """List all tenants with pagination.
+    
+    Args:
+        session: Async database session
+        limit: Maximum number of results
+        offset: Number of results to skip
+        
+    Returns:
+        Tuple of (list of Tenant objects, total count)
+    """
     stmt = select(Tenant).order_by(Tenant.name.asc()).limit(limit).offset(offset)
     result = await session.execute(stmt)
     total = (await session.execute(select(func.count()).select_from(Tenant))).scalar_one()
@@ -1275,6 +2075,19 @@ async def update_tenant(
     contact_email: Optional[str] = None,
     is_active: Optional[bool] = None,
 ) -> Tenant:
+    """Update tenant fields.
+    
+    Args:
+        session: Async database session
+        tenant: Tenant object to update
+        name: New name
+        slug: New slug
+        contact_email: New contact email
+        is_active: New active status
+        
+    Returns:
+        Updated Tenant object
+    """
     if name is not None:
         tenant.name = name
     if slug is not None:
@@ -1289,13 +2102,22 @@ async def update_tenant(
 
 
 async def delete_tenant(session: AsyncSession, tenant: Tenant) -> None:
+    """Delete tenant.
+    
+    Cascades to delete all related data (users, learners, packages, lessons, reminders).
+    
+    Args:
+        session: Async database session
+        tenant: Tenant object to delete
+    """
     await session.delete(tenant)
 
 
 
 # ============================================================================
-# INVITE TOKEN OPERATIONS
+# InviteToken CRUD Operations
 # ============================================================================
+
 
 async def create_invite_token(
     session: AsyncSession,
@@ -1303,7 +2125,23 @@ async def create_invite_token(
     created_by_user_id: int,
     expires_in_days: int = 30,
 ) -> InviteToken:
-    """Create a new invite token for a tenant."""
+    """Create new invite token for tenant.
+    
+    Generates cryptographically secure token for user registration.
+    Super-admins cannot create tokens (must be tenant-specific).
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        created_by_user_id: User creating the token
+        expires_in_days: Token validity period (default: 30 days)
+        
+    Returns:
+        Created InviteToken object
+        
+    Raises:
+        HTTPException: If super-admin attempts to create token
+    """
     import secrets
     from datetime import timedelta
     
@@ -1333,7 +2171,18 @@ async def get_invite_token_by_token(
     session: AsyncSession,
     token: str,
 ) -> Optional[InviteToken]:
-    """Get invite token by token string (no tenant filtering - needed for registration)."""
+    """Get invite token by token string.
+    
+    No tenant filtering - needed for registration flow.
+    Eager loads tenant and created_by relationships.
+    
+    Args:
+        session: Async database session
+        token: Token string to lookup
+        
+    Returns:
+        InviteToken object with relationships loaded or None
+    """
     stmt = (
         select(InviteToken)
         .options(
@@ -1350,7 +2199,17 @@ async def mark_invite_token_as_used(
     session: AsyncSession,
     invite_token: InviteToken,
 ) -> InviteToken:
-    """Mark an invite token as used."""
+    """Mark invite token as used.
+    
+    Sets used_at timestamp to current UTC time.
+    
+    Args:
+        session: Async database session
+        invite_token: InviteToken object to mark as used
+        
+    Returns:
+        Updated InviteToken object
+    """
     invite_token.used_at = datetime.now(timezone.utc)
     await session.flush()
     return invite_token
@@ -1362,7 +2221,23 @@ async def list_invite_tokens(
     limit: int = 50,
     offset: int = 0,
 ) -> tuple[list[InviteToken], int]:
-    """List invite tokens for a tenant."""
+    """List invite tokens for tenant with pagination.
+    
+    Super-admins cannot list tokens (must be tenant-specific).
+    Eager loads created_by relationship.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context
+        limit: Maximum number of results
+        offset: Number of results to skip
+        
+    Returns:
+        Tuple of (list of InviteToken objects, total count)
+        
+    Raises:
+        HTTPException: If super-admin attempts to list tokens
+    """
     if current_tenant.tenant_id is None:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,

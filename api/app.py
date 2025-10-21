@@ -1,3 +1,38 @@
+"""FastAPI application factory and configuration.
+
+This module creates and configures the FastAPI application with all necessary
+middleware, routers, and instrumentation for the tutoring management system.
+
+Key components:
+    - create_app: Factory function to create configured FastAPI instance
+    - CORS middleware: Configured for cross-origin requests
+    - Rate limiting: SlowAPI limiter for request throttling
+    - Prometheus metrics: Automatic endpoint instrumentation
+    - API routers: All business logic endpoints under /api/v1
+
+Middleware stack:
+    1. CORS: Allows configured origins with credentials
+    2. Rate limiter: IP-based request throttling
+    3. Prometheus: Automatic metrics collection
+
+API structure:
+    - /health: Health check endpoints (no auth required)
+    - /metrics: Prometheus metrics endpoint
+    - /api/v1/auth: Authentication and authorization
+    - /api/v1/lessons: Lesson management
+    - /api/v1/packages: Package management
+    - /api/v1/templates: Template management
+    - /api/v1/reminders: Reminder management
+    - /api/v1/learners: Learner management
+    - /api/v1/users: User management
+    - /api/v1/tenants: Tenant management (multi-tenancy)
+    - /api/v1/invitations: User invitation system
+
+Configuration:
+    - CORS origins from config.CORS_ORIGINS
+    - Rate limits configured per endpoint
+    - Lifespan events for metrics updates
+"""
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -17,6 +52,29 @@ API_PREFIX = "/api/v1"
 limiter = Limiter(key_func=get_remote_address)
 
 def create_app() -> FastAPI:
+    """Create and configure FastAPI application instance.
+
+    Factory function that creates FastAPI app with all middleware, routers,
+    and instrumentation configured. This pattern allows for easy testing
+    and multiple app instances if needed.
+
+    Configuration steps:
+        1. Create FastAPI instance with title, version, and lifespan
+        2. Configure rate limiter and exception handlers
+        3. Add CORS middleware for cross-origin requests
+        4. Instrument with Prometheus for metrics collection
+        5. Register health check router (no auth)
+        6. Register all API routers under /api/v1 prefix
+
+    Returns:
+        Configured FastAPI application instance ready to serve
+
+    Example:
+        >>> app = create_app()
+        >>> # Run with uvicorn
+        >>> import uvicorn
+        >>> uvicorn.run(app, host="0.0.0.0", port=8000)
+    """
     app = FastAPI(
         title=APP_TITLE, 
         version=APP_VERSION,

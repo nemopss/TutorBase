@@ -297,32 +297,13 @@ async def register_tutor(
     
     logger.info(f"[{request_id}] Tutor registration attempt: telegram_id={telegram_id}, school={registration_data.school_name}")
     
-    # Check if user already exists
-    existing_user = await crud.get_user_by_telegram_id(session, telegram_id)
-    if existing_user:
-        logger.warning(f"[{request_id}] Tutor registration failed: user already exists (telegram_id={telegram_id})")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User already registered"
-        )
-    
-    # Check if tenant name is unique
-    from sqlalchemy import select
-    existing_tenant = await session.execute(
-        select(Tenant).where(Tenant.name == registration_data.school_name)
-    )
-    if existing_tenant.scalar_one_or_none():
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="School name already taken"
-        )
-    
-    # Create new tenant (school)
+    # Generate slug for tenant
     import re
     slug = re.sub(r'[^a-zA-Z0-9-]', '-', registration_data.school_name.lower()).strip('-')
     slug = re.sub(r'-+', '-', slug)  # Remove multiple consecutive dashes
     
-    # Ensure slug is unique
+    # Ensure slug is unique by appending counter if needed
+    from sqlalchemy import select
     base_slug = slug
     counter = 1
     MAX_SLUG_ATTEMPTS = 100
@@ -342,6 +323,7 @@ async def register_tutor(
             detail="Failed to generate unique school identifier. Please try a different school name."
         )
     
+    # Create tenant and user - let database constraints handle uniqueness
     tenant = Tenant(
         name=registration_data.school_name,
         slug=slug,
@@ -371,6 +353,25 @@ async def register_tutor(
     except Exception as e:
         await session.rollback()
         logger.error(f"[{request_id}] Tutor registration failed during commit: {e}")
+        
+        # Handle specific constraint violations
+        from sqlalchemy.exc import IntegrityError
+        if isinstance(e, IntegrityError):
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            
+            # Check which constraint was violated
+            if 'tenants_name_key' in error_msg or 'tenants.name' in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="School name already taken"
+                )
+            elif 'users_telegram_id_key' in error_msg or 'users.telegram_id' in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="User already registered"
+                )
+        
+        # Generic error for other cases
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed. Please try again."
@@ -436,15 +437,6 @@ async def register_student(
     telegram_display_name = build_display_name(user_block)
     
     logger.info(f"[{request_id}] Student registration attempt: telegram_id={telegram_id}, invite_token_prefix={registration_data.invite_token[:8]}")
-    
-    # Check if user already exists
-    existing_user = await crud.get_user_by_telegram_id(session, telegram_id)
-    if existing_user:
-        logger.warning(f"[{request_id}] Student registration failed: user already exists (telegram_id={telegram_id})")
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="User already registered"
-        )
     
     # Validate invite token
     invite_token = await crud.get_invite_token_by_token(session, registration_data.invite_token)
@@ -517,6 +509,25 @@ async def register_student(
     except Exception as e:
         await session.rollback()
         logger.error(f"[{request_id}] Student registration failed during commit: {e}")
+        
+        # Handle specific constraint violations
+        from sqlalchemy.exc import IntegrityError
+        if isinstance(e, IntegrityError):
+            error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
+            
+            # Check which constraint was violated
+            if 'users_telegram_id_key' in error_msg or 'users.telegram_id' in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="User already registered"
+                )
+            elif 'bot_users_chat_id_key' in error_msg or 'bot_users.chat_id' in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="User already registered"
+                )
+        
+        # Generic error for other cases
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed. Please try again."
