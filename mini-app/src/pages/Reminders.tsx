@@ -83,8 +83,23 @@ const fetchReminders = async (page: number, pageSize: number, status: string | n
 };
 
 const fetchPackages = async (): Promise<PackageListResponse> => {
-  const { data } = await api.get('/packages', { params: { limit: 1000 } });
-  return data;
+  // Fetch all packages with pagination (max 100 per request)
+  let allItems: Package[] = [];
+  let offset = 0;
+  const limit = 100;
+  let hasMore = true;
+  
+  while (hasMore) {
+    const { data } = await api.get('/packages', { params: { limit, offset } });
+    allItems = [...allItems, ...data.items];
+    hasMore = data.has_more;
+    offset += limit;
+    
+    // Safety limit to prevent infinite loops
+    if (offset > 10000) break;
+  }
+  
+  return { items: allItems, total: allItems.length };
 };
 
 const updateReminder = async ({ id, values }: { id: number; values: any }) => {
