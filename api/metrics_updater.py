@@ -8,6 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import LessonPackage, Lesson, Learner
 from database.engine import async_session
+from config import config
+from utils.cache import init_cache, close_cache
 
 logger = logging.getLogger(__name__)
 
@@ -72,17 +74,33 @@ async def metrics_updater_task():
 
 @asynccontextmanager
 async def lifespan_with_metrics(app):
-    """FastAPI lifespan context manager with metrics updater."""
+    """FastAPI lifespan context manager with metrics updater and cache initialization."""
     # Startup
+    logger.info("Starting application lifespan...")
+    
+    # Initialize Redis cache
+    try:
+        await init_cache(config.REDIS_URL)
+    except Exception as e:
+        logger.warning(f"Failed to initialize cache, continuing without caching: {e}")
+    
+    # Start metrics updater task
     task = asyncio.create_task(metrics_updater_task())
     logger.info("Metrics updater started")
     
     yield
     
     # Shutdown
+    logger.info("Shutting down application...")
+    
+    # Stop metrics updater
     task.cancel()
     try:
         await task
     except asyncio.CancelledError:
         pass
     logger.info("Metrics updater stopped")
+    
+    # Close cache connection
+    await close_cache()
+    logger.info("Application shutdown complete")

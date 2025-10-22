@@ -1,7 +1,7 @@
 aiogram==3.4.1
 aiosqlite==0.18.0
 pydantic-settings==2.2.1
-redis
+redis[asyncio]>=5.0.0
 pandas
 openpyxl
 sqlalchemy==2.0.29
