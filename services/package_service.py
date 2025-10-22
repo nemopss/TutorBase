@@ -37,6 +37,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import CurrentTenant
 from database import crud
+from database.transaction import transactional
 from database.models import LessonPackage, LessonPackageTemplate
 from services.dto import LessonPackageDTO, PackageProgress
 from services.exceptions import NotFoundError
@@ -188,6 +189,7 @@ async def list_packages(
     return dtos, total
 
 
+@transactional(max_retries=3, backoff_factor=0.5)
 async def create_package(
     session: AsyncSession,
     current_tenant: CurrentTenant,
@@ -209,6 +211,10 @@ async def create_package(
 
     After creation, reminders are automatically generated for the package and
     Prometheus metrics are updated.
+
+    Transaction handling:
+        All operations execute in a single transaction with automatic commit on success
+        and rollback on error. Deadlocks are retried automatically.
 
     Args:
         session: Async database session
@@ -250,16 +256,19 @@ async def create_package(
         total_lessons=total_lessons,
     )
 
-    await session.flush([package])
-    await regenerate_package_reminders(session, current_tenant, package)    
-    await session.flush([package])
+    session.add(package)
+    await session.flush()  # Flush to get package.id for relationships
+    
+    await regenerate_package_reminders(session, current_tenant, package)
     
     if packages_created_total:
         packages_created_total.labels(learner_id=learner_id).inc()
     
+    # Transaction will be committed by @transactional decorator
     return _build_package_dto(package)
 
 
+@transactional(max_retries=3, backoff_factor=0.5)
 async def create_package_from_template(
     session: AsyncSession,
     current_tenant: CurrentTenant,
@@ -283,6 +292,10 @@ async def create_package_from_template(
         3. Synchronize package metrics (lesson count)
         4. Create reminders for all lessons
         5. Update Prometheus metrics
+
+    Transaction handling:
+        All operations execute in a single transaction with automatic commit on success
+        and rollback on error. Deadlocks are retried automatically.
 
     Args:
         session: Async database session
@@ -324,7 +337,9 @@ async def create_package_from_template(
         total_lessons=template.lesson_count,
     )
 
-    await session.flush([package])
+    session.add(package)
+    await session.flush()  # Flush to get package.id for relationships
+    
     await generate_lessons_from_template(session, current_tenant, package, template, localized_start)
     await sync_package_metrics(session, current_tenant, package.id)
     await regenerate_package_reminders(session, current_tenant, package)
@@ -332,6 +347,7 @@ async def create_package_from_template(
     if packages_created_total:
         packages_created_total.labels(learner_id=learner_id).inc()
     
+    # Transaction will be committed by @transactional decorator
     return _build_package_dto(package)
 
 
