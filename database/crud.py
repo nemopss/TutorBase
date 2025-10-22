@@ -29,6 +29,7 @@ from sqlalchemy.orm import selectinload, joinedload
 if TYPE_CHECKING:
     from api.dependencies import CurrentTenant
 
+from utils.tenant import resolve_tenant_id
 from database.models import (
     Application,
     Student,
@@ -591,11 +592,7 @@ async def create_learner(
         Created Learner object
     """
     now_utc = datetime.now(timezone.utc)
-
-    if current_tenant.is_super_admin and tenant_id is not None:
-        final_tenant_id = tenant_id
-    else:
-        final_tenant_id = current_tenant.tenant_id
+    final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
 
     learner = Learner(
         bot_user_id=bot_user_id,
@@ -817,10 +814,7 @@ async def create_learner_from_chat_id(
         return existing_learner
     
     # Create new learner
-    if current_tenant.is_super_admin and tenant_id is not None:
-        final_tenant_id = tenant_id
-    else:
-        final_tenant_id = current_tenant.tenant_id
+    final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
 
     learner = Learner(
         bot_user_id=bot_user.id,
@@ -1036,11 +1030,7 @@ async def create_lesson_package(
     
     final_tz = timezone_name or (template.default_timezone if template else "Europe/Moscow")
     final_tz = ensure_valid_timezone(final_tz, "timezone")
-
-    if current_tenant.is_super_admin and tenant_id is not None:
-        final_tenant_id = tenant_id
-    else:
-        final_tenant_id = current_tenant.tenant_id
+    final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
     
     package = LessonPackage(
         learner=learner,
@@ -1208,11 +1198,7 @@ async def create_lesson(
     status = ensure_in_list(status, "status", VALID_LESSON_STATUSES)
     duration_minutes = ensure_positive_int_or_none(duration_minutes, "duration_minutes")
     sequence_index = ensure_positive_int_or_none(sequence_index, "sequence_index")
-
-    if current_tenant.is_super_admin and tenant_id is not None:
-        final_tenant_id = tenant_id
-    else:
-        final_tenant_id = current_tenant.tenant_id
+    final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
     
     lesson = Lesson(
         package=package,
@@ -1495,10 +1481,7 @@ async def create_reminder_rule(
     Returns:
         Created ReminderRule object
     """
-    if current_tenant.is_super_admin and tenant_id is not None:
-        final_tenant_id = tenant_id
-    else:
-        final_tenant_id = current_tenant.tenant_id
+    final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
 
     rule = ReminderRule(
         package=package,
@@ -1569,10 +1552,7 @@ async def create_reminder_instance(
     Returns:
         Created ReminderInstance object
     """
-    if current_tenant.is_super_admin and tenant_id is not None:
-        final_tenant_id = tenant_id
-    else:
-        final_tenant_id = current_tenant.tenant_id
+    final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
 
     instance = ReminderInstance(
         rule=rule,
