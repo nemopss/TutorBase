@@ -43,6 +43,7 @@ from slowapi.errors import RateLimitExceeded
 from config import config
 from api.routes import auth, packages, lessons, templates, reminders, metrics, learners, users, health, tenants, invitations
 from api.metrics_updater import lifespan_with_metrics
+from api.errors import register_exception_handlers
 
 APP_TITLE = "App API"
 APP_VERSION = "0.1.2"
@@ -84,6 +85,9 @@ def create_app() -> FastAPI:
     # Configure rate limiter
     app.state.limiter = limiter
     app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+    # Register centralized exception handlers
+    register_exception_handlers(app)
 
     # Add CORS middleware for local development
     app.add_middleware(
