@@ -1,5 +1,44 @@
-from .auth import WebAppLoginRequest, RefreshRequest, SwitchTenantRequest, TokenPairResponse, UserPayload
-from .registration import (
+"""Pydantic schemas for API request/response validation.
+
+This package contains all Pydantic models used for:
+- Request validation at API boundary
+- Response serialization
+- Data transfer between layers
+
+Structure:
+    - base.py: Common base models and mixins
+    - pagination.py: Pagination request/response models
+    - validators.py: Custom Pydantic validators
+    - packages.py: Package-related schemas
+    - lessons.py: Lesson-related schemas
+    - learners.py: Learner-related schemas
+    - templates.py: Template-related schemas
+    - reminders.py: Reminder-related schemas
+    - users.py: User-related schemas
+
+Design principles:
+    - All validation happens at API boundary (not in CRUD/services)
+    - Schemas are immutable (use Config.frozen where appropriate)
+    - Use Field() for validation rules and documentation
+    - Custom validators for complex business rules
+"""
+
+from api.schemas.base import (
+    TimestampMixin,
+    TenantMixin,
+    BaseRequest,
+    BaseResponse,
+)
+from api.schemas.pagination import PaginationParams, PaginatedResponse
+from api.schemas.common import MessageResponse
+from api.schemas.auth import (
+    WebAppLoginRequest,
+    RefreshRequest,
+    SwitchTenantRequest,
+    UserPayload,
+    TokenPairResponse,
+)
+from api.schemas.registration import (
     TutorRegistrationRequest,
     StudentRegistrationRequest,
     InviteTokenRequest,
@@ -7,85 +46,127 @@ from .registration import (
     InviteTokenListResponse,
     RegistrationResponse,
 )
-from .packages import (
+from api.schemas.packages import (
     PackageCreateRequest,
-    PackageListResponse,
-    PackageResponse,
     PackageUpdateRequest,
+    PackageResponse,
+    PackageListResponse,
     PackageProgressModel,
+    VALID_PACKAGE_STATUSES,
 )
-from .lessons import (
+from api.schemas.lessons import (
     LessonCreateRequest,
-    LessonListResponse,
-    LessonResponse,
     LessonUpdateRequest,
+    LessonResponse,
+    LessonListResponse,
+    VALID_LESSON_STATUSES,
 )
-from .templates import (
+from api.schemas.learners import (
+    CreateLearnerRequest,
+    CreateLearnerFromChatIdRequest,
+    UpdateLearnerRequest,
+    UpdateLearnerNotificationsRequest,
+    LearnerResponse,
+    LearnerListResponse,
+)
+from api.schemas.templates import (
     TemplateCreateRequest,
-    TemplateListResponse,
-    TemplateResponse,
     TemplateUpdateRequest,
+    TemplateResponse,
+    TemplateListResponse,
 )
-from .reminders import (
-    ReminderListResponse,
-    ReminderResponse,
+from api.schemas.reminders import (
     ReminderUpdateRequest,
+    ReminderResponse,
+    ReminderListResponse,
+    VALID_REMINDER_STATUSES,
 )
-from .metrics import (
-    MetricsSummary,
-    DailyMetricsResponse,
-    DailyPoint,
-)
-from .common import MessageResponse
-from .users import (
+from api.schemas.users import (
+    UserRole,
     UserResponse,
     UserListResponse,
     UserRoleUpdateRequest,
+    UserUpdateRequest,
 )
-from .tenants import (
+from api.schemas.tenants import (
     TenantCreate,
     TenantUpdate,
     TenantResponse,
     TenantListResponse,
 )
+from api.schemas.metrics import (
+    MetricsSummary,
+    DailyPoint,
+    DailyMetricsResponse,
+)
 
 __all__ = [
-    "WebAppLoginRequest",
-    "RefreshRequest",
-    "SwitchTenantRequest",
-    "TokenPairResponse",
-    "UserPayload",
-    "TutorRegistrationRequest",
-    "StudentRegistrationRequest",
-    "InviteTokenRequest",
-    "InviteTokenResponse",
-    "InviteTokenListResponse",
-    "RegistrationResponse",
-    "PackageCreateRequest",
-    "PackageListResponse",
-    "PackageResponse",
-    "PackageUpdateRequest",
-    "PackageProgressModel",
-    "LessonCreateRequest",
-    "LessonListResponse",
-    "LessonResponse",
-    "LessonUpdateRequest",
-    "TemplateCreateRequest",
-    "TemplateListResponse",
-    "TemplateResponse",
-    "TemplateUpdateRequest",
-    "ReminderListResponse",
-    "ReminderResponse",
-    "ReminderUpdateRequest",
-    "MetricsSummary",
-    "DailyMetricsResponse",
-    "DailyPoint",
-    "MessageResponse",
-    "UserResponse",
-    "UserListResponse",
-    "UserRoleUpdateRequest",
-    "TenantCreate",
-    "TenantUpdate",
-    "TenantResponse",
-    "TenantListResponse",
+    # Base
+    'TimestampMixin',
+    'TenantMixin',
+    'BaseRequest',
+    'BaseResponse',
+    # Pagination
+    'PaginationParams',
+    'PaginatedResponse',
+    # Common
+    'MessageResponse',
+    # Auth
+    'WebAppLoginRequest',
+    'RefreshRequest',
+    'SwitchTenantRequest',
+    'UserPayload',
+    'TokenPairResponse',
+    # Registration
+    'TutorRegistrationRequest',
+    'StudentRegistrationRequest',
+    'InviteTokenRequest',
+    'InviteTokenResponse',
+    'InviteTokenListResponse',
+    'RegistrationResponse',
+    # Packages
+    'PackageCreateRequest',
+    'PackageUpdateRequest',
+    'PackageResponse',
+    'PackageListResponse',
+    'PackageProgressModel',
+    'VALID_PACKAGE_STATUSES',
+    # Lessons
+    'LessonCreateRequest',
+    'LessonUpdateRequest',
+    'LessonResponse',
+    'LessonListResponse',
+    'VALID_LESSON_STATUSES',
+    # Learners
+    'CreateLearnerRequest',
+    'CreateLearnerFromChatIdRequest',
+    'UpdateLearnerRequest',
+    'UpdateLearnerNotificationsRequest',
+    'LearnerResponse',
+    'LearnerListResponse',
+    # Templates
+    'TemplateCreateRequest',
+    'TemplateUpdateRequest',
+    'TemplateResponse',
+    'TemplateListResponse',
+    # Reminders
+    'ReminderUpdateRequest',
+    'ReminderResponse',
+    'ReminderListResponse',
+    'VALID_REMINDER_STATUSES',
+    # Users
+    'UserRole',
+    'UserResponse',
+    'UserListResponse',
+    'UserRoleUpdateRequest',
+    'UserUpdateRequest',
+    # Tenants
+    'TenantCreate',
+    'TenantUpdate',
+    'TenantResponse',
+    'TenantListResponse',
+    # Metrics
+    'MetricsSummary',
+    'DailyPoint',
+    'DailyMetricsResponse',
 ]
