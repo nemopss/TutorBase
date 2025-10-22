@@ -351,6 +351,7 @@ async def create_package_from_template(
     return _build_package_dto(package)
 
 
+@transactional(max_retries=3, backoff_factor=0.5)
 async def update_package(
     session: AsyncSession,
     current_tenant: CurrentTenant,
@@ -370,6 +371,10 @@ async def update_package(
 
     Note: Changing dates does not affect existing lessons. To change lesson
     schedule, use lesson_service.
+
+    Transaction handling:
+        All operations execute in a single transaction with automatic commit on success
+        and rollback on error. Deadlocks are retried automatically.
 
     Args:
         session: Async database session
@@ -406,16 +411,24 @@ async def update_package(
     if total_lessons is not None:
         package.total_lessons = total_lessons
 
-    await session.flush([package])
+    session.add(package)
+    await session.flush()
     await sync_package_metrics(session, current_tenant, package_id)
+    
+    # Transaction will be committed by @transactional decorator
     return _build_package_dto(package)
 
 
+@transactional(max_retries=3, backoff_factor=0.5)
 async def delete_package(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> None:
     """Delete lesson package and all related data.
 
     Delete package along with all its lessons and reminders. Operation is
     irreversible. Use with caution.
+
+    Transaction handling:
+        All operations execute in a single transaction with automatic commit on success
+        and rollback on error. Deadlocks are retried automatically.
 
     Args:
         session: Async database session
@@ -429,6 +442,7 @@ async def delete_package(session: AsyncSession, current_tenant: CurrentTenant, p
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
     await crud.delete_lesson_package(session, package)
+    # Transaction will be committed by @transactional decorator
 
 
 __all__ = [

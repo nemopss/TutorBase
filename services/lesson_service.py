@@ -35,6 +35,7 @@ from sqlalchemy import select, delete
 from api.dependencies import CurrentTenant
 from database import crud
 from database.models import Lesson
+from database.transaction import transactional
 from services.dto import LessonDTO
 from services.exceptions import NotFoundError
 from services.utils import sync_package_metrics
@@ -99,6 +100,7 @@ async def get_lesson(session: AsyncSession, current_tenant: CurrentTenant, lesso
     return _build_lesson_dto(lesson)
 
 
+@transactional(max_retries=3, backoff_factor=0.5)
 async def update_lesson(
     session: AsyncSession,
     current_tenant: CurrentTenant,
@@ -152,11 +154,14 @@ async def update_lesson(
     if homework_due_at is not None:
         lesson.homework_due_at = homework_due_at
 
-    await session.flush([lesson])
+    session.add(lesson)
+    await session.flush()
     await sync_package_metrics(session, current_tenant, lesson.package_id)
+    # Transaction will be committed by @transactional decorator
     return _build_lesson_dto(lesson)
 
 
+@transactional(max_retries=3, backoff_factor=0.5)
 async def delete_lesson(session: AsyncSession, current_tenant: CurrentTenant, lesson_id: int) -> int:
     """Delete a lesson and synchronize package metrics.
 
@@ -188,10 +193,11 @@ async def delete_lesson(session: AsyncSession, current_tenant: CurrentTenant, le
     delete_stmt = delete(Lesson).where(Lesson.id == lesson_id)
     await session.execute(delete_stmt)
     await sync_package_metrics(session, current_tenant, package_id)
-    await session.commit()
+    # Transaction will be committed by @transactional decorator
     return package_id
 
 
+@transactional(max_retries=3, backoff_factor=0.5)
 async def create_lesson(
     session: AsyncSession,
     current_tenant: CurrentTenant,
@@ -208,6 +214,10 @@ async def create_lesson(
 
     Create lesson with given parameters and automatically synchronize
     parent package metrics. Verify package existence before creating lesson.
+
+    Transaction handling:
+        All operations execute in a single transaction with automatic commit on success
+        and rollback on error. Deadlocks are retried automatically.
 
     Args:
         session: Async database session
@@ -248,6 +258,7 @@ async def create_lesson(
         sequence_index=sequence_index,
     )
     await sync_package_metrics(session, current_tenant, package_id)
+    # Transaction will be committed by @transactional decorator
     return _build_lesson_dto(lesson)
 
 
