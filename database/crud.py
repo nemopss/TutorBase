@@ -24,7 +24,7 @@ from typing import Optional, TYPE_CHECKING
 from aiogram.types import User as AiogramUser
 from sqlalchemy import select, func, or_, and_, cast, String
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy.orm import selectinload
+from sqlalchemy.orm import selectinload, joinedload
 
 if TYPE_CHECKING:
     from api.dependencies import CurrentTenant
@@ -1115,8 +1115,8 @@ async def get_lesson_package(session: AsyncSession, current_tenant: CurrentTenan
     stmt = (
         select(LessonPackage)
         .options(
-            selectinload(LessonPackage.learner).selectinload(Learner.bot_user),
-            selectinload(LessonPackage.template),
+            joinedload(LessonPackage.learner).joinedload(Learner.bot_user),
+            joinedload(LessonPackage.template),
             selectinload(LessonPackage.lessons),
             selectinload(LessonPackage.reminder_rules).selectinload(ReminderRule.instances),
             selectinload(LessonPackage.reminder_instances),
@@ -1150,8 +1150,8 @@ async def fetch_lesson_packages_for_learner(
     stmt = (
         select(LessonPackage)
         .options(
-            selectinload(LessonPackage.learner).selectinload(Learner.bot_user),
-            selectinload(LessonPackage.template),
+            joinedload(LessonPackage.learner).joinedload(Learner.bot_user),
+            joinedload(LessonPackage.template),
         )
         .where(LessonPackage.learner_id == learner_id)
         .order_by(LessonPackage.created_at.desc())
@@ -1245,7 +1245,7 @@ async def get_lesson(session: AsyncSession, current_tenant: CurrentTenant, lesso
     stmt = (
         select(Lesson)
         .options(
-            selectinload(Lesson.package).selectinload(LessonPackage.learner),
+            joinedload(Lesson.package).joinedload(LessonPackage.learner),
             selectinload(Lesson.reminder_rules),
         )
         .where(Lesson.id == lesson_id)
@@ -1321,8 +1321,8 @@ async def fetch_lesson_packages_paginated(
 
     rows_stmt = (
         base_query.options(
-            selectinload(LessonPackage.learner).selectinload(Learner.bot_user),
-            selectinload(LessonPackage.template),
+            joinedload(LessonPackage.learner).joinedload(Learner.bot_user),
+            joinedload(LessonPackage.template),
             selectinload(LessonPackage.lessons),
         )
         .order_by(LessonPackage.created_at.desc())
@@ -1391,7 +1391,7 @@ async def list_all_lessons(
     stmt = (
         select(Lesson)
         .options(
-            selectinload(Lesson.package).selectinload(LessonPackage.learner),
+            joinedload(Lesson.package).joinedload(LessonPackage.learner),
         )
     )
     count_stmt = select(func.count()).select_from(Lesson)
