@@ -44,13 +44,7 @@ from database.models import (
     User,
     Tenant,
 )
-from database.validators import (
-    ensure_positive_int,
-    ensure_non_empty,
-    ensure_valid_timezone,
-    ensure_in_list,
-    ensure_positive_int_or_none,
-)
+from database.validators import escape_like_pattern
 
 
 # ============================================================================
@@ -323,15 +317,6 @@ async def create_user(
     Raises:
         ValueError: If validation fails
     """
-    # Validation
-    VALID_ROLES = ["viewer", "teacher", "admin"]
-    
-    display_name = ensure_non_empty(display_name, "display_name", max_len=255)
-    role = ensure_in_list(role, "role", VALID_ROLES)
-    
-    if telegram_id is not None:
-        telegram_id = ensure_positive_int(telegram_id, "telegram_id")
-
     if current_tenant.is_super_admin and tenant_id is not None:
         final_tenant_id = tenant_id
     # Super-admins created without a tenant_id should be global
@@ -781,10 +766,6 @@ async def create_learner_from_chat_id(
     Returns:
         Created Learner object
     """
-    # Validation
-    chat_id = ensure_positive_int(chat_id, "chat_id")
-    display_name = ensure_non_empty(display_name, "display_name", max_len=255)
-    
     now_utc = datetime.now(timezone.utc)
     
     # Try to get existing BotUser
@@ -867,12 +848,6 @@ async def create_lesson_package_template(
     Raises:
         ValueError: If validation fails
     """
-    # Validation
-    name = ensure_non_empty(name, "name", max_len=255)
-    lesson_count = ensure_positive_int_or_none(lesson_count, "lesson_count")
-    duration_days = ensure_positive_int_or_none(duration_days, "duration_days")
-    default_timezone = ensure_valid_timezone(default_timezone, "default_timezone")
-
     if current_tenant.is_super_admin and tenant_id is not None:
         final_tenant_id = tenant_id
     else:
@@ -1021,15 +996,7 @@ async def create_lesson_package(
     Raises:
         ValueError: If validation fails
     """
-    # Validation
-    VALID_PACKAGE_STATUSES = ["draft", "active", "completed", "cancelled"]
-    
-    title = ensure_non_empty(title, "title", max_len=255)
-    status = ensure_in_list(status, "status", VALID_PACKAGE_STATUSES)
-    total_lessons = ensure_positive_int_or_none(total_lessons, "total_lessons")
-    
     final_tz = timezone_name or (template.default_timezone if template else "Europe/Moscow")
-    final_tz = ensure_valid_timezone(final_tz, "timezone")
     final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
     
     package = LessonPackage(
@@ -1192,12 +1159,6 @@ async def create_lesson(
     Raises:
         ValueError: If validation fails
     """
-    # Validation
-    VALID_LESSON_STATUSES = ["scheduled", "completed", "cancelled", "rescheduled"]
-    
-    status = ensure_in_list(status, "status", VALID_LESSON_STATUSES)
-    duration_minutes = ensure_positive_int_or_none(duration_minutes, "duration_minutes")
-    sequence_index = ensure_positive_int_or_none(sequence_index, "sequence_index")
     final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
     
     lesson = Lesson(

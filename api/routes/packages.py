@@ -107,8 +107,6 @@ async def create_package_endpoint(
     try:
         start_local = _parse_start_date(payload.start_date)
         if payload.template_id is not None:
-            if payload.start_date is None:
-                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="start_date required for template")
             await template_service.get_template(session, current_tenant, payload.template_id)
             package = await package_service.create_package_from_template(
                 session,

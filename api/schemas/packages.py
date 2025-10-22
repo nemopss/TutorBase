@@ -162,6 +162,20 @@ class PackageCreateRequest(BaseRequest):
             return v
         return validate_timezone(v)
 
+    @model_validator(mode='after')
+    def validate_template_requires_start_date(self) -> 'PackageCreateRequest':
+        """Validate that start_date is provided when using a template.
+        
+        Returns:
+            Self with validated fields
+            
+        Raises:
+            ValueError: If template_id is provided without start_date
+        """
+        if self.template_id is not None and self.start_date is None:
+            raise ValueError("start_date is required when creating package from template")
+        return self
+
 
 class PackageUpdateRequest(BaseRequest):
     """Request schema for updating an existing lesson package.
