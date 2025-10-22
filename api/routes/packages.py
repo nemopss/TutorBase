@@ -13,7 +13,7 @@ from api.schemas.packages import (
     PackageUpdateRequest,
     PackageProgressModel,
 )
-from api.schemas import MessageResponse
+from api.schemas import MessageResponse, PaginatedResponse, PaginationParams
 from services import package_service, template_service
 from services.dto import LessonPackageDTO
 from services.exceptions import NotFoundError, ValidationError
@@ -59,29 +59,26 @@ def _parse_start_date(value: datetime | str | None) -> datetime | None:
     return value
 
 
-@router.get("", response_model=PackageListResponse)
+@router.get("", response_model=PaginatedResponse[PackageResponse])
 async def list_packages(
-    limit: int = Query(10, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    pagination: PaginationParams = Depends(),
     learner_id: int | None = None,
     status_filter: str | None = None,
     search: str | None = None,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
-) -> PackageListResponse:
+) -> PaginatedResponse[PackageResponse]:
     packages, total = await package_service.list_packages(
         session,
         current_tenant,
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
         learner_id=learner_id,
         status=status_filter,
         search=search,
     )
-    return PackageListResponse(
-        total=total,
-        items=[_to_response(pkg) for pkg in packages],
-    )
+    items = [_to_response(pkg) for pkg in packages]
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
 @router.get("/{package_id}", response_model=PackageResponse)

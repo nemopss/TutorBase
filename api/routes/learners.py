@@ -15,20 +15,27 @@ from api.schemas.learners import (
     CreateLearnerFromChatIdRequest,
     UpdateLearnerNotificationsRequest,
 )
+from api.schemas import PaginatedResponse, PaginationParams
 from services import learner_service
 
 router = APIRouter()
 
 
-@router.get("", response_model=LearnerListResponse)
+@router.get("", response_model=PaginatedResponse[LearnerResponse])
 async def list_all_learners(
+    pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
-) -> LearnerListResponse:
+) -> PaginatedResponse[LearnerResponse]:
     """Lists all learners for the current tenant."""
     learners = await learner_service.get_all_learners(session, current_tenant)
+    
+    # Apply pagination manually since service doesn't support it yet
+    total = len(learners)
+    paginated_learners = learners[pagination.offset:pagination.offset + pagination.limit]
+    
     items = []
-    for learner in learners:
+    for learner in paginated_learners:
         chat_id = learner.bot_user.chat_id if learner.bot_user else None
         items.append(
             LearnerResponse(
@@ -38,7 +45,7 @@ async def list_all_learners(
                 chat_id=chat_id,
             )
         )
-    return LearnerListResponse(items=items)
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
 @router.post("", response_model=LearnerResponse, status_code=201)

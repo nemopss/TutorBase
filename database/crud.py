@@ -397,6 +397,41 @@ async def list_users(session: AsyncSession, current_tenant: CurrentTenant) -> li
     return result.scalars().all()
 
 
+async def list_users_paginated(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[User], int]:
+    """List users for current tenant with pagination.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        limit: Maximum number of records to return
+        offset: Number of records to skip
+        
+    Returns:
+        Tuple of (list of User objects, total count)
+    """
+    # Base query for filtering
+    base_stmt = select(User)
+    if current_tenant.tenant_id is not None:
+        base_stmt = base_stmt.where(User.tenant_id == current_tenant.tenant_id)
+    
+    # Count query
+    count_stmt = select(func.count()).select_from(base_stmt.subquery())
+    total = (await session.execute(count_stmt)).scalar() or 0
+    
+    # Data query with pagination
+    stmt = base_stmt.order_by(User.created_at.asc()).limit(limit).offset(offset)
+    result = await session.execute(stmt)
+    users = result.scalars().all()
+    
+    return users, total
+
+
 # ============================================================================
 # BotUser CRUD Operations
 # ============================================================================
@@ -1681,6 +1716,59 @@ async def fetch_reminder_instances_for_package(
         stmt = stmt.where(ReminderInstance.tenant_id == current_tenant.tenant_id)
 
     return (await session.execute(stmt)).scalars().all()
+
+
+async def fetch_reminder_instances_for_package_paginated(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    package_id: int,
+    *,
+    limit: int = 50,
+    offset: int = 0,
+) -> tuple[list[ReminderInstance], int]:
+    """Fetch paginated reminder instances for specific package.
+    
+    Eager loads rule, package, learner, and lesson.
+    Orders by scheduled time. Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        package_id: Package ID
+        limit: Maximum number of records to return
+        offset: Number of records to skip
+        
+    Returns:
+        Tuple of (list of ReminderInstance objects, total count)
+    """
+    # Base query for filtering
+    base_stmt = (
+        select(ReminderInstance)
+        .where(ReminderInstance.package_id == package_id)
+    )
+    if current_tenant.tenant_id is not None:
+        base_stmt = base_stmt.where(ReminderInstance.tenant_id == current_tenant.tenant_id)
+    
+    # Count query
+    count_stmt = select(func.count()).select_from(base_stmt.subquery())
+    total = (await session.execute(count_stmt)).scalar() or 0
+    
+    # Data query with pagination
+    stmt = (
+        base_stmt
+        .options(
+            selectinload(ReminderInstance.rule),
+            selectinload(ReminderInstance.package),
+            selectinload(ReminderInstance.learner),
+            selectinload(ReminderInstance.lesson),
+        )
+        .order_by(ReminderInstance.scheduled_for.asc())
+        .limit(limit)
+        .offset(offset)
+    )
+    
+    instances = (await session.execute(stmt)).scalars().all()
+    return instances, total
 
 
 async def fetch_reminder_instances_count(

@@ -32,7 +32,7 @@ async def test_list_users(client: AsyncClient, db_session: AsyncSession, current
     response = await client.get("/api/v1/users", headers=headers)
     assert response.status_code == 200
     data = response.json()
-    assert any(user["username"] == "second" for user in data["users"])
+    assert any(user["username"] == "second" for user in data["items"])
 
 
 @pytest.mark.asyncio

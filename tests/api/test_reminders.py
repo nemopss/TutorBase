@@ -145,6 +145,6 @@ async def test_list_reminders_for_package_internal_error(monkeypatch, client: As
     async def boom(*args, **kwargs):
         raise RuntimeError("db down")
 
-    monkeypatch.setattr(crud, "fetch_reminder_instances_for_package", boom)
+    monkeypatch.setattr(crud, "fetch_reminder_instances_for_package_paginated", boom)
     response = await client.get("/api/v1/reminders/packages/1", headers=headers)
     assert response.status_code == 500
