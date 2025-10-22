@@ -75,7 +75,7 @@ const Admin = () => {
     setLoading(true);
     try {
       const response = await api.get('/users');
-      setData(response.data.users.map(mapUser));
+      setData(response.data.items.map(mapUser));
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
       message.error(detail ?? 'Не удалось загрузить список пользователей');
