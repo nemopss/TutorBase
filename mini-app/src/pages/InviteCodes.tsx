@@ -34,7 +34,7 @@ const InviteCodes: React.FC = () => {
         setLoading(true);
         try {
             const response = await api.get(`/tenants/${tenantId}/invitations`);
-            setTokens(response.data.tokens || []);
+            setTokens(response.data.items || []);
         } catch (error: any) {
             message.error('Failed to load invite codes');
             console.error('Failed to fetch tokens:', error);

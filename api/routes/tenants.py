@@ -8,7 +8,8 @@ from api.schemas import (
     TenantCreate,
     TenantUpdate,
     TenantResponse,
-    TenantListResponse,
+    PaginationParams,
+    PaginatedResponse,
 )
 from services import tenant_service
 from services.exceptions import NotFoundError
@@ -49,19 +50,23 @@ async def create_tenant(
     return _to_response(tenant)
 
 
-@router.get("", response_model=TenantListResponse)
+@router.get("", response_model=PaginatedResponse[TenantResponse])
 async def list_tenants(
-    limit: int = Query(100, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
+    pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_required),
-) -> TenantListResponse:
+) -> PaginatedResponse[TenantResponse]:
     if not current_tenant.is_super_admin:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only super-admins can list tenants")
 
-    tenants, total = await tenant_service.list_tenants(session, limit=limit, offset=offset)
-    return TenantListResponse(total=total, items=[_to_response(t) for t in tenants])
+    tenants, total = await tenant_service.list_tenants(
+        session,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    items = [_to_response(t) for t in tenants]
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
 @router.get("/{tenant_id}", response_model=TenantResponse)

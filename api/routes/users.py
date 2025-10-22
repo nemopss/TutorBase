@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_session, admin_required, get_current_tenant, CurrentTenant, get_current_user
-from api.schemas import UserListResponse, UserResponse, UserRoleUpdateRequest
+from api.schemas import UserResponse, UserRoleUpdateRequest, PaginationParams, PaginatedResponse
 from database import crud
 from database.models import User
 
@@ -32,14 +32,21 @@ async def get_current_user_info(
     return _to_response(current_user)
 
 
-@router.get("", response_model=UserListResponse)
+@router.get("", response_model=PaginatedResponse[UserResponse])
 async def list_users(
+    pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_required),
-) -> UserListResponse:
-    users = await crud.list_users(session, current_tenant)
-    return UserListResponse(users=[_to_response(u) for u in users])
+) -> PaginatedResponse[UserResponse]:
+    users, total = await crud.list_users_paginated(
+        session,
+        current_tenant,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    items = [_to_response(u) for u in users]
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
 @router.patch("/{user_id}/role", response_model=UserResponse)

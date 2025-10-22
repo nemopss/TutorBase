@@ -126,13 +126,13 @@ async def test_list_invite_tokens_success(
     assert response.status_code == 200
     data = response.json()
     
-    assert "tokens" in data
+    assert "items" in data
     assert "total" in data
     assert data["total"] >= 2
-    assert len(data["tokens"]) >= 2
+    assert len(data["items"]) >= 2
     
     # Check token structure
-    token = data["tokens"][0]
+    token = data["items"][0]
     assert "token" in token
     assert "expires_at" in token
     assert "is_valid" in token
@@ -164,7 +164,7 @@ async def test_list_invite_tokens_pagination(
     
     assert response.status_code == 200
     data = response.json()
-    assert len(data["tokens"]) == 2
+    assert len(data["items"]) == 2
     assert data["total"] >= 5
 
 
@@ -222,4 +222,4 @@ async def test_list_invite_tokens_empty(
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 0
-    assert data["tokens"] == []
+    assert data["items"] == []

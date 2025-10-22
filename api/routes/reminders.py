@@ -5,9 +5,10 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_session, admin_or_teacher_required, get_current_tenant, CurrentTenant
 from api.schemas import (
-    ReminderListResponse,
     ReminderResponse,
     ReminderUpdateRequest,
+    PaginationParams,
+    PaginatedResponse,
 )
 from database import crud
 from database.models import ReminderInstance
@@ -39,10 +40,9 @@ def _to_response(instance: ReminderInstance) -> ReminderResponse:
     )
 
 
-@router.get("", response_model=ReminderListResponse)
+@router.get("", response_model=PaginatedResponse[ReminderResponse])
 async def list_reminders(
-    limit: int = Query(10, ge=1, le=100),
-    offset: int = Query(0, ge=0),
+    pagination: PaginationParams = Depends(),
     status_filter: str | None = Query(None, alias="status"),
     reminder_type: str | None = Query(None),
     package_id: int | None = Query(None),
@@ -50,13 +50,13 @@ async def list_reminders(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
-) -> ReminderListResponse:
+) -> PaginatedResponse[ReminderResponse]:
     try:
         instances, total = await crud.fetch_reminder_instances_paginated(
             session,
             current_tenant,
-            limit=limit,
-            offset=offset,
+            limit=pagination.limit,
+            offset=pagination.offset,
             status=status_filter,
             reminder_type=reminder_type,
             package_id=package_id,
@@ -64,21 +64,32 @@ async def list_reminders(
         )
     except Exception as exc:
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
-    return ReminderListResponse(total=total, items=[_to_response(instance) for instance in instances])
+    
+    items = [_to_response(instance) for instance in instances]
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
-@router.get("/packages/{package_id}", response_model=ReminderListResponse)
+@router.get("/packages/{package_id}", response_model=PaginatedResponse[ReminderResponse])
 async def list_reminders_for_package(
     package_id: int,
+    pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
-) -> ReminderListResponse:
+) -> PaginatedResponse[ReminderResponse]:
     try:
-        instances = await crud.fetch_reminder_instances_for_package(session, current_tenant, package_id)
+        instances, total = await crud.fetch_reminder_instances_for_package_paginated(
+            session,
+            current_tenant,
+            package_id,
+            limit=pagination.limit,
+            offset=pagination.offset,
+        )
     except Exception as exc:
         raise HTTPException(status_code=http_status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(exc)) from exc
-    return ReminderListResponse(total=len(instances), items=[_to_response(instance) for instance in instances])
+    
+    items = [_to_response(instance) for instance in instances]
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
 @router.patch("/{reminder_id}", response_model=ReminderResponse)

@@ -12,6 +12,8 @@ from api.schemas import (
     LessonResponse,
     LessonUpdateRequest,
     MessageResponse,
+    PaginatedResponse,
+    PaginationParams,
 )
 from services import lesson_service, package_service
 from services.dto import LessonDTO
@@ -20,28 +22,28 @@ from services.exceptions import NotFoundError
 router = APIRouter()
 
 
-@router.get("", response_model=LessonListResponse)
+@router.get("", response_model=PaginatedResponse[LessonResponse])
 async def list_all_lessons_endpoint(
+    pagination: PaginationParams = Depends(),
     status: Optional[str] = None,
     search: Optional[str] = None,
-    limit: int = Query(20, ge=1, le=1000),
-    offset: int = Query(0, ge=0),
     sort_by: str = 'scheduled_at',
     sort_order: str = 'asc',
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
-) -> LessonListResponse:
+) -> PaginatedResponse[LessonResponse]:
     lessons, total = await lesson_service.list_all_lessons(
         session, 
         current_tenant,
         status=status, 
         search=search,
-        limit=limit, 
-        offset=offset,
+        limit=pagination.limit, 
+        offset=pagination.offset,
         sort_by=sort_by,
         sort_order=sort_order,
     )
-    return LessonListResponse(total=total, items=[_to_response(lesson) for lesson in lessons])
+    items = [_to_response(lesson) for lesson in lessons]
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
 def _to_response(dto: LessonDTO) -> LessonResponse:
@@ -60,17 +62,23 @@ def _to_response(dto: LessonDTO) -> LessonResponse:
     )
 
 
-@router.get("/packages/{package_id}", response_model=LessonListResponse)
+@router.get("/packages/{package_id}", response_model=PaginatedResponse[LessonResponse])
 async def list_lessons_for_package(
     package_id: int,
+    pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
-) -> LessonListResponse:
+) -> PaginatedResponse[LessonResponse]:
     try:
         lessons = await lesson_service.list_lessons(session, current_tenant, package_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    return LessonListResponse(total=len(lessons), items=[_to_response(lesson) for lesson in lessons])
+    
+    # Apply pagination manually since service doesn't support it yet
+    total = len(lessons)
+    paginated_lessons = lessons[pagination.offset:pagination.offset + pagination.limit]
+    items = [_to_response(lesson) for lesson in paginated_lessons]
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
 @router.post("/packages/{package_id}", response_model=LessonResponse, status_code=status.HTTP_201_CREATED)

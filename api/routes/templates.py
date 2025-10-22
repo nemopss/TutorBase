@@ -4,7 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_session, admin_or_teacher_required, get_current_tenant, CurrentTenant
-from api.schemas import TemplateListResponse, TemplateResponse, TemplateCreateRequest, TemplateUpdateRequest, MessageResponse
+from api.schemas import (
+    TemplateListResponse,
+    TemplateResponse,
+    TemplateCreateRequest,
+    TemplateUpdateRequest,
+    MessageResponse,
+    PaginatedResponse,
+    PaginationParams,
+)
 from services import template_service
 from services.dto import TemplateDTO
 from services.exceptions import NotFoundError
@@ -24,13 +32,19 @@ def _to_response(dto: TemplateDTO) -> TemplateResponse:
     )
 
 
-@router.get("", response_model=TemplateListResponse)
+@router.get("", response_model=PaginatedResponse[TemplateResponse])
 async def list_templates(
+    pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
-) -> TemplateListResponse:
+) -> PaginatedResponse[TemplateResponse]:
     templates = await template_service.list_templates(session, current_tenant)
-    return TemplateListResponse(items=[_to_response(tpl) for tpl in templates], total=len(templates))
+    
+    # Apply pagination manually since service doesn't support it yet
+    total = len(templates)
+    paginated_templates = templates[pagination.offset:pagination.offset + pagination.limit]
+    items = [_to_response(tpl) for tpl in paginated_templates]
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
 @router.get("/{template_id}", response_model=TemplateResponse)

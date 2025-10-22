@@ -8,7 +8,8 @@ from api.dependencies import get_current_tenant, get_current_user, get_session, 
 from api.schemas import (
     InviteTokenRequest,
     InviteTokenResponse,
-    InviteTokenListResponse,
+    PaginationParams,
+    PaginatedResponse,
 )
 from database import crud
 from database.models import User
@@ -66,15 +67,14 @@ async def create_invite_token(
     )
 
 
-@router.get("/{tenant_id}/invitations", response_model=InviteTokenListResponse)
+@router.get("/{tenant_id}/invitations", response_model=PaginatedResponse[InviteTokenResponse])
 async def list_invite_tokens(
     tenant_id: int,
-    limit: int = 50,
-    offset: int = 0,
+    pagination: PaginationParams = Depends(),
     current_user: User = Depends(get_current_user),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     session: AsyncSession = Depends(get_session),
-) -> InviteTokenListResponse:
+) -> PaginatedResponse[InviteTokenResponse]:
     """List invite tokens for the tenant.
     
     Only teachers and admins of the tenant can list invite tokens.
@@ -98,11 +98,11 @@ async def list_invite_tokens(
     tokens, total = await crud.list_invite_tokens(
         session=session,
         current_tenant=current_tenant,
-        limit=limit,
-        offset=offset,
+        limit=pagination.limit,
+        offset=pagination.offset,
     )
     
-    token_responses = [
+    items = [
         InviteTokenResponse(
             id=token.id,
             token=token.token,
@@ -115,7 +115,4 @@ async def list_invite_tokens(
         for token in tokens
     ]
     
-    return InviteTokenListResponse(
-        tokens=token_responses,
-        total=total,
-    )
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)

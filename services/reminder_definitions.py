@@ -1,4 +1,26 @@
-"""Shared constants for reminder types and templates."""
+"""Shared constants and definitions for reminder system.
+
+This module defines all reminder types, their timing configurations, and validation
+sets used throughout the reminder system. These constants are used by reminder
+scheduler, rule creation, and message formatting.
+
+Reminder Types:
+    - lesson_confirm: Confirmation reminder sent before lesson (default 60 min)
+    - lesson_day_before: Day-before reminder sent at specific time (10:00)
+    - payment_week: Payment reminder sent week before due date
+    - payment_day: Payment reminder sent day before due date
+    - homework: Homework reminder sent day before at specific time (10:00)
+    - package_renewal: Package renewal reminder sent 14 days before end
+
+Timing Configuration:
+    Each reminder type has associated lead time (minutes/days) and optional
+    send time (hour:minute) for scheduled reminders. Lead times determine when
+    reminder is triggered relative to the event.
+
+Usage:
+    Import these constants when creating reminder rules, validating reminder types,
+    or building reminder messages in the scheduler.
+"""
 
 REMINDER_TYPE_LESSON_CONFIRM = 'lesson_confirm'
 REMINDER_TYPE_LESSON_DAY_BEFORE = 'lesson_day_before'
