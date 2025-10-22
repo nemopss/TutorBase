@@ -2,16 +2,22 @@
 
 This module provides dependency functions for FastAPI endpoints to handle:
 - Database session management with automatic commit/rollback
-- User authentication via JWT tokens
+- User authentication via JWT tokens (cached for 300s)
 - Role-based access control (RBAC)
 - Multi-tenancy context resolution with security validation
 
 Key components:
     - get_session: Database session dependency with transaction management
-    - get_current_user: Extract and validate user from JWT token
+    - get_current_user: Extract and validate user from JWT token (cached)
     - get_current_tenant: Resolve tenant context with security checks
     - require_roles: Role-based access control decorator
     - CurrentTenant: Dataclass for tenant context information
+
+Caching strategy:
+    - User lookups cached for 300s (balance security and performance)
+    - Cache includes user role for permission checks
+    - Cache invalidated on user updates (role changes, etc.)
+    - Critical for performance as user lookup happens on every request
 
 Security features:
     - JWT token validation for all authenticated endpoints
@@ -40,6 +46,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database.engine import async_session
 from api.security import TokenType, TokenVerificationError, decode_token
 from database import crud
+from utils.cache import cached
 
 _http_bearer = HTTPBearer(auto_error=False)
 
@@ -67,6 +74,23 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
             await session.close()
 
 
+@cached(ttl=300, key_prefix="users")
+async def _get_user_cached(session: AsyncSession, user_id: int):
+    """Get user by ID with caching.
+    
+    Cached for 300 seconds (5 minutes) to reduce database load on authentication.
+    This is called on EVERY authenticated request, so caching is critical.
+    
+    Args:
+        session: Database session
+        user_id: User ID to fetch
+        
+    Returns:
+        User model or None
+    """
+    return await crud.get_user(session, user_id)
+
+
 async def get_current_user(
     credentials: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
     session: AsyncSession = Depends(get_session),
@@ -75,6 +99,9 @@ async def get_current_user(
 
     Validates Bearer token, decodes JWT payload, and loads user from database.
     Used as dependency for all authenticated endpoints.
+    
+    User data is cached for 300 seconds to improve performance, as this function
+    is called on every authenticated request.
 
     Args:
         credentials: HTTP Bearer token from Authorization header
@@ -98,7 +125,8 @@ async def get_current_user(
     if not subject:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid token payload")
 
-    user = await crud.get_user(session, int(subject))
+    # Use cached user lookup (critical for performance)
+    user = await _get_user_cached(session, int(subject))
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
     return user
