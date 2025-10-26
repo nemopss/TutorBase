@@ -19,7 +19,6 @@ from typing import List, Optional
 
 from utils.celery_app import celery_app
 from database.engine import async_session
-from api.dependencies import CurrentTenant
 
 logger = logging.getLogger(__name__)
 
@@ -204,6 +203,7 @@ async def _sync_metrics_async(package_id: int, tenant_id: Optional[int]) -> dict
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
     from sqlalchemy.pool import NullPool
     from config import config
+    from api.dependencies import CurrentTenant
     
     # Create a new engine with NullPool for this task to avoid event loop conflicts
     task_engine = create_async_engine(
@@ -264,6 +264,7 @@ async def _bulk_sync_metrics_async(
     from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker
     from sqlalchemy.pool import NullPool
     from config import config
+    from api.dependencies import CurrentTenant
     
     # Create a new engine with NullPool for this task to avoid event loop conflicts
     task_engine = create_async_engine(
