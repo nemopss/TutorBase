@@ -18,6 +18,7 @@ from api.schemas import (
 from services import lesson_service, package_service
 from services.dto import LessonDTO
 from services.exceptions import NotFoundError
+from utils.tasks import regenerate_package_reminders_task, sync_package_metrics_task
 
 router = APIRouter()
 
@@ -108,7 +109,9 @@ async def create_lesson_for_package(
             homework_due_at=payload.homework_due_at,
             sequence_index=sequence_index,
         )
-        await package_service.regenerate_reminders_for_package(session, current_tenant, package_id)
+        # Regenerate reminders and sync metrics in background (non-blocking)
+        regenerate_package_reminders_task.delay(package_id, current_tenant.tenant_id)
+        sync_package_metrics_task.delay(package_id, current_tenant.tenant_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
@@ -148,7 +151,12 @@ async def update_lesson_endpoint(
             teacher_notes=payload.teacher_notes,
             homework_due_at=payload.homework_due_at,
         )
-        await package_service.regenerate_reminders_for_package(session, current_tenant, lesson.package_id)
+        # Regenerate reminders in background (non-blocking)
+        regenerate_package_reminders_task.delay(lesson.package_id, current_tenant.tenant_id)
+        
+        # Sync package metrics if status changed (non-blocking)
+        if payload.status is not None:
+            sync_package_metrics_task.delay(lesson.package_id, current_tenant.tenant_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
@@ -165,7 +173,9 @@ async def delete_lesson_endpoint(
 ):
     try:
         package_id = await lesson_service.delete_lesson(session, current_tenant, lesson_id)
-        await package_service.regenerate_reminders_for_package(session, current_tenant, package_id)
+        # Regenerate reminders and sync metrics in background (non-blocking)
+        regenerate_package_reminders_task.delay(package_id, current_tenant.tenant_id)
+        sync_package_metrics_task.delay(package_id, current_tenant.tenant_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:

@@ -64,7 +64,6 @@ async def _persist_user(session: AsyncSession, current_tenant: CurrentTenant, us
     telegram_id = int(user_data["id"])
     username = user_data.get("username")
     display_name = _build_display_name(user_data)
-
     user = await crud.get_user_by_telegram_id(session, telegram_id)
     now = datetime.now(timezone.utc)
     is_admin = telegram_id in config.ADMINS

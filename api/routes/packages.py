@@ -18,6 +18,7 @@ from services import package_service, template_service
 from services.dto import LessonPackageDTO
 from services.exceptions import NotFoundError, ValidationError
 from utils.timezone import DEFAULT_TIMEZONE, DEFAULT_TZ, parse_date_string, normalize_to_timezone
+from utils.tasks import regenerate_package_reminders_task, bulk_sync_package_metrics_task
 
 router = APIRouter()
 
@@ -180,10 +181,67 @@ async def regenerate_package_endpoint(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
 ) -> MessageResponse:
+    """Regenerate reminders for a package in background.
+    
+    This endpoint enqueues a background task to regenerate all reminder rules
+    and instances for the specified package. The operation is non-blocking and
+    returns immediately.
+    """
     try:
-        await package_service.regenerate_reminders_for_package(session, current_tenant, package_id)
+        # Verify package exists before enqueuing task
+        package = await package_service.get_package(session, current_tenant, package_id)
+        
+        # Enqueue background task (non-blocking)
+        task = regenerate_package_reminders_task.delay(package_id, current_tenant.tenant_id)
+        
+        return MessageResponse(
+            detail=f"Reminder regeneration started for package '{package.title}' (task_id: {task.id})"
+        )
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
-    package = await package_service.get_package(session, current_tenant, package_id)
-    return MessageResponse(detail=f"Reminders regenerated for package '{package.title}'")
+
+@router.post("/bulk-sync-metrics", response_model=MessageResponse)
+async def bulk_sync_metrics_endpoint(
+    package_ids: list[int] = Query(..., description="List of package IDs to sync metrics for"),
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_required),
+) -> MessageResponse:
+    """Synchronize metrics for multiple packages in background.
+    
+    This endpoint enqueues a background task to sync metrics for multiple packages.
+    Useful for bulk operations after data imports or migrations. The operation is
+    non-blocking and returns immediately.
+    
+    Args:
+        package_ids: List of package IDs to sync metrics for
+        
+    Returns:
+        MessageResponse with task ID and status
+        
+    Example:
+        POST /api/v1/packages/bulk-sync-metrics?package_ids=1&package_ids=2&package_ids=3
+    """
+    if not package_ids:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="At least one package_id is required"
+        )
+    
+    if len(package_ids) > 100:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Maximum 100 packages can be synced at once"
+        )
+    
+    # Enqueue background task (non-blocking)
+    task = bulk_sync_package_metrics_task.delay(
+        package_ids=package_ids,
+        tenant_id=current_tenant.tenant_id,
+        chunk_size=10
+    )
+    
+    return MessageResponse(
+        detail=f"Bulk metrics sync started for {len(package_ids)} packages (task_id: {task.id})"
+    )

@@ -78,15 +78,15 @@ async def get_session() -> AsyncGenerator[AsyncSession, None]:
 async def _get_user_cached(session: AsyncSession, user_id: int):
     """Get user by ID with caching.
     
-    Cached for 300 seconds (5 minutes) to reduce database load on authentication.
-    This is called on EVERY authenticated request, so caching is critical.
+    Cached for 300s (5 minutes) to improve performance on authenticated requests.
+    Cache returns dict, so we need to handle both User model and dict.
     
     Args:
         session: Database session
         user_id: User ID to fetch
         
     Returns:
-        User model or None
+        User model or dict with user data
     """
     return await crud.get_user(session, user_id)
 
@@ -129,6 +129,17 @@ async def get_current_user(
     user = await _get_user_cached(session, int(subject))
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    
+    # Handle both User model and dict (from cache)
+    if isinstance(user, dict):
+        # Cache returned dict, convert to User model for compatibility
+        from database.models import User
+        user_obj = User()
+        for key, value in user.items():
+            if not key.startswith('_'):
+                setattr(user_obj, key, value)
+        return user_obj
+    
     return user
 
 

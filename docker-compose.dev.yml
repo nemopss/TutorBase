@@ -26,7 +26,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.api
-    command: uvicorn api.app:create_app --factory --host 0.0.0.0 --port 8001 --reload
+    command: uvicorn api.app:create_app --factory --host 0.0.0.0 --port 8001 --reload --log-config api/logging_config.json
     env_file:
       - .env.dev
     environment:
@@ -84,6 +84,58 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+
+  # Celery Worker for background tasks (dev)
+  celery_worker:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: celery -A utils.celery_app worker --loglevel=debug --concurrency=1
+    env_file:
+      - .env.dev
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USER: app
+      POSTGRESQL_PASSWORD: app
+      POSTGRESQL_DBNAME: app
+    volumes:
+      - ./:/app
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A utils.celery_app inspect ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Flower for Celery monitoring (dev)
+  flower:
+    build:
+      context: .
+      dockerfile: Dockerfile.api
+    command: celery -A utils.celery_app flower --port=5555
+    env_file:
+      - .env.dev
+    environment:
+      REDIS_URL: redis://redis:6379/0
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_PORT: 5432
+      POSTGRESQL_USER: app
+      POSTGRESQL_PASSWORD: app
+      POSTGRESQL_DBNAME: app
+    volumes:
+      - ./:/app
+    ports:
+      - "5555:5555"
+    depends_on:
+      - redis
+      - celery_worker
 
 volumes:
   postgres-data:

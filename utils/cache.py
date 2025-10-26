@@ -7,6 +7,7 @@ with automatic fallback to database when Redis is unavailable.
 
 import json
 import logging
+from dataclasses import is_dataclass, asdict
 from functools import wraps
 from typing import Any, Callable, Optional, TypeVar
 from hashlib import md5
@@ -176,13 +177,17 @@ def cached(ttl: int = 300, key_prefix: str = "") -> Callable:
                 if hasattr(result, "dict"):
                     # Pydantic model
                     cache_value = result.dict()
+                elif is_dataclass(result):
+                    # Dataclass (including slots=True)
+                    cache_value = asdict(result)
                 elif hasattr(result, "__dict__"):
-                    # SQLAlchemy model or dataclass
+                    # SQLAlchemy model
                     cache_value = {k: v for k, v in result.__dict__.items() if not k.startswith("_")}
                 elif isinstance(result, (list, tuple)):
                     # List of models
                     cache_value = [
                         item.dict() if hasattr(item, "dict") else
+                        asdict(item) if is_dataclass(item) else
                         {k: v for k, v in item.__dict__.items() if not k.startswith("_")}
                         if hasattr(item, "__dict__") else item
                         for item in result
