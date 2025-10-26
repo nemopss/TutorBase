@@ -57,8 +57,6 @@ def regenerate_package_reminders_task(self, package_id: int, tenant_id: Optional
         )
     """
     import asyncio
-    from services.package_scheduler import regenerate_package_reminders
-    from database import crud
     
     logger.info(
         f"Starting reminder regeneration for package {package_id}",
