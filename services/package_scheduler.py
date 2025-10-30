@@ -104,24 +104,35 @@ async def regenerate_package_reminders(session: AsyncSession, current_tenant: Cu
 
     await _clear_existing(session, package)
 
-    lessons = sorted(
+    # Get all lessons with schedule (for finding last lesson)
+    all_lessons = sorted(
         [lesson for lesson in package.lessons or [] if lesson.scheduled_at],
         key=lambda lesson: _normalize_datetime(lesson.scheduled_at),
     )
+    
+    # Filter out cancelled lessons for lesson reminders
+    # Payment reminders use all lessons (including cancelled) to find last lesson
+    active_lessons = [
+        lesson for lesson in all_lessons
+        if lesson.status != 'cancelled'
+    ]
+    
     now_utc = datetime.now(timezone.utc)
     tz = _package_tz(package)
     chat_identifier = _preferred_chat_identifier(package)
 
-    for lesson in lessons:
+    # Create reminders only for active lessons
+    for lesson in active_lessons:
         await _create_lesson_confirm(session, current_tenant, package, lesson, tz, chat_identifier, now_utc)
         await _create_lesson_day_before_confirm(session, current_tenant, package, lesson, tz, chat_identifier, now_utc)
         await _create_homework_reminder(session, current_tenant, package, lesson, tz, chat_identifier, now_utc)
 
-    if lessons:
-        last_lesson = lessons[-1]
+    # Use all lessons (including cancelled) to find last lesson for payment reminders
+    if all_lessons:
+        last_lesson = all_lessons[-1]
         await _create_payment_reminders(session, current_tenant, package, last_lesson, tz, chat_identifier, now_utc)
 
-    await _create_package_renewal(session, current_tenant, package, lessons, tz, chat_identifier, now_utc)
+    await _create_package_renewal(session, current_tenant, package, all_lessons, tz, chat_identifier, now_utc)
 
 
 async def _clear_existing(session: AsyncSession, package: LessonPackage) -> None:
