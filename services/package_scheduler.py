@@ -356,6 +356,9 @@ async def _create_payment_reminders(
         chat_identifier: Chat identifier for delivery
         now_utc: Current UTC time for status determination
     """
+    # Format last lesson date for message
+    last_lesson_date = _format_lesson_date(last_lesson.scheduled_at, tz)
+    
     for reminder_type, delta in (
         (REMINDER_TYPE_PAYMENT_WEEK, timedelta(weeks=1)),
         (REMINDER_TYPE_PAYMENT_DAY, timedelta(days=1)),
@@ -374,6 +377,7 @@ async def _create_payment_reminders(
         payload = {
             'student_name': package.learner.display_name,
             'lesson_id': last_lesson.id,
+            'last_lesson_date': last_lesson_date,  # NEW: Add formatted date
         }
 
         await crud.create_reminder_instance(
@@ -586,6 +590,20 @@ def _format_local(dt: datetime, tz: ZoneInfo) -> str:
         Date string in YYYY-MM-DD format
     """
     return _to_local(dt, tz).strftime('%Y-%m-%d')
+
+
+def _format_lesson_date(dt: datetime, tz: ZoneInfo) -> str:
+    """Format lesson date for payment reminder message.
+    
+    Args:
+        dt: Lesson datetime
+        tz: Timezone for formatting
+        
+    Returns:
+        Formatted date string (e.g., "15.03.2024")
+    """
+    local_dt = _to_local(dt, tz)
+    return local_dt.strftime('%d.%m.%Y')
 
 
 def _normalize_datetime(dt: Optional[datetime]) -> datetime:
