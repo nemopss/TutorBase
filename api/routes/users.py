@@ -7,6 +7,7 @@ from api.dependencies import get_session, admin_required, get_current_tenant, Cu
 from api.schemas import UserResponse, UserRoleUpdateRequest, PaginationParams, PaginatedResponse
 from database import crud
 from database.models import User
+from utils.cache import invalidate_cache
 
 router = APIRouter()
 
@@ -57,6 +58,11 @@ async def update_user_role(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_required),
 ) -> UserResponse:
+    """Update user role.
+    
+    Invalidates user cache after role change to ensure permission checks
+    use updated role immediately.
+    """
     user = await crud.get_user(session, user_id)
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
@@ -64,4 +70,8 @@ async def update_user_role(
     user.role = payload.role
     session.add(user)
     await session.commit()
+    
+    # Invalidate user cache for this user (critical for permission checks)
+    await invalidate_cache("users:_get_user_cached:*")
+    
     return _to_response(user)

@@ -20,7 +20,20 @@ from services.exceptions import NotFoundError
 router = APIRouter()
 
 
-def _to_response(dto: TemplateDTO) -> TemplateResponse:
+def _to_response(dto: TemplateDTO | dict) -> TemplateResponse:
+    """Convert TemplateDTO or dict (from cache) to TemplateResponse.
+    
+    Args:
+        dto: TemplateDTO object or dict from cache
+        
+    Returns:
+        TemplateResponse for API response
+    """
+    if isinstance(dto, dict):
+        # Cache returned dict, convert directly
+        return TemplateResponse(**dto)
+    
+    # TemplateDTO object
     return TemplateResponse(
         id=dto.id,
         name=dto.name,
@@ -43,7 +56,10 @@ async def list_templates(
     # Apply pagination manually since service doesn't support it yet
     total = len(templates)
     paginated_templates = templates[pagination.offset:pagination.offset + pagination.limit]
+    
+    # Convert to response objects (handles both DTO and dict from cache)
     items = [_to_response(tpl) for tpl in paginated_templates]
+    
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 

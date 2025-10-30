@@ -352,31 +352,42 @@ async def update_user_login_metadata(
     """Update user login metadata and profile.
     
     Updates user information and last login timestamp.
+    Invalidates user cache if role is changed (critical for permissions).
     
     Args:
         session: Async database session
         user: User object to update
         username: New username
         display_name: New display name
-        role: New role
+        role: New role (invalidates cache if changed)
         last_login_at: Last login timestamp (defaults to now)
         
     Returns:
         Updated User object
     """
+    from utils.cache import invalidate_cache
+    
     now = datetime.now(timezone.utc)
+    role_changed = False
+    
     if username is not None:
         user.username = username
     if display_name is not None:
         user.display_name = display_name
-    if role is not None:
+    if role is not None and user.role != role:
         user.role = role
+        role_changed = True
     if last_login_at is not None:
         user.last_login_at = last_login_at
     else:
         user.last_login_at = now
     user.updated_at = now
     session.add(user)
+    
+    # Invalidate cache if role changed (critical for permission checks)
+    if role_changed:
+        await invalidate_cache("users:_get_user_cached:*")
+    
     return user
 
 

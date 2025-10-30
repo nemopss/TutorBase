@@ -18,6 +18,19 @@ router = APIRouter()
 
 
 def _to_response(tenant) -> TenantResponse:
+    """Convert Tenant model or dict (from cache) to TenantResponse.
+    
+    Args:
+        tenant: Tenant SQLAlchemy model or dict from cache
+        
+    Returns:
+        TenantResponse for API response
+    """
+    if isinstance(tenant, dict):
+        # Cache returned dict, convert directly
+        return TenantResponse(**tenant)
+    
+    # Tenant model
     return TenantResponse(
         id=tenant.id,
         name=tenant.name,

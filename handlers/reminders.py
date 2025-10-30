@@ -141,3 +141,149 @@ async def state_decline_reason(message: types.Message, state: FSMContext, sessio
 
     await state.clear()
     await message.answer(texts.REMINDER_DECLINE_REPLY)
+
+
+@router.callback_query(F.data.startswith('payment_confirm_'))
+async def cb_payment_confirm(query: CallbackQuery, session: AsyncSession):
+    """Handle payment confirmation button click.
+    
+    When learner confirms payment continuation:
+    1. Update reminder instance status
+    2. Send confirmation message to learner
+    3. Log response to admin chat
+    """
+    try:
+        instance_id = int(query.data.split('_')[-1])
+    except (ValueError, IndexError):
+        await query.answer("Неверный запрос", show_alert=True)
+        return
+    
+    instance = await crud.get_reminder_instance(session, instance_id)
+    if not instance:
+        await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+    
+    # Check if already responded (prevent double-click)
+    if instance.status == 'responded':
+        await query.answer("Вы уже ответили на это напоминание", show_alert=True)
+        return
+
+    now_utc = datetime.now(timezone.utc)
+    try:
+        await crud.set_reminder_instance_status(
+            session,
+            instance,
+            status='responded',
+            active=False,
+            last_response='confirmed',
+            last_response_at=now_utc,
+            last_decline_reason=None,
+        )
+        await session.commit()
+    except Exception as exc:
+        await session.rollback()
+        logging.error(
+            "Failed to persist payment confirm response for reminder instance #%s: %s",
+            instance_id,
+            exc,
+        )
+        await query.answer(texts.DATABASE_ERROR, show_alert=True)
+        return
+
+    # Remove buttons from message
+    await query.message.edit_reply_markup(None)
+    
+    # Send confirmation to learner
+    await query.message.answer(texts.PAYMENT_CONFIRM_REPLY)
+    
+    # Log to admin chat
+    student_name = escape_html_text(
+        (instance.payload or {}).get('student_name')
+        or (instance.learner.display_name if instance.learner else '—')
+    )
+    try:
+        log_text = texts.PAYMENT_CONFIRM_LOG.format(
+            name=student_name,
+            mention=escape_html_text(
+                config.REMINDER_NOTIFY_USERNAME,
+                default=config.REMINDER_NOTIFY_USERNAME
+            ),
+        )
+        await query.bot.send_message(config.LOGS_CHAT_ID, log_text)
+    except Exception as exc:
+        logging.error("Failed to send payment confirm log: %s", exc)
+
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith('payment_decline_'))
+async def cb_payment_decline(query: CallbackQuery, session: AsyncSession):
+    """Handle payment decline button click.
+    
+    When learner declines payment:
+    1. Update reminder instance status
+    2. Send acknowledgment message to learner
+    3. Log response to admin chat
+    """
+    try:
+        instance_id = int(query.data.split('_')[-1])
+    except (ValueError, IndexError):
+        await query.answer("Неверный запрос", show_alert=True)
+        return
+    
+    instance = await crud.get_reminder_instance(session, instance_id)
+    if not instance:
+        await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+    
+    # Check if already responded (prevent double-click)
+    if instance.status == 'responded':
+        await query.answer("Вы уже ответили на это напоминание", show_alert=True)
+        return
+
+    now_utc = datetime.now(timezone.utc)
+    try:
+        await crud.set_reminder_instance_status(
+            session,
+            instance,
+            status='responded',
+            active=False,
+            last_response='declined',
+            last_response_at=now_utc,
+            last_decline_reason=None,
+        )
+        await session.commit()
+    except Exception as exc:
+        await session.rollback()
+        logging.error(
+            "Failed to persist payment decline response for reminder instance #%s: %s",
+            instance_id,
+            exc,
+        )
+        await query.answer(texts.DATABASE_ERROR, show_alert=True)
+        return
+
+    # Remove buttons from message
+    await query.message.edit_reply_markup(None)
+    
+    # Send acknowledgment to learner
+    await query.message.answer(texts.PAYMENT_DECLINE_REPLY)
+    
+    # Log to admin chat
+    student_name = escape_html_text(
+        (instance.payload or {}).get('student_name')
+        or (instance.learner.display_name if instance.learner else '—')
+    )
+    try:
+        log_text = texts.PAYMENT_DECLINE_LOG.format(
+            name=student_name,
+            mention=escape_html_text(
+                config.REMINDER_NOTIFY_USERNAME,
+                default=config.REMINDER_NOTIFY_USERNAME
+            ),
+        )
+        await query.bot.send_message(config.LOGS_CHAT_ID, log_text)
+    except Exception as exc:
+        logging.error("Failed to send payment decline log: %s", exc)
+
+    await query.answer()

@@ -5,11 +5,11 @@ architecture. Tenants represent separate organizations or tutoring businesses
 that share the same application infrastructure but have isolated data.
 
 Key components:
-    - create_tenant: Create a new tenant organization
-    - get_tenant: Retrieve tenant by ID
-    - list_tenants: Get paginated list of all tenants
-    - update_tenant: Update tenant parameters
-    - delete_tenant: Delete tenant and all associated data
+    - create_tenant: Create a new tenant organization (invalidates cache)
+    - get_tenant: Retrieve tenant by ID (cached 600s)
+    - list_tenants: Get paginated list of all tenants (cached 600s)
+    - update_tenant: Update tenant parameters (invalidates cache)
+    - delete_tenant: Delete tenant and all associated data (invalidates cache)
 
 Multi-tenancy architecture:
     - Each tenant has isolated data (learners, packages, lessons, users)
@@ -17,6 +17,12 @@ Multi-tenancy architecture:
     - All data operations filtered by tenant_id for isolation
     - Super admins can manage multiple tenants
     - Regular users belong to single tenant
+
+Caching strategy:
+    - READ operations cached for 600s (tenants very stable)
+    - Longer TTL than templates because tenants rarely change
+    - WRITE operations invalidate relevant cache entries
+    - Cache fallback to database if Redis unavailable
 
 Security implications:
     - Tenant isolation is critical for data security
@@ -39,6 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from database import crud
 from database.models import Tenant
 from services.exceptions import NotFoundError
+from utils.cache import cached, invalidate_cache
 
 
 async def create_tenant(
@@ -53,6 +60,8 @@ async def create_tenant(
 
     Creates a new tenant with isolated data space. Slug must be unique and is
     used for tenant identification in routing/subdomains.
+    
+    Invalidates tenant list cache after creation.
 
     Args:
         session: Async database session
@@ -67,17 +76,26 @@ async def create_tenant(
     Raises:
         IntegrityError: If slug already exists (handled by database layer)
     """
-    return await crud.create_tenant(
+    tenant = await crud.create_tenant(
         session,
         name=name,
         slug=slug,
         contact_email=contact_email,
         is_active=is_active,
     )
+    
+    # Invalidate tenant list cache
+    await invalidate_cache("tenants:list_tenants:*")
+    
+    return tenant
 
 
+@cached(ttl=600, key_prefix="tenants")
 async def get_tenant(session: AsyncSession, tenant_id: int) -> Tenant:
     """Retrieve tenant by ID.
+    
+    Cached for 600 seconds (10 minutes) as tenants are very stable.
+    Longer TTL than templates because tenant data rarely changes.
 
     Args:
         session: Async database session
@@ -95,6 +113,7 @@ async def get_tenant(session: AsyncSession, tenant_id: int) -> Tenant:
     return tenant
 
 
+@cached(ttl=600, key_prefix="tenants")
 async def list_tenants(
     session: AsyncSession,
     *,
@@ -105,6 +124,8 @@ async def list_tenants(
 
     Retrieves all tenants in the system with pagination. Typically used by
     super admins for tenant management.
+    
+    Cached for 600 seconds (10 minutes) as tenant list is very stable.
 
     Args:
         session: Async database session
@@ -131,6 +152,8 @@ async def update_tenant(
     Updates specified tenant fields. All parameters are optional - only provided
     values are updated. Setting is_active=False effectively disables the tenant
     and prevents user access.
+    
+    Invalidates both specific tenant cache and tenant list cache after update.
 
     Args:
         session: Async database session
@@ -150,7 +173,8 @@ async def update_tenant(
     tenant = await crud.get_tenant(session, tenant_id)
     if not tenant:
         raise NotFoundError(f"Tenant {tenant_id} not found")
-    return await crud.update_tenant(
+    
+    updated_tenant = await crud.update_tenant(
         session,
         tenant,
         name=name,
@@ -158,6 +182,12 @@ async def update_tenant(
         contact_email=contact_email,
         is_active=is_active,
     )
+    
+    # Invalidate caches for this tenant and tenant list
+    await invalidate_cache("tenants:get_tenant:*")
+    await invalidate_cache("tenants:list_tenants:*")
+    
+    return updated_tenant
 
 
 async def delete_tenant(session: AsyncSession, tenant_id: int) -> None:
@@ -169,6 +199,8 @@ async def delete_tenant(session: AsyncSession, tenant_id: int) -> None:
 
     Security warning: This will delete ALL data for the tenant including all
     users, learners, lesson packages, and historical data.
+    
+    Invalidates both specific tenant cache and tenant list cache after deletion.
 
     Args:
         session: Async database session
@@ -181,3 +213,7 @@ async def delete_tenant(session: AsyncSession, tenant_id: int) -> None:
     if not tenant:
         raise NotFoundError(f"Tenant {tenant_id} not found")
     await crud.delete_tenant(session, tenant)
+    
+    # Invalidate caches for this tenant and tenant list
+    await invalidate_cache("tenants:get_tenant:*")
+    await invalidate_cache("tenants:list_tenants:*")

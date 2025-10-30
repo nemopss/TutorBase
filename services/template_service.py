@@ -5,12 +5,12 @@ Templates define reusable configurations for creating lesson packages with
 predefined lesson counts, durations, and scheduling rules.
 
 Key components:
-    - get_template: Retrieve template by ID
-    - list_templates: Get all templates for current tenant
-    - create_template: Create new template
-    - update_template: Update template parameters
-    - delete_template: Delete template
-    - duplicate_template: Clone existing template with modifications
+    - get_template: Retrieve template by ID (cached 300s)
+    - list_templates: Get all templates for current tenant (cached 300s)
+    - create_template: Create new template (invalidates cache)
+    - update_template: Update template parameters (invalidates cache)
+    - delete_template: Delete template (invalidates cache)
+    - duplicate_template: Clone existing template with modifications (invalidates cache)
 
 Business logic:
     - Templates belong to tenants for multi-tenancy isolation
@@ -18,6 +18,12 @@ Business logic:
     - default_config stores scheduling rules and other parameters
     - Templates can be duplicated for quick variations
     - Deleting template doesn't affect existing packages created from it
+
+Caching strategy:
+    - READ operations cached for 300s (templates rarely change)
+    - Cache automatically isolated by tenant_id for security
+    - WRITE operations invalidate relevant cache entries
+    - Cache fallback to database if Redis unavailable
 
 Relationships with other services:
     - package_service: Uses templates to create packages with auto-generated lessons
@@ -40,6 +46,7 @@ from database.models import LessonPackageTemplate
 from services.dto import TemplateDTO
 from services.exceptions import NotFoundError
 from api.dependencies import CurrentTenant
+from utils.cache import cached, invalidate_cache
 
 
 def _build_template_dto(template: LessonPackageTemplate) -> TemplateDTO:
@@ -62,8 +69,12 @@ def _build_template_dto(template: LessonPackageTemplate) -> TemplateDTO:
     )
 
 
+@cached(ttl=300, key_prefix="templates")
 async def get_template(session: AsyncSession, current_tenant: CurrentTenant, template_id: int) -> TemplateDTO:
     """Retrieve lesson package template by ID.
+    
+    Cached for 300 seconds (5 minutes) as templates rarely change.
+    Cache is automatically isolated by tenant_id for multi-tenancy security.
 
     Args:
         session: Async database session
@@ -82,8 +93,12 @@ async def get_template(session: AsyncSession, current_tenant: CurrentTenant, tem
     return _build_template_dto(template)
 
 
+@cached(ttl=300, key_prefix="templates")
 async def list_templates(session: AsyncSession, current_tenant: CurrentTenant) -> list[TemplateDTO]:
     """Get all lesson package templates for current tenant.
+    
+    Cached for 300 seconds (5 minutes) as templates rarely change.
+    Cache is automatically isolated by tenant_id for multi-tenancy security.
 
     Args:
         session: Async database session
@@ -110,6 +125,8 @@ async def create_template(
 
     Creates a reusable template for generating lesson packages. Template defines
     the structure and scheduling rules for packages created from it.
+    
+    Invalidates template list cache after creation.
 
     Args:
         session: Async database session
@@ -134,6 +151,10 @@ async def create_template(
         default_config=default_config,
     )
     await session.flush()
+    
+    # Invalidate template list cache for this tenant
+    await invalidate_cache("templates:list_templates:*")
+    
     return _build_template_dto(template)
 
 
@@ -152,6 +173,8 @@ async def update_template(
 
     Updates specified template fields. All parameters are optional - only provided
     values are updated. Changes don't affect existing packages created from template.
+    
+    Invalidates both specific template cache and template list cache after update.
 
     Args:
         session: Async database session
@@ -183,6 +206,11 @@ async def update_template(
         default_config=default_config,
     )
     await session.flush([template])
+    
+    # Invalidate caches for this template and template list
+    await invalidate_cache("templates:get_template:*")
+    await invalidate_cache("templates:list_templates:*")
+    
     return _build_template_dto(template)
 
 
@@ -190,6 +218,8 @@ async def delete_template(session: AsyncSession, current_tenant: CurrentTenant, 
     """Delete lesson package template.
 
     Deletes template. Existing packages created from this template are not affected.
+    
+    Invalidates both specific template cache and template list cache after deletion.
 
     Args:
         session: Async database session
@@ -203,6 +233,10 @@ async def delete_template(session: AsyncSession, current_tenant: CurrentTenant, 
     if not template:
         raise NotFoundError(f"Template {template_id} not found")
     await crud.delete_lesson_package_template(session, template)
+    
+    # Invalidate caches for this template and template list
+    await invalidate_cache("templates:get_template:*")
+    await invalidate_cache("templates:list_templates:*")
 
 
 async def duplicate_template(session: AsyncSession, current_tenant: CurrentTenant, template_id: int, *, name: Optional[str] = None) -> TemplateDTO:
@@ -210,6 +244,8 @@ async def duplicate_template(session: AsyncSession, current_tenant: CurrentTenan
 
     Creates a copy of existing template with all its configuration. Useful for
     creating variations of templates without starting from scratch.
+    
+    Invalidates template list cache after duplication.
 
     Args:
         session: Async database session
@@ -238,6 +274,10 @@ async def duplicate_template(session: AsyncSession, current_tenant: CurrentTenan
         default_config=template.default_config,
     )
     await session.flush()
+    
+    # Invalidate template list cache for this tenant
+    await invalidate_cache("templates:list_templates:*")
+    
     return _build_template_dto(clone)
 
 

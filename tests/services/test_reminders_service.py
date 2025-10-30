@@ -532,7 +532,8 @@ async def test_build_instance_message_lesson_day_before(
     await db_session.flush()
 
     message, keyboard = reminder_scheduler._build_instance_message(instance, "Tomorrow 10:00")
-    assert "Завтра занятие" in message
+    assert "у тебя завтра занятие" in message
+    assert "Всё в силе" in message
     assert keyboard is not None
     assert len(keyboard.inline_keyboard) == 2
 
@@ -549,8 +550,10 @@ async def test_build_instance_message_payment_week(
     await db_session.flush()
 
     message, keyboard = reminder_scheduler._build_instance_message(instance, "Schedule")
-    assert "через неделю оплата" in message
-    assert keyboard is None
+    assert "через неделю заканчивается" in message
+    assert "Продолжаем в том же темпе" in message
+    assert keyboard is not None  # Now has buttons
+    assert len(keyboard.inline_keyboard) == 2  # Confirm and Decline buttons
 
 
 @pytest.mark.asyncio
@@ -565,8 +568,10 @@ async def test_build_instance_message_payment_day(
     await db_session.flush()
 
     message, keyboard = reminder_scheduler._build_instance_message(instance, "Schedule")
-    assert "завтра оплата" in message
-    assert keyboard is None
+    assert "Завтра истекает срок" in message
+    assert "оплаченного пакета" in message
+    assert keyboard is not None  # Now has buttons
+    assert len(keyboard.inline_keyboard) == 2  # Confirm and Decline buttons
 
 
 @pytest.mark.asyncio

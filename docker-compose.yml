@@ -46,6 +46,46 @@ services:
     networks:
       - app-network
 
+  # Celery Worker for background tasks
+  celery_worker:
+    image: ghcr.io/nemopss/tutorbase-api:latest
+    command: celery -A utils.celery_app worker --loglevel=info --concurrency=2
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      - redis
+    environment:
+      PYTHONPATH: /app
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./database:/app/database
+    networks:
+      - app-network
+    healthcheck:
+      test: ["CMD-SHELL", "celery -A utils.celery_app inspect ping"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  # Flower for Celery monitoring (optional, comment out in production if not needed)
+  flower:
+    image: ghcr.io/nemopss/tutorbase-api:latest
+    command: celery -A utils.celery_app flower --port=5555
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      - redis
+      - celery_worker
+    environment:
+      REDIS_URL: redis://redis:6379/0
+    ports:
+      - "5555:5555"
+    networks:
+      - app-network
+
   # Nginx Reverse Proxy
   nginx:
     image: nginx:alpine
