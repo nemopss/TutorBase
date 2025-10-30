@@ -470,10 +470,40 @@ class ReminderScheduler:
             return message, keyboard.as_markup()
 
         if reminder_type == REMINDER_TYPE_PAYMENT_WEEK:
-            return texts.PAYMENT_REMINDER_WEEK_BEFORE, None
+            keyboard = InlineKeyboardBuilder()
+            keyboard.button(
+                text=texts.PAYMENT_CONFIRM_BUTTON,
+                callback_data=f"payment_confirm_{instance.id}"
+            )
+            keyboard.button(
+                text=texts.PAYMENT_DECLINE_BUTTON,
+                callback_data=f"payment_decline_{instance.id}"
+            )
+            keyboard.adjust(1)
+            
+            # Get last lesson date from payload
+            last_lesson_date = payload.get('last_lesson_date', '—')
+            
+            message = texts.PAYMENT_REMINDER_WEEK_BEFORE.format(
+                name=name,
+                last_lesson_date=escape_html_text(last_lesson_date),
+            )
+            return message, keyboard.as_markup()
 
         if reminder_type == REMINDER_TYPE_PAYMENT_DAY:
-            return texts.PAYMENT_REMINDER_DAY_BEFORE, None
+            keyboard = InlineKeyboardBuilder()
+            keyboard.button(
+                text=texts.PAYMENT_CONFIRM_BUTTON,
+                callback_data=f"payment_confirm_{instance.id}"
+            )
+            keyboard.button(
+                text=texts.PAYMENT_DECLINE_BUTTON,
+                callback_data=f"payment_decline_{instance.id}"
+            )
+            keyboard.adjust(1)
+            
+            message = texts.PAYMENT_REMINDER_DAY_BEFORE.format(name=name)
+            return message, keyboard.as_markup()
 
         if reminder_type == REMINDER_TYPE_HOMEWORK:
             return (
