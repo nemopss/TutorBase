@@ -162,6 +162,11 @@ async def cb_payment_confirm(query: CallbackQuery, session: AsyncSession):
     if not instance:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
         return
+    
+    # Check if already responded (prevent double-click)
+    if instance.status == 'responded':
+        await query.answer("Вы уже ответили на это напоминание", show_alert=True)
+        return
 
     now_utc = datetime.now(timezone.utc)
     try:
@@ -229,6 +234,11 @@ async def cb_payment_decline(query: CallbackQuery, session: AsyncSession):
     instance = await crud.get_reminder_instance(session, instance_id)
     if not instance:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+    
+    # Check if already responded (prevent double-click)
+    if instance.status == 'responded':
+        await query.answer("Вы уже ответили на это напоминание", show_alert=True)
         return
 
     now_utc = datetime.now(timezone.utc)
