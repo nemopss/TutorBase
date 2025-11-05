@@ -41,7 +41,8 @@ from database.transaction import transactional
 from database.models import LessonPackage, LessonPackageTemplate
 from services.dto import LessonPackageDTO, PackageProgress
 from services.exceptions import NotFoundError
-from services.package_scheduler import regenerate_package_reminders
+# Removed: from services.package_scheduler import regenerate_package_reminders (circular import)
+# Using lazy import inside functions instead
 from services.utils import generate_lessons_from_template, lesson_stats, sync_package_metrics
 from utils.timezone import DEFAULT_TIMEZONE, DEFAULT_TZ, normalize_to_timezone, to_utc
 
@@ -119,6 +120,9 @@ async def regenerate_reminders_for_package(session: AsyncSession, current_tenant
     Raises:
         NotFoundError: If package with specified ID is not found
     """
+    # Lazy import to avoid circular dependency
+    from services.package_scheduler import regenerate_package_reminders
+    
     package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
@@ -259,6 +263,8 @@ async def create_package(
     session.add(package)
     await session.flush()  # Flush to get package.id for relationships
     
+    # Lazy import to avoid circular dependency
+    from services.package_scheduler import regenerate_package_reminders
     await regenerate_package_reminders(session, current_tenant, package)
     
     if packages_created_total:
@@ -342,6 +348,9 @@ async def create_package_from_template(
     
     await generate_lessons_from_template(session, current_tenant, package, template, localized_start)
     await sync_package_metrics(session, current_tenant, package.id)
+    
+    # Lazy import to avoid circular dependency
+    from services.package_scheduler import regenerate_package_reminders
     await regenerate_package_reminders(session, current_tenant, package)
     
     if packages_created_total:

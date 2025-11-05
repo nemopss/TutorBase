@@ -26,6 +26,7 @@ Edge cases:
 """
 from __future__ import annotations
 
+import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -143,6 +144,9 @@ async def update_lesson(
     if not lesson:
         raise NotFoundError(f"Lesson {lesson_id} not found")
 
+    # Track old status for reminder handling
+    old_status = lesson.status
+
     if scheduled_at is not None:
         lesson.scheduled_at = scheduled_at
     if duration_minutes is not None:
@@ -156,6 +160,19 @@ async def update_lesson(
 
     session.add(lesson)
     await session.flush()
+    
+    # Handle reminder deactivation/regeneration based on status change
+    if status is not None and status != old_status:
+        if status == 'cancelled' and old_status != 'cancelled':
+            # Lesson was cancelled - deactivate reminders
+            count = await crud.deactivate_reminder_instances_for_lesson(session, lesson_id)
+            logging.info(f"Deactivated {count} reminders for cancelled lesson {lesson_id}")
+        elif old_status == 'cancelled' and status != 'cancelled':
+            # Lesson was uncancelled - regenerate reminders
+            from utils.tasks.reminders import regenerate_package_reminders_task
+            regenerate_package_reminders_task.delay(lesson.package_id, current_tenant.tenant_id)
+            logging.info(f"Triggered reminder regeneration for uncancelled lesson {lesson_id}")
+    
     await sync_package_metrics(session, current_tenant, lesson.package_id)
     # Transaction will be committed by @transactional decorator
     return _build_lesson_dto(lesson)

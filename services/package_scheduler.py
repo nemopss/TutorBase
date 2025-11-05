@@ -62,6 +62,8 @@ from services.reminder_definitions import (
     REMINDER_TYPE_PAYMENT_WEEK,
 )
 from utils.formatters import pack_chat_identifier
+from utils.validators import validate_chat_identifier
+import logging
 
 
 @dataclass
@@ -212,13 +214,17 @@ async def _create_lesson_confirm(
     )
 
     scheduled = _compute_lesson_offset(lesson, tz, minutes=-DEFAULT_LESSON_CONFIRM_LEAD_MINUTES)
-    schedule_meta = _resolve_schedule_state(scheduled, now_utc)
+    schedule_meta, validation_error = _validate_and_resolve_schedule(
+        chat_identifier, scheduled, now_utc, package.id
+    )
     payload = {
         'student_name': package.learner.display_name,
         'lesson_id': lesson.id,
         'sequence_index': lesson.sequence_index,
         'lead_minutes': DEFAULT_LESSON_CONFIRM_LEAD_MINUTES,
     }
+    if validation_error:
+        payload['validation_error'] = validation_error
 
     await crud.create_reminder_instance(
         session,
@@ -573,6 +579,45 @@ def _resolve_schedule_state(scheduled_for: Optional[datetime], now_utc: datetime
     if scheduled_for <= now_utc:
         return _ReminderSchedule(scheduled_for=scheduled_for, status='expired', active=False)
     return _ReminderSchedule(scheduled_for=scheduled_for, status='scheduled', active=True)
+
+
+def _validate_and_resolve_schedule(
+    chat_identifier: Optional[str],
+    scheduled_for: Optional[datetime],
+    now_utc: datetime,
+    package_id: int,
+) -> tuple[_ReminderSchedule, Optional[str]]:
+    """Validate chat identifier and resolve schedule state.
+    
+    Args:
+        chat_identifier: Chat identifier to validate
+        scheduled_for: Scheduled datetime
+        now_utc: Current UTC time
+        package_id: Package ID for logging
+        
+    Returns:
+        Tuple of (_ReminderSchedule, validation_error)
+        If validation fails, schedule will have status='failed' and error message
+    """
+    # Validate chat_identifier
+    is_valid, error = validate_chat_identifier(chat_identifier)
+    if not is_valid:
+        logging.warning(
+            f"Invalid chat_identifier for package {package_id}: {error}"
+        )
+        # Create failed schedule
+        return (
+            _ReminderSchedule(
+                scheduled_for=now_utc,
+                status='failed',
+                active=False
+            ),
+            error
+        )
+    
+    # Valid identifier - resolve normal schedule
+    schedule = _resolve_schedule_state(scheduled_for, now_utc)
+    return schedule, None
 
 
 def _to_local(dt: datetime, tz: ZoneInfo) -> datetime:
