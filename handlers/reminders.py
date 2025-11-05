@@ -23,9 +23,14 @@ class ReminderResponseStates(StatesGroup):
 @router.callback_query(F.data.startswith('remi_confirm_'))
 async def cb_reminder_instance_confirm(query: CallbackQuery, session: AsyncSession):
     instance_id = int(query.data.split('_')[-1])
-    instance = await crud.get_reminder_instance(session, instance_id)
+    instance = await crud.get_reminder_instance_global(session, instance_id)
     if not instance:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+    
+    # Check if already responded
+    if instance.status == 'responded':
+        await query.answer("Вы уже ответили на это напоминание", show_alert=True)
         return
 
     now_utc = datetime.now(timezone.utc)
@@ -71,9 +76,14 @@ async def cb_reminder_instance_confirm(query: CallbackQuery, session: AsyncSessi
 @router.callback_query(F.data.startswith('remi_decline_'))
 async def cb_reminder_instance_decline(query: CallbackQuery, state: FSMContext, session: AsyncSession):
     instance_id = int(query.data.split('_')[-1])
-    instance = await crud.get_reminder_instance(session, instance_id)
+    instance = await crud.get_reminder_instance_global(session, instance_id)
     if not instance:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
+        return
+    
+    # Check if already responded
+    if instance.status == 'responded':
+        await query.answer("Вы уже ответили на это напоминание", show_alert=True)
         return
 
     await state.set_state(ReminderResponseStates.reason)
@@ -92,7 +102,7 @@ async def state_decline_reason(message: types.Message, state: FSMContext, sessio
     data = await state.get_data()
     instance_id = data.get('instance_id')
 
-    instance = await crud.get_reminder_instance(session, instance_id)
+    instance = await crud.get_reminder_instance_global(session, instance_id)
     if not instance:
         await state.clear()
         await message.answer(texts.REMINDER_NOT_FOUND)
@@ -158,7 +168,7 @@ async def cb_payment_confirm(query: CallbackQuery, session: AsyncSession):
         await query.answer("Неверный запрос", show_alert=True)
         return
     
-    instance = await crud.get_reminder_instance(session, instance_id)
+    instance = await crud.get_reminder_instance_global(session, instance_id)
     if not instance:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
         return
@@ -231,7 +241,7 @@ async def cb_payment_decline(query: CallbackQuery, session: AsyncSession):
         await query.answer("Неверный запрос", show_alert=True)
         return
     
-    instance = await crud.get_reminder_instance(session, instance_id)
+    instance = await crud.get_reminder_instance_global(session, instance_id)
     if not instance:
         await query.answer(texts.REMINDER_NOT_FOUND, show_alert=True)
         return

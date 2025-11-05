@@ -480,6 +480,7 @@ class ReminderInstance(Base):
         last_response: Last response from learner
         last_response_at: Last response timestamp
         last_decline_reason: Reason if learner declined
+        retry_count: Number of retry attempts for temporary failures (max 3)
         created_at: Instance creation timestamp
         updated_at: Last instance update timestamp
         tenant: Related Tenant object
@@ -506,6 +507,7 @@ class ReminderInstance(Base):
     last_response = Column(String)
     last_response_at = Column(DateTime(timezone=True))
     last_decline_reason = Column(Text)
+    retry_count = Column(Integer, nullable=False, default=0)  # Track retry attempts for temporary failures
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
 

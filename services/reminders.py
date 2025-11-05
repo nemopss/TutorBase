@@ -58,6 +58,9 @@ from services.reminder_definitions import (
     REMINDER_TYPE_PACKAGE_RENEWAL,
 )
 
+# Maximum retry attempts for temporary failures
+MAX_RETRY_ATTEMPTS = 3
+
 class ReminderScheduler:
     """Automated reminder scheduler for sending Telegram notifications.
 
@@ -240,6 +243,9 @@ class ReminderScheduler:
                 active=False,
                 last_notified_at=now_utc,
             )
+            # Reset retry counter on success
+            instance.retry_count = 0
+            session.add(instance)
             await self._log_instance_sent(instance, schedule_label)
 
     async def _handle_instance_send_failure(
@@ -285,23 +291,54 @@ class ReminderScheduler:
                 comment=comment,
             )
         else:
-            # Temporary failure: keep active for retry
-            logging.warning(
-                "Temporary failure for reminder instance #%s to %s: %s (%s) - will retry",
-                instance.id,
-                contact_display,
-                exc,
-                reason,
-            )
-            comment = f"Temporary failure ({reason}), will retry: {exc}"[:1000]
-            await crud.set_reminder_instance_status(
-                session,
-                instance,
-                status='pending',
-                active=True,  # Keep active for retry
-                comment=comment,
-            )
-            return  # Don't send admin notification for temporary failures
+            # Temporary failure: check retry limit
+            retry_count = instance.retry_count + 1
+            
+            if retry_count >= MAX_RETRY_ATTEMPTS:
+                # Max retries reached - mark as permanently failed
+                logging.error(
+                    "Max retries (%s) reached for reminder instance #%s to %s: %s (%s)",
+                    MAX_RETRY_ATTEMPTS,
+                    instance.id,
+                    contact_display,
+                    exc,
+                    reason,
+                )
+                comment = f"Max retries ({MAX_RETRY_ATTEMPTS}) reached: {exc}"[:1000]
+                await crud.set_reminder_instance_status(
+                    session,
+                    instance,
+                    status='failed',
+                    active=False,
+                    comment=comment,
+                )
+                # Update retry counter
+                instance.retry_count = retry_count
+                session.add(instance)
+                # Send admin notification (fall through to admin notification code)
+            else:
+                # Keep active for retry
+                logging.warning(
+                    "Temporary failure for reminder instance #%s to %s (attempt %s/%s): %s (%s) - will retry",
+                    instance.id,
+                    contact_display,
+                    retry_count,
+                    MAX_RETRY_ATTEMPTS,
+                    exc,
+                    reason,
+                )
+                comment = f"Retry {retry_count}/{MAX_RETRY_ATTEMPTS}: {exc}"[:1000]
+                await crud.set_reminder_instance_status(
+                    session,
+                    instance,
+                    status='pending',
+                    active=True,  # Keep active for retry
+                    comment=comment,
+                )
+                # Update retry counter
+                instance.retry_count = retry_count
+                session.add(instance)
+                return  # Don't send admin notification for temporary failures (below limit)
         admin_message = (
             "⚠️ <b>Не удалось отправить напоминание</b>\n\n"
             f"Инстанс #{escape_html_text(instance.id)} ({escape_html_text(self._describe_instance_kind(instance))})\n"

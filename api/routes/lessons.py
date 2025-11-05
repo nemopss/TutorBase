@@ -18,7 +18,8 @@ from api.schemas import (
 from services import lesson_service, package_service
 from services.dto import LessonDTO
 from services.exceptions import NotFoundError
-from utils.tasks import regenerate_package_reminders_task, sync_package_metrics_task
+from utils.tasks.reminders import regenerate_package_reminders_task
+from utils.tasks import sync_package_metrics_task
 
 router = APIRouter()
 

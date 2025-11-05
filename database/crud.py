@@ -1664,6 +1664,43 @@ async def set_reminder_instance_status(
     return instance
 
 
+async def deactivate_reminder_instances_for_lesson(
+    session: AsyncSession,
+    lesson_id: int,
+) -> int:
+    """Deactivate all active reminder instances for a lesson.
+    
+    Used when a lesson is cancelled to prevent sending reminders.
+    Sets status='cancelled' and active=False for all active instances.
+    
+    Args:
+        session: Async database session
+        lesson_id: Lesson ID to deactivate reminders for
+        
+    Returns:
+        Count of deactivated instances
+    """
+    stmt = (
+        select(ReminderInstance)
+        .where(
+            ReminderInstance.lesson_id == lesson_id,
+            ReminderInstance.active == True,
+            ReminderInstance.status.in_(['scheduled', 'pending'])
+        )
+    )
+    instances = (await session.execute(stmt)).scalars().all()
+    
+    count = 0
+    for instance in instances:
+        instance.status = 'cancelled'
+        instance.active = False
+        instance.comment = 'Lesson cancelled'
+        session.add(instance)
+        count += 1
+    
+    return count
+
+
 async def get_reminder_instance(session: AsyncSession, current_tenant: CurrentTenant, instance_id: int) -> ReminderInstance | None:
     """Get reminder instance by ID with relationships loaded.
     
@@ -1691,6 +1728,34 @@ async def get_reminder_instance(session: AsyncSession, current_tenant: CurrentTe
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(ReminderInstance.tenant_id == current_tenant.tenant_id)
 
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def get_reminder_instance_global(session: AsyncSession, instance_id: int) -> ReminderInstance | None:
+    """Get reminder instance by ID without tenant filtering.
+    
+    Used by bot handlers where tenant context is not available.
+    Tenant isolation is maintained by checking instance.tenant_id after retrieval.
+    
+    Eager loads rule, package, learner (with bot_user), and lesson.
+    
+    Args:
+        session: Async database session
+        instance_id: Instance ID
+        
+    Returns:
+        ReminderInstance object with relationships loaded or None
+    """
+    stmt = (
+        select(ReminderInstance)
+        .options(
+            selectinload(ReminderInstance.rule),
+            selectinload(ReminderInstance.package),
+            selectinload(ReminderInstance.learner).selectinload(Learner.bot_user),
+            selectinload(ReminderInstance.lesson),
+        )
+        .where(ReminderInstance.id == instance_id)
+    )
     return (await session.execute(stmt)).scalar_one_or_none()
 
 

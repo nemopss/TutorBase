@@ -18,7 +18,8 @@ from services import package_service, template_service
 from services.dto import LessonPackageDTO
 from services.exceptions import NotFoundError, ValidationError
 from utils.timezone import DEFAULT_TIMEZONE, DEFAULT_TZ, parse_date_string, normalize_to_timezone
-from utils.tasks import regenerate_package_reminders_task, bulk_sync_package_metrics_task
+from utils.tasks.reminders import regenerate_package_reminders_task
+from utils.tasks import bulk_sync_package_metrics_task
 
 router = APIRouter()
 
