@@ -34,6 +34,7 @@ jobs:
               - 'alembic/**'
               - 'database/**'
               - 'push.py'
+              - 'keyboards/**'
             api:
               - 'Dockerfile.api'
               - 'api/**'
