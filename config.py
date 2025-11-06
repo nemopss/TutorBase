@@ -19,6 +19,7 @@ class Settings(BaseSettings):
     ADMIN_CHAT_ID: int
     LOGS_CHAT_ID: int
     CANCELLATION_IMAGE_FILE_ID: str
+    START_PHOTO_FILE_ID: Optional[str] = None
     ADMINS: list[int]
     REGULATIONS_URL: str
     REDIS_URL: str

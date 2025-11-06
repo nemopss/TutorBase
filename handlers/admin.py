@@ -283,6 +283,9 @@ class AddStudentStates(StatesGroup):
 class CuteMessageStates(StatesGroup):
     message = State()
 
+class SetStartPhotoStates(StatesGroup):
+    waiting_for_photo = State()
+
 
 
 @router.message(Command("admin"), IsAdmin())
@@ -1003,3 +1006,49 @@ async def cb_learner_delete_execute(query: CallbackQuery, session: AsyncSession)
 async def cb_noop(query: CallbackQuery):
     await query.answer()
 
+
+
+@router.message(Command("set_start_photo"), IsAdmin())
+async def cmd_set_start_photo(message: types.Message, state: FSMContext):
+    logging.info(f"Admin {message.from_user.id} initiated set_start_photo.")
+    await state.set_state(SetStartPhotoStates.waiting_for_photo)
+    await message.answer(
+        "📸 Отправьте фотографию, которую хотите использовать для стартового сообщения.\n\n"
+        "Я верну вам file_id, который нужно добавить в .env файл как START_PHOTO_FILE_ID"
+    )
+
+
+@router.message(SetStartPhotoStates.waiting_for_photo, F.photo, IsAdmin())
+async def state_receive_start_photo(message: types.Message, state: FSMContext):
+    file_id = message.photo[-1].file_id
+    
+    await state.clear()
+    
+    response = (
+        "✅ Фотография получена!\n\n"
+        f"<b>file_id:</b>\n<code>{escape_html_text(file_id)}</code>\n\n"
+        "Добавьте эту строку в ваш .env файл:\n"
+        f"<code>START_PHOTO_FILE_ID={file_id}</code>\n\n"
+        "После добавления перезапустите бота."
+    )
+    
+    await message.answer(response)
+    
+    # Log to admin channel
+    log_text = (
+        "#set_start_photo\n"
+        f"👨‍💻 Admin: @{escape_html_text(message.from_user.username or str(message.from_user.id))}\n"
+        f"📸 New start photo file_id: {file_id}"
+    )
+    try:
+        await message.bot.send_photo(config.LOGS_CHAT_ID, photo=file_id, caption=log_text)
+    except Exception as e:
+        logging.error(f"Failed to send log message: {e}")
+
+
+@router.message(SetStartPhotoStates.waiting_for_photo, IsAdmin())
+async def state_invalid_photo(message: types.Message, state: FSMContext):
+    await message.answer(
+        "❌ Пожалуйста, отправьте фотографию.\n\n"
+        "Если хотите отменить, используйте команду /admin"
+    )
