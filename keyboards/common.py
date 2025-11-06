@@ -4,11 +4,11 @@ from config import config
 
 def start_keyboard():
     builder = InlineKeyboardBuilder()
-    builder.button(text='📝 Оставить заявку', callback_data='start_apply')
+    builder.button(text='🫶🏻 Регламенты работы', callback_data='reglament_reply')
     # builder.button(text='🔗 Заполнить форму (Google Forms)', url=config.GOOGLE_FORM_URL)
     builder.button(text='💰 Узнать цены', callback_data='get_prices')
-    builder.button(text='💬 Результаты учеников', callback_data='show_cases')
-    builder.button(text='🫶🏻 Регламенты работы', callback_data='reglament_reply')
+    # builder.button(text='💬 Результаты учеников', callback_data='show_cases')
+    builder.button(text='📝 Оставить заявку', callback_data='start_apply')
     builder.adjust(1)
     return builder.as_markup()
 
