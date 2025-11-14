@@ -18,6 +18,7 @@ def admin_keyboard():
     builder.button(text='🌐 Open Web App', web_app={'url': config.MINI_APP_URL})
     builder.button(text='👩‍🎓 Ученики', callback_data='manage_students')
     builder.button(text='📦 Пакеты', callback_data='packages_manager')
+    builder.button(text='🧪 Тест напоминаний', callback_data='test_reminders')
     builder.button(text='📊 Статистика', callback_data='admin_stats_menu')
     builder.button(text='📚 Менеджер кейсов', callback_data='cases_manager')
     builder.adjust(1)

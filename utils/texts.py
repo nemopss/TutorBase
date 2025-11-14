@@ -392,3 +392,47 @@ PACKAGE_TEMPLATE_PROMPT_SCHEDULE_EDIT = 'Введите расписание (н
 PACKAGE_TEMPLATE_PROMPT_LESSON_COUNT_EDIT = 'Введите количество уроков (или "-" чтобы оставить {current}):'
 PACKAGE_TEMPLATE_PROMPT_DURATION_EDIT = 'Введите длительность пакета в днях (или "-" чтобы оставить {current}):'
 PACKAGE_TEMPLATE_PROMPT_TIMEZONE_EDIT = 'Введите часовой пояс (или "-" чтобы оставить {current}):'
+
+# --- Test Reminders ---
+TEST_REMINDERS_MENU = "🧪 <b>Тестирование напоминаний</b>\n\nВыберите пакет для тестирования:"
+TEST_PACKAGES_EMPTY = "Нет пакетов с активными напоминаниями"
+TEST_PACKAGE_ITEM = "📦 {title}\n👤 {learner_name}\n🔔 {count} напоминаний"
+TEST_PACKAGE_DETAILS = """📦 <b>Пакет:</b> {title}
+👤 <b>Ученик:</b> {learner_name}
+📅 <b>Период:</b> {start_date} - {end_date}
+
+<b>Активные напоминания ({count}):</b>
+{reminders_list}"""
+TEST_REMINDER_ITEM = "• {type} - {scheduled_for}"
+TEST_NO_REMINDERS = "Нет активных напоминаний для этого пакета"
+TEST_PROMPT_CONTACT = """Введите контакт получателя тестовых напоминаний:
+
+Форматы:
+• chat_id: <code>123456789</code>
+• username: <code>@username</code>
+• ссылка: <code>https://t.me/username</code>"""
+TEST_INVALID_CONTACT = "❌ Некорректный формат контакта. Попробуйте ещё раз."
+TEST_CONFIRM = """Отправить все тестовые напоминания?
+
+<b>Пакет:</b> {package_title}
+<b>Количество напоминаний:</b> {count}
+<b>Получатель:</b> {contact}"""
+TEST_SENDING = "⏳ Отправка тестовых напоминаний..."
+TEST_RESULTS = """✅ Отправка завершена
+
+<b>Успешно:</b> {success_count}
+<b>Ошибок:</b> {error_count}
+
+{details}"""
+TEST_RESULT_SUCCESS = "✅ {type} ({scheduled_for})"
+TEST_RESULT_ERROR = "❌ {type} ({scheduled_for}): {error}"
+TEST_LOG_MESSAGE = """#test_reminders
+👨‍💻 Admin: @{admin_username} (ID: {admin_id})
+📦 Package: {package_title} (ID: {package_id})
+📨 Sent to: {contact}
+✅ Success: {success_count}
+❌ Errors: {error_count}"""
+TEST_MESSAGE_PREFIX = """🧪 <b>[ТЕСТ]</b>
+📅 Запланировано на: {scheduled_for}
+
+"""

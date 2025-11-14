@@ -2372,3 +2372,119 @@ async def list_invite_tokens(
     result = await session.execute(stmt)
     tokens = result.scalars().all()
     return tokens, total
+
+
+# ============================================================================
+# Test Reminders CRUD Operations
+# ============================================================================
+
+
+async def fetch_packages_with_active_reminders(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    limit: int,
+    offset: int,
+) -> tuple[list[LessonPackage], int]:
+    """Fetch lesson packages that have active reminder instances.
+    
+    Returns packages with at least one active reminder (status='scheduled', active=True).
+    Eager loads learner and bot_user for display. Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        limit: Maximum number of results
+        offset: Number of results to skip
+        
+    Returns:
+        Tuple of (list of LessonPackage objects, total count)
+    """
+    # Subquery to find package IDs with active reminders
+    active_reminders_subquery = (
+        select(ReminderInstance.package_id)
+        .where(
+            and_(
+                ReminderInstance.status == 'scheduled',
+                ReminderInstance.active == True
+            )
+        )
+        .distinct()
+    )
+    
+    if current_tenant.tenant_id is not None:
+        active_reminders_subquery = active_reminders_subquery.where(
+            ReminderInstance.tenant_id == current_tenant.tenant_id
+        )
+    
+    # Base query for packages with active reminders
+    base_query = select(LessonPackage).where(
+        LessonPackage.id.in_(active_reminders_subquery)
+    )
+    
+    if current_tenant.tenant_id is not None:
+        base_query = base_query.where(LessonPackage.tenant_id == current_tenant.tenant_id)
+    
+    # Count query
+    count_stmt = base_query.with_only_columns(func.count()).order_by(None)
+    total = (await session.execute(count_stmt)).scalar_one()
+    
+    if total == 0:
+        return [], 0
+    
+    # Data query with eager loading
+    rows_stmt = (
+        base_query.options(
+            joinedload(LessonPackage.learner).joinedload(Learner.bot_user),
+            joinedload(LessonPackage.template),
+        )
+        .order_by(LessonPackage.created_at.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    
+    rows = (await session.execute(rows_stmt)).scalars().all()
+    return rows, total
+
+
+async def fetch_active_reminders_for_package(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    package_id: int,
+) -> list[ReminderInstance]:
+    """Fetch all active reminder instances for specific package.
+    
+    Returns only reminders with status='scheduled' and active=True.
+    Eager loads rule, package, learner, and lesson.
+    Orders by scheduled time ascending. Applies tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        package_id: Package ID
+        
+    Returns:
+        List of active ReminderInstance objects for the package
+    """
+    stmt = (
+        select(ReminderInstance)
+        .options(
+            selectinload(ReminderInstance.rule),
+            selectinload(ReminderInstance.package),
+            selectinload(ReminderInstance.learner),
+            selectinload(ReminderInstance.lesson),
+        )
+        .where(
+            and_(
+                ReminderInstance.package_id == package_id,
+                ReminderInstance.status == 'scheduled',
+                ReminderInstance.active == True
+            )
+        )
+        .order_by(ReminderInstance.scheduled_for.asc())
+    )
+    
+    if current_tenant.tenant_id is not None:
+        stmt = stmt.where(ReminderInstance.tenant_id == current_tenant.tenant_id)
+    
+    return (await session.execute(stmt)).scalars().all()
