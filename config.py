@@ -22,6 +22,7 @@ class Settings(BaseSettings):
     START_PHOTO_FILE_ID: Optional[str] = None
     ADMINS: list[int]
     REGULATIONS_URL: str
+    PROGRAMS_URL: str
     REDIS_URL: str
     REMINDER_NOTIFY_USERNAME: str
     JWT_SECRET: str
