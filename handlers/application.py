@@ -35,6 +35,11 @@ async def cb_reglament_reply(query: CallbackQuery):
     await query.message.answer(text=texts.REGLAMENT_REPLY_TEXT, reply_markup=reglament_keyboard())
     await query.answer()
 
+@router.callback_query(F.data == "programs_reply")
+async def cb_programs_reply(query: CallbackQuery):
+    await query.message.answer(text=texts.PROGRAMS_REPLY_TEXT, reply_markup=programs_keyboard())
+    await query.answer()
+
 class ApplyStates(StatesGroup):
     name = State()
     language = State()
