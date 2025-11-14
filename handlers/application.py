@@ -11,7 +11,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import config
 from database import crud
-from keyboards.common import start_keyboard, reglament_keyboard, back_with_menu_keyboard
+from keyboards.common import start_keyboard, reglament_keyboard, back_with_menu_keyboard, programs_keyboard
 from utils.formatters import format_application
 from utils import texts
 
