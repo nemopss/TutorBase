@@ -461,19 +461,35 @@ async def register_student(
     from database.models import Learner, BotUser
     display_name = registration_data.student_name or telegram_display_name
     
-    # Create bot_user record first
-    bot_user = BotUser(
-        chat_id=telegram_id,
-        username=username,
-        first_name=display_name.split()[0] if display_name else "User",
-        last_name=" ".join(display_name.split()[1:]) if len(display_name.split()) > 1 else "",
-        language_code="en",
-        is_bot=False,
-        created_at=datetime.now(timezone.utc),
-        updated_at=datetime.now(timezone.utc),
-        last_seen_at=datetime.now(timezone.utc),
-    )
-    session.add(bot_user)
+    # Check for existing BotUser (upsert pattern)
+    bot_user = await crud.get_bot_user_by_chat_id(session, telegram_id)
+    
+    if bot_user:
+        # Update existing BotUser record
+        logger.info(f"[{request_id}] Found existing BotUser: bot_user_id={bot_user.id}, updating metadata")
+        bot_user.username = username
+        bot_user.first_name = display_name.split()[0] if display_name else "User"
+        bot_user.last_name = " ".join(display_name.split()[1:]) if len(display_name.split()) > 1 else ""
+        bot_user.language_code = user_block.get("language_code", "en")
+        bot_user.updated_at = datetime.now(timezone.utc)
+        bot_user.last_seen_at = datetime.now(timezone.utc)
+        session.add(bot_user)
+    else:
+        # Create new BotUser record
+        logger.info(f"[{request_id}] Creating new BotUser for chat_id={telegram_id}")
+        bot_user = BotUser(
+            chat_id=telegram_id,
+            username=username,
+            first_name=display_name.split()[0] if display_name else "User",
+            last_name=" ".join(display_name.split()[1:]) if len(display_name.split()) > 1 else "",
+            language_code=user_block.get("language_code", "en"),
+            is_bot=False,
+            created_at=datetime.now(timezone.utc),
+            updated_at=datetime.now(timezone.utc),
+            last_seen_at=datetime.now(timezone.utc),
+        )
+        session.add(bot_user)
+    
     await session.flush()  # Get bot_user.id
     
     # Create learner record with bot_user_id
@@ -524,6 +540,11 @@ async def register_student(
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="User already registered"
+                )
+            elif 'learners_bot_user_id_key' in error_msg or 'learners.bot_user_id' in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Already registered as a student in this school"
                 )
         
         # Generic error for other cases
