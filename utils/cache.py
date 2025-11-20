@@ -173,27 +173,7 @@ def cached(ttl: int = 300, key_prefix: str = "") -> Callable:
 
             # Try to cache result
             try:
-                # Convert result to JSON-serializable format
-                if hasattr(result, "dict"):
-                    # Pydantic model
-                    cache_value = result.dict()
-                elif is_dataclass(result):
-                    # Dataclass (including slots=True)
-                    cache_value = asdict(result)
-                elif hasattr(result, "__dict__"):
-                    # SQLAlchemy model
-                    cache_value = {k: v for k, v in result.__dict__.items() if not k.startswith("_")}
-                elif isinstance(result, (list, tuple)):
-                    # List of models
-                    cache_value = [
-                        item.dict() if hasattr(item, "dict") else
-                        asdict(item) if is_dataclass(item) else
-                        {k: v for k, v in item.__dict__.items() if not k.startswith("_")}
-                        if hasattr(item, "__dict__") else item
-                        for item in result
-                    ]
-                else:
-                    cache_value = result
+                cache_value = _serialize_for_cache(result)
 
                 await cache_client.setex(
                     cache_key,
@@ -211,6 +191,28 @@ def cached(ttl: int = 300, key_prefix: str = "") -> Callable:
         return wrapper
 
     return decorator
+
+
+def _serialize_for_cache(obj: Any) -> Any:
+    """Recursively serialize objects for caching."""
+    if hasattr(obj, "dict"):
+        # Pydantic model
+        return obj.dict()
+    elif is_dataclass(obj):
+        # Dataclass
+        return asdict(obj)
+    elif hasattr(obj, "__dict__"):
+        # SQLAlchemy model or generic object
+        return {k: _serialize_for_cache(v) for k, v in obj.__dict__.items() if not k.startswith("_")}
+    elif isinstance(obj, (list, tuple)):
+        # List or tuple
+        return [_serialize_for_cache(item) for item in obj]
+    elif isinstance(obj, dict):
+        # Dictionary
+        return {k: _serialize_for_cache(v) for k, v in obj.items()}
+    else:
+        # Primitive or other
+        return obj
 
 
 async def invalidate_cache(pattern: str) -> int:
