@@ -160,7 +160,7 @@ REMINDER_SUMMARY = (
     "Тип: {reminder_type}\n"
     "Комментарий: {comment}"
 )
-REMINDER_TYPE_RECURRING = "еженедельное"
+REMINDER_TYPE_RECURRING = "за час до урока"
 REMINDER_TYPE_ONE_TIME = "одноразовое"
 REMINDER_TYPE_PAYMENT_WEEK = "оплата — за неделю"
 REMINDER_TYPE_PAYMENT_DAY = "оплата — за день"
