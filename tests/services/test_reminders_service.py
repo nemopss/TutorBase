@@ -397,7 +397,7 @@ async def test_describe_instance_kind(db_session: AsyncSession, reminder_schedul
     package = await factories.create_package(db_session, learner=learner)
 
     cases = [
-        (REMINDER_TYPE_LESSON_CONFIRM, "еженедельное"),
+        (REMINDER_TYPE_LESSON_CONFIRM, "за час до урока"),
         (REMINDER_TYPE_LESSON_DAY_BEFORE, "подтверждение за день"),
         ("unknown_type", "unknown_type"),
     ]
