@@ -85,7 +85,7 @@ const StudentDashboard: React.FC = () => {
   const nextLesson = upcomingLessons[0];
 
   return (
-    <div style={{ padding: "24px" }}>
+    <div style={{ padding: "16px" }}>
       <div style={{ marginBottom: 24 }}>
         <Title level={2} style={{ margin: 0 }}>
           Hello, {learner?.display_name || user?.display_name || "Student"}!

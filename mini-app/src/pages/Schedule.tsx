@@ -67,8 +67,15 @@ const Schedule: React.FC = () => {
   }
 
   return (
-    <div style={{ padding: '24px' }}>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+    <div style={{ padding: '16px' }}>
+      <div style={{ 
+        display: 'flex', 
+        justifyContent: 'space-between', 
+        alignItems: 'center', 
+        marginBottom: 24,
+        gap: 16,
+        flexWrap: 'wrap'
+      }}>
         <Title level={2} style={{ margin: 0 }}>
           Расписание
         </Title>

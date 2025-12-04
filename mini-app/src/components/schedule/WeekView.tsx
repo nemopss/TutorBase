@@ -1,5 +1,5 @@
 import React, { useMemo } from 'react';
-import { Card, Typography } from 'antd';
+import { Card, Typography, theme } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
 import type { Lesson } from './types';
 import { STATUS_COLORS } from './types';
@@ -13,6 +13,8 @@ interface WeekViewProps {
 }
 
 const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick }) => {
+  const { token } = theme.useToken();
+  
   // Get start of week (Monday)
   const weekStart = currentDate.startOf('isoWeek');
   const weekDays = Array.from({ length: 7 }, (_, i) => weekStart.add(i, 'day'));
@@ -45,7 +47,11 @@ const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick
   }, [lessons, weekStart]);
 
   return (
-    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(7, 1fr)', gap: 8 }}>
+    <div style={{ 
+      display: 'grid', 
+      gridTemplateColumns: 'repeat(auto-fit, minmax(120px, 1fr))', 
+      gap: 8
+    }}>
       {weekDays.map(day => {
         const dateKey = day.format('YYYY-MM-DD');
         const dayLessons = lessonsByDay[dateKey] || [];
@@ -71,7 +77,7 @@ const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick
             }
             style={{ 
               minHeight: 200,
-              background: isToday ? '#e6f7ff' : 'white'
+              background: isToday ? token.colorPrimaryBg : token.colorBgContainer
             }}
           >
             {dayLessons.length === 0 ? (
@@ -108,9 +114,11 @@ const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick
                       <div style={{ fontWeight: 'bold', fontSize: 14 }}>
                         {lessonTime.format('HH:mm')}
                       </div>
-                      <div style={{ fontSize: 12, color: '#666', marginTop: 4 }}>
-                        {lesson.duration_minutes} мин
-                      </div>
+                      {lesson.duration_minutes && (
+                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+                          {lesson.duration_minutes} мин
+                        </div>
+                      )}
                     </div>
                   );
                 })}
