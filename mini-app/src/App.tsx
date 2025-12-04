@@ -20,6 +20,7 @@ import RoleSelectionScreen from './pages/RoleSelectionScreen';
 import TutorRegistrationForm from './pages/TutorRegistrationForm';
 import StudentRegistrationForm from './pages/StudentRegistrationForm';
 import StudentDashboard from './pages/StudentDashboard';
+import Schedule from './pages/Schedule';
 import InviteCodes from './pages/InviteCodes';
 
 function App() {
@@ -145,6 +146,7 @@ function App() {
           {isStudent ? (
             <>
               <Route path="/" element={<StudentDashboard />} />
+              <Route path="/schedule" element={<Schedule />} />
               <Route path="/settings" element={<Settings />} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </>
