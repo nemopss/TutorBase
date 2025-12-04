@@ -310,6 +310,7 @@ async def list_all_lessons(
     current_tenant: CurrentTenant,
     *, 
     status: Optional[str] = None, 
+    learner_id: Optional[int] = None,
     search: Optional[str] = None,
     limit: int = 100, 
     offset: int = 0,
@@ -325,6 +326,7 @@ async def list_all_lessons(
         session: Async database session
         current_tenant: Current tenant context for data isolation
         status: Filter by lesson status (scheduled/completed/cancelled) (optional)
+        learner_id: Filter by learner ID (optional)
         search: Search query to filter by learner name or package title (optional)
         limit: Maximum number of lessons in result (default 100)
         offset: Offset for pagination (default 0)
@@ -344,6 +346,7 @@ async def list_all_lessons(
         session, 
         current_tenant,
         status=status, 
+        learner_id=learner_id,
         search=search,
         limit=limit, 
         offset=offset,

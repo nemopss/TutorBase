@@ -5,6 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import get_session, admin_required, get_current_tenant, CurrentTenant, get_current_user
 from api.schemas import UserResponse, UserRoleUpdateRequest, PaginationParams, PaginatedResponse
+from api.schemas.learners import LearnerResponse
 from database import crud
 from database.models import User
 from utils.cache import invalidate_cache
@@ -31,6 +32,39 @@ async def get_current_user_info(
 ) -> UserResponse:
     """Get current authenticated user information"""
     return _to_response(current_user)
+
+
+@router.get("/me/learner", response_model=LearnerResponse)
+async def get_current_learner_info(
+    current_user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> LearnerResponse:
+    """Get learner profile for current authenticated user.
+    
+    Finds learner profile linked to user's Telegram ID.
+    """
+    if not current_user.telegram_id:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="User is not linked to Telegram"
+        )
+
+    bot_user = await crud.get_bot_user_by_chat_id(session, current_user.telegram_id)
+    if not bot_user:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Bot user not found"
+        )
+
+    learner = await crud.get_learner_by_bot_user(session, current_tenant, bot_user.id)
+    if not learner:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, 
+            detail="Learner profile not found"
+        )
+        
+    return learner
 
 
 @router.get("", response_model=PaginatedResponse[UserResponse])

@@ -5,7 +5,7 @@ from datetime import datetime, time, date
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, admin_or_teacher_required, admin_required, get_current_tenant, CurrentTenant
+from api.dependencies import get_session, admin_or_teacher_required, admin_required, get_current_tenant, CurrentTenant, get_current_user
 from api.schemas.packages import (
     PackageCreateRequest,
     PackageListResponse,
@@ -20,6 +20,8 @@ from services.exceptions import NotFoundError, ValidationError
 from utils.timezone import DEFAULT_TIMEZONE, DEFAULT_TZ, parse_date_string, normalize_to_timezone
 from utils.tasks.reminders import regenerate_package_reminders_task
 from utils.tasks import bulk_sync_package_metrics_task
+from database import crud
+from database.models import User
 
 router = APIRouter()
 
@@ -69,7 +71,23 @@ async def list_packages(
     search: str | None = None,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ) -> PaginatedResponse[PackageResponse]:
+    # Enforce learner_id for viewers (students)
+    if current_user.role == 'viewer':
+        if not current_user.telegram_id:
+            return PaginatedResponse.create([], 0, pagination.limit, pagination.offset)
+            
+        bot_user = await crud.get_bot_user_by_chat_id(session, current_user.telegram_id)
+        if not bot_user:
+            return PaginatedResponse.create([], 0, pagination.limit, pagination.offset)
+            
+        learner = await crud.get_learner_by_bot_user(session, current_tenant, bot_user.id)
+        if not learner:
+            return PaginatedResponse.create([], 0, pagination.limit, pagination.offset)
+            
+        learner_id = learner.id
+
     packages, total = await package_service.list_packages(
         session,
         current_tenant,

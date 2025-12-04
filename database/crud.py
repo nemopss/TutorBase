@@ -1357,6 +1357,7 @@ async def list_all_lessons(
     current_tenant: CurrentTenant,
     *, 
     status: Optional[str] = None, 
+    learner_id: Optional[int] = None,
     search: Optional[str] = None,
     limit: int = 100, 
     offset: int = 0,
@@ -1372,6 +1373,7 @@ async def list_all_lessons(
         session: Async database session
         current_tenant: Current tenant context for filtering
         status: Optional status filter
+        learner_id: Optional learner ID filter
         search: Optional search string (date, package title, or learner name)
         limit: Maximum number of results
         offset: Number of results to skip
@@ -1399,6 +1401,10 @@ async def list_all_lessons(
 
     if status:
         conditions.append(Lesson.status == status)
+
+    if learner_id is not None:
+        needs_package_join = True
+        conditions.append(LessonPackage.learner_id == learner_id)
 
     search_term = (search or "").strip()
     if search_term:

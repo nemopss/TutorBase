@@ -80,6 +80,19 @@ interface AppLayoutProps {
   children: React.ReactNode;
 }
 
+const studentMenuItems: NonNullable<MenuProps['items']> = [
+  {
+    key: '/',
+    icon: <HomeOutlined />,
+    label: <Link to="/">Dashboard</Link>,
+  },
+  {
+    key: '/settings',
+    icon: <SettingOutlined />,
+    label: <Link to="/settings">Settings</Link>,
+  },
+];
+
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const location = useLocation();
   const { resolvedTheme } = useThemeMode();
@@ -89,8 +102,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const hasStaffAccess = user?.role === 'admin' || user?.role === 'teacher';
+  const isStudent = user?.role === 'viewer';
 
   const menuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
+    if (isStudent) {
+      return studentMenuItems;
+    }
+
     const items = [...baseMenuItems];
 
     // Add Invite Codes for teachers and admins
@@ -110,7 +128,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
 
     return items;
-  }, [isAdmin, hasStaffAccess]);
+  }, [isAdmin, hasStaffAccess, isStudent]);
 
   useEffect(() => {
     const handleResize = () => {
