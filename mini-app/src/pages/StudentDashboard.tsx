@@ -120,8 +120,7 @@ const StudentDashboard: React.FC = () => {
         <Card title="Next Lesson">
           {nextLesson ? (
             <div>
-              <Title level={4}>{nextLesson.package_title}</Title>
-              <Text strong>{dayjs(nextLesson.scheduled_at).format('MMMM D, YYYY h:mm A')}</Text>
+              <Text strong>{dayjs(nextLesson.scheduled_at).format('MMMM D, h:mm A')}</Text>
               <br />
               <Text type="secondary">{nextLesson.duration_minutes} minutes</Text>
             </div>
