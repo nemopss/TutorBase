@@ -5,7 +5,7 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, get_current_tenant, CurrentTenant, admin_or_teacher_required
+from api.dependencies import get_session, get_current_tenant, CurrentTenant, admin_or_teacher_required, get_current_user
 from api.schemas import (
     LessonCreateRequest,
     LessonListResponse,
@@ -17,6 +17,8 @@ from api.schemas import (
 )
 from services import lesson_service, package_service
 from services.dto import LessonDTO
+from database import crud
+from database.models import User
 from services.exceptions import NotFoundError
 from utils.tasks.reminders import regenerate_package_reminders_task
 from utils.tasks import sync_package_metrics_task
@@ -28,16 +30,34 @@ router = APIRouter()
 async def list_all_lessons_endpoint(
     pagination: PaginationParams = Depends(),
     status: Optional[str] = None,
+    learner_id: Optional[int] = None,
     search: Optional[str] = None,
     sort_by: str = 'scheduled_at',
     sort_order: str = 'asc',
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
 ) -> PaginatedResponse[LessonResponse]:
+    # Enforce learner_id for viewers (students)
+    if current_user.role == 'viewer':
+        if not current_user.telegram_id:
+            return PaginatedResponse.create([], 0, pagination.limit, pagination.offset)
+            
+        bot_user = await crud.get_bot_user_by_chat_id(session, current_user.telegram_id)
+        if not bot_user:
+            return PaginatedResponse.create([], 0, pagination.limit, pagination.offset)
+            
+        learner = await crud.get_learner_by_bot_user(session, current_tenant, bot_user.id)
+        if not learner:
+            return PaginatedResponse.create([], 0, pagination.limit, pagination.offset)
+            
+        learner_id = learner.id
+
     lessons, total = await lesson_service.list_all_lessons(
         session, 
         current_tenant,
         status=status, 
+        learner_id=learner_id,
         search=search,
         limit=pagination.limit, 
         offset=pagination.offset,

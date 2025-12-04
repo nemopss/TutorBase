@@ -19,6 +19,7 @@ import AccessDenied from './pages/AccessDenied';
 import RoleSelectionScreen from './pages/RoleSelectionScreen';
 import TutorRegistrationForm from './pages/TutorRegistrationForm';
 import StudentRegistrationForm from './pages/StudentRegistrationForm';
+import StudentDashboard from './pages/StudentDashboard';
 import InviteCodes from './pages/InviteCodes';
 
 function App() {
@@ -130,7 +131,10 @@ function App() {
     );
   }
 
-  if (!hasStaffAccess) {
+  const isStudent = user?.role === 'viewer';
+  const hasAccess = hasStaffAccess || isStudent;
+
+  if (!hasAccess) {
     return <AccessDenied />;
   }
 
@@ -138,18 +142,28 @@ function App() {
     <ConfigProvider theme={antdTheme}>
       <AppLayout>
         <Routes>
-          <Route path="/" element={<Dashboard />} />
-          <Route path="/packages" element={<Packages />} />
-          <Route path="/packages/:id" element={<PackageDetail />} />
-          <Route path="/lessons" element={<Lessons />} />
-          <Route path="/learners" element={<Learners />} />
-          <Route path="/templates" element={<Templates />} />
-          <Route path="/reminders" element={<Reminders />} />
-          <Route path="/analytics" element={<Analytics />} />
-          <Route path="/invite-codes" element={<InviteCodes />} />
-          <Route path="/settings" element={<Settings />} />
-          {isAdmin && <Route path="/admin" element={<Admin />} />}
-          <Route path="*" element={<Navigate to="/" replace />} />
+          {isStudent ? (
+            <>
+              <Route path="/" element={<StudentDashboard />} />
+              <Route path="/settings" element={<Settings />} />
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </>
+          ) : (
+            <>
+              <Route path="/" element={<Dashboard />} />
+              <Route path="/packages" element={<Packages />} />
+              <Route path="/packages/:id" element={<PackageDetail />} />
+              <Route path="/lessons" element={<Lessons />} />
+              <Route path="/learners" element={<Learners />} />
+              <Route path="/templates" element={<Templates />} />
+              <Route path="/reminders" element={<Reminders />} />
+              <Route path="/analytics" element={<Analytics />} />
+              <Route path="/invite-codes" element={<InviteCodes />} />
+              <Route path="/settings" element={<Settings />} />
+              {isAdmin && <Route path="/admin" element={<Admin />} />}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </>
+          )}
         </Routes>
       </AppLayout>
     </ConfigProvider>
