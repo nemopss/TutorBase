@@ -50,9 +50,11 @@ const ListView: React.FC<ListViewProps> = ({ lessons, onLessonClick }) => {
                 >
                   <List.Item.Meta
                     title={
-                      <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <Text strong>{lessonTime.format('HH:mm')}</Text>
-                        <Text type="secondary">({lesson.duration_minutes} мин)</Text>
+                        {lesson.duration_minutes && (
+                          <Text type="secondary">({lesson.duration_minutes} мин)</Text>
+                        )}
                       </div>
                     }
                     description={
