@@ -24,7 +24,7 @@ const Schedule: React.FC = () => {
     queryFn: async () => {
       const { data } = await api.get<{ items: Lesson[], total: number }>('/lessons', {
         params: { 
-          limit: 1000, // Get all lessons for calendar view
+          limit: 100, // Max allowed by API validation
           sort_by: 'scheduled_at',
           sort_order: 'asc'
         }

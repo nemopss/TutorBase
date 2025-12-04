@@ -89,7 +89,7 @@ const studentMenuItems: NonNullable<MenuProps['items']> = [
   {
     key: '/schedule',
     icon: <CalendarOutlined />,
-    label: <Link to="/schedule">Расписание</Link>,
+    label: <Link to="/schedule">Schedule</Link>,
   },
   {
     key: '/settings',
