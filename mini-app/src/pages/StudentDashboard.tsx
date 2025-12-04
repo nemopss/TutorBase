@@ -98,7 +98,7 @@ const StudentDashboard: React.FC = () => {
           <Card>
             <Statistic
               title="Upcoming Lessons"
-              value={upcomingLessons.length}
+              value={lessonsData?.total || 0}
               prefix={<ClockCircleOutlined />}
               valueStyle={{ color: "#2383e2" }}
             />
