@@ -236,27 +236,30 @@ const Lessons: React.FC = () => {
   }, [data?.items]);
 
   // Calendar cell renderer (using cellRender instead of deprecated dateCellRender)
-  const cellRender = (value: Dayjs, info: { type: string }) => {
-    if (info.type !== 'date') return null;
+  const cellRender = (value: Dayjs, info: { type: string; originNode: React.ReactNode }) => {
+    if (info.type !== 'date') return info.originNode;
     
     const dateKey = value.format('YYYY-MM-DD');
     const lessonsOnDate = lessonsByDate.get(dateKey) || [];
     
-    if (lessonsOnDate.length === 0) return null;
+    if (lessonsOnDate.length === 0) return info.originNode;
 
     // Mobile: Show dots only
     if (isMobile) {
       return (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
-          {lessonsOnDate.slice(0, 3).map(lesson => (
-            <Badge
-              key={lesson.id}
-              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'}
-            />
-          ))}
-          {lessonsOnDate.length > 3 && (
-            <span style={{ fontSize: 10, color: token.colorTextSecondary }}>+{lessonsOnDate.length - 3}</span>
-          )}
+        <div className="ant-picker-cell-inner">
+          {value.date()}
+          <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap', marginTop: 2 }}>
+            {lessonsOnDate.slice(0, 3).map(lesson => (
+              <Badge
+                key={lesson.id}
+                status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'}
+              />
+            ))}
+            {lessonsOnDate.length > 3 && (
+              <span style={{ fontSize: 10, color: token.colorTextSecondary }}>+{lessonsOnDate.length - 3}</span>
+            )}
+          </div>
         </div>
       );
     }

@@ -176,6 +176,9 @@ const Analytics: React.FC = () => {
               style={{ width: isMobile ? '100%' : 'auto' }}
               placement="bottomLeft"
               getPopupContainer={(trigger) => trigger.parentElement || document.body}
+              panelRender={isMobile ? (panelNode) => (
+                <div style={{ maxWidth: '100vw', overflow: 'auto' }}>{panelNode}</div>
+              ) : undefined}
             />
             <Button icon={<DownloadOutlined />} onClick={handleExport} block={isMobile}>
               Export CSV

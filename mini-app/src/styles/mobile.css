@@ -63,6 +63,15 @@
     font-size: 12px;
     padding: 0 8px;
   }
+
+  /* RangePicker panels stack vertically on very small screens */
+  .ant-picker-panels {
+    flex-direction: column !important;
+  }
+  
+  .ant-picker-panel {
+    width: 100% !important;
+  }
 }
 
 /* Touch-friendly improvements */
