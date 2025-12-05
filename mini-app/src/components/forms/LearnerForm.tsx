@@ -1,6 +1,7 @@
 import React from 'react';
-import { Form, Input, Modal, Switch, Space, Typography, Divider } from 'antd';
+import { Form, Input, Switch, Space, Typography, Divider } from 'antd';
 import { UserAddOutlined, BellOutlined } from '@ant-design/icons';
+import ResponsiveModal from '../common/ResponsiveModal';
 
 const { Text } = Typography;
 
@@ -50,7 +51,7 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
   }, [visible, initialValues, form]);
 
   return (
-    <Modal
+    <ResponsiveModal
       title={
         <Space>
           {mode === 'create' ? <UserAddOutlined /> : <BellOutlined />}
@@ -131,7 +132,7 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
           />
         </Form.Item>
       </Form>
-    </Modal>
+    </ResponsiveModal>
   );
 };
 

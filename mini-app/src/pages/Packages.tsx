@@ -1,13 +1,14 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { Table, Tag, Select, Space, Input, Modal, Button, message, Progress, Alert } from 'antd';
+import { Tag, Select, Space, Input, Modal, Button, message, Progress, Alert } from 'antd';
 import type { TableProps } from 'antd';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import PackageForm from '../components/forms/PackageForm';
 import PageHeader from '../components/common/PageHeader';
-import EmptyState from '../components/common/EmptyState';
+import ResponsiveDataView from '../components/common/ResponsiveDataView';
+import PackageCard from '../components/cards/PackageCard';
 
 // --- Types --- //
 interface PackageProgress {
@@ -328,36 +329,42 @@ const Packages: React.FC = () => {
           style={{ marginBottom: 16 }}
         />
       )}
-      {!isLoading && !isError && packagesData.length === 0 ? (
-        <EmptyState 
-          title="No packages yet"
-          description="Create your first lesson package to get started"
-          actionText="Create Package"
-          onAction={() => { setEditingPackage(null); setIsModalOpen(true); }}
-        />
-      ) : (
-        <Table
-          columns={columns}
-          dataSource={packagesData}
-          rowKey="id"
-          loading={isLoading}
-          scroll={{ x: 800 }}
-          pagination={{
-            current: currentPage,
-            pageSize: pageSize,
-            total: packagesTotal,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} packages`,
-          }}
-          onChange={handleTableChange}
-          onRow={(record) => ({
-            onClick: () => navigate(`/packages/${record.id}`),
-            style: { cursor: 'pointer' },
-          })}
-          bordered
-        />
-      )}
+      <ResponsiveDataView<Package>
+        data={packagesData}
+        loading={isLoading}
+        columns={columns}
+        rowKey="id"
+        emptyText="No packages yet"
+        emptyDescription="Create your first lesson package to get started"
+        emptyActionText="Create Package"
+        onEmptyAction={() => { setEditingPackage(null); setIsModalOpen(true); }}
+        onItemClick={(record) => navigate(`/packages/${record.id}`)}
+        renderCard={(pkg) => (
+          <PackageCard
+            key={pkg.id}
+            package={pkg}
+            onEdit={(p) => {
+              setEditingPackage(toFormValues(p as Package));
+              setIsModalOpen(true);
+            }}
+            onDelete={handleDelete}
+            onClick={() => navigate(`/packages/${pkg.id}`)}
+          />
+        )}
+        tableProps={{
+          scroll: { x: 800 },
+          onChange: handleTableChange,
+          bordered: true,
+        }}
+        pagination={{
+          current: currentPage,
+          pageSize: pageSize,
+          total: packagesTotal,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} packages`,
+        }}
+      />
       <PackageForm 
         open={isModalOpen}
         onCancel={() => { setIsModalOpen(false); setEditingPackage(null); }}

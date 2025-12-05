@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Tag, Select, Space, Input, Button, message, Modal, Form, Switch, Alert } from 'antd';
+import { Tag, Select, Space, Input, Button, message, Modal, Form, Switch, Alert } from 'antd';
 import type { TableProps } from 'antd';
 import type { FormInstance } from 'antd/es/form';
 import { EditOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
@@ -8,7 +8,8 @@ import dayjs from 'dayjs';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import PageHeader from '../components/common/PageHeader';
-import EmptyState from '../components/common/EmptyState';
+import ResponsiveDataView from '../components/common/ResponsiveDataView';
+import ReminderCard from '../components/cards/ReminderCard';
 
 // --- Types --- //
 interface Reminder {
@@ -316,30 +317,38 @@ const Reminders: React.FC = () => {
         />
       </Space>
 
-      {!isLoading && (!data?.items || data.items.length === 0) ? (
-        <EmptyState 
-          title="No reminders found"
-          description="Reminders will be automatically created when you schedule lessons"
-        />
-      ) : (
-        <Table
-          columns={columns}
-          dataSource={data?.items}
-          rowKey="id"
-          loading={isLoading}
-          pagination={{
-            current: currentPage,
-            pageSize: pageSize,
-            total: data?.total,
-            showSizeChanger: true,
-            showQuickJumper: true,
-            showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} reminders`,
-          }}
-          onChange={handleTableChange}
-          bordered
-          scroll={{ x: 1200 }}
-        />
-      )}
+      <ResponsiveDataView<Reminder>
+        data={data?.items || []}
+        loading={isLoading}
+        columns={columns}
+        rowKey="id"
+        emptyText="No reminders found"
+        emptyDescription="Reminders will be automatically created when you schedule lessons"
+        renderCard={(reminder) => (
+          <ReminderCard
+            key={reminder.id}
+            reminder={reminder}
+            packageInfo={packagesData?.items.find(p => p.id === reminder.package_id)}
+            onEdit={(r) => {
+              setEditingReminder(r as Reminder);
+              setIsModalOpen(true);
+            }}
+          />
+        )}
+        tableProps={{
+          onChange: handleTableChange,
+          bordered: true,
+          scroll: { x: 1200 },
+        }}
+        pagination={{
+          current: currentPage,
+          pageSize: pageSize,
+          total: data?.total,
+          showSizeChanger: true,
+          showQuickJumper: true,
+          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} reminders`,
+        }}
+      />
 
       <Modal
         open={isModalOpen}

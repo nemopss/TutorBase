@@ -35,14 +35,16 @@ const TenantSwitcher: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [switching, setSwitching] = useState(false);
 
-    // Only render for super-admins
+    useEffect(() => {
+        if (isSuperAdmin) {
+            fetchTenants();
+        }
+    }, [isSuperAdmin]);
+
+    // Only render for super-admins (moved after all hooks)
     if (!isSuperAdmin) {
         return null;
     }
-
-    useEffect(() => {
-        fetchTenants();
-    }, []);
 
     const fetchTenants = async () => {
         setLoading(true);

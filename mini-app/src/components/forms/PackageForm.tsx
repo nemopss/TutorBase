@@ -1,10 +1,11 @@
 import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Modal, Form, Input, Select, DatePicker } from 'antd';
+import { Form, Input, Select, DatePicker } from 'antd';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import api from '../../services/api';
+import ResponsiveModal from '../common/ResponsiveModal';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -87,7 +88,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
   const shouldRequireStartDate = !isEditing && !!selectedTemplateId;
 
   return (
-    <Modal
+    <ResponsiveModal
       open={open}
       title={isEditing ? `Edit Package${initialValues?.title ? `: ${initialValues.title}` : ''}` : "Create New Package"}
       okText={isEditing ? "Save" : "Create"}
@@ -267,7 +268,7 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
           <Input.TextArea rows={3} placeholder="Additional notes about this package..." />
         </Form.Item>
       </Form>
-    </Modal>
+    </ResponsiveModal>
   );
 };
 
