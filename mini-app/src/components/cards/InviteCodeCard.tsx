@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Tag, Button, Space, Typography, Tooltip } from 'antd';
-import { CopyOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { CopyOutlined, CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
@@ -19,6 +19,7 @@ interface InviteCodeCardProps {
   inviteCode: InviteToken;
   onCopyToken: (token: string) => void;
   onCopyLink: (token: string) => void;
+  onDelete?: (id: number) => void;
   onClick?: (inviteCode: InviteToken) => void;
 }
 
@@ -26,6 +27,7 @@ const InviteCodeCard: React.FC<InviteCodeCardProps> = ({
   inviteCode,
   onCopyToken,
   onCopyLink,
+  onDelete,
   onClick,
 }) => {
   const { resolvedTheme } = useThemeMode();
@@ -67,30 +69,46 @@ const InviteCodeCard: React.FC<InviteCodeCardProps> = ({
         borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
       }}
       onClick={() => onClick?.(inviteCode)}
-      actions={isActive ? [
-        <Tooltip key="copy" title="Copy code">
+      actions={[
+        ...(isActive ? [
+          <Tooltip key="copy" title="Copy code">
+            <Button
+              type="text"
+              icon={<CopyOutlined />}
+              onClick={(e) => {
+                e.stopPropagation();
+                onCopyToken(inviteCode.token);
+              }}
+            >
+              Copy Code
+            </Button>
+          </Tooltip>,
           <Button
+            key="link"
             type="text"
-            icon={<CopyOutlined />}
             onClick={(e) => {
               e.stopPropagation();
-              onCopyToken(inviteCode.token);
+              onCopyLink(inviteCode.token);
             }}
           >
-            Copy Code
-          </Button>
-        </Tooltip>,
-        <Button
-          key="link"
-          type="text"
-          onClick={(e) => {
-            e.stopPropagation();
-            onCopyLink(inviteCode.token);
-          }}
-        >
-          Copy Link
-        </Button>,
-      ] : undefined}
+            Copy Link
+          </Button>,
+        ] : []),
+        ...(!isUsed && onDelete ? [
+          <Button
+            key="delete"
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(inviteCode.id);
+            }}
+          >
+            Delete
+          </Button>,
+        ] : []),
+      ].filter(Boolean)}
     >
       <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', flexWrap: 'wrap', gap: spacing.xs }}>

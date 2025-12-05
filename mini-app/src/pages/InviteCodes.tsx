@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Button, Tag, message, Space, Typography, Tooltip, Empty } from 'antd';
-import { PlusOutlined, CopyOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Card, Button, Tag, message, Space, Typography, Tooltip, Empty, Modal } from 'antd';
+import { PlusOutlined, CopyOutlined, CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import InviteCodeCard from '../components/cards/InviteCodeCard';
@@ -26,6 +26,9 @@ const InviteCodes: React.FC = () => {
     const [tokens, setTokens] = useState<InviteToken[]>([]);
     const [loading, setLoading] = useState(false);
     const [creating, setCreating] = useState(false);
+    const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+    const [tokenToDelete, setTokenToDelete] = useState<InviteToken | null>(null);
+    const [deleting, setDeleting] = useState(false);
 
     const fetchTokens = useCallback(async () => {
         if (!tenantId) {
@@ -76,6 +79,31 @@ const InviteCodes: React.FC = () => {
         const link = `${window.location.origin}/register/student?code=${token}`;
         navigator.clipboard.writeText(link);
         message.success('Invite link copied to clipboard!');
+    };
+
+    const handleDelete = (tokenId: number) => {
+        const token = tokens.find(t => t.id === tokenId);
+        if (token) {
+            setTokenToDelete(token);
+            setDeleteModalOpen(true);
+        }
+    };
+
+    const confirmDelete = async () => {
+        if (!tokenToDelete || !tenantId) return;
+        
+        setDeleting(true);
+        try {
+            await api.delete(`/tenants/${tenantId}/invitations/${tokenToDelete.id}`);
+            message.success('Invite code deleted successfully!');
+            setTokens(tokens.filter(t => t.id !== tokenToDelete.id));
+            setDeleteModalOpen(false);
+            setTokenToDelete(null);
+        } catch (error: any) {
+            message.error(error.response?.data?.detail || 'Failed to delete invite code');
+        } finally {
+            setDeleting(false);
+        }
     };
 
     const columns = [
@@ -142,29 +170,41 @@ const InviteCodes: React.FC = () => {
                 const isUsed = !!record.used_at;
                 const isExpired = dayjs(record.expires_at).isBefore(dayjs());
 
-                if (isUsed || isExpired) {
-                    return <Text type="secondary">—</Text>;
-                }
-
                 return (
                     <Space>
-                        <Tooltip title="Copy code">
-                            <Button
-                                type="text"
-                                size="small"
-                                icon={<CopyOutlined />}
-                                onClick={() => handleCopyToken(record.token)}
-                            />
-                        </Tooltip>
-                        <Tooltip title="Copy invite link">
-                            <Button
-                                type="text"
-                                size="small"
-                                onClick={() => handleCopyLink(record.token)}
-                            >
-                                Copy Link
-                            </Button>
-                        </Tooltip>
+                        {!isUsed && !isExpired && (
+                            <>
+                                <Tooltip title="Copy code">
+                                    <Button
+                                        type="text"
+                                        size="small"
+                                        icon={<CopyOutlined />}
+                                        onClick={() => handleCopyToken(record.token)}
+                                    />
+                                </Tooltip>
+                                <Tooltip title="Copy invite link">
+                                    <Button
+                                        type="text"
+                                        size="small"
+                                        onClick={() => handleCopyLink(record.token)}
+                                    >
+                                        Copy Link
+                                    </Button>
+                                </Tooltip>
+                            </>
+                        )}
+                        {!isUsed && (
+                            <Tooltip title="Delete invite code">
+                                <Button
+                                    type="text"
+                                    size="small"
+                                    danger
+                                    icon={<DeleteOutlined />}
+                                    onClick={() => handleDelete(record.id)}
+                                />
+                            </Tooltip>
+                        )}
+                        {isUsed && <Text type="secondary">—</Text>}
                     </Space>
                 );
             },
@@ -222,6 +262,7 @@ const InviteCodes: React.FC = () => {
                             inviteCode={inviteCode}
                             onCopyToken={handleCopyToken}
                             onCopyLink={handleCopyLink}
+                            onDelete={handleDelete}
                         />
                     )}
                     pagination={{
@@ -264,6 +305,19 @@ const InviteCodes: React.FC = () => {
                     </div>
                 </Space>
             </Card>
+
+            <Modal
+                open={deleteModalOpen}
+                title="Delete Invite Code"
+                onCancel={() => { setDeleteModalOpen(false); setTokenToDelete(null); }}
+                onOk={confirmDelete}
+                okText="Delete"
+                okButtonProps={{ danger: true, loading: deleting }}
+                cancelButtonProps={{ disabled: deleting }}
+            >
+                <p>Are you sure you want to delete this invite code?</p>
+                <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+            </Modal>
         </div>
     );
 };
