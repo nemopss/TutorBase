@@ -172,8 +172,10 @@ async def update_lesson_endpoint(
             teacher_notes=payload.teacher_notes,
             homework_due_at=payload.homework_due_at,
         )
-        # Regenerate reminders in background (non-blocking)
-        regenerate_package_reminders_task.delay(lesson.package_id, current_tenant.tenant_id)
+        # Regenerate reminders only if schedule changed (non-blocking)
+        # Note: status changes are handled inside lesson_service.update_lesson()
+        if payload.scheduled_at is not None:
+            regenerate_package_reminders_task.delay(lesson.package_id, current_tenant.tenant_id)
         
         # Sync package metrics if status changed (non-blocking)
         if payload.status is not None:
