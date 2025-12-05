@@ -146,25 +146,29 @@ const PackageDetail: React.FC = () => {
       title: 'Scheduled At',
       dataIndex: 'scheduled_at',
       key: 'scheduled_at',
+      width: isMobile ? 140 : undefined,
       render: (text: string) => formatDateTime(text, { timezone: packageData?.timezone }),
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
+      width: isMobile ? 100 : undefined,
       render: (status: string) => <Tag>{status.toUpperCase()}</Tag>,
     },
     {
-      title: 'Duration (min)',
+      title: isMobile ? 'Min' : 'Duration (min)',
       dataIndex: 'duration_minutes',
       key: 'duration_minutes',
+      width: isMobile ? 60 : undefined,
     },
     {
       title: 'Actions',
       key: 'actions',
+      width: isMobile ? 70 : undefined,
       render: (_, record) => (
         <Space size="middle">
-          <Button type="link" onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>Edit</Button>
+          <Button type="link" size={isMobile ? 'small' : 'middle'} onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>Edit</Button>
         </Space>
       ),
     },
@@ -213,6 +217,8 @@ const PackageDetail: React.FC = () => {
             loading={isLoadingLessons}
             pagination={false}
             bordered
+            scroll={{ x: isMobile ? 400 : undefined }}
+            size={isMobile ? 'small' : 'middle'}
           />
         </div>
       ),
