@@ -49,22 +49,14 @@
   }
 }
 
-/* Calendar cell styling - fix date number alignment when badges are present */
-.ant-picker-calendar-mini .ant-picker-cell .ant-picker-cell-inner {
-  position: relative;
-  min-height: 48px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding-top: 4px;
-}
-
-/* Badges container positioned below the date number */
-.ant-picker-calendar-mini .ant-picker-cell .ant-picker-cell-inner > div {
-  position: absolute;
-  bottom: 4px;
-  left: 0;
-  right: 0;
+/* Calendar mini mode - fix date number position */
+.ant-picker-calendar-mini .ant-picker-cell-inner {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: center !important;
+  justify-content: flex-start !important;
+  min-height: 36px !important;
+  padding-top: 2px !important;
 }
 
 /* Very small screens: < 480px */
