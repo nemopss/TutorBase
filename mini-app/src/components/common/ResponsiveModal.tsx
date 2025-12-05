@@ -1,5 +1,5 @@
 import React from 'react';
-import { Modal, Drawer } from 'antd';
+import { Modal, Drawer, Button, Space } from 'antd';
 import type { ModalProps } from 'antd';
 import { useResponsive } from '../../hooks/useResponsive';
 import { spacing } from '../../theme/tokens';
@@ -29,8 +29,23 @@ const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
 
   // Very small screens: use full-screen drawer
   if (isMobile && isVerySmall && mobileFullScreen) {
-    // Drawer footer only accepts ReactNode, not function
-    const drawerFooter = typeof props.footer === 'function' ? undefined : props.footer;
+    // Build footer with action buttons for drawer
+    const drawerFooter = props.footer !== undefined ? (
+      typeof props.footer === 'function' ? undefined : props.footer
+    ) : props.footer !== null ? (
+      <Space style={{ width: '100%', justifyContent: 'flex-end' }}>
+        <Button onClick={props.onCancel as () => void}>
+          {props.cancelText || 'Cancel'}
+        </Button>
+        <Button 
+          type="primary" 
+          onClick={props.onOk as () => void}
+          loading={props.confirmLoading}
+        >
+          {props.okText || 'OK'}
+        </Button>
+      </Space>
+    ) : null;
     
     return (
       <Drawer
@@ -40,8 +55,9 @@ const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
         placement="bottom"
         height="100%"
         styles={{
-          body: { padding: spacing.md },
+          body: { padding: spacing.md, paddingBottom: 80 },
           header: { padding: `${spacing.md}px ${spacing.md}px` },
+          footer: { padding: spacing.md, borderTop: '1px solid #303030' },
         }}
         footer={drawerFooter}
         destroyOnClose={props.destroyOnClose}
