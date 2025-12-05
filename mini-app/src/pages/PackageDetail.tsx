@@ -1,19 +1,25 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Descriptions, Spin, Alert, Tag, Table, Button, message, Space, Tabs, Progress, Card, Statistic, Row, Col, Grid } from 'antd';
+import { Descriptions, Spin, Alert, Tag, Button, message, Space, Tabs, Progress, Card, Statistic, Row, Col, Grid, Typography } from 'antd';
 import type { TableProps } from 'antd';
 import { 
   ArrowLeftOutlined, 
   ReloadOutlined, 
   CheckCircleOutlined, 
   CloseCircleOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  EditOutlined
 } from '@ant-design/icons';
 import api from '../services/api';
 import LessonForm from '../components/forms/LessonForm';
 import PageHeader from '../components/common/PageHeader';
+import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import { formatDate, formatDateTime } from '../utils/datetime';
+import { spacing } from '../theme/tokens';
+import { useThemeMode } from '../theme/ThemeProvider';
+
+const { Text } = Typography;
 
 // --- Types --- //
 interface PackageProgress {
@@ -69,6 +75,16 @@ const updateLesson = async ({ lessonId, values }: { lessonId: number; values: an
   return data;
 };
 
+// --- Helper functions --- //
+const getStatusColor = (status: string) => {
+  switch (status) {
+    case 'scheduled': return 'blue';
+    case 'completed': return 'green';
+    case 'cancelled': return 'red';
+    default: return 'default';
+  }
+};
+
 // --- Component --- //
 const PackageDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
@@ -78,6 +94,8 @@ const PackageDetail: React.FC = () => {
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const screens = Grid.useBreakpoint();
   const isMobile = !screens?.md;
+  const { resolvedTheme } = useThemeMode();
+  const isDark = resolvedTheme === 'dark';
 
   const { 
     data: packageData, 
@@ -146,33 +164,71 @@ const PackageDetail: React.FC = () => {
       title: 'Scheduled At',
       dataIndex: 'scheduled_at',
       key: 'scheduled_at',
-      width: isMobile ? 140 : undefined,
       render: (text: string) => formatDateTime(text, { timezone: packageData?.timezone }),
     },
     {
       title: 'Status',
       dataIndex: 'status',
       key: 'status',
-      width: isMobile ? 100 : undefined,
-      render: (status: string) => <Tag>{status.toUpperCase()}</Tag>,
+      render: (status: string) => <Tag color={getStatusColor(status)}>{status.toUpperCase()}</Tag>,
     },
     {
-      title: isMobile ? 'Min' : 'Duration (min)',
+      title: 'Duration (min)',
       dataIndex: 'duration_minutes',
       key: 'duration_minutes',
-      width: isMobile ? 60 : undefined,
     },
     {
       title: 'Actions',
       key: 'actions',
-      width: isMobile ? 70 : undefined,
       render: (_, record) => (
         <Space size="middle">
-          <Button type="link" size={isMobile ? 'small' : 'middle'} onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>Edit</Button>
+          <Button type="link" onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>Edit</Button>
         </Space>
       ),
     },
   ];
+
+  // Render lesson card for mobile view
+  const renderLessonCard = (lesson: Lesson) => (
+    <Card
+      size="small"
+      style={{
+        marginBottom: spacing.sm,
+        background: isDark ? '#1f1f1f' : '#ffffff',
+        borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
+      }}
+      actions={[
+        <Button
+          key="edit"
+          type="text"
+          icon={<EditOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            setEditingLesson(lesson);
+            setIsModalOpen(true);
+          }}
+        >
+          Edit
+        </Button>,
+      ]}
+    >
+      <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+          <Text strong style={{ fontSize: 14 }}>
+            {formatDateTime(lesson.scheduled_at, { timezone: packageData?.timezone })}
+          </Text>
+          <Tag color={getStatusColor(lesson.status)}>{lesson.status.toUpperCase()}</Tag>
+        </div>
+        
+        {lesson.duration_minutes && (
+          <Space size={spacing.xs}>
+            <ClockCircleOutlined style={{ color: '#8c8c8c' }} />
+            <Text type="secondary">{lesson.duration_minutes} min</Text>
+          </Space>
+        )}
+      </Space>
+    </Card>
+  );
 
   if (!id || isLoadingPackage) {
     return <Spin size="large" />;
@@ -202,7 +258,7 @@ const PackageDetail: React.FC = () => {
       label: `Lessons (${lessonsData?.items.length || 0})`,
       children: (
         <div>
-          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
             <div style={{ color: '#8c8c8c', fontSize: 14 }}>
               {packageData?.progress.completed} completed, {packageData?.progress.cancelled} cancelled
             </div>
@@ -210,15 +266,21 @@ const PackageDetail: React.FC = () => {
               Add Lesson
             </Button>
           </div>
-          <Table
-            columns={lessonColumns}
-            dataSource={lessonsData?.items}
-            rowKey="id"
+          <ResponsiveDataView<Lesson>
+            data={lessonsData?.items || []}
             loading={isLoadingLessons}
+            columns={lessonColumns}
+            rowKey="id"
+            emptyText="No lessons yet"
+            emptyDescription="Add your first lesson to this package"
+            emptyActionText="Add Lesson"
+            onEmptyAction={() => { setEditingLesson(null); setIsModalOpen(true); }}
+            renderCard={renderLessonCard}
             pagination={false}
-            bordered
-            scroll={{ x: isMobile ? 400 : undefined }}
-            size={isMobile ? 'small' : 'middle'}
+            tableProps={{
+              bordered: true,
+              size: 'middle',
+            }}
           />
         </div>
       ),
