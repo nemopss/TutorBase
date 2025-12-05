@@ -55,8 +55,15 @@
   flex-direction: column !important;
   align-items: center !important;
   justify-content: flex-start !important;
-  min-height: 36px !important;
-  padding-top: 2px !important;
+  min-height: 50px !important;
+  padding-top: 4px !important;
+  gap: 2px !important;
+  line-height: 1 !important;
+}
+
+/* Badges container - position closer to number */
+.ant-picker-calendar-mini .ant-picker-cell-inner > div {
+  margin-top: 2px !important;
 }
 
 /* Very small screens: < 480px */
