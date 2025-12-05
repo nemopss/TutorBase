@@ -70,6 +70,29 @@ const fetchLessons = async (status: string | null, search: string, limit: number
   return data;
 };
 
+// Fetch all lessons with pagination (API limit is 100 per request)
+const fetchAllLessons = async (): Promise<LessonListResponse> => {
+  const limit = 100;
+  let allItems: Lesson[] = [];
+  let offset = 0;
+  let total = 0;
+  
+  // First request to get total count
+  const firstResponse = await fetchLessons(null, '', limit, 0);
+  allItems = [...firstResponse.items];
+  total = firstResponse.total;
+  offset = limit;
+  
+  // Fetch remaining pages if needed
+  while (offset < total && offset < 1000) { // Safety limit of 1000
+    const response = await fetchLessons(null, '', limit, offset);
+    allItems = [...allItems, ...response.items];
+    offset += limit;
+  }
+  
+  return { items: allItems, total };
+};
+
 const updateLesson = async ({ lessonId, values }: { lessonId: number; values: any }) => {
   const { data } = await api.patch(`/lessons/${lessonId}`, values);
   return data;
@@ -105,10 +128,10 @@ const Lessons: React.FC = () => {
     placeholderData: (previousData) => previousData,
   });
 
-  // Data for calendar view (all lessons, no pagination)
+  // Data for calendar view (all lessons with pagination - API limit is 100)
   const { data: calendarData } = useQuery<LessonListResponse, Error>({
-    queryKey: ['lessons', 'calendar'],
-    queryFn: () => fetchLessons(null, '', 1000, 0), // Load up to 1000 lessons for calendar
+    queryKey: ['lessons', 'calendar', 'all'],
+    queryFn: fetchAllLessons,
     enabled: viewMode === 'calendar', // Only fetch when calendar is visible
   });
 
