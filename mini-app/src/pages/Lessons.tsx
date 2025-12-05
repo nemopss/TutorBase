@@ -98,10 +98,18 @@ const Lessons: React.FC = () => {
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
+  // Data for table view (with pagination and filters)
   const { data, isLoading } = useQuery<LessonListResponse, Error>({
     queryKey: ['lessons', currentPage, pageSize, statusFilter, debouncedSearchTerm],
     queryFn: () => fetchLessons(statusFilter, debouncedSearchTerm, pageSize, (currentPage - 1) * pageSize),
     placeholderData: (previousData) => previousData,
+  });
+
+  // Data for calendar view (all lessons, no pagination)
+  const { data: calendarData } = useQuery<LessonListResponse, Error>({
+    queryKey: ['lessons', 'calendar'],
+    queryFn: () => fetchLessons(null, '', 1000, 0), // Load up to 1000 lessons for calendar
+    enabled: viewMode === 'calendar', // Only fetch when calendar is visible
   });
 
   const updateMutation = useMutation({
@@ -220,12 +228,13 @@ const Lessons: React.FC = () => {
     setPageSize(pagination.pageSize || 10);
   };
 
-  // Group lessons by date for calendar performance
+  // Group lessons by date for calendar performance (use calendarData for calendar view)
   const lessonsByDate = useMemo(() => {
-    if (!data?.items) return new Map<string, Lesson[]>();
+    const items = calendarData?.items || [];
+    if (items.length === 0) return new Map<string, Lesson[]>();
     
     const grouped = new Map<string, Lesson[]>();
-    data.items.forEach(lesson => {
+    items.forEach(lesson => {
       const dateKey = dayjsInTimezone(lesson.scheduled_at, lesson.timezone).format('YYYY-MM-DD');
       if (!grouped.has(dateKey)) {
         grouped.set(dateKey, []);
@@ -233,7 +242,7 @@ const Lessons: React.FC = () => {
       grouped.get(dateKey)!.push(lesson);
     });
     return grouped;
-  }, [data?.items]);
+  }, [calendarData?.items]);
 
   // Get lessons content for a specific date (used in cellRender)
   const getLessonsContent = (dateKey: string) => {
