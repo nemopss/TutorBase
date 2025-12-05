@@ -296,7 +296,7 @@ const Packages: React.FC = () => {
           </Button>
         }
       />
-      <Space style={{ marginBottom: 16, width: '100%', justifyContent: 'space-between', flexWrap: 'wrap' }}>
+      <Space style={{ marginBottom: 16, width: '100%', gap: 12 }} wrap>
         <Input.Search
           placeholder="Search by title or learner"
           allowClear
@@ -307,12 +307,12 @@ const Packages: React.FC = () => {
             setSearchTerm(e.target.value);
             setCurrentPage(1);
           }}
-          style={{ width: '100%', maxWidth: 300 }}
+          style={{ width: 250, minWidth: 200 }}
         />
         <Select
           placeholder="Filter by status"
           allowClear
-          style={{ width: '100%', maxWidth: 200 }}
+          style={{ width: 180, minWidth: 150 }}
           options={STATUS_OPTIONS}
           onChange={(value) => {
             setStatusFilter(value);

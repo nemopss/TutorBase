@@ -222,6 +222,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               textAlign: 'center',
               borderTop: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
               cursor: 'pointer',
+              color: isDark ? '#ffffff' : '#37352f',
             }}>
               {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             </div>
