@@ -91,3 +91,27 @@
     transform: none;
   }
 }
+
+/* Sidebar collapse trigger - fix blue color */
+.ant-layout-sider-trigger {
+  background: transparent !important;
+  color: inherit !important;
+}
+
+.ant-layout-sider-light .ant-layout-sider-trigger {
+  color: #37352f !important;
+  border-top: 1px solid #e8e8e8;
+}
+
+.ant-layout-sider-dark .ant-layout-sider-trigger {
+  color: #ffffff !important;
+  border-top: 1px solid #3a3a3a;
+}
+
+.ant-layout-sider-trigger:hover {
+  background: rgba(0, 0, 0, 0.04) !important;
+}
+
+.ant-layout-sider-dark .ant-layout-sider-trigger:hover {
+  background: rgba(255, 255, 255, 0.08) !important;
+}

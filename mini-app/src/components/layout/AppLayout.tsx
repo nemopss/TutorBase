@@ -159,13 +159,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const menuContent = (
     <>
       <div style={{
-        padding: '20px 16px',
-        fontSize: '18px',
+        padding: sidebarCollapsed ? '20px 8px' : '20px 16px',
+        fontSize: sidebarCollapsed ? '16px' : '18px',
         fontWeight: 600,
         color: isDark ? '#ffffff' : '#37352f',
         borderBottom: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+        textAlign: 'center',
+        whiteSpace: 'nowrap',
+        overflow: 'hidden',
       }}>
-        📚 TutorBase
+        {sidebarCollapsed ? '📚' : '📚 TutorBase'}
       </div>
 
       {/* Tenant Switcher for Super Admins */}
