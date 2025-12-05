@@ -244,22 +244,19 @@ const Lessons: React.FC = () => {
     
     if (lessonsOnDate.length === 0) return info.originNode;
 
-    // Mobile: Show dots only
+    // Mobile: Show dots only (date number is rendered by originNode)
     if (isMobile) {
       return (
-        <div className="ant-picker-cell-inner">
-          {value.date()}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap', marginTop: 2 }}>
-            {lessonsOnDate.slice(0, 3).map(lesson => (
-              <Badge
-                key={lesson.id}
-                status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'}
-              />
-            ))}
-            {lessonsOnDate.length > 3 && (
-              <span style={{ fontSize: 10, color: token.colorTextSecondary }}>+{lessonsOnDate.length - 3}</span>
-            )}
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap', marginTop: 2 }}>
+          {lessonsOnDate.slice(0, 3).map(lesson => (
+            <Badge
+              key={lesson.id}
+              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'}
+            />
+          ))}
+          {lessonsOnDate.length > 3 && (
+            <span style={{ fontSize: 10, color: token.colorTextSecondary }}>+{lessonsOnDate.length - 3}</span>
+          )}
         </div>
       );
     }
