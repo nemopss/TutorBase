@@ -2380,6 +2380,45 @@ async def list_invite_tokens(
     return tokens, total
 
 
+async def get_invite_token_by_id(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    token_id: int,
+) -> Optional[InviteToken]:
+    """Get invite token by ID with tenant filtering.
+    
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for filtering
+        token_id: Invite token ID
+        
+    Returns:
+        InviteToken object or None if not found
+    """
+    stmt = (
+        select(InviteToken)
+        .where(
+            InviteToken.id == token_id,
+            InviteToken.tenant_id == current_tenant.tenant_id,
+        )
+    )
+    result = await session.execute(stmt)
+    return result.scalar_one_or_none()
+
+
+async def delete_invite_token(
+    session: AsyncSession,
+    invite_token: InviteToken,
+) -> None:
+    """Delete an invite token.
+    
+    Args:
+        session: Async database session
+        invite_token: InviteToken object to delete
+    """
+    await session.delete(invite_token)
+
+
 # ============================================================================
 # Test Reminders CRUD Operations
 # ============================================================================

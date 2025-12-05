@@ -99,3 +99,20 @@ async def update_learner_notifications(
         notifications_enabled=learner.notifications_enabled,
         chat_id=chat_id,
     )
+
+
+@router.delete("/{learner_id}", status_code=204)
+async def delete_learner(
+    learner_id: int,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+):
+    """Delete a learner and all associated data (packages, lessons, reminders)."""
+    deleted = await learner_service.delete_learner(
+        session,
+        current_tenant,
+        learner_id=learner_id,
+    )
+    if not deleted:
+        raise HTTPException(status_code=404, detail="Learner not found")

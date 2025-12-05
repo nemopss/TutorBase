@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, message, Tag, Space, Switch, Typography, Tooltip } from 'antd';
-import { UserAddOutlined, BellOutlined, BellFilled, IdcardOutlined } from '@ant-design/icons';
+import { Button, message, Tag, Space, Switch, Typography, Tooltip, Modal } from 'antd';
+import { UserAddOutlined, BellOutlined, BellFilled, IdcardOutlined, DeleteOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import api from '../services/api';
 import LearnerForm from '../components/forms/LearnerForm';
@@ -46,10 +46,16 @@ const updateNotifications = async ({ learnerId, enabled }: { learnerId: number; 
   return data;
 };
 
+const deleteLearner = async (learnerId: number) => {
+  await api.delete(`/learners/${learnerId}`);
+};
+
 // --- Component --- //
 const Learners: React.FC = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [learnerToDelete, setLearnerToDelete] = useState<Learner | null>(null);
 
   const { data, isLoading } = useQuery<LearnerListResponse, Error>({
     queryKey: ['learners'],
@@ -84,11 +90,39 @@ const Learners: React.FC = () => {
     },
   });
 
+  const deleteMutation = useMutation({
+    mutationFn: deleteLearner,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learners'] });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      message.success('Learner deleted successfully!');
+      setDeleteModalOpen(false);
+      setLearnerToDelete(null);
+    },
+    onError: (error: Error) => {
+      message.error(`Failed to delete learner: ${error.message}`);
+    },
+  });
+
   const handleNotificationToggle = (learnerId: number, currentValue: boolean) => {
     notificationsMutation.mutate({
       learnerId,
       enabled: !currentValue,
     });
+  };
+
+  const handleDelete = (learnerId: number) => {
+    const learner = learners.find(l => l.id === learnerId);
+    if (learner) {
+      setLearnerToDelete(learner);
+      setDeleteModalOpen(true);
+    }
+  };
+
+  const confirmDelete = () => {
+    if (learnerToDelete) {
+      deleteMutation.mutate(learnerToDelete.id);
+    }
   };
 
   const columns: TableProps<Learner>['columns'] = [
@@ -134,6 +168,20 @@ const Learners: React.FC = () => {
         </Space>
       ),
     },
+    {
+      title: 'Actions',
+      key: 'actions',
+      render: (_, record: Learner) => (
+        <Button
+          type="link"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={() => handleDelete(record.id)}
+        >
+          Delete
+        </Button>
+      ),
+    },
   ];
 
   const learners = data?.items || [];
@@ -168,6 +216,7 @@ const Learners: React.FC = () => {
             key={learner.id}
             learner={learner}
             onNotificationToggle={handleNotificationToggle}
+            onDelete={handleDelete}
             isToggling={notificationsMutation.isPending}
           />
         )}
@@ -185,6 +234,20 @@ const Learners: React.FC = () => {
         loading={createMutation.isPending}
         mode="create"
       />
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Learner"
+        onCancel={() => { setDeleteModalOpen(false); setLearnerToDelete(null); }}
+        onOk={confirmDelete}
+        okText="Delete"
+        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+        cancelButtonProps={{ disabled: deleteMutation.isPending }}
+      >
+        <p>Are you sure you want to delete <strong>{learnerToDelete?.display_name}</strong>?</p>
+        <p style={{ color: '#ff4d4f' }}>This will also delete all their packages, lessons, and reminders.</p>
+        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+      </Modal>
     </div>
   );
 };

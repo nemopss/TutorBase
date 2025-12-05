@@ -125,3 +125,31 @@ async def update_learner_notifications(
         learner,
         notifications_enabled=notifications_enabled,
     )
+
+
+async def delete_learner(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    learner_id: int,
+) -> bool:
+    """Delete a learner and all associated data.
+
+    Deletes the learner record along with all related packages, lessons, and reminders.
+    First verifies that the learner belongs to the current tenant before deletion.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        learner_id: ID of learner to delete
+
+    Returns:
+        True if learner was deleted, False if learner doesn't exist or doesn't
+        belong to current tenant
+    """
+    learner = await crud.get_learner(session, current_tenant, learner_id)
+    if not learner:
+        return False
+    
+    await crud.delete_learner(session, current_tenant, learner)
+    return True
