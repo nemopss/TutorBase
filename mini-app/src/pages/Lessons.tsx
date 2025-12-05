@@ -235,56 +235,55 @@ const Lessons: React.FC = () => {
     return grouped;
   }, [data?.items]);
 
-  // Calendar cell renderer for date cells
-  // In Ant Design 5.x, cellRender receives (current, info) where info.originNode is the default render
-  const cellRender: (current: Dayjs, info: { type: string; originNode: React.ReactNode }) => React.ReactNode = (value, info) => {
-    if (info.type !== 'date') return info.originNode;
-    
-    const dateKey = value.format('YYYY-MM-DD');
+  // Get lessons content for a specific date (used in cellRender)
+  const getLessonsContent = (dateKey: string) => {
     const lessonsOnDate = lessonsByDate.get(dateKey) || [];
-    
-    // No lessons - return original node (just the date number)
-    if (lessonsOnDate.length === 0) return info.originNode;
+    if (lessonsOnDate.length === 0) return null;
 
-    // Mobile: Show date + dots
+    // Mobile: Show dots only
     if (isMobile) {
       return (
-        <div className="ant-picker-cell-inner">
-          {value.date()}
-          <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap', marginTop: 2 }}>
-            {lessonsOnDate.slice(0, 3).map(lesson => (
-              <Badge
-                key={lesson.id}
-                status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'}
-              />
-            ))}
-            {lessonsOnDate.length > 3 && (
-              <span style={{ fontSize: 10, color: token.colorTextSecondary }}>+{lessonsOnDate.length - 3}</span>
-            )}
-          </div>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
+          {lessonsOnDate.slice(0, 3).map(lesson => (
+            <Badge
+              key={lesson.id}
+              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'}
+            />
+          ))}
+          {lessonsOnDate.length > 3 && (
+            <span style={{ fontSize: 10, color: token.colorTextSecondary }}>+{lessonsOnDate.length - 3}</span>
+          )}
         </div>
       );
     }
 
-    // Desktop fullscreen mode: Show date number + lesson list
+    // Desktop: Show lesson list
     return (
-      <div className="ant-picker-calendar-date">
-        <div className="ant-picker-calendar-date-value">{value.date()}</div>
-        <div className="ant-picker-calendar-date-content">
-          <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-            {lessonsOnDate.slice(0, 3).map(lesson => (
-              <li key={lesson.id}>
-                <Badge 
-                  status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'} 
-                  text={formatTime(lesson.scheduled_at, { timezone: lesson.timezone })} 
-                />
-              </li>
-            ))}
-            {lessonsOnDate.length > 3 && <li style={{ fontSize: 12, color: '#8c8c8c' }}>+{lessonsOnDate.length - 3} more</li>}
-          </ul>
-        </div>
-      </div>
+      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
+        {lessonsOnDate.slice(0, 3).map(lesson => (
+          <li key={lesson.id}>
+            <Badge 
+              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'} 
+              text={formatTime(lesson.scheduled_at, { timezone: lesson.timezone })} 
+            />
+          </li>
+        ))}
+        {lessonsOnDate.length > 3 && <li style={{ fontSize: 12, color: '#8c8c8c' }}>+{lessonsOnDate.length - 3} more</li>}
+      </ul>
     );
+  };
+
+  // Calendar cell renderer - returns CONTENT to add to the cell (not replacing the date number)
+  // In Ant Design 5.x cellRender, return null for no extra content, or JSX to add below the date
+  const dateCellRender = (value: Dayjs) => {
+    const dateKey = value.format('YYYY-MM-DD');
+    return getLessonsContent(dateKey);
+  };
+
+  // Wrapper for cellRender that handles different cell types
+  const cellRender = (current: Dayjs, info: { type: string }) => {
+    if (info.type === 'date') return dateCellRender(current);
+    return null;
   };
 
   const onCalendarSelect = (date: Dayjs) => {
