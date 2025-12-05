@@ -236,18 +236,19 @@ const Lessons: React.FC = () => {
   }, [data?.items]);
 
   // Calendar cell renderer (using cellRender instead of deprecated dateCellRender)
-  const cellRender = (value: Dayjs, info: { type: string; originNode: React.ReactNode }) => {
-    if (info.type !== 'date') return info.originNode;
+  // Return null to let Calendar render the date number, return content to add below the date
+  const cellRender = (value: Dayjs, info: { type: string }) => {
+    if (info.type !== 'date') return null;
     
     const dateKey = value.format('YYYY-MM-DD');
     const lessonsOnDate = lessonsByDate.get(dateKey) || [];
     
-    if (lessonsOnDate.length === 0) return info.originNode;
+    if (lessonsOnDate.length === 0) return null;
 
-    // Mobile: Show dots only (date number is rendered by originNode)
+    // Mobile: Show dots only
     if (isMobile) {
       return (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap', marginTop: 2 }}>
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
           {lessonsOnDate.slice(0, 3).map(lesson => (
             <Badge
               key={lesson.id}
