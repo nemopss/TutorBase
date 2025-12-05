@@ -2,6 +2,8 @@ import React from 'react';
 import { Empty, Button } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useThemeMode } from '../../theme/ThemeProvider';
+import { useResponsive } from '../../hooks/useResponsive';
+import { spacing } from '../../theme/tokens';
 
 interface EmptyStateProps {
   title?: string;
@@ -19,6 +21,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   icon 
 }) => {
   const { resolvedTheme } = useThemeMode();
+  const { isMobile } = useResponsive();
   const isDark = resolvedTheme === 'dark';
   const titleColor = isDark ? '#ffffff' : '#37352f';
   const descColor = isDark ? '#a0a0a0' : '#8c8c8c';
@@ -28,21 +31,21 @@ const EmptyState: React.FC<EmptyStateProps> = ({
       display: 'flex', 
       justifyContent: 'center', 
       alignItems: 'center', 
-      minHeight: '400px',
-      padding: '40px 20px'
+      minHeight: isMobile ? 250 : 400,
+      padding: isMobile ? `${spacing.lg}px ${spacing.md}px` : '40px 20px',
     }}>
       <Empty
         image={icon || Empty.PRESENTED_IMAGE_SIMPLE}
         imageStyle={{
-          height: 120,
+          height: isMobile ? 80 : 120,
         }}
         description={
           <div>
-            <div style={{ fontSize: 16, fontWeight: 500, marginBottom: 8, color: titleColor }}>
+            <div style={{ fontSize: isMobile ? 14 : 16, fontWeight: 500, marginBottom: 8, color: titleColor }}>
               {title}
             </div>
             {description && (
-              <div style={{ fontSize: 14, color: descColor }}>
+              <div style={{ fontSize: isMobile ? 12 : 14, color: descColor }}>
                 {description}
               </div>
             )}
@@ -50,7 +53,7 @@ const EmptyState: React.FC<EmptyStateProps> = ({
         }
       >
         {actionText && onAction && (
-          <Button type="primary" icon={<PlusOutlined />} onClick={onAction}>
+          <Button type="primary" icon={<PlusOutlined />} onClick={onAction} size={isMobile ? 'middle' : 'large'}>
             {actionText}
           </Button>
         )}

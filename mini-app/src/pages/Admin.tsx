@@ -1,8 +1,11 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Card, Table, Typography, Tag, Select, Space, message, Grid } from 'antd';
+import { Card, Typography, Tag, Select, Space, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import api from '../services/api';
 import { useAuth } from '../auth/AuthProvider';
+import { useResponsive } from '../hooks/useResponsive';
+import ResponsiveDataView from '../components/common/ResponsiveDataView';
+import UserCard from '../components/cards/UserCard';
 
 type UserRole = 'admin' | 'teacher' | 'viewer';
 
@@ -68,8 +71,7 @@ const Admin = () => {
   const [data, setData] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens.md;
+  const { isMobile } = useResponsive();
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -200,14 +202,26 @@ const Admin = () => {
       </div>
 
       <Card>
-        <Table<UserRecord>
-          rowKey="id"
-          dataSource={data}
-          columns={columns}
+        <ResponsiveDataView<UserRecord>
+          data={data}
           loading={loading}
-          size={isMobile ? 'small' : 'middle'}
+          columns={columns}
+          rowKey="id"
+          emptyText="Нет пользователей"
+          renderCard={(userRecord) => (
+            <UserCard
+              key={userRecord.id}
+              user={userRecord}
+              currentUserId={user?.id}
+              onRoleChange={handleRoleChange}
+              isUpdating={updatingUserId === userRecord.id}
+            />
+          )}
+          tableProps={{
+            size: isMobile ? 'small' : 'middle',
+            scroll: { x: 720 },
+          }}
           pagination={false}
-          scroll={{ x: 720 }}
         />
       </Card>
     </Space>

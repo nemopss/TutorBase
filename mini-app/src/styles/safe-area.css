@@ -1,0 +1,50 @@
+/**
+ * Safe area support for devices with notches and home indicators.
+ * Uses CSS environment variables for safe-area-inset values.
+ */
+
+/* Apply safe area padding to body */
+body {
+  /* Top padding for notch */
+  padding-top: env(safe-area-inset-top, 0px);
+  /* Bottom padding for home indicator */
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Fixed headers should account for safe area */
+.safe-area-top {
+  padding-top: env(safe-area-inset-top, 0px);
+}
+
+/* Fixed footers should account for safe area */
+.safe-area-bottom {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Full safe area padding */
+.safe-area-all {
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
+/* For modals and drawers that need bottom safe area */
+.ant-drawer-content-wrapper,
+.ant-modal-content {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+/* Mobile header with safe area */
+@supports (padding-top: env(safe-area-inset-top)) {
+  .mobile-header {
+    padding-top: calc(12px + env(safe-area-inset-top, 0px));
+  }
+}
+
+/* Bottom navigation or fixed buttons */
+@supports (padding-bottom: env(safe-area-inset-bottom)) {
+  .fixed-bottom {
+    padding-bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  }
+}

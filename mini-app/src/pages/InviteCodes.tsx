@@ -1,7 +1,9 @@
-import React, { useState, useEffect } from 'react';
-import { Card, Button, Table, Tag, message, Space, Typography, Tooltip, Empty } from 'antd';
+import React, { useState, useEffect, useCallback } from 'react';
+import { Card, Button, Tag, message, Space, Typography, Tooltip, Empty } from 'antd';
 import { PlusOutlined, CopyOutlined, CheckCircleOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import PageHeader from '../components/common/PageHeader';
+import ResponsiveDataView from '../components/common/ResponsiveDataView';
+import InviteCodeCard from '../components/cards/InviteCodeCard';
 import api from '../services/api';
 import { useAuth } from '../auth/AuthProvider';
 import dayjs from 'dayjs';
@@ -25,7 +27,7 @@ const InviteCodes: React.FC = () => {
     const [loading, setLoading] = useState(false);
     const [creating, setCreating] = useState(false);
 
-    const fetchTokens = async () => {
+    const fetchTokens = useCallback(async () => {
         if (!tenantId) {
             console.error('No tenant_id available');
             return;
@@ -41,11 +43,11 @@ const InviteCodes: React.FC = () => {
         } finally {
             setLoading(false);
         }
-    };
+    }, [tenantId]);
 
     useEffect(() => {
         fetchTokens();
-    }, [tenantId]);
+    }, [fetchTokens]);
 
     const handleCreateToken = async () => {
         if (!tenantId) {
@@ -206,32 +208,26 @@ const InviteCodes: React.FC = () => {
             />
 
             <Card>
-                <Table
-                    columns={columns}
-                    dataSource={tokens}
-                    rowKey="id"
+                <ResponsiveDataView<InviteToken>
+                    data={tokens}
                     loading={loading}
+                    columns={columns}
+                    rowKey="id"
+                    emptyText="No invite codes yet"
+                    emptyActionText="Create Your First Invite Code"
+                    onEmptyAction={handleCreateToken}
+                    renderCard={(inviteCode) => (
+                        <InviteCodeCard
+                            key={inviteCode.id}
+                            inviteCode={inviteCode}
+                            onCopyToken={handleCopyToken}
+                            onCopyLink={handleCopyLink}
+                        />
+                    )}
                     pagination={{
                         pageSize: 10,
                         showSizeChanger: false,
                         showTotal: (total) => `Total ${total} invite codes`,
-                    }}
-                    locale={{
-                        emptyText: (
-                            <Empty
-                                description="No invite codes yet"
-                                image={Empty.PRESENTED_IMAGE_SIMPLE}
-                            >
-                                <Button
-                                    type="primary"
-                                    icon={<PlusOutlined />}
-                                    onClick={handleCreateToken}
-                                    loading={creating}
-                                >
-                                    Create Your First Invite Code
-                                </Button>
-                            </Empty>
-                        ),
                     }}
                 />
             </Card>

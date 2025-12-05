@@ -1,11 +1,14 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, DatePicker, InputNumber, Select, Input } from 'antd';
+import { Form, DatePicker, InputNumber, Select, Input } from 'antd';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
+import ResponsiveModal from '../common/ResponsiveModal';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
+
+const DEFAULT_TIMEZONE = 'Europe/Moscow';
 
 interface LessonFormProps {
   open: boolean;
@@ -22,9 +25,10 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
 
   useEffect(() => {
     if (initialValues) {
+      const tz = initialValues.timezone || DEFAULT_TIMEZONE;
       form.setFieldsValue({
         ...initialValues,
-        scheduled_at: initialValues.scheduled_at ? dayjs(initialValues.scheduled_at).tz('Europe/Moscow') : null,
+        scheduled_at: initialValues.scheduled_at ? dayjs(initialValues.scheduled_at).tz(tz) : null,
       });
     } else {
       form.resetFields();
@@ -32,9 +36,10 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
   }, [initialValues, form, open]);
 
   const isEditing = !!initialValues;
+  const lessonTimezone = initialValues?.timezone || DEFAULT_TIMEZONE;
 
   return (
-    <Modal
+    <ResponsiveModal
       open={open}
       title={isEditing ? "Edit Lesson" : "Add New Lesson"}
       okText={isEditing ? "Save" : "Create"}
@@ -48,7 +53,7 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
             const formattedValues = {
               ...values,
               scheduled_at: values.scheduled_at
-                ? values.scheduled_at.tz('Europe/Moscow').toISOString()
+                ? values.scheduled_at.tz(lessonTimezone).toISOString()
                 : undefined,
             };
             
@@ -65,7 +70,7 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
           });
       }}
       confirmLoading={isLoading}
-      destroyOnClose // Сбрасывать состояние формы при закрытии, если не редактируем
+      destroyOnClose
     >
       <Form form={form} layout="vertical" name="lesson_form">
         <Form.Item
@@ -89,7 +94,7 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
           <Input.TextArea rows={2} />
         </Form.Item>
       </Form>
-    </Modal>
+    </ResponsiveModal>
   );
 };
 

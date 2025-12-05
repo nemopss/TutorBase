@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Button, Typography, Space, Alert, Card, List } from 'antd';
+import { Form, Input, Button, Typography, Space, Alert, Card, List, theme } from 'antd';
 import { ArrowLeftOutlined, CheckCircleOutlined } from '@ant-design/icons';
 import { useAuth } from '../auth/AuthProvider';
+import { useThemeMode } from '../theme/ThemeProvider';
 
 const { Title, Text } = Typography;
 
@@ -15,6 +16,9 @@ interface FormData {
 const TutorRegistrationForm: React.FC = () => {
     const navigate = useNavigate();
     const { registerTutor } = useAuth();
+    const { resolvedTheme } = useThemeMode();
+    const { token } = theme.useToken();
+    const isDark = resolvedTheme === 'dark';
     const [form] = Form.useForm();
 
     const [loading, setLoading] = useState(false);
@@ -50,7 +54,8 @@ const TutorRegistrationForm: React.FC = () => {
 
     return (
         <div style={{
-            minHeight: '100vh'
+            minHeight: '100vh',
+            background: isDark ? token.colorBgContainer : '#fff',
         }}>
             {/* Header */}
             <div style={{
@@ -58,7 +63,8 @@ const TutorRegistrationForm: React.FC = () => {
                 position: 'sticky',
                 top: 0,
                 zIndex: 10,
-                backdropFilter: 'blur(8px)'
+                backdropFilter: 'blur(8px)',
+                background: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
             }}>
                 <Space align="center">
                     <Button

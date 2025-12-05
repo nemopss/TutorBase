@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Form, Input, Button, Typography, Space, Alert, Card, Collapse } from 'antd';
+import { Form, Input, Button, Typography, Space, Alert, Card, Collapse, theme } from 'antd';
 import { ArrowLeftOutlined, CopyOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { useAuth } from '../auth/AuthProvider';
+import { useThemeMode } from '../theme/ThemeProvider';
 
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
@@ -16,6 +17,9 @@ const StudentRegistrationForm: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { registerStudent } = useAuth();
+    const { resolvedTheme } = useThemeMode();
+    const { token } = theme.useToken();
+    const isDark = resolvedTheme === 'dark';
     const [form] = Form.useForm();
 
     const [loading, setLoading] = useState(false);
@@ -75,7 +79,8 @@ const StudentRegistrationForm: React.FC = () => {
 
     return (
         <div style={{
-            minHeight: '100vh'
+            minHeight: '100vh',
+            background: isDark ? token.colorBgContainer : '#fff',
         }}>
             {/* Header */}
             <div style={{
@@ -83,7 +88,8 @@ const StudentRegistrationForm: React.FC = () => {
                 position: 'sticky',
                 top: 0,
                 zIndex: 10,
-                backdropFilter: 'blur(8px)'
+                backdropFilter: 'blur(8px)',
+                background: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
             }}>
                 <Space align="center">
                     <Button

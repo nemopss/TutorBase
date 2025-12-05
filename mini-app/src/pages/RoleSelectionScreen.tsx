@@ -1,7 +1,8 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Card, Typography, Space, Tag } from 'antd';
+import { Card, Typography, Space, Tag, theme } from 'antd';
 import { UserOutlined, TeamOutlined, RightOutlined } from '@ant-design/icons';
+import { useThemeMode } from '../theme/ThemeProvider';
 
 const { Title, Text } = Typography;
 
@@ -45,12 +46,16 @@ const RoleCard: React.FC<RoleCardProps> = ({
 
 const RoleSelectionScreen: React.FC = () => {
     const navigate = useNavigate();
+    const { resolvedTheme } = useThemeMode();
+    const { token } = theme.useToken();
+    const isDark = resolvedTheme === 'dark';
 
     return (
         <div style={{
             minHeight: '100vh',
             display: 'flex',
-            flexDirection: 'column'
+            flexDirection: 'column',
+            background: isDark ? token.colorBgContainer : '#fff',
         }}>
             {/* Header */}
             <div style={{

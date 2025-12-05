@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Button, Space, Modal, message, Alert } from 'antd';
+import { Button, Space, Modal, message, Alert } from 'antd';
 import type { TableProps } from 'antd';
 import api from '../services/api';
 import TemplateForm from '../components/forms/TemplateForm';
 import PageHeader from '../components/common/PageHeader';
-import EmptyState from '../components/common/EmptyState';
+import ResponsiveDataView from '../components/common/ResponsiveDataView';
+import TemplateCard from '../components/cards/TemplateCard';
 
 // --- Types --- //
 interface Template {
@@ -201,24 +202,33 @@ const Templates: React.FC = () => {
           style={{ marginBottom: 16 }}
         />
       )}
-      {!isLoading && !isError && (!data?.items || data.items.length === 0) ? (
-        <EmptyState 
-          title="No templates yet"
-          description="Create a template to quickly generate lesson packages with predefined schedules"
-          actionText="Create Template"
-          onAction={() => { setEditingTemplate(null); setIsModalOpen(true); }}
-        />
-      ) : (
-        <Table
-          columns={columns}
-          dataSource={data?.items}
-          rowKey="id"
-          loading={isLoading}
-          pagination={false}
-          scroll={{ x: 700 }}
-          bordered
-        />
-      )}
+      <ResponsiveDataView<Template>
+        data={data?.items || []}
+        loading={isLoading}
+        columns={columns}
+        rowKey="id"
+        emptyText="No templates yet"
+        emptyDescription="Create a template to quickly generate lesson packages with predefined schedules"
+        emptyActionText="Create Template"
+        onEmptyAction={() => { setEditingTemplate(null); setIsModalOpen(true); }}
+        renderCard={(template) => (
+          <TemplateCard
+            key={template.id}
+            template={template}
+            onEdit={(t) => {
+              setEditingTemplate(t);
+              setIsModalOpen(true);
+            }}
+            onDuplicate={(id) => duplicateMutation.mutate(id)}
+            onDelete={handleDelete}
+          />
+        )}
+        tableProps={{
+          scroll: { x: 700 },
+          bordered: true,
+        }}
+        pagination={false}
+      />
       <TemplateForm 
         open={isModalOpen}
         onCancel={() => setIsModalOpen(false)}

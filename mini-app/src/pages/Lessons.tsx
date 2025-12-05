@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Tag, Select, Space, Input, Button, message, Card, Calendar, Badge, Modal } from 'antd';
+import { Tag, Select, Space, Input, Button, message, Card, Calendar, Badge, Modal, List, theme } from 'antd';
 import type { TableProps } from 'antd';
 import { CalendarOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -10,10 +10,13 @@ import 'dayjs/locale/ru';
 import calendarLocale from 'antd/es/calendar/locale/ru_RU';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
+import { useResponsive } from '../hooks/useResponsive';
 import LessonForm from '../components/forms/LessonForm';
 import PageHeader from '../components/common/PageHeader';
-import EmptyState from '../components/common/EmptyState';
+import ResponsiveDataView from '../components/common/ResponsiveDataView';
+import LessonCard from '../components/cards/LessonCard';
 import { dayjsInTimezone, formatDate, formatDateTime, formatTime, DEFAULT_TIMEZONE } from '../utils/datetime';
+import { spacing } from '../theme/tokens';
 
 dayjs.extend(updateLocale);
 dayjs.updateLocale('ru', { week: { dow: 1 } });
@@ -79,6 +82,8 @@ const deleteLesson = async (lessonId: number) => {
 // --- Component --- //
 const Lessons: React.FC = () => {
   const queryClient = useQueryClient();
+  const { isMobile } = useResponsive();
+  const { token } = theme.useToken();
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -88,6 +93,8 @@ const Lessons: React.FC = () => {
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [lessonToDelete, setLessonToDelete] = useState<number | null>(null);
+  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Dayjs | null>(null);
+  const [dayModalOpen, setDayModalOpen] = useState(false);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -131,13 +138,6 @@ const Lessons: React.FC = () => {
   const handleDelete = (id: number) => {
     setLessonToDelete(id);
     setDeleteModalOpen(true);
-    // Modal.confirm({
-    //   title: 'Are you sure you want to delete this lesson?',
-    //   content: 'This action cannot be undone.',
-    //   okText: 'Yes, delete it',
-    //   okType: 'danger',
-    //   onOk: () => deleteMutation.mutate(id),
-    // });
   };
 
   const confirmDelete = () => {
@@ -235,11 +235,33 @@ const Lessons: React.FC = () => {
     return grouped;
   }, [data?.items]);
 
-  // Calendar cell renderer
-  const dateCellRender = (value: Dayjs) => {
+  // Calendar cell renderer (using cellRender instead of deprecated dateCellRender)
+  const cellRender = (value: Dayjs, info: { type: string }) => {
+    if (info.type !== 'date') return null;
+    
     const dateKey = value.format('YYYY-MM-DD');
     const lessonsOnDate = lessonsByDate.get(dateKey) || [];
     
+    if (lessonsOnDate.length === 0) return null;
+
+    // Mobile: Show dots only
+    if (isMobile) {
+      return (
+        <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
+          {lessonsOnDate.slice(0, 3).map(lesson => (
+            <Badge
+              key={lesson.id}
+              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'}
+            />
+          ))}
+          {lessonsOnDate.length > 3 && (
+            <span style={{ fontSize: 10, color: token.colorTextSecondary }}>+{lessonsOnDate.length - 3}</span>
+          )}
+        </div>
+      );
+    }
+
+    // Desktop: Show full list
     return (
       <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
         {lessonsOnDate.slice(0, 3).map(lesson => (
@@ -260,22 +282,31 @@ const Lessons: React.FC = () => {
     const lessonsOnDate = lessonsByDate.get(dateKey) || [];
     
     if (lessonsOnDate.length > 0) {
-      Modal.info({
-        title: `Lessons on ${formatDate(date, { timezone: DEFAULT_TIMEZONE, format: 'YYYY-MM-DD' })}`,
-        content: (
-          <div>
-            {lessonsOnDate.map(lesson => (
-              <div key={lesson.id} style={{ marginBottom: 8 }}>
-                <Tag color={getStatusColor(lesson.status)}>{lesson.status}</Tag>
-                {formatTime(lesson.scheduled_at, { timezone: lesson.timezone })} - {lesson.duration_minutes || 60} min
-              </div>
-            ))}
-          </div>
-        ),
-        width: 500,
-      });
+      if (isMobile) {
+        setSelectedCalendarDate(date);
+        setDayModalOpen(true);
+      } else {
+        Modal.info({
+          title: `Lessons on ${formatDate(date, { timezone: DEFAULT_TIMEZONE, format: 'YYYY-MM-DD' })}`,
+          content: (
+            <div>
+              {lessonsOnDate.map(lesson => (
+                <div key={lesson.id} style={{ marginBottom: 8 }}>
+                  <Tag color={getStatusColor(lesson.status)}>{lesson.status}</Tag>
+                  {formatTime(lesson.scheduled_at, { timezone: lesson.timezone })} - {lesson.duration_minutes || 60} min
+                </div>
+              ))}
+            </div>
+          ),
+          width: 500,
+        });
+      }
     }
   };
+
+  const selectedDateLessons = selectedCalendarDate 
+    ? lessonsByDate.get(selectedCalendarDate.format('YYYY-MM-DD')) || []
+    : [];
 
   return (
     <div>
@@ -330,40 +361,81 @@ const Lessons: React.FC = () => {
             />
           </Space>
 
-          {!isLoading && (!data?.items || data.items.length === 0) ? (
-            <EmptyState 
-              title="No lessons found"
-              description="Lessons will appear here once you create packages and schedule lessons"
-            />
-          ) : (
-            <Table
-              columns={columns}
-              dataSource={data?.items}
-              rowKey="id"
-              loading={isLoading}
-              scroll={{ x: 900 }}
-              pagination={{
-                current: currentPage,
-                pageSize: pageSize,
-                total: data?.total,
-                showSizeChanger: true,
-                showQuickJumper: true,
-                showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} lessons`,
-              }}
-              onChange={handleTableChange}
-              bordered
-            />
-          )}
+          <ResponsiveDataView<Lesson>
+            data={data?.items || []}
+            loading={isLoading}
+            columns={columns}
+            rowKey="id"
+            emptyText="No lessons found"
+            emptyDescription="Lessons will appear here once you create packages and schedule lessons"
+            renderCard={(lesson) => (
+              <LessonCard
+                key={lesson.id}
+                lesson={lesson}
+                onEdit={(l) => {
+                  setEditingLesson(l);
+                  setIsModalOpen(true);
+                }}
+                onDelete={handleDelete}
+              />
+            )}
+            tableProps={{
+              scroll: { x: 900 },
+              onChange: handleTableChange,
+              bordered: true,
+            }}
+            pagination={{
+              current: currentPage,
+              pageSize: pageSize,
+              total: data?.total,
+              showSizeChanger: true,
+              showQuickJumper: true,
+              showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} lessons`,
+            }}
+          />
         </>
       ) : (
         <Card>
           <Calendar 
             locale={calendarLocaleWithMonday}
-            cellRender={dateCellRender}
+            cellRender={cellRender}
             onSelect={onCalendarSelect}
+            fullscreen={!isMobile}
           />
         </Card>
       )}
+
+      {/* Mobile: Day details modal for calendar */}
+      <Modal
+        open={dayModalOpen}
+        title={selectedCalendarDate?.format('dddd, D MMMM')}
+        onCancel={() => setDayModalOpen(false)}
+        footer={null}
+        width={isMobile ? '100%' : 400}
+      >
+        <List
+          dataSource={selectedDateLessons}
+          renderItem={(lesson) => (
+            <List.Item
+              onClick={() => {
+                setDayModalOpen(false);
+                setEditingLesson(lesson);
+                setIsModalOpen(true);
+              }}
+              style={{ cursor: 'pointer', padding: spacing.sm }}
+            >
+              <Space>
+                <Badge 
+                  status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'} 
+                />
+                <span>{formatTime(lesson.scheduled_at, { timezone: lesson.timezone })}</span>
+                <Tag color={getStatusColor(lesson.status)}>{lesson.status}</Tag>
+                <span>{lesson.duration_minutes || 60} min</span>
+              </Space>
+            </List.Item>
+          )}
+        />
+      </Modal>
 
       <LessonForm
         open={isModalOpen}

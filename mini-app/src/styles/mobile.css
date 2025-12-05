@@ -1,72 +1,84 @@
-/* Mobile-specific styles */
+/**
+ * Mobile-specific styles for TutorBase Mini-App
+ * 
+ * Note: Most responsive behavior is now handled by:
+ * - useResponsive hook
+ * - ResponsiveDataView component
+ * - ResponsiveModal component
+ * - Design tokens (src/theme/tokens.ts)
+ * 
+ * This file contains global CSS overrides for Ant Design components
+ * that cannot be easily styled via inline styles or component props.
+ */
 
-/* Reduce padding on mobile */
+/* Mobile breakpoint: < 768px */
 @media (max-width: 768px) {
-  .ant-btn {
-    padding: 4px 12px !important;
-    font-size: 13px !important;
-    height: auto !important;
-    min-height: 32px;
-  }
-
-  .ant-btn-icon-only {
-    padding: 4px !important;
-  }
-
-  /* Smaller headers on mobile */
-  h1 {
-    font-size: 24px !important;
-  }
-
-  h2 {
-    font-size: 20px !important;
-  }
-
-  /* Date picker improvements */
-  .ant-picker {
-    font-size: 13px !important;
-  }
-
+  /* Date picker dropdown positioning */
   .ant-picker-dropdown {
-    z-index: 9999 !important;
+    z-index: 9999;
   }
 
-  /* Card spacing */
-  .ant-card {
-    margin-bottom: 12px !important;
-  }
-
-  .ant-card-body {
-    padding: 16px !important;
-  }
-
-  /* Table responsive */
+  /* Table font size reduction */
   .ant-table {
-    font-size: 13px !important;
+    font-size: 13px;
   }
 
-  .ant-table-thead > tr > th {
-    padding: 8px !important;
-  }
-
+  .ant-table-thead > tr > th,
   .ant-table-tbody > tr > td {
-    padding: 8px !important;
+    padding: 8px;
   }
 
-  /* Space between elements */
-  .ant-space-item {
-    margin-bottom: 8px !important;
+  /* Form item spacing */
+  .ant-form-item {
+    margin-bottom: 16px;
+  }
+
+  /* Modal adjustments */
+  .ant-modal {
+    max-width: calc(100vw - 32px);
+  }
+
+  /* Select dropdown */
+  .ant-select-dropdown {
+    max-height: 50vh;
+  }
+
+  /* Calendar compact mode */
+  .ant-picker-calendar-mini .ant-picker-cell {
+    padding: 2px 0;
   }
 }
 
-/* Very small screens */
+/* Very small screens: < 480px */
 @media (max-width: 480px) {
-  .ant-btn {
-    font-size: 12px !important;
-    padding: 2px 8px !important;
+  /* Even smaller table cells */
+  .ant-table-thead > tr > th,
+  .ant-table-tbody > tr > td {
+    padding: 6px;
+    font-size: 12px;
   }
 
-  h1 {
-    font-size: 20px !important;
+  /* Compact buttons */
+  .ant-btn-sm {
+    font-size: 12px;
+    padding: 0 8px;
+  }
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+  /* Larger touch targets */
+  .ant-btn {
+    min-height: 44px;
+  }
+
+  .ant-input,
+  .ant-select-selector {
+    min-height: 44px;
+  }
+
+  /* Remove hover effects on touch devices */
+  .ant-btn:hover {
+    transform: none;
   }
 }

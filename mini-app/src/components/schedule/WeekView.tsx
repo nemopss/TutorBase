@@ -1,8 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Card, Typography, theme } from 'antd';
+import { DownOutlined, RightOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
 import type { Lesson } from './types';
 import { STATUS_COLORS } from './types';
+import { useResponsive } from '../../hooks/useResponsive';
+import { spacing } from '../../theme/tokens';
 
 const { Text } = Typography;
 
@@ -14,6 +17,8 @@ interface WeekViewProps {
 
 const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick }) => {
   const { token } = theme.useToken();
+  const { isMobile } = useResponsive();
+  const [expandedDays, setExpandedDays] = useState<string[]>([dayjs().format('YYYY-MM-DD')]);
   
   // Get start of week (Monday)
   const weekStart = currentDate.startOf('isoWeek');
@@ -46,6 +51,105 @@ const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick
     return grouped;
   }, [lessons, weekStart]);
 
+  const renderLessonItem = (lesson: Lesson) => {
+    const lessonTime = dayjs(lesson.scheduled_at);
+    const statusColor = STATUS_COLORS[lesson.status];
+
+    return (
+      <div
+        key={lesson.id}
+        onClick={() => onLessonClick(lesson)}
+        style={{
+          cursor: 'pointer',
+          padding: spacing.sm,
+          borderRadius: 4,
+          border: `1px solid ${statusColor}`,
+          background: `${statusColor}10`,
+          transition: 'all 0.2s'
+        }}
+      >
+        <div style={{ fontWeight: 'bold', fontSize: 14 }}>
+          {lessonTime.format('HH:mm')}
+        </div>
+        {lesson.duration_minutes && (
+          <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
+            {lesson.duration_minutes} мин
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  // Mobile: Vertical list with expandable days
+  if (isMobile) {
+    return (
+      <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.sm }}>
+        {weekDays.map(day => {
+          const dateKey = day.format('YYYY-MM-DD');
+          const dayLessons = lessonsByDay[dateKey] || [];
+          const isToday = day.isSame(dayjs(), 'day');
+          const isExpanded = expandedDays.includes(dateKey);
+
+          return (
+            <Card
+              key={dateKey}
+              size="small"
+              style={{
+                background: isToday ? token.colorPrimaryBg : token.colorBgContainer,
+              }}
+            >
+              <div
+                onClick={() => {
+                  setExpandedDays(prev =>
+                    prev.includes(dateKey)
+                      ? prev.filter(d => d !== dateKey)
+                      : [...prev, dateKey]
+                  );
+                }}
+                style={{
+                  display: 'flex',
+                  justifyContent: 'space-between',
+                  alignItems: 'center',
+                  cursor: 'pointer',
+                  padding: `${spacing.xs}px 0`,
+                }}
+              >
+                <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                  <div style={{
+                    fontSize: 16,
+                    fontWeight: isToday ? 'bold' : 'normal',
+                    color: isToday ? token.colorPrimary : 'inherit',
+                  }}>
+                    {day.format('ddd, D MMM')}
+                  </div>
+                  {dayLessons.length > 0 && (
+                    <Text type="secondary" style={{ fontSize: 12 }}>
+                      ({dayLessons.length} {dayLessons.length === 1 ? 'урок' : 'уроков'})
+                    </Text>
+                  )}
+                </div>
+                {isExpanded ? <DownOutlined /> : <RightOutlined />}
+              </div>
+
+              {isExpanded && (
+                <div style={{ marginTop: spacing.sm }}>
+                  {dayLessons.length === 0 ? (
+                    <Text type="secondary" style={{ fontSize: 12 }}>Нет уроков</Text>
+                  ) : (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.sm }}>
+                      {dayLessons.map(renderLessonItem)}
+                    </div>
+                  )}
+                </div>
+              )}
+            </Card>
+          );
+        })}
+      </div>
+    );
+  }
+
+  // Desktop: 7-column grid
   return (
     <div style={{ 
       display: 'grid', 
@@ -86,42 +190,7 @@ const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-                {dayLessons.map(lesson => {
-                  const lessonTime = dayjs(lesson.scheduled_at);
-                  const statusColor = STATUS_COLORS[lesson.status];
-
-                  return (
-                    <div
-                      key={lesson.id}
-                      onClick={() => onLessonClick(lesson)}
-                      style={{
-                        cursor: 'pointer',
-                        padding: 8,
-                        borderRadius: 4,
-                        border: `1px solid ${statusColor}`,
-                        background: `${statusColor}10`,
-                        transition: 'all 0.2s'
-                      }}
-                      onMouseEnter={(e) => {
-                        e.currentTarget.style.transform = 'scale(1.02)';
-                        e.currentTarget.style.boxShadow = '0 2px 8px rgba(0,0,0,0.1)';
-                      }}
-                      onMouseLeave={(e) => {
-                        e.currentTarget.style.transform = 'scale(1)';
-                        e.currentTarget.style.boxShadow = 'none';
-                      }}
-                    >
-                      <div style={{ fontWeight: 'bold', fontSize: 14 }}>
-                        {lessonTime.format('HH:mm')}
-                      </div>
-                      {lesson.duration_minutes && (
-                        <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
-                          {lesson.duration_minutes} мин
-                        </div>
-                      )}
-                    </div>
-                  );
-                })}
+                {dayLessons.map(renderLessonItem)}
               </div>
             )}
           </Card>

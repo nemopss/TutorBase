@@ -1,12 +1,13 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Table, Button, message, Tag, Space, Switch, Typography, Tooltip } from 'antd';
+import { Button, message, Tag, Space, Switch, Typography, Tooltip } from 'antd';
 import { UserAddOutlined, BellOutlined, BellFilled, IdcardOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import api from '../services/api';
 import LearnerForm from '../components/forms/LearnerForm';
 import PageHeader from '../components/common/PageHeader';
-import EmptyState from '../components/common/EmptyState';
+import ResponsiveDataView from '../components/common/ResponsiveDataView';
+import LearnerCard from '../components/cards/LearnerCard';
 
 const { Text } = Typography;
 
@@ -153,26 +154,29 @@ const Learners: React.FC = () => {
         }
       />
 
-      {learners.length === 0 && !isLoading ? (
-        <EmptyState
-          title="No learners yet"
-          description="Create your first learner by clicking the 'Add Learner' button above"
-          actionText="Add Learner"
-          onAction={() => setIsModalOpen(true)}
-        />
-      ) : (
-        <Table
-          columns={columns}
-          dataSource={learners}
-          rowKey="id"
-          loading={isLoading}
-          pagination={{
-            pageSize: 20,
-            showSizeChanger: true,
-            showTotal: (total) => `Total ${total} learner${total !== 1 ? 's' : ''}`,
-          }}
-        />
-      )}
+      <ResponsiveDataView<Learner>
+        data={learners}
+        loading={isLoading}
+        columns={columns}
+        rowKey="id"
+        emptyText="No learners yet"
+        emptyDescription="Create your first learner by clicking the 'Add Learner' button above"
+        emptyActionText="Add Learner"
+        onEmptyAction={() => setIsModalOpen(true)}
+        renderCard={(learner) => (
+          <LearnerCard
+            key={learner.id}
+            learner={learner}
+            onNotificationToggle={handleNotificationToggle}
+            isToggling={notificationsMutation.isPending}
+          />
+        )}
+        pagination={{
+          pageSize: 20,
+          showSizeChanger: true,
+          showTotal: (total) => `Total ${total} learner${total !== 1 ? 's' : ''}`,
+        }}
+      />
 
       <LearnerForm
         visible={isModalOpen}

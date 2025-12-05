@@ -1,7 +1,8 @@
 import React, { useEffect } from 'react';
-import { Modal, Form, Input, InputNumber, Select, Button, Space, TimePicker } from 'antd';
+import { Form, Input, InputNumber, Select, Button, Space, TimePicker } from 'antd';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import ResponsiveModal from '../common/ResponsiveModal';
 
 interface TemplateFormProps {
   open: boolean;
@@ -55,7 +56,7 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
   };
 
   return (
-    <Modal
+    <ResponsiveModal
       open={open}
       title={isEditing ? "Edit Template" : "Create New Template"}
       okText={isEditing ? "Save" : "Create"}
@@ -67,7 +68,7 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
         }
       })}
       confirmLoading={isLoading}
-      destroyOnHidden
+      destroyOnClose
       width={600}
     >
       <Form form={form} layout="vertical" name="template_form" autoComplete="off">
@@ -117,7 +118,7 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
           )}
         </Form.List>
       </Form>
-    </Modal>
+    </ResponsiveModal>
   );
 };
 

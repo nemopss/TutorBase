@@ -14,6 +14,8 @@ import dayjs from 'dayjs';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
+import { useResponsive } from '../hooks/useResponsive';
+import { chartHeight } from '../theme/tokens';
 import { formatDateTime } from '../utils/datetime';
 
 // --- Types --- //
@@ -103,6 +105,9 @@ const fetchActivePackages = async (): Promise<PackageListResponse> => {
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { cardStyle, textColor, subtitleColor, chartGridColor, tooltipStyle } = useResponsiveStyles();
+  const { isMobile, breakpoint } = useResponsive();
+  const currentChartHeight = isMobile ? chartHeight.mobile : chartHeight.desktop;
+  const isVerySmall = breakpoint === 'xs';
 
   const { 
     data: metricsData, 
@@ -230,13 +235,13 @@ const Dashboard: React.FC = () => {
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={16}>
           <Card title="Lessons Over Time (Last 30 Days)" bordered={false} style={cardStyle}>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={currentChartHeight}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
-                <XAxis dataKey="date" stroke={textColor} />
-                <YAxis stroke={textColor} />
+                <XAxis dataKey="date" stroke={textColor} tick={{ fontSize: isMobile ? 10 : 12 }} />
+                <YAxis stroke={textColor} tick={{ fontSize: isMobile ? 10 : 12 }} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Legend />
+                <Legend wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} />
                 <Line type="monotone" dataKey="lessons" stroke="#1890ff" strokeWidth={2} />
               </LineChart>
             </ResponsiveContainer>
@@ -244,15 +249,15 @@ const Dashboard: React.FC = () => {
         </Col>
         <Col xs={24} lg={8}>
           <Card title="Lessons by Status" bordered={false} style={cardStyle}>
-            <ResponsiveContainer width="100%" height={300}>
+            <ResponsiveContainer width="100%" height={currentChartHeight}>
               <PieChart>
                 <Pie
                   data={pieData}
                   cx="50%"
                   cy="50%"
-                  labelLine={false}
-                  label={(props: any) => `${props.name}: ${(props.percent * 100).toFixed(0)}%`}
-                  outerRadius={80}
+                  labelLine={!isVerySmall}
+                  label={isVerySmall ? false : (props: any) => `${props.name}: ${(props.percent * 100).toFixed(0)}%`}
+                  outerRadius={isMobile ? 60 : 80}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -261,6 +266,7 @@ const Dashboard: React.FC = () => {
                   ))}
                 </Pie>
                 <Tooltip />
+                {isVerySmall && <Legend wrapperStyle={{ fontSize: 10 }} />}
               </PieChart>
             </ResponsiveContainer>
           </Card>

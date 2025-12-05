@@ -7,6 +7,7 @@ import { ThemeProvider } from './theme/ThemeProvider';
 import App from './App';
 import './index.css';
 import './styles/mobile.css';
+import './styles/safe-area.css';
 
 const queryClient = new QueryClient();
 
