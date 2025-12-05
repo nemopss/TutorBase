@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Descriptions, Spin, Alert, Tag, Button, message, Space, Tabs, Progress, Card, Statistic, Row, Col, Grid, Typography } from 'antd';
+import { Descriptions, Spin, Alert, Tag, Button, message, Space, Tabs, Progress, Card, Statistic, Row, Col, Grid, Typography, Modal } from 'antd';
 import type { TableProps } from 'antd';
 import { 
   ArrowLeftOutlined, 
@@ -9,7 +9,8 @@ import {
   CheckCircleOutlined, 
   CloseCircleOutlined,
   ClockCircleOutlined,
-  EditOutlined
+  EditOutlined,
+  DeleteOutlined
 } from '@ant-design/icons';
 import api from '../services/api';
 import LessonForm from '../components/forms/LessonForm';
@@ -75,6 +76,10 @@ const updateLesson = async ({ lessonId, values }: { lessonId: number; values: an
   return data;
 };
 
+const deleteLesson = async (lessonId: number) => {
+  await api.delete(`/lessons/${lessonId}`);
+};
+
 // --- Helper functions --- //
 const getStatusColor = (status: string) => {
   switch (status) {
@@ -92,6 +97,8 @@ const PackageDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
+  const [lessonToDelete, setLessonToDelete] = useState<number | null>(null);
   const screens = Grid.useBreakpoint();
   const isMobile = !screens?.md;
   const { resolvedTheme } = useThemeMode();
@@ -146,6 +153,31 @@ const PackageDetail: React.FC = () => {
     }
   });
 
+  const deleteLessonMutation = useMutation({
+    mutationFn: deleteLesson,
+    onSuccess: () => {
+      message.success('Lesson deleted successfully!');
+      queryClient.invalidateQueries({ queryKey: ['packageLessons', id] });
+      queryClient.invalidateQueries({ queryKey: ['package', id] });
+      setDeleteModalOpen(false);
+      setLessonToDelete(null);
+    },
+    onError: (error: Error) => {
+      message.error(`Failed to delete lesson: ${error.message}`);
+    }
+  });
+
+  const handleDeleteLesson = (lessonId: number) => {
+    setLessonToDelete(lessonId);
+    setDeleteModalOpen(true);
+  };
+
+  const confirmDeleteLesson = () => {
+    if (lessonToDelete) {
+      deleteLessonMutation.mutate(lessonToDelete);
+    }
+  };
+
   const handleFormFinish = (values: any) => {
     if (editingLesson) {
       updateLessonMutation.mutate({ lessonId: editingLesson.id, values });
@@ -183,6 +215,7 @@ const PackageDetail: React.FC = () => {
       render: (_, record) => (
         <Space size="middle">
           <Button type="link" onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>Edit</Button>
+          <Button type="link" danger onClick={() => handleDeleteLesson(record.id)}>Delete</Button>
         </Space>
       ),
     },
@@ -209,6 +242,18 @@ const PackageDetail: React.FC = () => {
           }}
         >
           Edit
+        </Button>,
+        <Button
+          key="delete"
+          type="text"
+          danger
+          icon={<DeleteOutlined />}
+          onClick={(e) => {
+            e.stopPropagation();
+            handleDeleteLesson(lesson.id);
+          }}
+        >
+          Delete
         </Button>,
       ]}
     >
@@ -390,6 +435,19 @@ const PackageDetail: React.FC = () => {
         isLoading={createLessonMutation.isPending || updateLessonMutation.isPending}
         initialValues={editingLesson}
       />
+
+      <Modal
+        open={deleteModalOpen}
+        title="Delete Lesson"
+        onCancel={() => { setDeleteModalOpen(false); setLessonToDelete(null); }}
+        onOk={confirmDeleteLesson}
+        okText="Delete"
+        okButtonProps={{ danger: true, loading: deleteLessonMutation.isPending }}
+        cancelButtonProps={{ disabled: deleteLessonMutation.isPending }}
+      >
+        <p>Are you sure you want to delete this lesson?</p>
+        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+      </Modal>
     </div>
   );
 };
