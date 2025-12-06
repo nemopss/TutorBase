@@ -65,6 +65,8 @@ class PackageResponse(BaseResponse, TimestampMixin, TenantMixin):
         notes: Teacher notes
         total_lessons: Total number of lessons
         progress: Progress tracking information
+        price: Package price (calculated or manual)
+        payment_status: Payment status (unpaid, partial, paid)
         created_at: Creation timestamp (from TimestampMixin)
         updated_at: Last update timestamp (from TimestampMixin)
         tenant_id: Tenant ID (from TenantMixin)
@@ -81,6 +83,9 @@ class PackageResponse(BaseResponse, TimestampMixin, TenantMixin):
     notes: Optional[str] = Field(None, max_length=5000, description="Teacher notes")
     total_lessons: Optional[int] = Field(None, ge=0, description="Total number of lessons")
     progress: PackageProgressModel = Field(..., description="Progress tracking")
+    price: Optional[float] = Field(None, description="Package price")
+    payment_status: str = Field(default='unpaid', description="Payment status (unpaid, partial, paid)")
+    total_paid: float = Field(default=0.0, description="Total amount paid for this package")
 
 
 class PackageListResponse(BaseResponse):

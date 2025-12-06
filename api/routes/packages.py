@@ -46,6 +46,9 @@ def _to_response(dto: LessonPackageDTO) -> PackageResponse:
         notes=dto.notes,
         total_lessons=dto.total_lessons,
         progress=progress,
+        price=dto.price,
+        payment_status=dto.payment_status,
+        total_paid=dto.total_paid,
     )
 
 

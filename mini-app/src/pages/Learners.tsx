@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, message, Tag, Space, Switch, Typography, Tooltip, Modal } from 'antd';
-import { UserAddOutlined, BellOutlined, BellFilled, IdcardOutlined, DeleteOutlined } from '@ant-design/icons';
+import { UserAddOutlined, BellOutlined, BellFilled, IdcardOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import api from '../services/api';
 import LearnerForm from '../components/forms/LearnerForm';
@@ -35,6 +36,7 @@ const createLearner = async (values: any) => {
     display_name: values.display_name,
     notes: values.notes || null,
     notifications_enabled: values.notifications_enabled ?? true,
+    lesson_rate: values.lesson_rate || null,
   });
   return data;
 };
@@ -52,6 +54,7 @@ const deleteLearner = async (learnerId: number) => {
 
 // --- Component --- //
 const Learners: React.FC = () => {
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -172,14 +175,23 @@ const Learners: React.FC = () => {
       title: 'Actions',
       key: 'actions',
       render: (_, record: Learner) => (
-        <Button
-          type="link"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={() => handleDelete(record.id)}
-        >
-          Delete
-        </Button>
+        <Space>
+          <Button
+            type="link"
+            icon={<DollarOutlined />}
+            onClick={() => navigate(`/learners/${record.id}/finance`)}
+          >
+            Финансы
+          </Button>
+          <Button
+            type="link"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={() => handleDelete(record.id)}
+          >
+            Delete
+          </Button>
+        </Space>
       ),
     },
   ];
@@ -217,6 +229,7 @@ const Learners: React.FC = () => {
             learner={learner}
             onNotificationToggle={handleNotificationToggle}
             onDelete={handleDelete}
+            onFinance={(id) => navigate(`/learners/${id}/finance`)}
             isToggling={notificationsMutation.isPending}
           />
         )}

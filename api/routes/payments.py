@@ -1,0 +1,182 @@
+"""Payment API endpoints.
+
+This module provides REST API endpoints for payment operations:
+- POST /payments - Record a new payment
+- GET /payments - List payments with filtering
+- DELETE /payments/{id} - Delete a payment
+"""
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Optional
+
+from fastapi import APIRouter, Depends, HTTPException, Query
+from sqlalchemy import select, func
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from api.dependencies import (
+    get_session,
+    admin_or_teacher_required,
+    get_current_tenant,
+    CurrentTenant,
+)
+from api.schemas.finance import PaymentCreate, PaymentResponse
+from api.schemas import PaginatedResponse, PaginationParams
+from database.models import Payment, Learner, LessonPackage
+from services import finance_service
+
+router = APIRouter()
+
+
+@router.post("", response_model=PaymentResponse, status_code=201)
+async def create_payment(
+    request: PaymentCreate,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> PaymentResponse:
+    """Record a new payment.
+    
+    Creates a payment record and updates the associated package's
+    payment status if applicable.
+    
+    **Validates: Requirements 3.1**
+    """
+    # Verify learner exists and belongs to tenant
+    learner = await session.get(Learner, request.learner_id)
+    if not learner or learner.tenant_id != current_tenant.tenant_id:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    
+    # Verify package if provided
+    package_title = None
+    if request.package_id:
+        package = await session.get(LessonPackage, request.package_id)
+        if not package or package.tenant_id != current_tenant.tenant_id:
+            raise HTTPException(status_code=404, detail="Package not found")
+        package_title = package.title
+    
+    try:
+        payment = await finance_service.record_payment(
+            session,
+            current_tenant,
+            learner_id=request.learner_id,
+            amount=request.amount,
+            paid_at=request.paid_at,
+            package_id=request.package_id,
+            lesson_id=request.lesson_id,
+            notes=request.notes,
+        )
+        await session.commit()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+    
+    return PaymentResponse(
+        id=payment.id,
+        learner_id=payment.learner_id,
+        learner_name=learner.display_name,
+        package_id=payment.package_id,
+        package_title=package_title,
+        lesson_id=payment.lesson_id,
+        amount=payment.amount,
+        currency=payment.currency,
+        paid_at=payment.paid_at,
+        notes=payment.notes,
+        created_at=payment.created_at,
+        updated_at=payment.updated_at,
+        tenant_id=payment.tenant_id,
+    )
+
+
+@router.get("", response_model=PaginatedResponse[PaymentResponse])
+async def list_payments(
+    learner_id: Optional[int] = Query(None, description="Filter by learner"),
+    from_date: Optional[datetime] = Query(None, description="Filter from date"),
+    to_date: Optional[datetime] = Query(None, description="Filter to date"),
+    pagination: PaginationParams = Depends(),
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> PaginatedResponse[PaymentResponse]:
+    """List payments with optional filtering.
+    
+    **Validates: Requirements 5.4**
+    """
+    # Build query
+    query = (
+        select(Payment)
+        .where(Payment.tenant_id == current_tenant.tenant_id)
+        .order_by(Payment.paid_at.desc())
+    )
+    
+    if learner_id:
+        query = query.where(Payment.learner_id == learner_id)
+    if from_date:
+        query = query.where(Payment.paid_at >= from_date)
+    if to_date:
+        query = query.where(Payment.paid_at <= to_date)
+    
+    # Get total count
+    count_query = select(func.count()).select_from(query.subquery())
+    total_result = await session.execute(count_query)
+    total = total_result.scalar() or 0
+    
+    # Apply pagination
+    query = query.offset(pagination.offset).limit(pagination.limit)
+    result = await session.execute(query)
+    payments = result.scalars().all()
+    
+    # Build response items
+    items = []
+    for payment in payments:
+        # Get learner name
+        learner = await session.get(Learner, payment.learner_id)
+        learner_name = learner.display_name if learner else None
+        
+        # Get package title
+        package_title = None
+        if payment.package_id:
+            package = await session.get(LessonPackage, payment.package_id)
+            package_title = package.title if package else None
+        
+        items.append(PaymentResponse(
+            id=payment.id,
+            learner_id=payment.learner_id,
+            learner_name=learner_name,
+            package_id=payment.package_id,
+            package_title=package_title,
+            lesson_id=payment.lesson_id,
+            amount=payment.amount,
+            currency=payment.currency,
+            paid_at=payment.paid_at,
+            notes=payment.notes,
+            created_at=payment.created_at,
+            updated_at=payment.updated_at,
+            tenant_id=payment.tenant_id,
+        ))
+    
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
+
+
+@router.delete("/{payment_id}", status_code=204)
+async def delete_payment(
+    payment_id: int,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+):
+    """Delete a payment and recalculate package status.
+    
+    **Validates: Requirements 3.2**
+    """
+    payment = await session.get(Payment, payment_id)
+    if not payment or payment.tenant_id != current_tenant.tenant_id:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    
+    package_id = payment.package_id
+    
+    await session.delete(payment)
+    
+    # Recalculate package status if payment was for a package
+    if package_id:
+        await finance_service.update_payment_status(session, package_id)
+    
+    await session.commit()

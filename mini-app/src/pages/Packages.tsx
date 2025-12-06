@@ -31,6 +31,8 @@ interface Package {
   total_lessons?: number;
   progress: PackageProgress;
   template_id?: number | null;
+  price?: number | null;
+  payment_status?: string;
 }
 
 interface PackageListResponse {
@@ -257,6 +259,39 @@ const Packages: React.FC = () => {
             </span>
           </div>
         );
+      },
+    },
+    {
+      title: 'Price',
+      dataIndex: 'price',
+      key: 'price',
+      width: 120,
+      render: (price: number | null) => {
+        if (price === null || price === undefined) return '—';
+        return new Intl.NumberFormat('ru-RU', {
+          style: 'currency',
+          currency: 'RUB',
+          minimumFractionDigits: 0,
+        }).format(price);
+      },
+    },
+    {
+      title: 'Payment',
+      dataIndex: 'payment_status',
+      key: 'payment_status',
+      width: 100,
+      render: (status: string) => {
+        const colorMap: Record<string, string> = {
+          paid: 'green',
+          partial: 'orange',
+          unpaid: 'red',
+        };
+        const labelMap: Record<string, string> = {
+          paid: 'Paid',
+          partial: 'Partial',
+          unpaid: 'Unpaid',
+        };
+        return <Tag color={colorMap[status] || 'default'}>{labelMap[status] || status}</Tag>;
       },
     },
     {

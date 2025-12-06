@@ -38,6 +38,7 @@ class LearnerResponse(BaseResponse, TimestampMixin, TenantMixin):
         chat_id: Telegram chat ID (if linked to bot user)
         bot_user_id: ID of linked bot user
         notes: Teacher notes about the learner
+        lesson_rate: Individual lesson rate for this learner
         created_at: Creation timestamp (from TimestampMixin)
         updated_at: Last update timestamp (from TimestampMixin)
         tenant_id: Tenant ID (from TenantMixin)
@@ -48,6 +49,7 @@ class LearnerResponse(BaseResponse, TimestampMixin, TenantMixin):
     chat_id: Optional[int] = Field(None, description="Telegram chat ID")
     bot_user_id: Optional[int] = Field(None, gt=0, description="Linked bot user ID")
     notes: Optional[str] = Field(None, max_length=5000, description="Teacher notes")
+    lesson_rate: Optional[float] = Field(None, description="Individual lesson rate")
 
 
 class LearnerListResponse(BaseResponse):
@@ -114,11 +116,13 @@ class CreateLearnerFromChatIdRequest(BaseRequest):
         display_name: Display name for learner (required, 1-255 chars)
         notes: Optional teacher notes (max 5000 chars)
         notifications_enabled: Whether to enable notifications (default: True)
+        lesson_rate: Individual lesson rate (optional)
     
     Validation:
         - chat_id is required
         - display_name must be non-empty and <= 255 chars
         - notes max 5000 chars
+        - lesson_rate must be positive if provided
     """
     chat_id: int = Field(..., description="Telegram chat ID")
     display_name: str = Field(..., min_length=1, max_length=255, description="Display name for learner")
@@ -127,6 +131,7 @@ class CreateLearnerFromChatIdRequest(BaseRequest):
         default=True,
         description="Whether learner should receive notifications after creation",
     )
+    lesson_rate: Optional[float] = Field(None, gt=0, description="Individual lesson rate")
 
     @field_validator('display_name')
     @classmethod
@@ -157,14 +162,17 @@ class UpdateLearnerRequest(BaseRequest):
         display_name: New display name (1-255 chars)
         notes: New teacher notes (max 5000 chars)
         notifications_enabled: New notification setting
+        lesson_rate: Individual lesson rate
     
     Validation:
         - If provided, display_name must be non-empty and <= 255 chars
         - If provided, notes max 5000 chars
+        - If provided, lesson_rate must be positive
     """
     display_name: Optional[str] = Field(None, min_length=1, max_length=255, description="Display name")
     notes: Optional[str] = Field(None, max_length=5000, description="Teacher notes")
     notifications_enabled: Optional[bool] = Field(None, description="Enable or disable notifications")
+    lesson_rate: Optional[float] = Field(None, gt=0, description="Individual lesson rate")
 
     @field_validator('display_name')
     @classmethod

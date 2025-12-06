@@ -18,6 +18,8 @@ interface Package {
   learner_name: string;
   status: string;
   progress: PackageProgress;
+  price?: number | null;
+  payment_status?: string;
 }
 
 interface PackageCardProps {
@@ -42,6 +44,33 @@ const PackageCard: React.FC<PackageCardProps> = ({
     : 0;
 
   const statusColor = pkg.status === 'active' ? 'green' : 'volcano';
+
+  const formatCurrency = (value: number): string => {
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: 'RUB',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const getPaymentStatusColor = (status?: string): string => {
+    switch (status) {
+      case 'paid': return 'green';
+      case 'partial': return 'orange';
+      case 'unpaid': return 'red';
+      default: return 'default';
+    }
+  };
+
+  const getPaymentStatusLabel = (status?: string): string => {
+    switch (status) {
+      case 'paid': return 'Оплачен';
+      case 'partial': return 'Частично';
+      case 'unpaid': return 'Не оплачен';
+      default: return '—';
+    }
+  };
 
   return (
     <Card
@@ -98,6 +127,16 @@ const PackageCard: React.FC<PackageCardProps> = ({
             {progress.completed}+{progress.cancelled}/{progress.total}
           </Text>
         </div>
+
+        {/* Price and Payment Status */}
+        {(pkg.price !== undefined && pkg.price !== null) && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs }}>
+            <Text style={{ fontSize: 14 }}>{formatCurrency(pkg.price)}</Text>
+            <Tag color={getPaymentStatusColor(pkg.payment_status)}>
+              {getPaymentStatusLabel(pkg.payment_status)}
+            </Tag>
+          </div>
+        )}
       </Space>
     </Card>
   );

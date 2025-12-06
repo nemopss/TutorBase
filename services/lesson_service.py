@@ -74,6 +74,7 @@ def _build_lesson_dto(lesson: Lesson) -> LessonDTO:
         teacher_notes=lesson.teacher_notes,
         homework_due_at=normalize_to_timezone(lesson.homework_due_at),
         timezone=DEFAULT_TIMEZONE,
+        price=float(lesson.price) if lesson.price else None,
     )
 
 
@@ -226,6 +227,7 @@ async def create_lesson(
     teacher_notes: Optional[str] = None,
     homework_due_at: Optional[datetime] = None,
     sequence_index: Optional[int] = None,
+    price: Optional[float] = None,
 ) -> LessonDTO:
     """Create a new lesson in the specified package.
 
@@ -246,6 +248,7 @@ async def create_lesson(
         teacher_notes: Teacher notes (optional)
         homework_due_at: Homework due date (optional)
         sequence_index: Lesson sequence number in package (optional)
+        price: Lesson price for standalone lessons (optional, defaults to learner rate)
 
     Returns:
         LessonDTO with created lesson data
@@ -258,10 +261,20 @@ async def create_lesson(
         After lesson creation, package metrics are automatically recalculated.
         If sequence_index is not specified, it will be calculated automatically
         based on existing lessons in the package.
+        If price is not specified, it defaults to the learner's lesson_rate.
     """
+    from decimal import Decimal
+    
     package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
+
+    # Default price to learner's lesson_rate if not provided
+    lesson_price = None
+    if price is not None:
+        lesson_price = Decimal(str(price))
+    elif package.learner and package.learner.lesson_rate:
+        lesson_price = package.learner.lesson_rate
 
     lesson = await crud.create_lesson(
         session,
@@ -274,6 +287,13 @@ async def create_lesson(
         homework_due_at=homework_due_at,
         sequence_index=sequence_index,
     )
+    
+    # Set price on lesson
+    if lesson_price is not None:
+        lesson.price = lesson_price
+        session.add(lesson)
+        await session.flush()
+    
     await sync_package_metrics(session, current_tenant, package_id)
     # Transaction will be committed by @transactional decorator
     return _build_lesson_dto(lesson)

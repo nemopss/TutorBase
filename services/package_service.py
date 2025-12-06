@@ -44,6 +44,7 @@ from services.exceptions import NotFoundError
 # Removed: from services.package_scheduler import regenerate_package_reminders (circular import)
 # Using lazy import inside functions instead
 from services.utils import generate_lessons_from_template, lesson_stats, sync_package_metrics
+from services.finance_service import calculate_package_price
 from utils.timezone import DEFAULT_TIMEZONE, DEFAULT_TZ, normalize_to_timezone, to_utc
 
 # Prometheus metrics
@@ -55,7 +56,7 @@ except ImportError:
     db_query_duration = None
 
 
-def _build_package_dto(package: LessonPackage) -> LessonPackageDTO:
+def _build_package_dto(package: LessonPackage, total_paid: float = 0.0) -> LessonPackageDTO:
     """Convert LessonPackage model to DTO for data transfer.
 
     Calculate lesson statistics (total, completed, cancelled) and build data
@@ -63,6 +64,7 @@ def _build_package_dto(package: LessonPackage) -> LessonPackageDTO:
 
     Args:
         package: Lesson package model from database
+        total_paid: Total amount paid for this package (default 0.0)
 
     Returns:
         LessonPackageDTO with package data and calculated progress
@@ -83,6 +85,9 @@ def _build_package_dto(package: LessonPackage) -> LessonPackageDTO:
         notes=package.notes,
         total_lessons=package.total_lessons,
         progress=PackageProgress(total=total, completed=completed, cancelled=cancelled),
+        price=float(package.price) if package.price else None,
+        payment_status=package.payment_status or 'unpaid',
+        total_paid=total_paid,
     )
 
 
@@ -100,10 +105,22 @@ async def get_package(session: AsyncSession, current_tenant: CurrentTenant, pack
     Raises:
         NotFoundError: If package with specified ID is not found
     """
+    from decimal import Decimal
+    from sqlalchemy import func, select
+    from database.models import Payment
+    
     package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
-    return _build_package_dto(package)
+    
+    # Get total paid for this package
+    result = await session.execute(
+        select(func.coalesce(func.sum(Payment.amount), Decimal("0")))
+        .where(Payment.package_id == package_id)
+    )
+    total_paid = float(result.scalar() or 0)
+    
+    return _build_package_dto(package, total_paid=total_paid)
 
 
 async def regenerate_reminders_for_package(session: AsyncSession, current_tenant: CurrentTenant, package_id: int) -> None:
@@ -247,6 +264,9 @@ async def create_package(
         if not template:
             raise NotFoundError(f"Template {template_id} not found")
 
+    # Calculate price from learner's lesson_rate
+    price = calculate_package_price(learner.lesson_rate, total_lessons)
+    
     package = await crud.create_lesson_package(
         session,
         current_tenant,
@@ -259,6 +279,10 @@ async def create_package(
         timezone_name=DEFAULT_TIMEZONE,
         total_lessons=total_lessons,
     )
+    
+    # Set financial fields
+    package.price = price
+    package.payment_status = 'unpaid'
 
     session.add(package)
     await session.flush()  # Flush to get package.id for relationships
@@ -330,6 +354,10 @@ async def create_package_from_template(
         localized_start = start_local.astimezone(DEFAULT_TZ)
 
     start_utc = localized_start.astimezone(timezone.utc)
+    
+    # Calculate price from learner's lesson_rate
+    price = calculate_package_price(learner.lesson_rate, template.lesson_count)
+    
     package = await crud.create_lesson_package(
         session,
         current_tenant,
@@ -342,6 +370,10 @@ async def create_package_from_template(
         timezone_name=DEFAULT_TIMEZONE,
         total_lessons=template.lesson_count,
     )
+    
+    # Set financial fields
+    package.price = price
+    package.payment_status = 'unpaid'
 
     session.add(package)
     await session.flush()  # Flush to get package.id for relationships
@@ -417,7 +449,17 @@ async def update_package(
         package.start_date = to_utc(start_date, DEFAULT_TZ)
     if end_date is not None:
         package.end_date = to_utc(end_date, DEFAULT_TZ)
-    if total_lessons is not None:
+    
+    # Recalculate price if total_lessons changed and price wasn't manually set
+    if total_lessons is not None and total_lessons != package.total_lessons:
+        package.total_lessons = total_lessons
+        # Only recalculate if price was auto-calculated (not manually set)
+        # We recalculate if learner has a rate
+        learner = await crud.get_learner(session, current_tenant, package.learner_id)
+        if learner and learner.lesson_rate:
+            new_price = calculate_package_price(learner.lesson_rate, total_lessons)
+            package.price = new_price
+    elif total_lessons is not None:
         package.total_lessons = total_lessons
 
     session.add(package)

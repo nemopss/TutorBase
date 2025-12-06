@@ -49,6 +49,7 @@ class LessonDTO:
         teacher_notes: Notes from teacher
         homework_due_at: Homework deadline in local timezone
         timezone: Timezone for datetime display
+        price: Lesson price (for standalone lessons)
     """
     id: int
     package_id: int
@@ -61,6 +62,7 @@ class LessonDTO:
     teacher_notes: Optional[str]
     homework_due_at: Optional[datetime]
     timezone: str
+    price: Optional[float] = None
 
 
 @dataclass(slots=True)
@@ -100,6 +102,9 @@ class LessonPackageDTO:
         notes: Additional notes about package
         total_lessons: Total number of lessons in package
         progress: Progress metrics (total, completed, cancelled)
+        price: Package price (calculated or manual)
+        payment_status: Payment status (unpaid, partial, paid)
+        total_paid: Total amount paid for this package
     """
     id: int
     learner_id: int
@@ -113,6 +118,9 @@ class LessonPackageDTO:
     notes: Optional[str]
     total_lessons: Optional[int]
     progress: PackageProgress
+    price: Optional[float] = None
+    payment_status: str = 'unpaid'
+    total_paid: float = 0.0
 
 
 @dataclass(slots=True)

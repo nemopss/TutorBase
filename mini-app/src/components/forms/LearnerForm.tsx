@@ -1,5 +1,5 @@
 import React from 'react';
-import { Form, Input, Switch, Space, Typography, Divider } from 'antd';
+import { Form, Input, InputNumber, Switch, Space, Typography, Divider } from 'antd';
 import { UserAddOutlined, BellOutlined } from '@ant-design/icons';
 import ResponsiveModal from '../common/ResponsiveModal';
 
@@ -15,6 +15,7 @@ interface LearnerFormProps {
     display_name?: string;
     notes?: string;
     notifications_enabled?: boolean;
+    lesson_rate?: number;
   };
   mode?: 'create' | 'edit_notifications';
 }
@@ -109,6 +110,22 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
               <Input.TextArea 
                 placeholder="Any additional information about this learner..."
                 rows={3}
+              />
+            </Form.Item>
+
+            <Form.Item
+              name="lesson_rate"
+              label="Стоимость урока (₽)"
+              rules={[
+                { type: 'number', min: 0, message: 'Стоимость должна быть положительной' },
+              ]}
+              extra="Индивидуальный тариф за один урок"
+            >
+              <InputNumber
+                placeholder="например, 1500"
+                style={{ width: '100%' }}
+                min={0}
+                precision={2}
               />
             </Form.Item>
 
