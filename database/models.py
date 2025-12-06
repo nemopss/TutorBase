@@ -30,6 +30,7 @@ from sqlalchemy import (
     DateTime,
     JSON,
     Index,
+    Numeric,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -240,6 +241,7 @@ class Learner(Base):
         display_name: Display name for the learner
         notes: Teacher notes about the learner
         notifications_enabled: Whether to send reminders to this learner
+        lesson_rate: Individual lesson rate for this learner (price per lesson)
         created_at: Learner creation timestamp
         tenant: Related Tenant object
         bot_user: Related BotUser object (eager loaded)
@@ -253,11 +255,13 @@ class Learner(Base):
     display_name = Column(String, nullable=False)
     notes = Column(Text)
     notifications_enabled = Column(Boolean, nullable=False, default=True)
+    lesson_rate = Column(Numeric(10, 2), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
 
     tenant = relationship('Tenant', back_populates='learners')
     bot_user = relationship('BotUser', back_populates='learner', lazy='joined')
     packages = relationship('LessonPackage', back_populates='learner', cascade='all, delete-orphan')
+    payments = relationship('Payment', back_populates='learner', cascade='all, delete-orphan')
 
     __table_args__ = (
         Index('ix_learners_tenant_display_name', 'tenant_id', 'display_name'),
@@ -318,6 +322,8 @@ class LessonPackage(Base):
         end_date: Package end date
         timezone: Timezone for lesson scheduling
         total_lessons: Total number of lessons in package
+        price: Calculated or manual package price
+        payment_status: Payment status (unpaid, partial, paid)
         notes: Teacher notes about the package
         created_at: Package creation timestamp
         updated_at: Last package update timestamp
@@ -342,6 +348,8 @@ class LessonPackage(Base):
     end_date = Column(DateTime(timezone=True))
     timezone = Column(String(64), nullable=False, default='Europe/Moscow')
     total_lessons = Column(Integer)
+    price = Column(Numeric(10, 2), nullable=True)
+    payment_status = Column(String(16), nullable=False, default='unpaid')
     notes = Column(Text)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
@@ -355,6 +363,7 @@ class LessonPackage(Base):
     reminder_rules = relationship('ReminderRule', back_populates='package', cascade='all, delete-orphan')
     reminder_instances = relationship('ReminderInstance', back_populates='package', cascade='all, delete-orphan')
     updated_by = relationship('User', back_populates='updated_packages')
+    payments = relationship('Payment', back_populates='package')
 
     __table_args__ = (
         Index('ix_lesson_packages_learner_status', 'learner_id', 'status'),
@@ -375,6 +384,7 @@ class Lesson(Base):
         duration_minutes: Lesson duration in minutes
         status: Lesson status (scheduled, completed, cancelled, missed)
         sequence_index: Order of lesson in package
+        price: Price for standalone lessons
         teacher_notes: Notes from teacher about the lesson
         homework_due_at: Homework deadline datetime
         created_at: Lesson creation timestamp
@@ -395,6 +405,7 @@ class Lesson(Base):
     duration_minutes = Column(Integer)
     status = Column(String(32), nullable=False, default='scheduled')
     sequence_index = Column(Integer)
+    price = Column(Numeric(10, 2), nullable=True)
     teacher_notes = Column(Text)
     homework_due_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
@@ -407,6 +418,7 @@ class Lesson(Base):
     reminder_rules = relationship('ReminderRule', back_populates='lesson', cascade='all, delete-orphan')
     reminder_instances = relationship('ReminderInstance', back_populates='lesson', cascade='all, delete-orphan')
     updated_by = relationship('User', back_populates='updated_lessons')
+    payments = relationship('Payment', back_populates='lesson')
 
     __table_args__ = (
         Index('ix_lessons_package_scheduled_at', 'package_id', 'scheduled_at'),
@@ -524,6 +536,54 @@ class ReminderInstance(Base):
         Index('ix_reminder_instances_active_scheduled', 'active', 'scheduled_for'),  # For global queries
     )
 
+class Payment(Base):
+    """Payment record for tracking learner payments.
+    
+    Stores payment information for packages or standalone lessons.
+    Supports multi-tenancy and tracks payment history.
+    
+    Attributes:
+        id: Primary key
+        tenant_id: Associated tenant ID for multi-tenancy
+        learner_id: Learner who made the payment
+        package_id: Associated package (nullable for standalone lessons)
+        lesson_id: Associated lesson (for standalone lesson payments)
+        amount: Payment amount
+        currency: Currency code (default RUB)
+        paid_at: Payment date
+        notes: Optional payment notes
+        created_at: Record creation timestamp
+        updated_at: Record update timestamp
+        tenant: Related Tenant object
+        learner: Related Learner object
+        package: Related LessonPackage object (if package payment)
+        lesson: Related Lesson object (if standalone lesson payment)
+    """
+    __tablename__ = 'payments'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey('learners.id', ondelete='CASCADE'), nullable=False)
+    package_id = Column(Integer, ForeignKey('lesson_packages.id', ondelete='SET NULL'), nullable=True)
+    lesson_id = Column(Integer, ForeignKey('lessons.id', ondelete='SET NULL'), nullable=True)
+    amount = Column(Numeric(10, 2), nullable=False)
+    currency = Column(String(3), nullable=False, default='RUB')
+    paid_at = Column(DateTime(timezone=True), nullable=False)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant', back_populates='payments')
+    learner = relationship('Learner', back_populates='payments')
+    package = relationship('LessonPackage', back_populates='payments')
+    lesson = relationship('Lesson', back_populates='payments')
+
+    __table_args__ = (
+        Index('ix_payments_tenant_learner', 'tenant_id', 'learner_id'),
+        Index('ix_payments_tenant_paid_at', 'tenant_id', 'paid_at'),
+    )
+
+
 class Tenant(Base):
     """Tenant model for multi-tenancy support.
     
@@ -547,6 +607,7 @@ class Tenant(Base):
         reminder_instances: Reminder instances for this tenant
         applications: Student applications for this tenant
         invite_tokens: Invitation tokens for this tenant
+        payments: Payment records for this tenant
     """
     __tablename__ = 'tenants'
 
@@ -567,5 +628,6 @@ class Tenant(Base):
     reminder_instances = relationship('ReminderInstance', back_populates='tenant')
     applications = relationship('Application', back_populates='tenant')
     invite_tokens = relationship('InviteToken', back_populates='tenant')
+    payments = relationship('Payment', back_populates='tenant')
 
 
