@@ -54,7 +54,8 @@ async def create_learner_from_chat_id(
     display_name: str,
     notes: Optional[str] = None,
     notifications_enabled: bool = True,
-    tenant_id: Optional[int] = None, # For super_admin usage
+    tenant_id: Optional[int] = None,  # For super_admin usage
+    lesson_rate: Optional[float] = None,
 ) -> Learner:
     """Create a new learner linked to a Telegram chat ID.
 
@@ -73,6 +74,7 @@ async def create_learner_from_chat_id(
         notes: Additional notes about the learner (optional)
         notifications_enabled: Whether to enable notifications (default True)
         tenant_id: Explicit tenant ID for super admin usage (optional)
+        lesson_rate: Individual lesson rate for this learner (optional)
 
     Returns:
         Created Learner model with bot_user relationship loaded
@@ -85,10 +87,54 @@ async def create_learner_from_chat_id(
         notes=notes,
         notifications_enabled=notifications_enabled,
         tenant_id=tenant_id,
+        lesson_rate=lesson_rate,
     )
     await session.flush()
     await session.refresh(learner, attribute_names=["bot_user"])
     return learner
+
+
+async def update_learner(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    learner_id: int,
+    display_name: Optional[str] = None,
+    notes: Optional[str] = None,
+    notifications_enabled: Optional[bool] = None,
+    lesson_rate: Optional[float] = None,
+) -> Learner | None:
+    """Update learner details.
+
+    Updates learner fields. Only provided (non-None) fields will be updated.
+    First verifies that the learner belongs to the current tenant before updating.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        learner_id: ID of learner to update
+        display_name: New display name (optional)
+        notes: New notes (optional)
+        notifications_enabled: New notification preference (optional)
+        lesson_rate: New lesson rate (optional)
+
+    Returns:
+        Updated Learner model if found, None if learner doesn't exist or doesn't
+        belong to current tenant
+    """
+    learner = await crud.get_learner(session, current_tenant, learner_id)
+    if not learner:
+        return None
+    
+    return await crud.update_learner(
+        session,
+        current_tenant,
+        learner,
+        display_name=display_name,
+        notes=notes,
+        notifications_enabled=notifications_enabled,
+        lesson_rate=lesson_rate,
+    )
 
 
 async def update_learner_notifications(

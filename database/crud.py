@@ -707,6 +707,7 @@ async def update_learner(
     display_name: Optional[str] = None,
     notes: Optional[str] = None,
     notifications_enabled: Optional[bool] = None,
+    lesson_rate: Optional[float] = None,
 ) -> Learner:
     """Update learner with tenant validation.
     
@@ -719,6 +720,7 @@ async def update_learner(
         display_name: New display name
         notes: New notes
         notifications_enabled: Enable/disable notifications
+        lesson_rate: Individual lesson rate
         
     Returns:
         Updated Learner object
@@ -726,6 +728,8 @@ async def update_learner(
     Raises:
         ValueError: If learner doesn't belong to current tenant
     """
+    from decimal import Decimal
+    
     # Security check: Ensure learner belongs to current tenant
     if not current_tenant.is_super_admin and learner.tenant_id != current_tenant.tenant_id:
         raise ValueError(f"Learner {learner.id} does not belong to tenant {current_tenant.tenant_id}")
@@ -736,6 +740,8 @@ async def update_learner(
         learner.notes = notes
     if notifications_enabled is not None:
         learner.notifications_enabled = notifications_enabled
+    if lesson_rate is not None:
+        learner.lesson_rate = Decimal(str(lesson_rate)) if lesson_rate else None
     session.add(learner)
     return learner
 
@@ -794,6 +800,7 @@ async def create_learner_from_chat_id(
     notes: Optional[str] = None,
     notifications_enabled: bool = True,
     tenant_id: Optional[int] = None,
+    lesson_rate: Optional[float] = None,
 ) -> Learner:
     """Create learner from Telegram chat ID.
     
@@ -808,6 +815,7 @@ async def create_learner_from_chat_id(
         notes: Optional notes
         notifications_enabled: Enable notifications (default True)
         tenant_id: Optional tenant ID (super admin only)
+        lesson_rate: Individual lesson rate (optional)
         
     Returns:
         Created Learner object
@@ -842,6 +850,10 @@ async def create_learner_from_chat_id(
     
     # Create new learner
     final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
+    
+    # Convert lesson_rate to Decimal if provided
+    from decimal import Decimal
+    lesson_rate_decimal = Decimal(str(lesson_rate)) if lesson_rate is not None else None
 
     learner = Learner(
         bot_user_id=bot_user.id,
@@ -850,6 +862,7 @@ async def create_learner_from_chat_id(
         notifications_enabled=notifications_enabled,
         created_at=now_utc,
         tenant_id=final_tenant_id,
+        lesson_rate=lesson_rate_decimal,
     )
     learner.bot_user = bot_user
     session.add(learner)
