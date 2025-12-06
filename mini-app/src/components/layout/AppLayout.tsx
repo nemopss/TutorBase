@@ -14,7 +14,8 @@ import {
   MenuUnfoldOutlined,
   TeamOutlined,
   CrownOutlined,
-  MailOutlined
+  MailOutlined,
+  DollarOutlined,
 } from '@ant-design/icons';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { useAuth } from '../../auth/AuthProvider';
@@ -43,6 +44,21 @@ const baseMenuItems: NonNullable<MenuProps['items']> = [
     key: '/learners',
     icon: <TeamOutlined />,
     label: <Link to="/learners">Learners</Link>,
+  },
+  {
+    key: 'finance',
+    icon: <DollarOutlined />,
+    label: 'Finance',
+    children: [
+      {
+        key: '/finance/dashboard',
+        label: <Link to="/finance/dashboard">Dashboard</Link>,
+      },
+      {
+        key: '/finance/reports',
+        label: <Link to="/finance/reports">Reports</Link>,
+      },
+    ],
   },
   {
     key: '/templates',
