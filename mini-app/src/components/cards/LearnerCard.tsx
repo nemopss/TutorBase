@@ -1,6 +1,6 @@
 import React from 'react';
 import { Card, Tag, Switch, Space, Typography, Tooltip, Button } from 'antd';
-import { BellOutlined, BellFilled, IdcardOutlined, DeleteOutlined } from '@ant-design/icons';
+import { BellOutlined, BellFilled, IdcardOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
@@ -17,6 +17,7 @@ interface LearnerCardProps {
   learner: Learner;
   onNotificationToggle: (learnerId: number, currentValue: boolean) => void;
   onDelete?: (learnerId: number) => void;
+  onFinance?: (learnerId: number) => void;
   isToggling?: boolean;
   onClick?: (learner: Learner) => void;
 }
@@ -25,6 +26,7 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
   learner,
   onNotificationToggle,
   onDelete,
+  onFinance,
   isToggling = false,
   onClick,
 }) => {
@@ -41,20 +43,35 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
         borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
       }}
       onClick={() => onClick?.(learner)}
-      actions={onDelete ? [
-        <Button
-          key="delete"
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(learner.id);
-          }}
-        >
-          Delete
-        </Button>,
-      ] : undefined}
+      actions={[
+        ...(onFinance ? [
+          <Button
+            key="finance"
+            type="text"
+            icon={<DollarOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onFinance(learner.id);
+            }}
+          >
+            Финансы
+          </Button>,
+        ] : []),
+        ...(onDelete ? [
+          <Button
+            key="delete"
+            type="text"
+            danger
+            icon={<DeleteOutlined />}
+            onClick={(e) => {
+              e.stopPropagation();
+              onDelete(learner.id);
+            }}
+          >
+            Delete
+          </Button>,
+        ] : []),
+      ]}
     >
       <Space direction="vertical" size={spacing.sm} style={{ width: '100%' }}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>

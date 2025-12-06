@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Descriptions, Spin, Alert, Tag, Button, message, Space, Tabs, Progress, Card, Statistic, Row, Col, Grid, Typography, Modal } from 'antd';
+import { Descriptions, Spin, Alert, Tag, Button, message, Space, Tabs, Progress, Card, Statistic, Row, Col, Grid, Typography, Modal, Form, InputNumber, DatePicker, Input } from 'antd';
 import type { TableProps } from 'antd';
 import { 
   ArrowLeftOutlined, 
@@ -10,8 +10,11 @@ import {
   CloseCircleOutlined,
   ClockCircleOutlined,
   EditOutlined,
-  DeleteOutlined
+  DeleteOutlined,
+  DollarOutlined,
+  PlusOutlined,
 } from '@ant-design/icons';
+import dayjs from 'dayjs';
 import api from '../services/api';
 import LessonForm from '../components/forms/LessonForm';
 import PageHeader from '../components/common/PageHeader';
@@ -31,6 +34,7 @@ interface PackageProgress {
 
 interface PackageDetails {
   id: number;
+  learner_id: number;
   learner_name: string;
   title: string;
   status: string;
@@ -40,6 +44,9 @@ interface PackageDetails {
   notes?: string;
   total_lessons?: number;
   progress: PackageProgress;
+  price?: number | null;
+  payment_status?: string;
+  total_paid?: number;
 }
 
 interface Lesson {
@@ -99,6 +106,8 @@ const PackageDetail: React.FC = () => {
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [lessonToDelete, setLessonToDelete] = useState<number | null>(null);
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [paymentForm] = Form.useForm();
   const screens = Grid.useBreakpoint();
   const isMobile = !screens?.md;
   const { resolvedTheme } = useThemeMode();
@@ -167,6 +176,29 @@ const PackageDetail: React.FC = () => {
     }
   });
 
+  const createPaymentMutation = useMutation({
+    mutationFn: async (values: any) => {
+      const { data } = await api.post('/payments', {
+        learner_id: packageData?.learner_id,
+        package_id: parseInt(id!),
+        amount: values.amount,
+        paid_at: values.paid_at.toISOString(),
+        notes: values.notes || null,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      message.success('Платёж записан!');
+      queryClient.invalidateQueries({ queryKey: ['package', id] });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      setIsPaymentModalOpen(false);
+      paymentForm.resetFields();
+    },
+    onError: (error: Error) => {
+      message.error(`Ошибка: ${error.message}`);
+    },
+  });
+
   const handleDeleteLesson = (lessonId: number) => {
     setLessonToDelete(lessonId);
     setDeleteModalOpen(true);
@@ -175,6 +207,55 @@ const PackageDetail: React.FC = () => {
   const confirmDeleteLesson = () => {
     if (lessonToDelete) {
       deleteLessonMutation.mutate(lessonToDelete);
+    }
+  };
+
+  const handleCreatePayment = async () => {
+    try {
+      const values = await paymentForm.validateFields();
+      createPaymentMutation.mutate(values);
+    } catch {
+      // Validation error
+    }
+  };
+
+  const openPaymentModal = () => {
+    // Calculate remaining amount to pay
+    const price = packageData?.price || 0;
+    const totalPaid = packageData?.total_paid || 0;
+    const remaining = Math.max(0, price - totalPaid);
+    
+    paymentForm.setFieldsValue({
+      amount: remaining > 0 ? remaining : undefined,
+      paid_at: dayjs(),
+    });
+    setIsPaymentModalOpen(true);
+  };
+
+  const formatCurrency = (value: number): string => {
+    return new Intl.NumberFormat('ru-RU', {
+      style: 'currency',
+      currency: 'RUB',
+      minimumFractionDigits: 0,
+      maximumFractionDigits: 0,
+    }).format(value);
+  };
+
+  const getPaymentStatusColor = (status?: string): string => {
+    switch (status) {
+      case 'paid': return 'green';
+      case 'partial': return 'orange';
+      case 'unpaid': return 'red';
+      default: return 'default';
+    }
+  };
+
+  const getPaymentStatusLabel = (status?: string): string => {
+    switch (status) {
+      case 'paid': return 'Оплачен';
+      case 'partial': return 'Частично';
+      case 'unpaid': return 'Не оплачен';
+      default: return '—';
     }
   };
 
@@ -367,7 +448,7 @@ const PackageDetail: React.FC = () => {
       />
 
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={6}>
           <Card>
             <Statistic
               title="Total Lessons"
@@ -376,7 +457,7 @@ const PackageDetail: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={6}>
           <Card>
             <Statistic
               title="Completed"
@@ -386,7 +467,7 @@ const PackageDetail: React.FC = () => {
             />
           </Card>
         </Col>
-        <Col xs={24} sm={8}>
+        <Col xs={24} sm={6}>
           <Card>
             <Statistic
               title="Cancelled"
@@ -394,6 +475,30 @@ const PackageDetail: React.FC = () => {
               prefix={<CloseCircleOutlined />}
               valueStyle={{ color: '#cf1322' }}
             />
+          </Card>
+        </Col>
+        <Col xs={24} sm={6}>
+          <Card>
+            <Statistic
+              title="Стоимость"
+              value={packageData?.price || 0}
+              prefix={<DollarOutlined />}
+              formatter={(value) => value ? formatCurrency(Number(value)) : '—'}
+            />
+            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <Tag color={getPaymentStatusColor(packageData?.payment_status)}>
+                {getPaymentStatusLabel(packageData?.payment_status)}
+              </Tag>
+              <Button
+                type="primary"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={openPaymentModal}
+                disabled={!packageData?.price}
+              >
+                Платёж
+              </Button>
+            </div>
           </Card>
         </Col>
       </Row>
@@ -447,6 +552,50 @@ const PackageDetail: React.FC = () => {
       >
         <p>Are you sure you want to delete this lesson?</p>
         <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+      </Modal>
+
+      {/* Payment Modal */}
+      <Modal
+        title="Записать платёж"
+        open={isPaymentModalOpen}
+        onOk={handleCreatePayment}
+        onCancel={() => {
+          setIsPaymentModalOpen(false);
+          paymentForm.resetFields();
+        }}
+        confirmLoading={createPaymentMutation.isPending}
+        okText="Записать"
+        cancelText="Отмена"
+      >
+        <Form form={paymentForm} layout="vertical" initialValues={{ paid_at: dayjs() }}>
+          <Form.Item
+            name="amount"
+            label="Сумма"
+            rules={[
+              { required: true, message: 'Введите сумму' },
+              { type: 'number', min: 1, message: 'Сумма должна быть положительной' },
+            ]}
+          >
+            <InputNumber
+              style={{ width: '100%' }}
+              placeholder="например, 5000"
+              min={1}
+              precision={2}
+            />
+          </Form.Item>
+
+          <Form.Item
+            name="paid_at"
+            label="Дата платежа"
+            rules={[{ required: true, message: 'Выберите дату' }]}
+          >
+            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+          </Form.Item>
+
+          <Form.Item name="notes" label="Примечание">
+            <Input.TextArea rows={2} placeholder="Комментарий к платежу" />
+          </Form.Item>
+        </Form>
       </Modal>
     </div>
   );
