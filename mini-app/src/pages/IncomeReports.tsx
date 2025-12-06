@@ -95,6 +95,16 @@ const IncomeReports: React.FC = () => {
     if (period === 'month') {
       return [selectedMonth.startOf('month'), selectedMonth.endOf('month')];
     }
+    if (period === 'all') {
+      return [dayjs('2020-01-01'), dayjs().endOf('day')];
+    }
+    if (period === 'quarter') {
+      const now = dayjs();
+      const quarterMonth = Math.floor(now.month() / 3) * 3;
+      const quarterStart = now.month(quarterMonth).startOf('month');
+      const quarterEnd = now.month(quarterMonth + 2).endOf('month');
+      return [quarterStart, quarterEnd];
+    }
     return dateRange;
   };
 
