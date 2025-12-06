@@ -83,20 +83,25 @@ async def update_payment_status(
     
     **Validates: Requirements 3.3, 3.4, 3.5**
     """
-    # Get package
+    # Get package - refresh to ensure we have latest data
     package = await session.get(LessonPackage, package_id)
     if not package:
         return 'unpaid'
+    
+    # Refresh package to ensure we're working with latest DB state
+    await session.refresh(package)
     
     # Sum all payments for this package
     result = await session.execute(
         select(func.coalesce(func.sum(Payment.amount), Decimal("0")))
         .where(Payment.package_id == package_id)
     )
-    total_paid = result.scalar() or Decimal("0")
+    total_paid_raw = result.scalar()
     
-    # Determine status
-    package_price = package.price or Decimal("0")
+    # Determine status - ensure both are Decimal with same precision for proper comparison
+    # Round to 2 decimal places to avoid floating point comparison issues
+    package_price = Decimal(str(package.price)).quantize(Decimal("0.01")) if package.price else Decimal("0")
+    total_paid = Decimal(str(total_paid_raw)).quantize(Decimal("0.01")) if total_paid_raw else Decimal("0")
     
     if total_paid <= Decimal("0"):
         new_status = 'unpaid'
@@ -107,6 +112,7 @@ async def update_payment_status(
     
     # Update package
     package.payment_status = new_status
+    await session.flush()
     
     return new_status
 
