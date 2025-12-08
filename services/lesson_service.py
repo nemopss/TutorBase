@@ -150,8 +150,12 @@ async def update_lesson(
 
     if scheduled_at is not None:
         lesson.scheduled_at = scheduled_at
+        # Auto-set rescheduled status when time changes (unless explicit status provided)
+        if status is None and lesson.status in ('scheduled', 'rescheduled'):
+            lesson.status = 'rescheduled'
     if duration_minutes is not None:
         lesson.duration_minutes = duration_minutes
+    # Explicit status takes precedence over auto-rescheduling
     if status is not None:
         lesson.status = status
     if teacher_notes is not None:

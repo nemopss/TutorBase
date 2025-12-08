@@ -9,7 +9,7 @@ Key components:
     - LessonResponse: Schema for lesson API responses
 
 Validation rules:
-    - Status must be one of: scheduled, completed, cancelled, missed
+    - Status must be one of: scheduled, rescheduled, completed, cancelled, missed
     - Duration must be positive (1-480 minutes, i.e., up to 8 hours)
     - Scheduled date must be provided
     - Teacher notes limited to 5000 chars
@@ -26,7 +26,7 @@ from api.schemas.base import BaseRequest, BaseResponse, TimestampMixin, TenantMi
 from api.schemas.validators import validate_status
 
 # Valid lesson statuses
-VALID_LESSON_STATUSES = ['scheduled', 'completed', 'cancelled', 'missed']
+VALID_LESSON_STATUSES = ['scheduled', 'rescheduled', 'completed', 'cancelled', 'missed']
 
 
 class LessonResponse(BaseResponse, TimestampMixin, TenantMixin):
@@ -41,7 +41,7 @@ class LessonResponse(BaseResponse, TimestampMixin, TenantMixin):
         package_title: Title of parent package
         learner_name: Display name of learner
         scheduled_at: Scheduled lesson datetime
-        status: Current status (scheduled, completed, cancelled, missed)
+        status: Current status (scheduled, rescheduled, completed, cancelled, missed)
         duration_minutes: Lesson duration in minutes
         sequence_index: Order of lesson in package
         teacher_notes: Notes from teacher
@@ -93,7 +93,7 @@ class LessonCreateRequest(BaseRequest):
     Validation:
         - scheduled_at is required
         - duration_minutes must be between 1 and 480 (8 hours)
-        - status must be one of: scheduled, completed, cancelled, missed
+        - status must be one of: scheduled, rescheduled, completed, cancelled, missed
         - teacher_notes max 5000 chars
         - homework_due_at must be after scheduled_at if provided
     """
@@ -149,7 +149,7 @@ class LessonUpdateRequest(BaseRequest):
     
     Validation:
         - If provided, duration_minutes must be between 1 and 480
-        - If provided, status must be one of: scheduled, completed, cancelled, missed
+        - If provided, status must be one of: scheduled, rescheduled, completed, cancelled, missed
         - If provided, teacher_notes max 5000 chars
         - If both dates provided, homework_due_at must be after scheduled_at
     """

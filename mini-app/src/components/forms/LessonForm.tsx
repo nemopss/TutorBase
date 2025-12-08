@@ -50,12 +50,18 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
           .validateFields()
           .then((values) => {
             // Преобразуем scheduled_at в ISO string для backend
-            const formattedValues = {
+            const formattedValues: Record<string, any> = {
               ...values,
               scheduled_at: values.scheduled_at
                 ? values.scheduled_at.tz(lessonTimezone).toISOString()
                 : undefined,
             };
+            
+            // При редактировании: не отправляем status если он не изменился
+            // Это позволяет backend автоматически установить 'rescheduled' при изменении времени
+            if (isEditing && initialValues?.status === values.status) {
+              delete formattedValues.status;
+            }
             
             // Не сбрасываем поля при редактировании, чтобы не было моргания
             if (!isEditing) {
@@ -83,9 +89,10 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
         <Form.Item name="duration_minutes" label="Duration (minutes)">
           <InputNumber min={1} style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item name="status" label="Status" initialValue="scheduled">
+        <Form.Item name="status" label="Status" initialValue={isEditing ? undefined : "scheduled"}>
           <Select>
             <Option value="scheduled">Scheduled</Option>
+            <Option value="rescheduled">Rescheduled</Option>
             <Option value="completed">Completed</Option>
             <Option value="cancelled">Cancelled</Option>
           </Select>
