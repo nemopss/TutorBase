@@ -91,6 +91,7 @@ const deleteLesson = async (lessonId: number) => {
 const getStatusColor = (status: string) => {
   switch (status) {
     case 'scheduled': return 'blue';
+    case 'rescheduled': return 'gold';
     case 'completed': return 'green';
     case 'cancelled': return 'red';
     default: return 'default';

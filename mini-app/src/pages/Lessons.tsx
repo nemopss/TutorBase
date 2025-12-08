@@ -51,6 +51,7 @@ interface LessonListResponse {
 
 const STATUS_OPTIONS = [
   { value: 'scheduled', label: 'Scheduled' },
+  { value: 'rescheduled', label: 'Rescheduled' },
   { value: 'completed', label: 'Completed' },
   { value: 'cancelled', label: 'Cancelled' },
 ];
@@ -182,6 +183,7 @@ const Lessons: React.FC = () => {
   const getStatusColor = (status: string) => {
     switch (status) {
       case 'scheduled': return 'blue';
+      case 'rescheduled': return 'gold';
       case 'completed': return 'green';
       case 'cancelled': return 'red';
       default: return 'default';
@@ -279,7 +281,7 @@ const Lessons: React.FC = () => {
           {lessonsOnDate.slice(0, 3).map(lesson => (
             <Badge
               key={lesson.id}
-              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'}
+              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : lesson.status === 'rescheduled' ? 'warning' : 'processing'}
             />
           ))}
           {lessonsOnDate.length > 3 && (
@@ -295,7 +297,7 @@ const Lessons: React.FC = () => {
         {lessonsOnDate.slice(0, 3).map(lesson => (
           <li key={lesson.id}>
             <Badge 
-              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'} 
+              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : lesson.status === 'rescheduled' ? 'warning' : 'processing'} 
               text={formatTime(lesson.scheduled_at, { timezone: lesson.timezone })} 
             />
           </li>
@@ -467,7 +469,7 @@ const Lessons: React.FC = () => {
             >
               <Space>
                 <Badge 
-                  status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : 'processing'} 
+                  status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : lesson.status === 'rescheduled' ? 'warning' : 'processing'} 
                 />
                 <span>{formatTime(lesson.scheduled_at, { timezone: lesson.timezone })}</span>
                 <Tag color={getStatusColor(lesson.status)}>{lesson.status}</Tag>
