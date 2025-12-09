@@ -27,6 +27,8 @@ interface MetricsSummary {
 interface Lesson {
   id: number;
   package_id: number;
+  package_title?: string;
+  learner_name?: string;
   scheduled_at: string;
   status: string;
   timezone: string;
@@ -65,7 +67,15 @@ interface PackageListResponse {
 
 // --- API Fetchers --- //
 const fetchMetrics = async (): Promise<MetricsSummary> => {
-  const { data } = await api.get('/metrics/summary');
+  // Filter by current calendar month
+  const startOfMonth = dayjs().startOf('month').toISOString();
+  const endOfMonth = dayjs().endOf('month').toISOString();
+  const { data } = await api.get('/metrics/summary', {
+    params: {
+      from_date: startOfMonth,
+      to_date: endOfMonth,
+    },
+  });
   return data;
 };
 
@@ -157,6 +167,7 @@ const Dashboard: React.FC = () => {
   const totalLessons = Object.values(metricsData?.lessons || {}).reduce((a, b) => a + b, 0);
   const pieData = [
     { name: 'Scheduled', value: metricsData?.lessons.scheduled || 0, color: '#1890ff' },
+    { name: 'Rescheduled', value: metricsData?.lessons.rescheduled || 0, color: '#faad14' },
     { name: 'Completed', value: metricsData?.lessons.completed || 0, color: '#52c41a' },
     { name: 'Cancelled', value: metricsData?.lessons.cancelled || 0, color: '#ff4d4f' },
   ].filter(item => item.value > 0);
@@ -187,7 +198,12 @@ const Dashboard: React.FC = () => {
         }
       />
 
-      {/* Key Metrics */}
+      {/* Key Metrics - Current Month */}
+      <div style={{ marginBottom: 8 }}>
+        <span style={{ color: subtitleColor, fontSize: 12 }}>
+          Statistics for {dayjs().format('MMMM YYYY')}
+        </span>
+      </div>
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12} lg={6}>
           <Card style={cardStyle}>
@@ -325,7 +341,7 @@ const Dashboard: React.FC = () => {
                     <List.Item.Meta
                       avatar={<CalendarOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
                       title={formatDateTime(item.scheduled_at, { timezone: item.timezone, format: 'MMM DD, YYYY HH:mm' })}
-                      description={`Status: ${item.status}`}
+                      description={item.learner_name || item.package_title || `Status: ${item.status}`}
                     />
                   </List.Item>
                 )}

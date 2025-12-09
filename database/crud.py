@@ -2009,12 +2009,19 @@ async def fetch_reminder_instances_paginated(
 # ============================================================================
 
 
-async def count_lessons_by_status(session: AsyncSession, current_tenant: CurrentTenant) -> dict[str, int]:
+async def count_lessons_by_status(
+    session: AsyncSession, 
+    current_tenant: CurrentTenant,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
+) -> dict[str, int]:
     """Get count of lessons grouped by status.
     
     Args:
         session: Async database session
         current_tenant: Current tenant context for filtering
+        from_date: Optional start date filter (inclusive)
+        to_date: Optional end date filter (inclusive)
         
     Returns:
         Dictionary mapping status to count
@@ -2022,6 +2029,10 @@ async def count_lessons_by_status(session: AsyncSession, current_tenant: Current
     stmt = select(Lesson.status, func.count()).group_by(Lesson.status)
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(Lesson.tenant_id == current_tenant.tenant_id)
+    if from_date is not None:
+        stmt = stmt.where(Lesson.scheduled_at >= from_date)
+    if to_date is not None:
+        stmt = stmt.where(Lesson.scheduled_at <= to_date)
     result = await session.execute(stmt)
     return {status or 'unknown': count for status, count in result.all()}
 
