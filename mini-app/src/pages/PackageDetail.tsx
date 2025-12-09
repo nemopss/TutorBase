@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
@@ -14,7 +14,6 @@ import {
   InputNumber,
   DatePicker,
   Input,
-  Collapse,
   Space,
 } from 'antd';
 import {
@@ -25,7 +24,7 @@ import {
 import dayjs from 'dayjs';
 import api from '../services/api';
 import SegmentedProgress from '../components/common/SegmentedProgress';
-import LessonCard from '../components/cards/LessonCard';
+import WeekCalendar from '../components/common/WeekCalendar';
 import PackageForm from '../components/forms/PackageForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
 import { formatDate } from '../utils/datetime';
@@ -165,18 +164,6 @@ const PackageDetail: React.FC = () => {
     enabled: !!id,
   });
 
-  // Group and sort lessons
-  const { upcomingLessons, completedLessons } = useMemo(() => {
-    const lessons = lessonsData?.items || [];
-    const upcoming = lessons
-      .filter((l) => l.status === 'scheduled' || l.status === 'rescheduled')
-      .sort((a, b) => new Date(a.scheduled_at).getTime() - new Date(b.scheduled_at).getTime());
-    const completed = lessons
-      .filter((l) => l.status === 'completed' || l.status === 'cancelled')
-      .sort((a, b) => new Date(b.scheduled_at).getTime() - new Date(a.scheduled_at).getTime());
-    return { upcomingLessons: upcoming, completedLessons: completed };
-  }, [lessonsData]);
-
   // Mutations
   const updateLessonMutation = useMutation({
     mutationFn: updateLesson,
@@ -270,14 +257,21 @@ const PackageDetail: React.FC = () => {
     setIsRescheduleModalOpen(true);
   };
 
-  const handleRescheduleSubmit = (values: { date: dayjs.Dayjs; time: dayjs.Dayjs }) => {
+  const handleRescheduleSubmit = (values: { date: dayjs.Dayjs; time: dayjs.Dayjs; duration_minutes?: number }) => {
     if (!selectedLessonId) return;
     const newDateTime = values.date
       .hour(values.time.hour())
       .minute(values.time.minute())
       .second(0);
+    const updateValues: any = { 
+      scheduled_at: newDateTime.toISOString(), 
+      status: 'rescheduled' 
+    };
+    if (values.duration_minutes) {
+      updateValues.duration_minutes = values.duration_minutes;
+    }
     updateLessonMutation.mutate(
-      { lessonId: selectedLessonId, values: { scheduled_at: newDateTime.toISOString(), status: 'rescheduled' } },
+      { lessonId: selectedLessonId, values: updateValues },
       {
         onSuccess: () => {
           message.success('Lesson rescheduled');
@@ -474,64 +468,25 @@ const PackageDetail: React.FC = () => {
     </div>
   );
 
+  // Handle lesson click from calendar
+  const handleLessonClick = (lessonId: number) => {
+    setSelectedLessonId(lessonId);
+    const lesson = lessonsData?.items.find((l) => l.id === lessonId);
+    setSelectedLesson(lesson || null);
+    // Open action modal or reschedule directly
+    setIsRescheduleModalOpen(true);
+  };
+
   const lessonsContent = (
     <div>
       {isLoadingLessons ? (
         <Spin />
       ) : (
-        <>
-          {/* Upcoming section */}
-          <div style={{ marginBottom: spacing.lg }}>
-            <Text strong style={{ fontSize: 14, marginBottom: spacing.sm, display: 'block' }}>
-              Upcoming ({upcomingLessons.length})
-            </Text>
-            {upcomingLessons.length === 0 ? (
-              <Text type="secondary">No upcoming lessons</Text>
-            ) : (
-              <Space direction="vertical" style={{ width: '100%' }} size={spacing.sm}>
-                {upcomingLessons.map((lesson) => (
-                  <LessonCard
-                    key={lesson.id}
-                    lesson={lesson}
-                    timezone={packageData?.timezone || 'UTC'}
-                    onReschedule={handleReschedule}
-                    onComplete={handleComplete}
-                    onCancel={handleCancel}
-                    onDelete={handleDelete}
-                  />
-                ))}
-              </Space>
-            )}
-          </div>
-
-          {/* Completed section */}
-          {completedLessons.length > 0 && (
-            <Collapse
-              ghost
-              items={[
-                {
-                  key: 'completed',
-                  label: <Text strong>Completed ({completedLessons.length})</Text>,
-                  children: (
-                    <Space direction="vertical" style={{ width: '100%' }} size={spacing.sm}>
-                      {completedLessons.map((lesson) => (
-                        <LessonCard
-                          key={lesson.id}
-                          lesson={lesson}
-                          timezone={packageData?.timezone || 'UTC'}
-                          onReschedule={handleReschedule}
-                          onComplete={handleComplete}
-                          onCancel={handleCancel}
-                          onDelete={handleDelete}
-                        />
-                      ))}
-                    </Space>
-                  ),
-                },
-              ]}
-            />
-          )}
-        </>
+        <WeekCalendar
+          lessons={lessonsData?.items || []}
+          timezone={packageData?.timezone || 'UTC'}
+          onLessonClick={handleLessonClick}
+        />
       )}
     </div>
   );
@@ -643,6 +598,7 @@ const PackageDetail: React.FC = () => {
         onFinish={handleRescheduleSubmit}
         isLoading={updateLessonMutation.isPending}
         currentDateTime={selectedLesson?.scheduled_at}
+        currentDuration={selectedLesson?.duration_minutes}
       />
 
       {/* Delete Package Modal */}
