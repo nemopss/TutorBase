@@ -14,7 +14,6 @@ import {
   InputNumber,
   DatePicker,
   Input,
-  Space,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -118,15 +117,6 @@ const getPaymentStatusColor = (status?: string): string => {
     case 'partial': return 'orange';
     case 'unpaid': return 'red';
     default: return 'default';
-  }
-};
-
-const getPaymentStatusLabel = (status?: string): string => {
-  switch (status) {
-    case 'paid': return 'Paid';
-    case 'partial': return 'Partial';
-    case 'unpaid': return 'Unpaid';
-    default: return '—';
   }
 };
 

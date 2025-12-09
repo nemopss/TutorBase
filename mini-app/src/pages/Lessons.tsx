@@ -1,6 +1,6 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Tag, Select, Space, Input, Button, message, Modal, theme } from 'antd';
+import { Tag, Select, Space, Input, Button, message, Modal } from 'antd';
 import type { TableProps } from 'antd';
 import { CalendarOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -8,7 +8,6 @@ import updateLocale from 'dayjs/plugin/updateLocale';
 import 'dayjs/locale/ru';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
-import { useResponsive } from '../hooks/useResponsive';
 import LessonForm from '../components/forms/LessonForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
 import PageHeader from '../components/common/PageHeader';
@@ -16,20 +15,21 @@ import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import LessonCard from '../components/cards/LessonCard';
 import WeekCalendar from '../components/common/WeekCalendar';
 import { dayjsInTimezone, formatDateTime, DEFAULT_TIMEZONE } from '../utils/datetime';
-import { spacing } from '../theme/tokens';
 
 dayjs.extend(updateLocale);
 dayjs.updateLocale('ru', { week: { dow: 1 } });
 dayjs.locale('ru');
 
 // --- Types --- //
+type LessonStatus = 'scheduled' | 'rescheduled' | 'completed' | 'cancelled';
+
 interface Lesson {
   id: number;
   package_id: number;
   package_title?: string;
   learner_name?: string;
   scheduled_at: string;
-  status: string;
+  status: LessonStatus;
   duration_minutes?: number;
   teacher_notes?: string;
   sequence_index?: number;
@@ -98,7 +98,6 @@ const deleteLesson = async (lessonId: number) => {
 // --- Component --- //
 const Lessons: React.FC = () => {
   const queryClient = useQueryClient();
-  const { isMobile } = useResponsive();
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('calendar');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -180,7 +179,7 @@ const Lessons: React.FC = () => {
 
   // WeekCalendar handlers
   const handleLessonClick = (lessonId: number) => {
-    const lesson = calendarData?.items.find((l) => l.id === lessonId);
+    const lesson = calendarData?.items.find((l: Lesson) => l.id === lessonId);
     if (lesson) {
       setEditingLesson(lesson);
       setIsModalOpen(true);
@@ -188,7 +187,7 @@ const Lessons: React.FC = () => {
   };
 
   const handleReschedule = (lessonId: number, newDate?: string) => {
-    const lesson = calendarData?.items.find((l) => l.id === lessonId);
+    const lesson = calendarData?.items.find((l: Lesson) => l.id === lessonId);
     if (newDate && lesson) {
       // Drag & drop reschedule - update directly
       updateMutation.mutate({
@@ -409,11 +408,25 @@ const Lessons: React.FC = () => {
               <LessonCard
                 key={lesson.id}
                 lesson={lesson}
-                onEdit={(l) => {
-                  setEditingLesson(l);
-                  setIsModalOpen(true);
+                timezone={lesson.timezone || DEFAULT_TIMEZONE}
+                onReschedule={(id) => {
+                  const l = data?.items.find((item: Lesson) => item.id === id);
+                  if (l) {
+                    setSelectedLesson(l);
+                    setSelectedLessonId(id);
+                    setIsRescheduleModalOpen(true);
+                  }
                 }}
+                onComplete={handleComplete}
+                onCancel={handleCancel}
                 onDelete={handleDelete}
+                onClick={(id) => {
+                  const l = data?.items.find((item: Lesson) => item.id === id);
+                  if (l) {
+                    setEditingLesson(l);
+                    setIsModalOpen(true);
+                  }
+                }}
               />
             )}
             tableProps={{

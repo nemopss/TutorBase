@@ -123,7 +123,7 @@ const PackageCard: React.FC<PackageCardProps> = ({
               lineHeight: 1.3,
               display: 'block',
             }}
-            ellipsis={{ rows: 2 }}
+            ellipsis
           >
             {pkg.title}
           </Text>
