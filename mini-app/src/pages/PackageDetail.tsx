@@ -270,11 +270,20 @@ const PackageDetail: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
-  const handleReschedule = (lessonId: number) => {
+  const handleReschedule = (lessonId: number, newDate?: string) => {
     const lesson = lessonsData?.items.find((l) => l.id === lessonId);
-    setSelectedLesson(lesson || null);
-    setSelectedLessonId(lessonId);
-    setIsRescheduleModalOpen(true);
+    if (newDate && lesson) {
+      // Drag & drop reschedule - update directly
+      updateLessonMutation.mutate({
+        lessonId,
+        values: { scheduled_at: newDate, status: 'rescheduled' },
+      });
+    } else {
+      // Context menu reschedule - open modal
+      setSelectedLesson(lesson || null);
+      setSelectedLessonId(lessonId);
+      setIsRescheduleModalOpen(true);
+    }
   };
 
   const handleRescheduleSubmit = (values: { date: dayjs.Dayjs; time: dayjs.Dayjs; duration_minutes?: number }) => {
@@ -513,6 +522,10 @@ const PackageDetail: React.FC = () => {
           timezone={packageData?.timezone || 'UTC'}
           onLessonClick={handleLessonClick}
           onAddLesson={handleAddLesson}
+          onReschedule={handleReschedule}
+          onComplete={handleComplete}
+          onCancel={handleCancel}
+          onDelete={handleDelete}
         />
       )}
     </div>
@@ -697,6 +710,7 @@ const PackageDetail: React.FC = () => {
         }}
         onFinish={(values) => createLessonMutation.mutate(values)}
         isLoading={createLessonMutation.isPending}
+        mode="create"
         initialValues={newLessonDate ? {
           scheduled_at: dayjs(newLessonDate).hour(10).minute(0),
           duration_minutes: 60,
