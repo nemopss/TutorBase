@@ -115,9 +115,8 @@ const fetchActivePackages = async (): Promise<PackageListResponse> => {
 const Dashboard: React.FC = () => {
   const navigate = useNavigate();
   const { cardStyle, textColor, subtitleColor, chartGridColor, tooltipStyle } = useResponsiveStyles();
-  const { isMobile, breakpoint } = useResponsive();
+  const { isMobile } = useResponsive();
   const currentChartHeight = isMobile ? chartHeight.mobile : chartHeight.desktop;
-  const isVerySmall = breakpoint === 'xs';
 
   const { 
     data: metricsData, 
@@ -204,43 +203,43 @@ const Dashboard: React.FC = () => {
           Statistics for {dayjs().format('MMMM YYYY')}
         </span>
       </div>
-      <Row gutter={[16, 16]}>
-        <Col xs={24} sm={12} lg={6}>
-          <Card style={cardStyle}>
+      <Row gutter={[12, 12]}>
+        <Col xs={12} sm={12} lg={6}>
+          <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
             <Statistic
-              title="Total Lessons"
+              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>Total</span>}
               value={totalLessons}
               prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: textColor }}
+              valueStyle={{ color: textColor, fontSize: isMobile ? 20 : 24 }}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card style={cardStyle}>
+        <Col xs={12} sm={12} lg={6}>
+          <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
             <Statistic
-              title="Completed"
+              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>Completed</span>}
               value={metricsData?.lessons.completed || 0}
-              valueStyle={{ color: '#52c41a' }}
+              valueStyle={{ color: '#52c41a', fontSize: isMobile ? 20 : 24 }}
               prefix={<CheckCircleOutlined />}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card style={cardStyle}>
+        <Col xs={12} sm={12} lg={6}>
+          <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
             <Statistic
-              title="Scheduled"
+              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>Scheduled</span>}
               value={metricsData?.lessons.scheduled || 0}
-              valueStyle={{ color: '#1890ff' }}
+              valueStyle={{ color: '#1890ff', fontSize: isMobile ? 20 : 24 }}
               prefix={<ClockCircleOutlined />}
             />
           </Card>
         </Col>
-        <Col xs={24} sm={12} lg={6}>
-          <Card style={cardStyle}>
+        <Col xs={12} sm={12} lg={6}>
+          <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
             <Statistic
-              title="Cancelled"
+              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>Cancelled</span>}
               value={metricsData?.lessons.cancelled || 0}
-              valueStyle={{ color: '#ff4d4f' }}
+              valueStyle={{ color: '#ff4d4f', fontSize: isMobile ? 20 : 24 }}
               prefix={<CloseCircleOutlined />}
             />
           </Card>
@@ -271,9 +270,9 @@ const Dashboard: React.FC = () => {
                   data={pieData}
                   cx="50%"
                   cy="50%"
-                  labelLine={!isVerySmall}
-                  label={isVerySmall ? false : (props: any) => `${props.name}: ${(props.percent * 100).toFixed(0)}%`}
-                  outerRadius={isMobile ? 60 : 80}
+                  labelLine={false}
+                  label={isMobile ? false : (props: any) => `${(props.percent * 100).toFixed(0)}%`}
+                  outerRadius={isMobile ? 50 : 80}
                   fill="#8884d8"
                   dataKey="value"
                 >
@@ -282,7 +281,12 @@ const Dashboard: React.FC = () => {
                   ))}
                 </Pie>
                 <Tooltip />
-                {isVerySmall && <Legend wrapperStyle={{ fontSize: 10 }} />}
+                <Legend 
+                  wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} 
+                  layout={isMobile ? 'horizontal' : 'vertical'}
+                  align={isMobile ? 'center' : 'right'}
+                  verticalAlign={isMobile ? 'bottom' : 'middle'}
+                />
               </PieChart>
             </ResponsiveContainer>
           </Card>

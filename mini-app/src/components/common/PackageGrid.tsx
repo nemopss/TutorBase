@@ -33,8 +33,9 @@ const PackageGrid: React.FC<PackageGridProps> = ({
 
   const gridStyle: React.CSSProperties = {
     display: 'grid',
-    gridTemplateColumns: `repeat(${getColumns()}, 1fr)`,
+    gridTemplateColumns: `repeat(${getColumns()}, minmax(0, 1fr))`,
     gap: spacing.md,
+    overflow: 'hidden',
   };
 
   if (loading) {
