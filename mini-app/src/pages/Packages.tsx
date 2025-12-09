@@ -26,7 +26,7 @@ interface Package {
   notes?: string;
   learner_name: string;
   title: string;
-  status: string;
+  status: 'active' | 'completed' | 'cancelled' | 'draft';
   start_date?: string;
   end_date?: string;
   timezone?: string;
@@ -36,6 +36,7 @@ interface Package {
   price?: number | null;
   payment_status?: string;
   created_at?: string;
+  next_lesson_date?: string | null;
 }
 
 interface PackageListResponse {

@@ -56,6 +56,28 @@ except ImportError:
     db_query_duration = None
 
 
+def _get_next_lesson_date(lessons: list) -> Optional[datetime]:
+    """Get the date of the next scheduled lesson.
+    
+    Finds the earliest lesson with status 'scheduled' or 'rescheduled'.
+    
+    Args:
+        lessons: List of Lesson models
+        
+    Returns:
+        Datetime of next lesson or None if no upcoming lessons
+    """
+    upcoming = [
+        lesson for lesson in (lessons or [])
+        if lesson.status in ('scheduled', 'rescheduled')
+    ]
+    if not upcoming:
+        return None
+    # Sort by scheduled_at and return the earliest
+    upcoming.sort(key=lambda x: x.scheduled_at)
+    return normalize_to_timezone(upcoming[0].scheduled_at)
+
+
 def _build_package_dto(package: LessonPackage, total_paid: float = 0.0) -> LessonPackageDTO:
     """Convert LessonPackage model to DTO for data transfer.
 
@@ -71,6 +93,7 @@ def _build_package_dto(package: LessonPackage, total_paid: float = 0.0) -> Lesso
     """
     total, completed, cancelled = lesson_stats(package.lessons or [])
     learner_name = package.learner.display_name if package.learner else None
+    next_lesson = _get_next_lesson_date(package.lessons)
     
     return LessonPackageDTO(
         id=package.id,
@@ -88,6 +111,7 @@ def _build_package_dto(package: LessonPackage, total_paid: float = 0.0) -> Lesso
         price=float(package.price) if package.price else None,
         payment_status=package.payment_status or 'unpaid',
         total_paid=total_paid,
+        next_lesson_date=next_lesson,
     )
 
 

@@ -86,6 +86,7 @@ class PackageResponse(BaseResponse, TimestampMixin, TenantMixin):
     price: Optional[float] = Field(None, description="Package price")
     payment_status: str = Field(default='unpaid', description="Payment status (unpaid, partial, paid)")
     total_paid: float = Field(default=0.0, description="Total amount paid for this package")
+    next_lesson_date: Optional[datetime] = Field(None, description="Date of next scheduled lesson")
 
 
 class PackageListResponse(BaseResponse):

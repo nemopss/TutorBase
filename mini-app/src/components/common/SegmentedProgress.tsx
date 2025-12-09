@@ -1,5 +1,4 @@
 import React from 'react';
-import { Progress } from 'antd';
 
 interface SegmentedProgressProps {
   /** Total number of lessons */
@@ -17,8 +16,10 @@ interface SegmentedProgressProps {
 /**
  * Circular progress indicator with three colored segments:
  * - Green: completed lessons
- * - Red: cancelled lessons
+ * - Red: cancelled lessons  
  * - Gray: remaining lessons
+ * 
+ * Uses custom SVG for precise segment control without color mixing.
  */
 const SegmentedProgress: React.FC<SegmentedProgressProps> = ({
   total,
@@ -30,44 +31,114 @@ const SegmentedProgress: React.FC<SegmentedProgressProps> = ({
   // Calculate percentages
   const completedPercent = total > 0 ? (completed / total) * 100 : 0;
   const cancelledPercent = total > 0 ? (cancelled / total) * 100 : 0;
-  const totalProgress = completedPercent + cancelledPercent;
-  const displayPercent = Math.round(totalProgress);
+  const remainingPercent = 100 - completedPercent - cancelledPercent;
+  const displayPercent = Math.round(completedPercent + cancelledPercent);
 
-  // Build stroke color array for segments
-  // Ant Design Progress uses gradient stops for strokeColor
-  const getStrokeColor = () => {
-    if (total === 0) return '#d9d9d9';
-    
-    const colors: Record<string, string> = {};
-    let currentPosition = 0;
+  // SVG circle parameters
+  const strokeWidth = 8;
+  const radius = (size - strokeWidth) / 2;
+  const circumference = 2 * Math.PI * radius;
+  const center = size / 2;
 
-    // Completed segment (green)
-    if (completedPercent > 0) {
-      colors[`${currentPosition}%`] = '#52c41a';
-      currentPosition = completedPercent;
-      colors[`${currentPosition}%`] = '#52c41a';
-    }
+  // Calculate stroke dash arrays for each segment
+  // Segments are drawn starting from top (12 o'clock position)
+  const completedLength = (completedPercent / 100) * circumference;
+  const cancelledLength = (cancelledPercent / 100) * circumference;
+  const remainingLength = (remainingPercent / 100) * circumference;
 
-    // Cancelled segment (red)
-    if (cancelledPercent > 0) {
-      colors[`${currentPosition}%`] = '#ff4d4f';
-      currentPosition += cancelledPercent;
-      colors[`${currentPosition}%`] = '#ff4d4f';
-    }
+  // Gap between segments (small gap for visual separation)
+  const gap = total > 0 ? 2 : 0;
 
-    return colors;
-  };
+  // Calculate offsets for each segment
+  // Start from top (-90 degrees rotation)
+  const completedOffset = 0;
+  const cancelledOffset = completedLength + gap;
+  const remainingOffset = completedLength + cancelledLength + gap * 2;
 
   return (
-    <Progress
-      type="circle"
-      percent={totalProgress}
-      size={size}
-      strokeColor={getStrokeColor()}
-      trailColor="#d9d9d9"
-      format={() => (showPercent ? `${displayPercent}%` : '')}
-      strokeWidth={8}
-    />
+    <div style={{ position: 'relative', width: size, height: size }}>
+      <svg
+        width={size}
+        height={size}
+        style={{ transform: 'rotate(-90deg)' }}
+      >
+        {/* Background circle (gray) */}
+        <circle
+          cx={center}
+          cy={center}
+          r={radius}
+          fill="none"
+          stroke="#d9d9d9"
+          strokeWidth={strokeWidth}
+        />
+
+        {/* Remaining segment (gray, drawn first as background) */}
+        {remainingPercent > 0 && total > 0 && (
+          <circle
+            cx={center}
+            cy={center}
+            r={radius}
+            fill="none"
+            stroke="#d9d9d9"
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${remainingLength - gap} ${circumference}`}
+            strokeDashoffset={-remainingOffset}
+            strokeLinecap="round"
+          />
+        )}
+
+        {/* Completed segment (green) */}
+        {completedPercent > 0 && (
+          <circle
+            cx={center}
+            cy={center}
+            r={radius}
+            fill="none"
+            stroke="#52c41a"
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${completedLength - gap} ${circumference}`}
+            strokeDashoffset={-completedOffset}
+            strokeLinecap="round"
+          />
+        )}
+
+        {/* Cancelled segment (red) */}
+        {cancelledPercent > 0 && (
+          <circle
+            cx={center}
+            cy={center}
+            r={radius}
+            fill="none"
+            stroke="#ff4d4f"
+            strokeWidth={strokeWidth}
+            strokeDasharray={`${cancelledLength - gap} ${circumference}`}
+            strokeDashoffset={-cancelledOffset}
+            strokeLinecap="round"
+          />
+        )}
+      </svg>
+
+      {/* Center text */}
+      {showPercent && (
+        <div
+          style={{
+            position: 'absolute',
+            top: 0,
+            left: 0,
+            width: size,
+            height: size,
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            fontSize: size * 0.22,
+            fontWeight: 600,
+            color: 'inherit',
+          }}
+        >
+          {displayPercent}%
+        </div>
+      )}
+    </div>
   );
 };
 

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Progress, Typography } from 'antd';
+import { Card, Progress, Typography, Tag } from 'antd';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
@@ -15,7 +15,9 @@ interface Package {
   id: number;
   title: string;
   learner_name: string;
+  status: 'active' | 'completed' | 'cancelled' | 'draft';
   progress: PackageProgress;
+  next_lesson_date?: string | null;
 }
 
 interface PackageCardProps {
@@ -24,9 +26,57 @@ interface PackageCardProps {
 }
 
 /**
- * Simplified package card with circular progress.
- * Shows: title (bold), learner name (light), circular progress with percentage.
- * No action buttons - all actions through detail page.
+ * Format lesson count as "X/Y уроков"
+ */
+export const formatLessonCount = (progress: PackageProgress): string => {
+  const done = progress.completed + progress.cancelled;
+  return `${done}/${progress.total} уроков`;
+};
+
+/**
+ * Get badge color for package status
+ */
+export const getStatusBadgeColor = (status: string): string => {
+  switch (status) {
+    case 'active': return 'green';
+    case 'completed': return 'blue';
+    default: return 'default';
+  }
+};
+
+/**
+ * Get status label in Russian
+ */
+const getStatusLabel = (status: string): string => {
+  switch (status) {
+    case 'active': return 'Активен';
+    case 'completed': return 'Завершён';
+    case 'cancelled': return 'Отменён';
+    case 'draft': return 'Черновик';
+    default: return status;
+  }
+};
+
+/**
+ * Format next lesson date as "Следующий: DD MMM" or "Нет запланированных"
+ */
+export const formatNextLessonDate = (dateStr?: string | null): string => {
+  if (!dateStr) return 'Нет запланированных';
+  
+  const date = new Date(dateStr);
+  const day = date.getDate();
+  const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+  const month = months[date.getMonth()];
+  
+  return `Следующий: ${day} ${month}`;
+};
+
+/**
+ * Package card with new layout:
+ * - Title + learner name on the left
+ * - Progress ring on the right (no percentage)
+ * - Lesson count + status badge
+ * - Next lesson date (for active packages)
  */
 const PackageCard: React.FC<PackageCardProps> = ({
   package: pkg,
@@ -41,6 +91,8 @@ const PackageCard: React.FC<PackageCardProps> = ({
     ? Math.round(((progress.completed + progress.cancelled) / progress.total) * 100)
     : 0;
 
+  const isActive = pkg.status === 'active';
+
   return (
     <Card
       hoverable
@@ -52,11 +104,7 @@ const PackageCard: React.FC<PackageCardProps> = ({
         transition: 'transform 0.1s ease-out',
       }}
       bodyStyle={{
-        display: 'flex',
-        flexDirection: 'column',
-        alignItems: 'center',
         padding: spacing.md,
-        gap: spacing.sm,
       }}
       onClick={onClick}
       onMouseDown={() => setIsPressed(true)}
@@ -65,35 +113,58 @@ const PackageCard: React.FC<PackageCardProps> = ({
       onTouchStart={() => setIsPressed(true)}
       onTouchEnd={() => setIsPressed(false)}
     >
-      <Progress
-        type="circle"
-        percent={percent}
-        size={60}
-        strokeColor="#0f7b6c"
-        format={(p) => `${p}%`}
-      />
-      <Text
-        strong
-        style={{
-          fontSize: 16,
-          textAlign: 'center',
-          lineHeight: 1.3,
-        }}
-        ellipsis={{ rows: 2 }}
-      >
-        {pkg.title}
-      </Text>
-      <Text
-        type="secondary"
-        style={{
-          fontSize: 12,
-          fontWeight: 300,
-          textAlign: 'center',
-        }}
-        ellipsis
-      >
-        {pkg.learner_name}
-      </Text>
+      {/* Top row: Title + Progress */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            strong
+            style={{
+              fontSize: 16,
+              lineHeight: 1.3,
+              display: 'block',
+            }}
+            ellipsis={{ rows: 2 }}
+          >
+            {pkg.title}
+          </Text>
+          <Text
+            type="secondary"
+            style={{
+              fontSize: 12,
+              fontWeight: 300,
+              display: 'block',
+              marginTop: 2,
+            }}
+            ellipsis
+          >
+            {pkg.learner_name}
+          </Text>
+        </div>
+        <Progress
+          type="circle"
+          percent={percent}
+          size={48}
+          strokeColor="#0f7b6c"
+          format={() => null}
+        />
+      </div>
+
+      {/* Lesson count + Status badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm }}>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {formatLessonCount(progress)}
+        </Text>
+        <Tag color={getStatusBadgeColor(pkg.status)} style={{ margin: 0, fontSize: 11 }}>
+          {getStatusLabel(pkg.status)}
+        </Tag>
+      </div>
+
+      {/* Next lesson date (active packages only) */}
+      {isActive && (
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+          {formatNextLessonDate(pkg.next_lesson_date)}
+        </Text>
+      )}
     </Card>
   );
 };

@@ -49,6 +49,7 @@ def _to_response(dto: LessonPackageDTO) -> PackageResponse:
         price=dto.price,
         payment_status=dto.payment_status,
         total_paid=dto.total_paid,
+        next_lesson_date=dto.next_lesson_date,
     )
 
 

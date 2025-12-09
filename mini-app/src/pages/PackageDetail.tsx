@@ -20,6 +20,13 @@ import {
   ArrowLeftOutlined,
   EditOutlined,
   PlusOutlined,
+  CalendarOutlined,
+  BookOutlined,
+  DollarOutlined,
+  FileTextOutlined,
+  CheckCircleOutlined,
+  CloseCircleOutlined,
+  ClockCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import api from '../services/api';
@@ -383,115 +390,169 @@ const PackageDetail: React.FC = () => {
   const progress = packageData?.progress || { total: 0, completed: 0, cancelled: 0 };
   const remaining = progress.total - progress.completed - progress.cancelled;
 
+  // Card style for details sections
+  const cardStyle: React.CSSProperties = {
+    background: isDark ? '#1f1f1f' : '#ffffff',
+    borderRadius: 12,
+    padding: spacing.md,
+    border: `1px solid ${isDark ? '#3a3a3a' : '#f0f0f0'}`,
+  };
+
+  const cardHeaderStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  };
+
+  const cardTitleStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: spacing.xs,
+  };
+
+  const iconStyle: React.CSSProperties = {
+    fontSize: 18,
+    color: '#0f7b6c',
+  };
+
+  const rowStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: spacing.xs,
+    padding: '6px 0',
+  };
+
   // Tab content
   const detailsContent = (
-    <div style={{ maxWidth: 600 }}>
-      {/* Edit button */}
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: spacing.md }}>
-        <Button icon={<EditOutlined />} onClick={() => setIsEditModalOpen(true)}>
-          Edit
-        </Button>
-      </div>
-
-      {/* Dates section */}
-      <div style={{ marginBottom: spacing.lg }}>
-        <Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase' }}>
-          Dates
-        </Text>
-        <div style={{ marginTop: spacing.xs }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-            <Text>Start Date</Text>
+    <div>
+      {/* Two-column grid for desktop, single column for mobile */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: spacing.md,
+      }}>
+        {/* Dates Card */}
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <div style={cardTitleStyle}>
+              <CalendarOutlined style={iconStyle} />
+              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Даты
+              </Text>
+            </div>
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => setIsEditModalOpen(true)}
+            />
+          </div>
+          <div style={rowStyle}>
+            <Text type="secondary">Начало:</Text>
             <Text>{packageData?.start_date ? formatDate(packageData.start_date, { timezone: packageData.timezone }) : '—'}</Text>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-            <Text>End Date</Text>
+          <div style={rowStyle}>
+            <Text type="secondary">Конец:</Text>
             <Text>{packageData?.end_date ? formatDate(packageData.end_date, { timezone: packageData.timezone }) : '—'}</Text>
           </div>
         </div>
-      </div>
 
-      {/* Lessons section */}
-      <div style={{ marginBottom: spacing.lg }}>
-        <Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase' }}>
-          Lessons
-        </Text>
-        <div style={{ marginTop: spacing.xs }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-            <Text>Total</Text>
-            <Text>{progress.total}</Text>
+        {/* Lessons Card */}
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <div style={cardTitleStyle}>
+              <BookOutlined style={iconStyle} />
+              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Уроки
+              </Text>
+            </div>
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              {progress.total} всего
+            </Text>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-            <Text>Completed</Text>
-            <Text style={{ color: '#52c41a' }}>{progress.completed}</Text>
+          <div style={rowStyle}>
+            <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+            <Text>{progress.completed} завершено</Text>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-            <Text>Cancelled</Text>
-            <Text style={{ color: '#ff4d4f' }}>{progress.cancelled}</Text>
+          <div style={rowStyle}>
+            <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 16 }} />
+            <Text>{progress.cancelled} отменено</Text>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-            <Text>Remaining</Text>
-            <Text>{remaining}</Text>
+          <div style={rowStyle}>
+            <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
+            <Text>{remaining} осталось</Text>
           </div>
         </div>
-      </div>
 
-      {/* Payment section */}
-      <div style={{ marginBottom: spacing.lg }}>
-        <Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase' }}>
-          Payment
-        </Text>
-        <div style={{ marginTop: spacing.xs }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-            <Text>Price</Text>
-            <Text>{packageData?.price ? formatCurrency(packageData.price) : '—'}</Text>
+        {/* Payment Card */}
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <div style={cardTitleStyle}>
+              <DollarOutlined style={iconStyle} />
+              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Оплата
+              </Text>
+            </div>
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={openPaymentModal}
+              disabled={!packageData?.price}
+            >
+              Добавить
+            </Button>
           </div>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '4px 0' }}>
-            <Text>Status</Text>
-            <Space>
-              <Tag color={getPaymentStatusColor(packageData?.payment_status)}>
-                {getPaymentStatusLabel(packageData?.payment_status)}
-              </Tag>
-              <Button
-                type="primary"
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={openPaymentModal}
-                disabled={!packageData?.price}
-              >
-                Add Payment
-              </Button>
-            </Space>
+          <div style={rowStyle}>
+            <Text type="secondary">Цена:</Text>
+            <Text strong>{packageData?.price ? formatCurrency(packageData.price) : '—'}</Text>
           </div>
           {packageData?.total_paid !== undefined && packageData.total_paid > 0 && (
-            <div style={{ display: 'flex', justifyContent: 'space-between', padding: '4px 0' }}>
-              <Text>Total Paid</Text>
-              <Text>{formatCurrency(packageData.total_paid)}</Text>
+            <div style={rowStyle}>
+              <Text type="secondary">Оплачено:</Text>
+              <Text style={{ color: '#52c41a' }}>{formatCurrency(packageData.total_paid)}</Text>
             </div>
           )}
+          <div style={{ ...rowStyle, marginTop: 4 }}>
+            <Tag color={getPaymentStatusColor(packageData?.payment_status)} style={{ margin: 0 }}>
+              {packageData?.payment_status === 'paid' ? 'Оплачено' : 
+               packageData?.payment_status === 'partial' ? 'Частично' : 'Не оплачено'}
+            </Tag>
+          </div>
         </div>
-      </div>
 
-      {/* Notes section */}
-      <div style={{ marginBottom: spacing.lg }}>
-        <Text type="secondary" style={{ fontSize: 12, textTransform: 'uppercase' }}>
-          Notes
-        </Text>
-        <div style={{ marginTop: spacing.xs }}>
-          <Text type={packageData?.notes ? undefined : 'secondary'}>
-            {packageData?.notes || 'No notes'}
+        {/* Notes Card */}
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <div style={cardTitleStyle}>
+              <FileTextOutlined style={iconStyle} />
+              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Заметки
+              </Text>
+            </div>
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => setIsEditModalOpen(true)}
+            />
+          </div>
+          <Text type={packageData?.notes ? undefined : 'secondary'} style={{ whiteSpace: 'pre-wrap' }}>
+            {packageData?.notes || 'Нет заметок'}
           </Text>
         </div>
       </div>
 
       {/* Delete link */}
-      <div style={{ textAlign: 'center', marginTop: spacing.xl }}>
+      <div style={{ textAlign: 'center', marginTop: spacing.lg }}>
         <Button
           type="link"
           danger
           style={{ fontSize: 12 }}
           onClick={() => setIsDeletePackageModalOpen(true)}
         >
-          Delete Package
+          Удалить пакет
         </Button>
       </div>
     </div>

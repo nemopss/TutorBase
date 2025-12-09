@@ -121,6 +121,7 @@ class LessonPackageDTO:
     price: Optional[float] = None
     payment_status: str = 'unpaid'
     total_paid: float = 0.0
+    next_lesson_date: Optional[datetime] = None
 
 
 @dataclass(slots=True)
