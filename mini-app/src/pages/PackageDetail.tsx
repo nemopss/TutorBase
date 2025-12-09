@@ -1,29 +1,44 @@
 import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Descriptions, Spin, Alert, Tag, Button, message, Space, Tabs, Progress, Card, Statistic, Row, Col, Grid, Typography, Modal, Form, InputNumber, DatePicker, Input } from 'antd';
-import type { TableProps } from 'antd';
-import { 
-  ArrowLeftOutlined, 
-  ReloadOutlined, 
-  CheckCircleOutlined, 
+import {
+  Spin,
+  Alert,
+  Tag,
+  Button,
+  message,
+  Tabs,
+  Typography,
+  Modal,
+  Form,
+  InputNumber,
+  DatePicker,
+  Input,
+} from 'antd';
+import {
+  ArrowLeftOutlined,
+  EditOutlined,
+  PlusOutlined,
+  CalendarOutlined,
+  BookOutlined,
+  DollarOutlined,
+  FileTextOutlined,
+  CheckCircleOutlined,
   CloseCircleOutlined,
   ClockCircleOutlined,
-  EditOutlined,
-  DeleteOutlined,
-  DollarOutlined,
-  PlusOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import api from '../services/api';
+import SegmentedProgress from '../components/common/SegmentedProgress';
+import WeekCalendar from '../components/common/WeekCalendar';
+import PackageForm from '../components/forms/PackageForm';
+import RescheduleForm from '../components/forms/RescheduleForm';
 import LessonForm from '../components/forms/LessonForm';
-import PageHeader from '../components/common/PageHeader';
-import ResponsiveDataView from '../components/common/ResponsiveDataView';
-import { formatDate, formatDateTime } from '../utils/datetime';
+import { formatDate } from '../utils/datetime';
 import { spacing } from '../theme/tokens';
 import { useThemeMode } from '../theme/ThemeProvider';
 
-const { Text } = Typography;
+const { Text, Title } = Typography;
 
 // --- Types --- //
 interface PackageProgress {
@@ -52,7 +67,7 @@ interface PackageDetails {
 interface Lesson {
   id: number;
   scheduled_at: string;
-  status: string;
+  status: 'scheduled' | 'rescheduled' | 'completed' | 'cancelled';
   duration_minutes?: number;
   timezone: string;
 }
@@ -73,11 +88,6 @@ const fetchPackageLessons = async (id: string): Promise<LessonListResponse> => {
   return data;
 };
 
-const createLesson = async ({ packageId, values }: { packageId: string; values: any }) => {
-  const { data } = await api.post(`/lessons/packages/${packageId}`, values);
-  return data;
-};
-
 const updateLesson = async ({ lessonId, values }: { lessonId: number; values: any }) => {
   const { data } = await api.patch(`/lessons/${lessonId}`, values);
   return data;
@@ -87,15 +97,31 @@ const deleteLesson = async (lessonId: number) => {
   await api.delete(`/lessons/${lessonId}`);
 };
 
+const deletePackage = async (id: number) => {
+  await api.delete(`/packages/${id}`);
+};
+
 // --- Helper functions --- //
-const getStatusColor = (status: string) => {
+const formatCurrency = (value: number): string => {
+  return new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+};
+
+const getPaymentStatusColor = (status?: string): string => {
   switch (status) {
-    case 'scheduled': return 'blue';
-    case 'rescheduled': return 'gold';
-    case 'completed': return 'green';
-    case 'cancelled': return 'red';
+    case 'paid': return 'green';
+    case 'partial': return 'orange';
+    case 'unpaid': return 'red';
     default: return 'default';
   }
+};
+
+const getStatusColor = (status: string): string => {
+  return status === 'active' ? 'green' : 'volcano';
 };
 
 // --- Component --- //
@@ -103,78 +129,93 @@ const PackageDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [lessonToDelete, setLessonToDelete] = useState<number | null>(null);
-  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
-  const [paymentForm] = Form.useForm();
-  const screens = Grid.useBreakpoint();
-  const isMobile = !screens?.md;
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
+  const [paymentForm] = Form.useForm();
 
-  const { 
-    data: packageData, 
-    isLoading: isLoadingPackage, 
-    isError: isErrorPackage, 
-    error: errorPackage 
+  // Modal states
+  const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
+  const [isEditModalOpen, setIsEditModalOpen] = useState(false);
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+  const [isDeletePackageModalOpen, setIsDeletePackageModalOpen] = useState(false);
+  const [isDeleteLessonModalOpen, setIsDeleteLessonModalOpen] = useState(false);
+  const [isCompleteLessonModalOpen, setIsCompleteLessonModalOpen] = useState(false);
+  const [isCancelLessonModalOpen, setIsCancelLessonModalOpen] = useState(false);
+  const [isAddLessonModalOpen, setIsAddLessonModalOpen] = useState(false);
+  const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [newLessonDate, setNewLessonDate] = useState<string | null>(null);
+
+  // Queries
+  const {
+    data: packageData,
+    isLoading: isLoadingPackage,
+    isError: isErrorPackage,
+    error: errorPackage,
   } = useQuery<PackageDetails, Error>({
     queryKey: ['package', id],
     queryFn: () => fetchPackage(id!),
     enabled: !!id,
   });
 
-  const { 
-    data: lessonsData, 
-    isLoading: isLoadingLessons 
-  } = useQuery<LessonListResponse, Error>({
+  const { data: lessonsData, isLoading: isLoadingLessons } = useQuery<LessonListResponse, Error>({
     queryKey: ['packageLessons', id],
     queryFn: () => fetchPackageLessons(id!),
     enabled: !!id,
   });
 
-  const mutationOptions = {
+  // Mutations
+  const createLessonMutation = useMutation({
+    mutationFn: async (values: any) => {
+      const { data } = await api.post(`/lessons/packages/${id}`, values);
+      return data;
+    },
     onSuccess: () => {
+      message.success('Lesson created');
       queryClient.invalidateQueries({ queryKey: ['packageLessons', id] });
-      setIsModalOpen(false);
-      setEditingLesson(null);
+      queryClient.invalidateQueries({ queryKey: ['package', id] });
+      setIsAddLessonModalOpen(false);
+      setNewLessonDate(null);
     },
     onError: (error: Error) => {
-      message.error(`An error occurred: ${error.message}`);
-    }
-  };
-
-  const createLessonMutation = useMutation({ 
-    mutationFn: createLesson,
-    ...mutationOptions,
-    onSuccess: () => {
-      message.success('Lesson created successfully!');
-      mutationOptions.onSuccess();
-    }
+      message.error(`Error: ${error.message}`);
+    },
   });
 
-  const updateLessonMutation = useMutation({ 
+  const updateLessonMutation = useMutation({
     mutationFn: updateLesson,
-    ...mutationOptions,
     onSuccess: () => {
-      message.success('Lesson updated successfully!');
-      mutationOptions.onSuccess();
-    }
+      queryClient.invalidateQueries({ queryKey: ['packageLessons', id] });
+      queryClient.invalidateQueries({ queryKey: ['package', id] });
+    },
+    onError: (error: Error) => {
+      message.error(`Error: ${error.message}`);
+    },
   });
 
   const deleteLessonMutation = useMutation({
     mutationFn: deleteLesson,
     onSuccess: () => {
-      message.success('Lesson deleted successfully!');
+      message.success('Lesson deleted');
       queryClient.invalidateQueries({ queryKey: ['packageLessons', id] });
       queryClient.invalidateQueries({ queryKey: ['package', id] });
-      setDeleteModalOpen(false);
-      setLessonToDelete(null);
+      setIsDeleteLessonModalOpen(false);
+      setSelectedLessonId(null);
     },
     onError: (error: Error) => {
-      message.error(`Failed to delete lesson: ${error.message}`);
-    }
+      message.error(`Error: ${error.message}`);
+    },
+  });
+
+  const deletePackageMutation = useMutation({
+    mutationFn: deletePackage,
+    onSuccess: () => {
+      message.success('Package deleted');
+      navigate('/packages');
+    },
+    onError: (error: Error) => {
+      message.error(`Error: ${error.message}`);
+    },
   });
 
   const createPaymentMutation = useMutation({
@@ -189,43 +230,36 @@ const PackageDetail: React.FC = () => {
       return data;
     },
     onSuccess: () => {
-      message.success('Платёж записан!');
+      message.success('Payment recorded');
       queryClient.invalidateQueries({ queryKey: ['package', id] });
-      queryClient.invalidateQueries({ queryKey: ['packages'] });
       setIsPaymentModalOpen(false);
       paymentForm.resetFields();
     },
     onError: (error: Error) => {
-      message.error(`Ошибка: ${error.message}`);
+      message.error(`Error: ${error.message}`);
     },
   });
 
-  const handleDeleteLesson = (lessonId: number) => {
-    setLessonToDelete(lessonId);
-    setDeleteModalOpen(true);
-  };
+  const updatePackageMutation = useMutation({
+    mutationFn: async (values: any) => {
+      const { data } = await api.patch(`/packages/${id}`, values);
+      return data;
+    },
+    onSuccess: () => {
+      message.success('Package updated');
+      queryClient.invalidateQueries({ queryKey: ['package', id] });
+      setIsEditModalOpen(false);
+    },
+    onError: (error: Error) => {
+      message.error(`Error: ${error.message}`);
+    },
+  });
 
-  const confirmDeleteLesson = () => {
-    if (lessonToDelete) {
-      deleteLessonMutation.mutate(lessonToDelete);
-    }
-  };
-
-  const handleCreatePayment = async () => {
-    try {
-      const values = await paymentForm.validateFields();
-      createPaymentMutation.mutate(values);
-    } catch {
-      // Validation error
-    }
-  };
-
+  // Handlers
   const openPaymentModal = () => {
-    // Calculate remaining amount to pay
     const price = packageData?.price || 0;
     const totalPaid = packageData?.total_paid || 0;
     const remaining = Math.max(0, price - totalPaid);
-    
     paymentForm.setFieldsValue({
       amount: remaining > 0 ? remaining : undefined,
       paid_at: dayjs(),
@@ -233,371 +267,507 @@ const PackageDetail: React.FC = () => {
     setIsPaymentModalOpen(true);
   };
 
-  const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  const getPaymentStatusColor = (status?: string): string => {
-    switch (status) {
-      case 'paid': return 'green';
-      case 'partial': return 'orange';
-      case 'unpaid': return 'red';
-      default: return 'default';
-    }
-  };
-
-  const getPaymentStatusLabel = (status?: string): string => {
-    switch (status) {
-      case 'paid': return 'Оплачен';
-      case 'partial': return 'Частично';
-      case 'unpaid': return 'Не оплачен';
-      default: return '—';
-    }
-  };
-
-  const handleFormFinish = (values: any) => {
-    if (editingLesson) {
-      updateLessonMutation.mutate({ lessonId: editingLesson.id, values });
+  const handleReschedule = (lessonId: number, newDate?: string) => {
+    const lesson = lessonsData?.items.find((l) => l.id === lessonId);
+    if (newDate && lesson) {
+      // Drag & drop reschedule - update directly
+      updateLessonMutation.mutate({
+        lessonId,
+        values: { scheduled_at: newDate, status: 'rescheduled' },
+      });
     } else {
-      createLessonMutation.mutate({ packageId: id!, values });
+      // Context menu reschedule - open modal
+      setSelectedLesson(lesson || null);
+      setSelectedLessonId(lessonId);
+      setIsRescheduleModalOpen(true);
     }
   };
 
-  const handleCancel = () => {
-    setIsModalOpen(false);
-    setEditingLesson(null);
+  const handleRescheduleSubmit = (values: { date: dayjs.Dayjs; time: dayjs.Dayjs; duration_minutes?: number }) => {
+    if (!selectedLessonId) return;
+    const newDateTime = values.date
+      .hour(values.time.hour())
+      .minute(values.time.minute())
+      .second(0);
+    const updateValues: any = { 
+      scheduled_at: newDateTime.toISOString(), 
+      status: 'rescheduled' 
+    };
+    if (values.duration_minutes) {
+      updateValues.duration_minutes = values.duration_minutes;
+    }
+    updateLessonMutation.mutate(
+      { lessonId: selectedLessonId, values: updateValues },
+      {
+        onSuccess: () => {
+          message.success('Lesson rescheduled');
+          setIsRescheduleModalOpen(false);
+          setSelectedLessonId(null);
+          setSelectedLesson(null);
+        },
+      }
+    );
   };
 
-  const lessonColumns: TableProps<Lesson>['columns'] = [
-    {
-      title: 'Scheduled At',
-      dataIndex: 'scheduled_at',
-      key: 'scheduled_at',
-      render: (text: string) => formatDateTime(text, { timezone: packageData?.timezone }),
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => <Tag color={getStatusColor(status)}>{status.toUpperCase()}</Tag>,
-    },
-    {
-      title: 'Duration (min)',
-      dataIndex: 'duration_minutes',
-      key: 'duration_minutes',
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_, record) => (
-        <Space size="middle">
-          <Button type="link" onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>Edit</Button>
-          <Button type="link" danger onClick={() => handleDeleteLesson(record.id)}>Delete</Button>
-        </Space>
-      ),
-    },
-  ];
+  const handleComplete = (lessonId: number) => {
+    setSelectedLessonId(lessonId);
+    setIsCompleteLessonModalOpen(true);
+  };
 
-  // Render lesson card for mobile view
-  const renderLessonCard = (lesson: Lesson) => (
-    <Card
-      size="small"
-      style={{
-        marginBottom: spacing.sm,
-        background: isDark ? '#1f1f1f' : '#ffffff',
-        borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
-      }}
-      actions={[
-        <Button
-          key="edit"
-          type="text"
-          icon={<EditOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            setEditingLesson(lesson);
-            setIsModalOpen(true);
-          }}
-        >
-          Edit
-        </Button>,
-        <Button
-          key="delete"
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            handleDeleteLesson(lesson.id);
-          }}
-        >
-          Delete
-        </Button>,
-      ]}
-    >
-      <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Text strong style={{ fontSize: 14 }}>
-            {formatDateTime(lesson.scheduled_at, { timezone: packageData?.timezone })}
-          </Text>
-          <Tag color={getStatusColor(lesson.status)}>{lesson.status.toUpperCase()}</Tag>
-        </div>
-        
-        {lesson.duration_minutes && (
-          <Space size={spacing.xs}>
-            <ClockCircleOutlined style={{ color: '#8c8c8c' }} />
-            <Text type="secondary">{lesson.duration_minutes} min</Text>
-          </Space>
-        )}
-      </Space>
-    </Card>
-  );
+  const confirmComplete = () => {
+    if (!selectedLessonId) return;
+    updateLessonMutation.mutate(
+      { lessonId: selectedLessonId, values: { status: 'completed' } },
+      {
+        onSuccess: () => {
+          message.success('Lesson marked as completed');
+          setIsCompleteLessonModalOpen(false);
+          setSelectedLessonId(null);
+        },
+      }
+    );
+  };
 
+  const handleCancel = (lessonId: number) => {
+    setSelectedLessonId(lessonId);
+    setIsCancelLessonModalOpen(true);
+  };
+
+  const confirmCancel = () => {
+    if (!selectedLessonId) return;
+    updateLessonMutation.mutate(
+      { lessonId: selectedLessonId, values: { status: 'cancelled' } },
+      {
+        onSuccess: () => {
+          message.success('Lesson cancelled');
+          setIsCancelLessonModalOpen(false);
+          setSelectedLessonId(null);
+        },
+      }
+    );
+  };
+
+  const handleDelete = (lessonId: number) => {
+    setSelectedLessonId(lessonId);
+    setIsDeleteLessonModalOpen(true);
+  };
+
+  const confirmDeleteLesson = () => {
+    if (selectedLessonId) {
+      deleteLessonMutation.mutate(selectedLessonId);
+    }
+  };
+
+  const confirmDeletePackage = () => {
+    if (id) {
+      deletePackageMutation.mutate(parseInt(id));
+    }
+  };
+
+  // Loading/Error states
   if (!id || isLoadingPackage) {
-    return <Spin size="large" />;
+    return (
+      <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
+        <Spin size="large" />
+      </div>
+    );
   }
 
   if (isErrorPackage) {
-    return <Alert message="Error fetching package details" description={errorPackage.message} type="error" />;
+    return <Alert message="Error" description={errorPackage.message} type="error" />;
   }
 
-  const handleRegenerateReminders = async () => {
-    try {
-      await api.post(`/packages/${id}/regenerate`);
-      message.success('Reminders regenerated successfully!');
-      queryClient.invalidateQueries({ queryKey: ['packageReminders', id] });
-    } catch (error: any) {
-      message.error(`Failed to regenerate reminders: ${error.message}`);
-    }
+  const progress = packageData?.progress || { total: 0, completed: 0, cancelled: 0 };
+  const remaining = progress.total - progress.completed - progress.cancelled;
+
+  // Card style for details sections
+  const cardStyle: React.CSSProperties = {
+    background: isDark ? '#1f1f1f' : '#ffffff',
+    borderRadius: 12,
+    padding: spacing.md,
+    border: `1px solid ${isDark ? '#3a3a3a' : '#f0f0f0'}`,
   };
 
-  const progressPercent = packageData && packageData.progress.total > 0
-    ? Math.round(((packageData.progress.completed + packageData.progress.cancelled) / packageData.progress.total) * 100)
-    : 0;
+  const cardHeaderStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: spacing.sm,
+  };
 
-  const tabItems = [
-    {
-      key: 'lessons',
-      label: `Lessons (${lessonsData?.items.length || 0})`,
-      children: (
-        <div>
-          <div style={{ marginBottom: 16, display: 'flex', justifyContent: 'space-between', alignItems: 'center', flexWrap: 'wrap', gap: 8 }}>
-            <div style={{ color: '#8c8c8c', fontSize: 14 }}>
-              {packageData?.progress.completed} completed, {packageData?.progress.cancelled} cancelled
+  const cardTitleStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: spacing.xs,
+  };
+
+  const iconStyle: React.CSSProperties = {
+    fontSize: 18,
+    color: '#0f7b6c',
+  };
+
+  const rowStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    gap: spacing.xs,
+    padding: '6px 0',
+  };
+
+  // Tab content
+  const detailsContent = (
+    <div>
+      {/* Two-column grid for desktop, single column for mobile */}
+      <div style={{ 
+        display: 'grid', 
+        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
+        gap: spacing.md,
+      }}>
+        {/* Dates Card */}
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <div style={cardTitleStyle}>
+              <CalendarOutlined style={iconStyle} />
+              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Даты
+              </Text>
             </div>
-            <Button type="primary" onClick={() => { setEditingLesson(null); setIsModalOpen(true); }}>
-              Add Lesson
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => setIsEditModalOpen(true)}
+            />
+          </div>
+          <div style={rowStyle}>
+            <Text type="secondary">Начало:</Text>
+            <Text>{packageData?.start_date ? formatDate(packageData.start_date, { timezone: packageData.timezone }) : '—'}</Text>
+          </div>
+          <div style={rowStyle}>
+            <Text type="secondary">Конец:</Text>
+            <Text>{packageData?.end_date ? formatDate(packageData.end_date, { timezone: packageData.timezone }) : '—'}</Text>
+          </div>
+        </div>
+
+        {/* Lessons Card */}
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <div style={cardTitleStyle}>
+              <BookOutlined style={iconStyle} />
+              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Уроки
+              </Text>
+            </div>
+            <Text type="secondary" style={{ fontSize: 13 }}>
+              {progress.total} всего
+            </Text>
+          </div>
+          <div style={rowStyle}>
+            <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
+            <Text>{progress.completed} завершено</Text>
+          </div>
+          <div style={rowStyle}>
+            <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 16 }} />
+            <Text>{progress.cancelled} отменено</Text>
+          </div>
+          <div style={rowStyle}>
+            <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
+            <Text>{remaining} осталось</Text>
+          </div>
+        </div>
+
+        {/* Payment Card */}
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <div style={cardTitleStyle}>
+              <DollarOutlined style={iconStyle} />
+              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Оплата
+              </Text>
+            </div>
+            <Button
+              type="primary"
+              size="small"
+              icon={<PlusOutlined />}
+              onClick={openPaymentModal}
+              disabled={!packageData?.price}
+            >
+              Добавить
             </Button>
           </div>
-          <ResponsiveDataView<Lesson>
-            data={lessonsData?.items || []}
-            loading={isLoadingLessons}
-            columns={lessonColumns}
-            rowKey="id"
-            emptyText="No lessons yet"
-            emptyDescription="Add your first lesson to this package"
-            emptyActionText="Add Lesson"
-            onEmptyAction={() => { setEditingLesson(null); setIsModalOpen(true); }}
-            renderCard={renderLessonCard}
-            pagination={false}
-            tableProps={{
-              bordered: true,
-              size: 'middle',
-            }}
-          />
+          <div style={rowStyle}>
+            <Text type="secondary">Цена:</Text>
+            <Text strong>{packageData?.price ? formatCurrency(packageData.price) : '—'}</Text>
+          </div>
+          {packageData?.total_paid !== undefined && packageData.total_paid > 0 && (
+            <div style={rowStyle}>
+              <Text type="secondary">Оплачено:</Text>
+              <Text style={{ color: '#52c41a' }}>{formatCurrency(packageData.total_paid)}</Text>
+            </div>
+          )}
+          <div style={{ ...rowStyle, marginTop: 4 }}>
+            <Tag color={getPaymentStatusColor(packageData?.payment_status)} style={{ margin: 0 }}>
+              {packageData?.payment_status === 'paid' ? 'Оплачено' : 
+               packageData?.payment_status === 'partial' ? 'Частично' : 'Не оплачено'}
+            </Tag>
+          </div>
         </div>
-      ),
-    },
-    {
-      key: 'reminders',
-      label: 'Reminders',
-      children: (
-        <div>
-          <Space style={{ marginBottom: 16 }}>
-            <Button type="primary" icon={<ReloadOutlined />} onClick={handleRegenerateReminders}>
-              Regenerate All Reminders
-            </Button>
-            <Button onClick={() => queryClient.invalidateQueries({ queryKey: ['packageReminders', id] })}>
-              Refresh
-            </Button>
-          </Space>
-          <Alert 
-            message="Reminders Management" 
-            description="Use the Reminders page to view and manage all reminders for this package. Click 'Regenerate' to recreate all reminders based on current lessons."
-            type="info" 
-            showIcon
-          />
+
+        {/* Notes Card */}
+        <div style={cardStyle}>
+          <div style={cardHeaderStyle}>
+            <div style={cardTitleStyle}>
+              <FileTextOutlined style={iconStyle} />
+              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+                Заметки
+              </Text>
+            </div>
+            <Button
+              type="text"
+              size="small"
+              icon={<EditOutlined />}
+              onClick={() => setIsEditModalOpen(true)}
+            />
+          </div>
+          <Text type={packageData?.notes ? undefined : 'secondary'} style={{ whiteSpace: 'pre-wrap' }}>
+            {packageData?.notes || 'Нет заметок'}
+          </Text>
         </div>
-      ),
-    },
+      </div>
+
+      {/* Delete link */}
+      <div style={{ textAlign: 'center', marginTop: spacing.lg }}>
+        <Button
+          type="link"
+          danger
+          style={{ fontSize: 12 }}
+          onClick={() => setIsDeletePackageModalOpen(true)}
+        >
+          Удалить пакет
+        </Button>
+      </div>
+    </div>
+  );
+
+  // Handle lesson click from calendar
+  const handleLessonClick = (lessonId: number) => {
+    setSelectedLessonId(lessonId);
+    const lesson = lessonsData?.items.find((l) => l.id === lessonId);
+    setSelectedLesson(lesson || null);
+    // Open action modal or reschedule directly
+    setIsRescheduleModalOpen(true);
+  };
+
+  // Handle add lesson from calendar
+  const handleAddLesson = (date: string) => {
+    setNewLessonDate(date);
+    setIsAddLessonModalOpen(true);
+  };
+
+  const lessonsContent = (
+    <div>
+      {isLoadingLessons ? (
+        <Spin />
+      ) : (
+        <WeekCalendar
+          lessons={lessonsData?.items || []}
+          timezone={packageData?.timezone || 'UTC'}
+          onLessonClick={handleLessonClick}
+          onAddLesson={handleAddLesson}
+          onReschedule={handleReschedule}
+          onComplete={handleComplete}
+          onCancel={handleCancel}
+          onDelete={handleDelete}
+        />
+      )}
+    </div>
+  );
+
+  const tabItems = [
+    { key: 'lessons', label: 'Lessons', children: lessonsContent },
+    { key: 'details', label: 'Details', children: detailsContent },
   ];
 
   return (
     <div>
-      <PageHeader 
-        title={packageData?.title || 'Package Details'}
-        subtitle={`Learner: ${packageData?.learner_name || '-'} • Status: ${packageData?.status || '-'}`}
-        actions={
-          <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/packages')}>
-            Back to Packages
-          </Button>
-        }
-      />
-
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
-        <Col xs={24} sm={6}>
-          <Card>
-            <Statistic
-              title="Total Lessons"
-              value={packageData?.progress.total || 0}
-              prefix={<ClockCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={6}>
-          <Card>
-            <Statistic
-              title="Completed"
-              value={packageData?.progress.completed || 0}
-              prefix={<CheckCircleOutlined />}
-              valueStyle={{ color: '#3f8600' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={6}>
-          <Card>
-            <Statistic
-              title="Cancelled"
-              value={packageData?.progress.cancelled || 0}
-              prefix={<CloseCircleOutlined />}
-              valueStyle={{ color: '#cf1322' }}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} sm={6}>
-          <Card>
-            <Statistic
-              title="Стоимость"
-              value={packageData?.price || 0}
-              prefix={<DollarOutlined />}
-              formatter={(value) => value ? formatCurrency(Number(value)) : '—'}
-            />
-            <div style={{ marginTop: 8, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <Tag color={getPaymentStatusColor(packageData?.payment_status)}>
-                {getPaymentStatusLabel(packageData?.payment_status)}
-              </Tag>
-              <Button
-                type="primary"
-                size="small"
-                icon={<PlusOutlined />}
-                onClick={openPaymentModal}
-                disabled={!packageData?.price}
-              >
-                Платёж
-              </Button>
-            </div>
-          </Card>
-        </Col>
-      </Row>
-
-      <Card style={{ marginBottom: 24 }}>
-        <h3>Progress</h3>
-        <Progress 
-          percent={progressPercent} 
-          status={progressPercent === 100 ? 'success' : 'active'}
-          strokeColor={{
-            '0%': '#108ee9',
-            '100%': '#87d068',
-          }}
+      {/* Header */}
+      <div
+        style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: spacing.md,
+          marginBottom: spacing.lg,
+          flexWrap: 'wrap',
+        }}
+      >
+        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/packages')}>
+          Back
+        </Button>
+        <SegmentedProgress
+          total={progress.total}
+          completed={progress.completed}
+          cancelled={progress.cancelled}
+          size={80}
         />
-        <Descriptions 
-          bordered 
-          column={isMobile ? 1 : 2} 
-          size={isMobile ? 'small' : 'middle'} 
-          style={{ marginTop: 16 }}
-        >
-          <Descriptions.Item label="Start Date">
-            {packageData?.start_date ? formatDate(packageData.start_date, { timezone: packageData?.timezone }) : 'N/A'}
-          </Descriptions.Item>
-          <Descriptions.Item label="End Date">
-            {packageData?.end_date ? formatDate(packageData.end_date, { timezone: packageData?.timezone }) : 'N/A'}
-          </Descriptions.Item>
-          <Descriptions.Item label="Timezone">{packageData?.timezone}</Descriptions.Item>
-          <Descriptions.Item label="Total Lessons">{packageData?.total_lessons || '-'}</Descriptions.Item>
-          <Descriptions.Item label="Notes" span={2}>{packageData?.notes || '-'}</Descriptions.Item>
-        </Descriptions>
-      </Card>
+        <div style={{ flex: 1, minWidth: 200 }}>
+          <Title level={4} style={{ margin: 0 }}>
+            {packageData?.title}
+          </Title>
+          <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
+            <Link to={`/learners/${packageData?.learner_id}`}>
+              <Text type="secondary" style={{ textDecoration: 'underline' }}>
+                {packageData?.learner_name}
+              </Text>
+            </Link>
+            <Text type="secondary">•</Text>
+            <Tag color={getStatusColor(packageData?.status || '')}>
+              {packageData?.status?.toUpperCase()}
+            </Tag>
+          </div>
+        </div>
+      </div>
 
+      {/* Tabs */}
       <Tabs items={tabItems} defaultActiveKey="lessons" />
 
-      <LessonForm
-        open={isModalOpen}
-        onCancel={handleCancel}
-        onFinish={handleFormFinish}
-        isLoading={createLessonMutation.isPending || updateLessonMutation.isPending}
-        initialValues={editingLesson}
+      {/* Payment Modal */}
+      <Modal
+        title="Add Payment"
+        open={isPaymentModalOpen}
+        onOk={() => paymentForm.validateFields().then((values) => createPaymentMutation.mutate(values))}
+        onCancel={() => setIsPaymentModalOpen(false)}
+        confirmLoading={createPaymentMutation.isPending}
+        okText="Add"
+        cancelText="Cancel"
+      >
+        <Form form={paymentForm} layout="vertical">
+          <Form.Item
+            name="amount"
+            label="Amount"
+            rules={[{ required: true, message: 'Enter amount' }]}
+          >
+            <InputNumber style={{ width: '100%' }} min={1} />
+          </Form.Item>
+          <Form.Item
+            name="paid_at"
+            label="Date"
+            rules={[{ required: true, message: 'Select date' }]}
+          >
+            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+          </Form.Item>
+          <Form.Item name="notes" label="Notes">
+            <Input.TextArea rows={2} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      {/* Edit Package Modal */}
+      <PackageForm
+        open={isEditModalOpen}
+        onCancel={() => setIsEditModalOpen(false)}
+        onFinish={(values) => updatePackageMutation.mutate(values)}
+        isLoading={updatePackageMutation.isPending}
+        initialValues={{
+          id: packageData?.id,
+          title: packageData?.title,
+          notes: packageData?.notes,
+          price: packageData?.price,
+          start_date: packageData?.start_date,
+          end_date: packageData?.end_date,
+          timezone: packageData?.timezone,
+          learner_id: packageData?.learner_id,
+        }}
       />
 
+      {/* Reschedule Modal */}
+      <RescheduleForm
+        open={isRescheduleModalOpen}
+        onCancel={() => {
+          setIsRescheduleModalOpen(false);
+          setSelectedLessonId(null);
+          setSelectedLesson(null);
+        }}
+        onFinish={handleRescheduleSubmit}
+        isLoading={updateLessonMutation.isPending}
+        currentDateTime={selectedLesson?.scheduled_at}
+        currentDuration={selectedLesson?.duration_minutes}
+      />
+
+      {/* Delete Package Modal */}
       <Modal
-        open={deleteModalOpen}
+        title="Delete Package"
+        open={isDeletePackageModalOpen}
+        onOk={confirmDeletePackage}
+        onCancel={() => setIsDeletePackageModalOpen(false)}
+        okText="Delete"
+        okButtonProps={{ danger: true, loading: deletePackageMutation.isPending }}
+      >
+        <p>Are you sure you want to delete this package?</p>
+        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+      </Modal>
+
+      {/* Delete Lesson Modal */}
+      <Modal
         title="Delete Lesson"
-        onCancel={() => { setDeleteModalOpen(false); setLessonToDelete(null); }}
+        open={isDeleteLessonModalOpen}
         onOk={confirmDeleteLesson}
+        onCancel={() => {
+          setIsDeleteLessonModalOpen(false);
+          setSelectedLessonId(null);
+        }}
         okText="Delete"
         okButtonProps={{ danger: true, loading: deleteLessonMutation.isPending }}
-        cancelButtonProps={{ disabled: deleteLessonMutation.isPending }}
       >
         <p>Are you sure you want to delete this lesson?</p>
         <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
       </Modal>
 
-      {/* Payment Modal */}
+      {/* Complete Lesson Modal */}
       <Modal
-        title="Записать платёж"
-        open={isPaymentModalOpen}
-        onOk={handleCreatePayment}
+        title="Mark as Completed"
+        open={isCompleteLessonModalOpen}
+        onOk={confirmComplete}
         onCancel={() => {
-          setIsPaymentModalOpen(false);
-          paymentForm.resetFields();
+          setIsCompleteLessonModalOpen(false);
+          setSelectedLessonId(null);
         }}
-        confirmLoading={createPaymentMutation.isPending}
-        okText="Записать"
-        cancelText="Отмена"
+        okText="Complete"
+        confirmLoading={updateLessonMutation.isPending}
       >
-        <Form form={paymentForm} layout="vertical" initialValues={{ paid_at: dayjs() }}>
-          <Form.Item
-            name="amount"
-            label="Сумма"
-            rules={[
-              { required: true, message: 'Введите сумму' },
-              { type: 'number', min: 1, message: 'Сумма должна быть положительной' },
-            ]}
-          >
-            <InputNumber
-              style={{ width: '100%' }}
-              placeholder="например, 5000"
-              min={1}
-              precision={2}
-            />
-          </Form.Item>
-
-          <Form.Item
-            name="paid_at"
-            label="Дата платежа"
-            rules={[{ required: true, message: 'Выберите дату' }]}
-          >
-            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
-          </Form.Item>
-
-          <Form.Item name="notes" label="Примечание">
-            <Input.TextArea rows={2} placeholder="Комментарий к платежу" />
-          </Form.Item>
-        </Form>
+        <p>Mark this lesson as completed?</p>
       </Modal>
+
+      {/* Cancel Lesson Modal */}
+      <Modal
+        title="Cancel Lesson"
+        open={isCancelLessonModalOpen}
+        onOk={confirmCancel}
+        onCancel={() => {
+          setIsCancelLessonModalOpen(false);
+          setSelectedLessonId(null);
+        }}
+        okText="Yes, Cancel"
+        okButtonProps={{ danger: true }}
+        confirmLoading={updateLessonMutation.isPending}
+      >
+        <p>Are you sure you want to cancel this lesson?</p>
+      </Modal>
+
+      {/* Add Lesson Modal */}
+      <LessonForm
+        open={isAddLessonModalOpen}
+        onCancel={() => {
+          setIsAddLessonModalOpen(false);
+          setNewLessonDate(null);
+        }}
+        onFinish={(values) => createLessonMutation.mutate(values)}
+        isLoading={createLessonMutation.isPending}
+        mode="create"
+        initialValues={newLessonDate ? {
+          scheduled_at: dayjs(newLessonDate).hour(10).minute(0),
+          duration_minutes: 60,
+          timezone: packageData?.timezone || 'Europe/Moscow',
+        } : undefined}
+      />
     </div>
   );
 };

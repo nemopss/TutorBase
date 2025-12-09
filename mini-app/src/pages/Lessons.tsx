@@ -1,43 +1,35 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Tag, Select, Space, Input, Button, message, Card, Calendar, Badge, Modal, List, theme } from 'antd';
+import { Tag, Select, Space, Input, Button, message, Modal } from 'antd';
 import type { TableProps } from 'antd';
 import { CalendarOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import type { Dayjs } from 'dayjs';
 import updateLocale from 'dayjs/plugin/updateLocale';
 import 'dayjs/locale/ru';
-import calendarLocale from 'antd/es/calendar/locale/ru_RU';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
-import { useResponsive } from '../hooks/useResponsive';
 import LessonForm from '../components/forms/LessonForm';
+import RescheduleForm from '../components/forms/RescheduleForm';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import LessonCard from '../components/cards/LessonCard';
-import { dayjsInTimezone, formatDate, formatDateTime, formatTime, DEFAULT_TIMEZONE } from '../utils/datetime';
-import { spacing } from '../theme/tokens';
+import WeekCalendar from '../components/common/WeekCalendar';
+import { dayjsInTimezone, formatDateTime, DEFAULT_TIMEZONE } from '../utils/datetime';
 
 dayjs.extend(updateLocale);
 dayjs.updateLocale('ru', { week: { dow: 1 } });
 dayjs.locale('ru');
 
-const calendarLocaleWithMonday = {
-  ...calendarLocale,
-  lang: {
-    ...calendarLocale.lang,
-    firstDayOfWeek: 1,
-  },
-};
-
 // --- Types --- //
+type LessonStatus = 'scheduled' | 'rescheduled' | 'completed' | 'cancelled';
+
 interface Lesson {
   id: number;
   package_id: number;
   package_title?: string;
   learner_name?: string;
   scheduled_at: string;
-  status: string;
+  status: LessonStatus;
   duration_minutes?: number;
   teacher_notes?: string;
   sequence_index?: number;
@@ -106,9 +98,7 @@ const deleteLesson = async (lessonId: number) => {
 // --- Component --- //
 const Lessons: React.FC = () => {
   const queryClient = useQueryClient();
-  const { isMobile } = useResponsive();
-  const { token } = theme.useToken();
-  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('table');
+  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('calendar');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -117,8 +107,15 @@ const Lessons: React.FC = () => {
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [lessonToDelete, setLessonToDelete] = useState<number | null>(null);
-  const [selectedCalendarDate, setSelectedCalendarDate] = useState<Dayjs | null>(null);
-  const [dayModalOpen, setDayModalOpen] = useState(false);
+  
+  // Reschedule modal state
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
+  const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  
+  // Complete/Cancel confirmation modals
+  const [isCompleteLessonModalOpen, setIsCompleteLessonModalOpen] = useState(false);
+  const [isCancelLessonModalOpen, setIsCancelLessonModalOpen] = useState(false);
 
   const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
@@ -178,6 +175,100 @@ const Lessons: React.FC = () => {
       setDeleteModalOpen(false);
       setLessonToDelete(null);
     }
+  };
+
+  // WeekCalendar handlers
+  const handleLessonClick = (lessonId: number) => {
+    const lesson = calendarData?.items.find((l: Lesson) => l.id === lessonId);
+    if (lesson) {
+      setEditingLesson(lesson);
+      setIsModalOpen(true);
+    }
+  };
+
+  const handleReschedule = (lessonId: number, newDate?: string) => {
+    const lesson = calendarData?.items.find((l: Lesson) => l.id === lessonId);
+    if (newDate && lesson) {
+      // Drag & drop reschedule - update directly
+      updateMutation.mutate({
+        lessonId,
+        values: { scheduled_at: newDate, status: 'rescheduled' },
+      });
+    } else {
+      // Context menu reschedule - open modal
+      setSelectedLesson(lesson || null);
+      setSelectedLessonId(lessonId);
+      setIsRescheduleModalOpen(true);
+    }
+  };
+
+  const handleRescheduleSubmit = (values: { date: dayjs.Dayjs; time: dayjs.Dayjs; duration_minutes?: number }) => {
+    if (!selectedLessonId) return;
+    const newDateTime = values.date
+      .hour(values.time.hour())
+      .minute(values.time.minute())
+      .second(0);
+    const updateValues: any = { 
+      scheduled_at: newDateTime.toISOString(), 
+      status: 'rescheduled' 
+    };
+    if (values.duration_minutes) {
+      updateValues.duration_minutes = values.duration_minutes;
+    }
+    updateMutation.mutate(
+      { lessonId: selectedLessonId, values: updateValues },
+      {
+        onSuccess: () => {
+          message.success('Lesson rescheduled');
+          setIsRescheduleModalOpen(false);
+          setSelectedLessonId(null);
+          setSelectedLesson(null);
+        },
+      }
+    );
+  };
+
+  const handleComplete = (lessonId: number) => {
+    setSelectedLessonId(lessonId);
+    setIsCompleteLessonModalOpen(true);
+  };
+
+  const confirmComplete = () => {
+    if (!selectedLessonId) return;
+    updateMutation.mutate(
+      { lessonId: selectedLessonId, values: { status: 'completed' } },
+      {
+        onSuccess: () => {
+          message.success('Lesson marked as completed');
+          setIsCompleteLessonModalOpen(false);
+          setSelectedLessonId(null);
+        },
+      }
+    );
+  };
+
+  const handleCancel = (lessonId: number) => {
+    setSelectedLessonId(lessonId);
+    setIsCancelLessonModalOpen(true);
+  };
+
+  const confirmCancel = () => {
+    if (!selectedLessonId) return;
+    updateMutation.mutate(
+      { lessonId: selectedLessonId, values: { status: 'cancelled' } },
+      {
+        onSuccess: () => {
+          message.success('Lesson cancelled');
+          setIsCancelLessonModalOpen(false);
+          setSelectedLessonId(null);
+        },
+      }
+    );
+  };
+
+  const handleDeleteFromCalendar = (lessonId: number) => {
+    setLessonToDelete(lessonId);
+    setDeleteModalOpen(true);
   }
 
   const getStatusColor = (status: string) => {
@@ -253,104 +344,6 @@ const Lessons: React.FC = () => {
     setPageSize(pagination.pageSize || 10);
   };
 
-  // Group lessons by date for calendar performance (use calendarData for calendar view)
-  const lessonsByDate = useMemo(() => {
-    const items = calendarData?.items || [];
-    if (items.length === 0) return new Map<string, Lesson[]>();
-    
-    const grouped = new Map<string, Lesson[]>();
-    items.forEach(lesson => {
-      const dateKey = dayjsInTimezone(lesson.scheduled_at, lesson.timezone).format('YYYY-MM-DD');
-      if (!grouped.has(dateKey)) {
-        grouped.set(dateKey, []);
-      }
-      grouped.get(dateKey)!.push(lesson);
-    });
-    return grouped;
-  }, [calendarData?.items]);
-
-  // Get lessons content for a specific date (used in cellRender)
-  const getLessonsContent = (dateKey: string) => {
-    const lessonsOnDate = lessonsByDate.get(dateKey) || [];
-    if (lessonsOnDate.length === 0) return null;
-
-    // Mobile: Show dots only
-    if (isMobile) {
-      return (
-        <div style={{ display: 'flex', justifyContent: 'center', gap: 2, flexWrap: 'wrap' }}>
-          {lessonsOnDate.slice(0, 3).map(lesson => (
-            <Badge
-              key={lesson.id}
-              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : lesson.status === 'rescheduled' ? 'warning' : 'processing'}
-            />
-          ))}
-          {lessonsOnDate.length > 3 && (
-            <span style={{ fontSize: 10, color: token.colorTextSecondary }}>+{lessonsOnDate.length - 3}</span>
-          )}
-        </div>
-      );
-    }
-
-    // Desktop: Show lesson list
-    return (
-      <ul style={{ listStyle: 'none', padding: 0, margin: 0 }}>
-        {lessonsOnDate.slice(0, 3).map(lesson => (
-          <li key={lesson.id}>
-            <Badge 
-              status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : lesson.status === 'rescheduled' ? 'warning' : 'processing'} 
-              text={formatTime(lesson.scheduled_at, { timezone: lesson.timezone })} 
-            />
-          </li>
-        ))}
-        {lessonsOnDate.length > 3 && <li style={{ fontSize: 12, color: '#8c8c8c' }}>+{lessonsOnDate.length - 3} more</li>}
-      </ul>
-    );
-  };
-
-  // Calendar cell renderer - returns CONTENT to add to the cell (not replacing the date number)
-  // In Ant Design 5.x cellRender, return null for no extra content, or JSX to add below the date
-  const dateCellRender = (value: Dayjs) => {
-    const dateKey = value.format('YYYY-MM-DD');
-    return getLessonsContent(dateKey);
-  };
-
-  // Wrapper for cellRender that handles different cell types
-  const cellRender = (current: Dayjs, info: { type: string }) => {
-    if (info.type === 'date') return dateCellRender(current);
-    return null;
-  };
-
-  const onCalendarSelect = (date: Dayjs) => {
-    const dateKey = date.format('YYYY-MM-DD');
-    const lessonsOnDate = lessonsByDate.get(dateKey) || [];
-    
-    if (lessonsOnDate.length > 0) {
-      if (isMobile) {
-        setSelectedCalendarDate(date);
-        setDayModalOpen(true);
-      } else {
-        Modal.info({
-          title: `Lessons on ${formatDate(date, { timezone: DEFAULT_TIMEZONE, format: 'YYYY-MM-DD' })}`,
-          content: (
-            <div>
-              {lessonsOnDate.map(lesson => (
-                <div key={lesson.id} style={{ marginBottom: 8 }}>
-                  <Tag color={getStatusColor(lesson.status)}>{lesson.status}</Tag>
-                  {formatTime(lesson.scheduled_at, { timezone: lesson.timezone })} - {lesson.duration_minutes || 60} min
-                </div>
-              ))}
-            </div>
-          ),
-          width: 500,
-        });
-      }
-    }
-  };
-
-  const selectedDateLessons = selectedCalendarDate 
-    ? lessonsByDate.get(selectedCalendarDate.format('YYYY-MM-DD')) || []
-    : [];
-
   return (
     <div>
       <PageHeader 
@@ -415,11 +408,25 @@ const Lessons: React.FC = () => {
               <LessonCard
                 key={lesson.id}
                 lesson={lesson}
-                onEdit={(l) => {
-                  setEditingLesson(l);
-                  setIsModalOpen(true);
+                timezone={lesson.timezone || DEFAULT_TIMEZONE}
+                onReschedule={(id) => {
+                  const l = data?.items.find((item: Lesson) => item.id === id);
+                  if (l) {
+                    setSelectedLesson(l);
+                    setSelectedLessonId(id);
+                    setIsRescheduleModalOpen(true);
+                  }
                 }}
+                onComplete={handleComplete}
+                onCancel={handleCancel}
                 onDelete={handleDelete}
+                onClick={(id) => {
+                  const l = data?.items.find((item: Lesson) => item.id === id);
+                  if (l) {
+                    setEditingLesson(l);
+                    setIsModalOpen(true);
+                  }
+                }}
               />
             )}
             tableProps={{
@@ -438,47 +445,16 @@ const Lessons: React.FC = () => {
           />
         </>
       ) : (
-        <Card>
-          <Calendar 
-            locale={calendarLocaleWithMonday}
-            cellRender={cellRender}
-            onSelect={onCalendarSelect}
-            fullscreen={!isMobile}
-          />
-        </Card>
-      )}
-
-      {/* Mobile: Day details modal for calendar */}
-      <Modal
-        open={dayModalOpen}
-        title={selectedCalendarDate?.format('dddd, D MMMM')}
-        onCancel={() => setDayModalOpen(false)}
-        footer={null}
-        width={isMobile ? '100%' : 400}
-      >
-        <List
-          dataSource={selectedDateLessons}
-          renderItem={(lesson) => (
-            <List.Item
-              onClick={() => {
-                setDayModalOpen(false);
-                setEditingLesson(lesson);
-                setIsModalOpen(true);
-              }}
-              style={{ cursor: 'pointer', padding: spacing.sm }}
-            >
-              <Space>
-                <Badge 
-                  status={lesson.status === 'completed' ? 'success' : lesson.status === 'cancelled' ? 'error' : lesson.status === 'rescheduled' ? 'warning' : 'processing'} 
-                />
-                <span>{formatTime(lesson.scheduled_at, { timezone: lesson.timezone })}</span>
-                <Tag color={getStatusColor(lesson.status)}>{lesson.status}</Tag>
-                <span>{lesson.duration_minutes || 60} min</span>
-              </Space>
-            </List.Item>
-          )}
+        <WeekCalendar
+          lessons={calendarData?.items || []}
+          timezone={DEFAULT_TIMEZONE}
+          onLessonClick={handleLessonClick}
+          onReschedule={handleReschedule}
+          onComplete={handleComplete}
+          onCancel={handleCancel}
+          onDelete={handleDeleteFromCalendar}
         />
-      </Modal>
+      )}
 
       <LessonForm
         open={isModalOpen}
@@ -494,10 +470,55 @@ const Lessons: React.FC = () => {
         onCancel={() => setDeleteModalOpen(false)}
         onOk={confirmDelete}
         okText="Delete"
-        okButtonProps={{loading: deleteMutation.isPending }}
-        >
+        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+      >
         <p>Are you sure you want to delete this lesson?</p>
         <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+      </Modal>
+
+      {/* Reschedule Modal */}
+      <RescheduleForm
+        open={isRescheduleModalOpen}
+        onCancel={() => {
+          setIsRescheduleModalOpen(false);
+          setSelectedLessonId(null);
+          setSelectedLesson(null);
+        }}
+        onFinish={handleRescheduleSubmit}
+        isLoading={updateMutation.isPending}
+        currentDateTime={selectedLesson?.scheduled_at}
+        currentDuration={selectedLesson?.duration_minutes}
+      />
+
+      {/* Complete Lesson Modal */}
+      <Modal
+        title="Mark as Completed"
+        open={isCompleteLessonModalOpen}
+        onOk={confirmComplete}
+        onCancel={() => {
+          setIsCompleteLessonModalOpen(false);
+          setSelectedLessonId(null);
+        }}
+        okText="Complete"
+        confirmLoading={updateMutation.isPending}
+      >
+        <p>Mark this lesson as completed?</p>
+      </Modal>
+
+      {/* Cancel Lesson Modal */}
+      <Modal
+        title="Cancel Lesson"
+        open={isCancelLessonModalOpen}
+        onOk={confirmCancel}
+        onCancel={() => {
+          setIsCancelLessonModalOpen(false);
+          setSelectedLessonId(null);
+        }}
+        okText="Yes, Cancel"
+        okButtonProps={{ danger: true }}
+        confirmLoading={updateMutation.isPending}
+      >
+        <p>Are you sure you want to cancel this lesson?</p>
       </Modal>
     </div>
   );

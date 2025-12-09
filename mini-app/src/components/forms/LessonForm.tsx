@@ -16,11 +16,12 @@ interface LessonFormProps {
   onFinish: (values: any) => void;
   isLoading: boolean;
   initialValues?: any; // Объект с начальными значениями для редактирования
+  mode?: 'create' | 'edit'; // Явный режим формы
 }
 
 const { Option } = Select;
 
-const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoading, initialValues }) => {
+const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoading, initialValues, mode }) => {
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -35,7 +36,8 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
     }
   }, [initialValues, form, open]);
 
-  const isEditing = !!initialValues;
+  // Use explicit mode if provided, otherwise infer from initialValues.id
+  const isEditing = mode === 'edit' || (mode !== 'create' && !!initialValues?.id);
   const lessonTimezone = initialValues?.timezone || DEFAULT_TIMEZONE;
 
   return (

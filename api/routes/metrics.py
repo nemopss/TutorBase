@@ -28,11 +28,13 @@ def _coerce_row_to_date(raw: datetime | date | str) -> date:
 
 @router.get("/summary", response_model=MetricsSummary)
 async def metrics_summary(
+    from_date: datetime | None = Query(None, description="Filter lessons from this date"),
+    to_date: datetime | None = Query(None, description="Filter lessons to this date"),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
 ) -> MetricsSummary:
-    lessons = await crud.count_lessons_by_status(session, current_tenant)
+    lessons = await crud.count_lessons_by_status(session, current_tenant, from_date=from_date, to_date=to_date)
     reminders = await crud.count_reminders_by_status(session, current_tenant)
     return MetricsSummary(lessons=lessons, reminders=reminders)
 

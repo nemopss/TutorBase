@@ -105,6 +105,15 @@ async def sync_package_metrics(
     else:
         package.end_date = None
 
+    # Auto-complete package if all lessons are completed or cancelled
+    if lessons and package.status == 'active':
+        all_done = all(
+            lesson.status in ('completed', 'cancelled')
+            for lesson in lessons
+        )
+        if all_done:
+            package.status = 'completed'
+
     await session.flush([package])
     for lesson in lessons:
         lesson.package = package

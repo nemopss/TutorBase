@@ -1,6 +1,5 @@
-import React from 'react';
-import { Card, Tag, Progress, Button, Space, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
+import { Card, Progress, Typography, Tag } from 'antd';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
@@ -16,128 +15,156 @@ interface Package {
   id: number;
   title: string;
   learner_name: string;
-  status: string;
+  status: 'active' | 'completed' | 'cancelled' | 'draft';
   progress: PackageProgress;
-  price?: number | null;
-  payment_status?: string;
+  next_lesson_date?: string | null;
 }
 
 interface PackageCardProps {
   package: Package;
-  onEdit: (pkg: Package) => void;
-  onDelete: (id: number) => void;
-  onClick?: (pkg: Package) => void;
+  onClick?: () => void;
 }
 
+/**
+ * Format lesson count as "X/Y уроков"
+ */
+export const formatLessonCount = (progress: PackageProgress): string => {
+  const done = progress.completed + progress.cancelled;
+  return `${done}/${progress.total} уроков`;
+};
+
+/**
+ * Get badge color for package status
+ */
+export const getStatusBadgeColor = (status: string): string => {
+  switch (status) {
+    case 'active': return 'green';
+    case 'completed': return 'blue';
+    default: return 'default';
+  }
+};
+
+/**
+ * Get status label in Russian
+ */
+const getStatusLabel = (status: string): string => {
+  switch (status) {
+    case 'active': return 'Активен';
+    case 'completed': return 'Завершён';
+    case 'cancelled': return 'Отменён';
+    case 'draft': return 'Черновик';
+    default: return status;
+  }
+};
+
+/**
+ * Format next lesson date as "Следующий: DD MMM" or "Нет запланированных"
+ */
+export const formatNextLessonDate = (dateStr?: string | null): string => {
+  if (!dateStr) return 'Нет запланированных';
+  
+  const date = new Date(dateStr);
+  const day = date.getDate();
+  const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
+  const month = months[date.getMonth()];
+  
+  return `Следующий: ${day} ${month}`;
+};
+
+/**
+ * Package card with new layout:
+ * - Title + learner name on the left
+ * - Progress ring on the right (no percentage)
+ * - Lesson count + status badge
+ * - Next lesson date (for active packages)
+ */
 const PackageCard: React.FC<PackageCardProps> = ({
   package: pkg,
-  onEdit,
-  onDelete,
   onClick,
 }) => {
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
+  const [isPressed, setIsPressed] = useState(false);
 
   const progress = pkg.progress || { total: 0, completed: 0, cancelled: 0 };
   const percent = progress.total > 0
     ? Math.round(((progress.completed + progress.cancelled) / progress.total) * 100)
     : 0;
 
-  const statusColor = pkg.status === 'active' ? 'green' : 'volcano';
-
-  const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  const getPaymentStatusColor = (status?: string): string => {
-    switch (status) {
-      case 'paid': return 'green';
-      case 'partial': return 'orange';
-      case 'unpaid': return 'red';
-      default: return 'default';
-    }
-  };
-
-  const getPaymentStatusLabel = (status?: string): string => {
-    switch (status) {
-      case 'paid': return 'Оплачен';
-      case 'partial': return 'Частично';
-      case 'unpaid': return 'Не оплачен';
-      default: return '—';
-    }
-  };
+  const isActive = pkg.status === 'active';
 
   return (
     <Card
-      size="small"
+      hoverable
       style={{
-        marginBottom: spacing.sm,
-        cursor: onClick ? 'pointer' : 'default',
+        cursor: 'pointer',
         background: isDark ? '#1f1f1f' : '#ffffff',
         borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
+        transform: isPressed ? 'scale(0.98)' : 'scale(1)',
+        transition: 'transform 0.1s ease-out',
       }}
-      onClick={() => onClick?.(pkg)}
-      actions={[
-        <Button
-          key="edit"
-          type="text"
-          icon={<EditOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(pkg);
-          }}
-        >
-          Edit
-        </Button>,
-        <Button
-          key="delete"
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(pkg.id);
-          }}
-        >
-          Delete
-        </Button>,
-      ]}
+      bodyStyle={{
+        padding: spacing.md,
+      }}
+      onClick={onClick}
+      onMouseDown={() => setIsPressed(true)}
+      onMouseUp={() => setIsPressed(false)}
+      onMouseLeave={() => setIsPressed(false)}
+      onTouchStart={() => setIsPressed(true)}
+      onTouchEnd={() => setIsPressed(false)}
     >
-      <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Text strong style={{ fontSize: 16 }}>{pkg.title}</Text>
-          <Tag color={statusColor}>{pkg.status?.toUpperCase() || 'UNKNOWN'}</Tag>
-        </div>
-        
-        <Text type="secondary">{pkg.learner_name}</Text>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-          <Progress
-            percent={percent}
-            size="small"
-            strokeColor="#0f7b6c"
-            style={{ flex: 1, margin: 0 }}
-          />
-          <Text type="secondary" style={{ fontSize: 12, minWidth: 60 }}>
-            {progress.completed}+{progress.cancelled}/{progress.total}
+      {/* Top row: Title + Progress */}
+      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: spacing.sm }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <Text
+            strong
+            style={{
+              fontSize: 16,
+              lineHeight: 1.3,
+              display: 'block',
+            }}
+            ellipsis
+          >
+            {pkg.title}
+          </Text>
+          <Text
+            type="secondary"
+            style={{
+              fontSize: 12,
+              fontWeight: 300,
+              display: 'block',
+              marginTop: 2,
+            }}
+            ellipsis
+          >
+            {pkg.learner_name}
           </Text>
         </div>
+        <Progress
+          type="circle"
+          percent={percent}
+          size={48}
+          strokeColor="#0f7b6c"
+          format={() => null}
+        />
+      </div>
 
-        {/* Price and Payment Status */}
-        {(pkg.price !== undefined && pkg.price !== null) && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs }}>
-            <Text style={{ fontSize: 14 }}>{formatCurrency(pkg.price)}</Text>
-            <Tag color={getPaymentStatusColor(pkg.payment_status)}>
-              {getPaymentStatusLabel(pkg.payment_status)}
-            </Tag>
-          </div>
-        )}
-      </Space>
+      {/* Lesson count + Status badge */}
+      <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm }}>
+        <Text type="secondary" style={{ fontSize: 12 }}>
+          {formatLessonCount(progress)}
+        </Text>
+        <Tag color={getStatusBadgeColor(pkg.status)} style={{ margin: 0, fontSize: 11 }}>
+          {getStatusLabel(pkg.status)}
+        </Tag>
+      </div>
+
+      {/* Next lesson date (active packages only) */}
+      {isActive && (
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+          {formatNextLessonDate(pkg.next_lesson_date)}
+        </Text>
+      )}
     </Card>
   );
 };
