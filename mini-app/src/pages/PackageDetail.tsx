@@ -27,6 +27,7 @@ import SegmentedProgress from '../components/common/SegmentedProgress';
 import WeekCalendar from '../components/common/WeekCalendar';
 import PackageForm from '../components/forms/PackageForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
+import LessonForm from '../components/forms/LessonForm';
 import { formatDate } from '../utils/datetime';
 import { spacing } from '../theme/tokens';
 import { useThemeMode } from '../theme/ThemeProvider';
@@ -143,8 +144,10 @@ const PackageDetail: React.FC = () => {
   const [isDeleteLessonModalOpen, setIsDeleteLessonModalOpen] = useState(false);
   const [isCompleteLessonModalOpen, setIsCompleteLessonModalOpen] = useState(false);
   const [isCancelLessonModalOpen, setIsCancelLessonModalOpen] = useState(false);
+  const [isAddLessonModalOpen, setIsAddLessonModalOpen] = useState(false);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [newLessonDate, setNewLessonDate] = useState<string | null>(null);
 
   // Queries
   const {
@@ -165,6 +168,23 @@ const PackageDetail: React.FC = () => {
   });
 
   // Mutations
+  const createLessonMutation = useMutation({
+    mutationFn: async (values: any) => {
+      const { data } = await api.post(`/lessons/packages/${id}`, values);
+      return data;
+    },
+    onSuccess: () => {
+      message.success('Lesson created');
+      queryClient.invalidateQueries({ queryKey: ['packageLessons', id] });
+      queryClient.invalidateQueries({ queryKey: ['package', id] });
+      setIsAddLessonModalOpen(false);
+      setNewLessonDate(null);
+    },
+    onError: (error: Error) => {
+      message.error(`Error: ${error.message}`);
+    },
+  });
+
   const updateLessonMutation = useMutation({
     mutationFn: updateLesson,
     onSuccess: () => {
@@ -477,6 +497,12 @@ const PackageDetail: React.FC = () => {
     setIsRescheduleModalOpen(true);
   };
 
+  // Handle add lesson from calendar
+  const handleAddLesson = (date: string) => {
+    setNewLessonDate(date);
+    setIsAddLessonModalOpen(true);
+  };
+
   const lessonsContent = (
     <div>
       {isLoadingLessons ? (
@@ -486,6 +512,7 @@ const PackageDetail: React.FC = () => {
           lessons={lessonsData?.items || []}
           timezone={packageData?.timezone || 'UTC'}
           onLessonClick={handleLessonClick}
+          onAddLesson={handleAddLesson}
         />
       )}
     </div>
@@ -660,6 +687,22 @@ const PackageDetail: React.FC = () => {
       >
         <p>Are you sure you want to cancel this lesson?</p>
       </Modal>
+
+      {/* Add Lesson Modal */}
+      <LessonForm
+        open={isAddLessonModalOpen}
+        onCancel={() => {
+          setIsAddLessonModalOpen(false);
+          setNewLessonDate(null);
+        }}
+        onFinish={(values) => createLessonMutation.mutate(values)}
+        isLoading={createLessonMutation.isPending}
+        initialValues={newLessonDate ? {
+          scheduled_at: dayjs(newLessonDate).hour(10).minute(0),
+          duration_minutes: 60,
+          timezone: packageData?.timezone || 'Europe/Moscow',
+        } : undefined}
+      />
     </div>
   );
 };

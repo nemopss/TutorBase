@@ -1,6 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Button, Typography } from 'antd';
-import { LeftOutlined, RightOutlined } from '@ant-design/icons';
+import { LeftOutlined, RightOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
@@ -29,6 +29,7 @@ interface WeekCalendarProps {
   lessons: Lesson[];
   timezone: string;
   onLessonClick: (lessonId: number) => void;
+  onAddLesson?: (date: string) => void;
 }
 
 /** Status colors for lesson blocks */
@@ -78,6 +79,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
   lessons,
   timezone: tz,
   onLessonClick,
+  onAddLesson,
 }) => {
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
@@ -227,21 +229,51 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
           const dateKey = day.format('YYYY-MM-DD');
           const dayLessons = lessonsByDay[dateKey] || [];
           const isToday = day.isSame(dayjs().tz(tz), 'day');
+          const [isHovered, setIsHovered] = useState(false);
 
           return (
             <div
               key={`cell-${index}`}
+              onMouseEnter={() => setIsHovered(true)}
+              onMouseLeave={() => setIsHovered(false)}
+              onClick={(e) => {
+                // Only trigger if clicking on empty space, not on a lesson
+                if (e.target === e.currentTarget && onAddLesson) {
+                  onAddLesson(dateKey);
+                }
+              }}
               style={{
                 background: isDark 
                   ? (isToday ? '#1a1a2e' : '#141414') 
                   : (isToday ? '#f0f7ff' : '#ffffff'),
                 padding: spacing.xs,
+                position: 'relative',
                 display: 'flex',
                 flexDirection: 'column',
                 gap: 6,
                 overflowY: 'auto',
+                cursor: onAddLesson ? 'pointer' : 'default',
               }}
             >
+              {/* Add lesson button - shows on hover */}
+              {onAddLesson && isHovered && (
+                <Button
+                  type="dashed"
+                  size="small"
+                  icon={<PlusOutlined />}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    onAddLesson(dateKey);
+                  }}
+                  style={{
+                    position: 'absolute',
+                    top: 4,
+                    right: 4,
+                    zIndex: 10,
+                    opacity: 0.8,
+                  }}
+                />
+              )}
               {dayLessons.map(lesson => {
                 const lessonTime = dayjs(lesson.scheduled_at).tz(tz);
                 const duration = lesson.duration_minutes || DEFAULT_DURATION;
