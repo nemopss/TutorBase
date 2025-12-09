@@ -838,18 +838,21 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
   const today = dayjs().tz(tz);
   const isTodayVisible = today.isSameOrAfter(viewStart, 'day') && today.isSameOrBefore(viewEnd, 'day');
 
-  // Calculate week stats
+  // Calculate week stats - only for currently visible days
   const weekStats = useMemo(() => {
     let totalLessons = 0;
     let totalMinutes = 0;
-    Object.values(lessonsByDay).forEach(dayLessons => {
+    // Only count lessons from currently visible weekDays, not prev/next panels
+    weekDays.forEach(day => {
+      const dateKey = day.format('YYYY-MM-DD');
+      const dayLessons = lessonsByDay[dateKey] || [];
       totalLessons += dayLessons.length;
       dayLessons.forEach(l => {
         totalMinutes += l.duration_minutes || DEFAULT_DURATION;
       });
     });
     return { totalLessons, totalHours: Math.round(totalMinutes / 60 * 10) / 10 };
-  }, [lessonsByDay]);
+  }, [lessonsByDay, weekDays]);
 
   // Calculate initial scroll position (earliest lesson or 08:00)
   const initialScrollTop = useMemo(() => {
