@@ -1,14 +1,16 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery, useMutation, useQueryClient, keepPreviousData } from '@tanstack/react-query';
-import { Tag, Select, Space, Input, Modal, Button, message, Progress, Alert } from 'antd';
-import type { TableProps } from 'antd';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { Tabs, Modal, Button, message, Alert, Card } from 'antd';
+import { PlusOutlined } from '@ant-design/icons';
 import api from '../services/api';
-import { useDebounce } from '../hooks/useDebounce';
 import PackageForm from '../components/forms/PackageForm';
 import PageHeader from '../components/common/PageHeader';
-import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import PackageCard from '../components/cards/PackageCard';
+import PackageGrid from '../components/common/PackageGrid';
+import FloatingActionButton from '../components/common/FloatingActionButton';
+import { useThemeMode } from '../theme/ThemeProvider';
+import { spacing } from '../theme/tokens';
 
 // --- Types --- //
 interface PackageProgress {
@@ -33,6 +35,7 @@ interface Package {
   template_id?: number | null;
   price?: number | null;
   payment_status?: string;
+  created_at?: string;
 }
 
 interface PackageListResponse {
@@ -40,34 +43,12 @@ interface PackageListResponse {
   items: Package[];
 }
 
-interface PackageFormValues {
-  id?: number;
-  learner_id?: number;
-  template_id?: number | null;
-  title?: string;
-  status?: string;
-  notes?: string;
-  start_date?: string | null;
-  end_date?: string | null;
-  timezone?: string;
-  total_lessons?: number | null;
-}
-
-const STATUS_OPTIONS = [
-  { value: 'active', label: 'Active' },
-  { value: 'draft', label: 'Draft' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
-
 // --- API Fetchers --- //
-const fetchPackages = async (page: number, pageSize: number, status: string | null, search: string): Promise<PackageListResponse> => {
+const fetchPackages = async (status: string): Promise<PackageListResponse> => {
   const { data } = await api.get('/packages', {
     params: {
-      offset: (page - 1) * pageSize,
-      limit: pageSize,
       status_filter: status,
-      search: search || undefined,
+      limit: 100,
     },
   });
   return data;
@@ -78,348 +59,124 @@ const createPackage = async (values: any) => {
   return data;
 };
 
-const updatePackage = async ({ id, values }: { id: number; values: any }) => {
-  const { data } = await api.patch(`/packages/${id}`, values);
-  return data;
-};
-
-const deletePackage = async (id: number) => {
-  await api.delete(`/packages/${id}`);
-};
-
-const toFormValues = (pkg: Package): PackageFormValues => ({
-  id: pkg.id,
-  learner_id: pkg.learner_id ?? pkg.learner?.id,
-  template_id: pkg.template_id ?? null,
-  title: pkg.title,
-  status: pkg.status,
-  notes: pkg.notes ?? undefined,
-  start_date: pkg.start_date ?? null,
-  end_date: pkg.end_date ?? null,
-  timezone: pkg.timezone ?? 'Europe/Moscow',
-  total_lessons: pkg.total_lessons ?? null,
-});
-
 // --- Component --- //
 const Packages: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(10);
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
+  const { resolvedTheme } = useThemeMode();
+  const isDark = resolvedTheme === 'dark';
+  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
   const [isModalOpen, setIsModalOpen] = useState(false);
-  const [editingPackage, setEditingPackage] = useState<PackageFormValues | null>(null);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [packageToDelete, setPackageToDelete] = useState<number | null>(null);
-
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
 
   const { data, isLoading, error, isError } = useQuery<PackageListResponse, Error>({
-    queryKey: ['packages', currentPage, pageSize, statusFilter, debouncedSearchTerm],
-    queryFn: () => fetchPackages(currentPage, pageSize, statusFilter, debouncedSearchTerm),
-    placeholderData: keepPreviousData,
+    queryKey: ['packages', activeTab],
+    queryFn: () => fetchPackages(activeTab),
   });
 
   const packagesData = data?.items ?? [];
-  const packagesTotal = data?.total ?? 0;
 
-  // Debug logging for Android
-  React.useEffect(() => {
-    if (import.meta.env.DEV) {
-      console.log('Packages Debug:', { 
-        isLoading, 
-        isError, 
-        error: error?.message,
-        hasData: !!data, 
-        itemsCount: packagesData.length,
-        userAgent: navigator.userAgent 
-      });
-    }
-  }, [data, isLoading, isError, error]);
+  // Sort by creation date (newest first)
+  const sortedPackages = useMemo(() => {
+    return [...packagesData].sort((a, b) => {
+      const dateA = a.created_at ? new Date(a.created_at).getTime() : 0;
+      const dateB = b.created_at ? new Date(b.created_at).getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [packagesData]);
 
-  const mutationOptions = {
+  const createMutation = useMutation({
+    mutationFn: createPackage,
     onSuccess: () => {
+      message.success('Package created successfully!');
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       setIsModalOpen(false);
-      setEditingPackage(null);
     },
     onError: (error: Error) => {
       message.error(`An error occurred: ${error.message}`);
-    }
-  };
-
-  const createMutation = useMutation({ 
-    mutationFn: createPackage,
-    ...mutationOptions,
-    onSuccess: () => {
-      message.success('Package created successfully!');
-      mutationOptions.onSuccess();
-    }
-  });
-
-  const updateMutation = useMutation({ 
-    mutationFn: updatePackage,
-    ...mutationOptions,
-    onSuccess: () => {
-      message.success('Package updated successfully!');
-      mutationOptions.onSuccess();
-    }
-  });
-
-  const deleteMutation = useMutation({ 
-    mutationFn: deletePackage,
-    onSuccess: () => {
-      message.success('Package deleted successfully!');
-      queryClient.invalidateQueries({ queryKey: ['packages'] });
     },
-    onError: (error: any) => {
-      console.error('Delete error:', error);
-      message.error(`Failed to delete package: ${error.message}`);
-    }
   });
-
-  const handleDelete = (id: number) => {
-    setPackageToDelete(id);
-    setDeleteModalOpen(true);
-  };
-
-  const confirmDelete = () => {
-    if (packageToDelete) {
-      deleteMutation.mutate(packageToDelete);
-      setDeleteModalOpen(false);
-      setPackageToDelete(null);
-    }
-  };
-  
-  const handleDeleteCancel = () => {
-    if (deleteMutation.isPending) return;
-    setDeleteModalOpen(false);
-    setPackageToDelete(null);
-  };
 
   const handleFormFinish = (values: any) => {
-    if (editingPackage?.id) {
-      updateMutation.mutate({ id: editingPackage.id, values });
-    } else {
-      createMutation.mutate(values);
-    }
+    createMutation.mutate(values);
   };
 
-  const columns: TableProps<Package>['columns'] = [
-    {
-      title: 'Title',
-      dataIndex: 'title',
-      key: 'title',
-      render: (text, record) => (
-        <a
-          onClick={(e) => {
-            e.preventDefault();
-            e.stopPropagation();
-            navigate(`/packages/${record.id}`);
-          }}
-        >
-          {text}
-        </a>
-      ),
-    },
-    {
-      title: 'Learner',
-      dataIndex: 'learner_name',
-      key: 'learner_name',
-    },
-    {
-      title: 'Status',
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => {
-        const displayStatus = status ? status.toUpperCase() : 'UNKNOWN';
-        return <Tag color={status === 'active' ? 'green' : 'volcano'}>{displayStatus}</Tag>;
-      },
-    },
-    {
-      title: 'Progress',
-      key: 'progress',
-      width: 200,
-      render: (_, record) => {
-        const progress = record.progress || { total: 0, completed: 0, cancelled: 0 };
-        const percent = progress.total > 0 
-          ? Math.round(((progress.completed + progress.cancelled) / progress.total) * 100) 
-          : 0;
-        return (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <Progress 
-              percent={percent} 
-              size="small" 
-              strokeColor="#0f7b6c"
-              style={{ flex: 1, margin: 0 }}
-            />
-            <span style={{ fontSize: 12, color: '#8c8c8c', minWidth: 60 }}>
-              {progress.completed}+{progress.cancelled}/{progress.total}
-            </span>
-          </div>
-        );
-      },
-    },
-    {
-      title: 'Price',
-      dataIndex: 'price',
-      key: 'price',
-      width: 120,
-      render: (price: number | null) => {
-        if (price === null || price === undefined) return '—';
-        return new Intl.NumberFormat('ru-RU', {
-          style: 'currency',
-          currency: 'RUB',
-          minimumFractionDigits: 0,
-        }).format(price);
-      },
-    },
-    {
-      title: 'Payment',
-      dataIndex: 'payment_status',
-      key: 'payment_status',
-      width: 100,
-      render: (status: string) => {
-        const colorMap: Record<string, string> = {
-          paid: 'green',
-          partial: 'orange',
-          unpaid: 'red',
-        };
-        const labelMap: Record<string, string> = {
-          paid: 'Paid',
-          partial: 'Partial',
-          unpaid: 'Unpaid',
-        };
-        return <Tag color={colorMap[status] || 'default'}>{labelMap[status] || status}</Tag>;
-      },
-    },
-    {
-      title: 'Actions',
-      key: 'actions',
-      render: (_, record) => (
-        <Space size="middle">
-          <Button
-            type="link"
-            onClick={(e) => {
-              e.stopPropagation();
-              setEditingPackage(toFormValues(record));
-              setIsModalOpen(true);
-            }}
-          >
-            Edit
-          </Button>
-          <Button type="link" danger onClick={(e) => { e.stopPropagation(); handleDelete(record.id); }}>Delete</Button>
-        </Space>
-      ),
-    },
+  const hasPackages = sortedPackages.length > 0;
+
+  const tabItems = [
+    { key: 'active', label: 'Active' },
+    { key: 'completed', label: 'Completed' },
   ];
-
-  const handleTableChange = (pagination: any) => {
-    setCurrentPage(pagination.current);
-    setPageSize(pagination.pageSize);
-  };
 
   return (
     <div>
-      <PageHeader 
+      <PageHeader
         title="Packages"
         subtitle="Manage lesson packages for your students"
-        actions={
-          <Button type="primary" onClick={() => { setEditingPackage(null); setIsModalOpen(true); }}>
-            Create Package
-          </Button>
-        }
-      />
-      <Space style={{ marginBottom: 16, width: '100%', gap: 12 }} wrap>
-        <Input.Search
-          placeholder="Search by title or learner"
-          allowClear
-          onSearch={() => {
-            setCurrentPage(1);
-          }}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setCurrentPage(1);
-          }}
-          style={{ width: 250, minWidth: 200 }}
-        />
-        <Select
-          placeholder="Filter by status"
-          allowClear
-          style={{ width: 180, minWidth: 150 }}
-          options={STATUS_OPTIONS}
-          onChange={(value) => {
-            setStatusFilter(value);
-            setCurrentPage(1);
-          }}
-        />
-      </Space>
-      {isError && (
-        <Alert 
-          message="Error loading packages" 
-          description={error?.message || 'Failed to load packages'} 
-          type="error" 
-          showIcon
-          style={{ marginBottom: 16 }}
-        />
-      )}
-      <ResponsiveDataView<Package>
-        data={packagesData}
-        loading={isLoading}
-        columns={columns}
-        rowKey="id"
-        emptyText="No packages yet"
-        emptyDescription="Create your first lesson package to get started"
-        emptyActionText="Create Package"
-        onEmptyAction={() => { setEditingPackage(null); setIsModalOpen(true); }}
-        onItemClick={(record) => navigate(`/packages/${record.id}`)}
-        renderCard={(pkg) => (
-          <PackageCard
-            key={pkg.id}
-            package={pkg}
-            onEdit={(p) => {
-              setEditingPackage(toFormValues(p as Package));
-              setIsModalOpen(true);
-            }}
-            onDelete={handleDelete}
-            onClick={() => navigate(`/packages/${pkg.id}`)}
-          />
-        )}
-        tableProps={{
-          scroll: { x: 800 },
-          onChange: handleTableChange,
-          bordered: true,
-        }}
-        pagination={{
-          current: currentPage,
-          pageSize: pageSize,
-          total: packagesTotal,
-          showSizeChanger: true,
-          showQuickJumper: true,
-          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} packages`,
-        }}
-      />
-      <PackageForm 
-        open={isModalOpen}
-        onCancel={() => { setIsModalOpen(false); setEditingPackage(null); }}
-        onFinish={handleFormFinish}
-        isLoading={createMutation.isPending || updateMutation.isPending}
-        initialValues={editingPackage ?? undefined}
       />
 
-      <Modal
-        open={deleteModalOpen}
-        title="Delete Package"
-        onCancel={handleDeleteCancel}
-        onOk={confirmDelete}
-        okText="Delete"
-        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
-        cancelButtonProps={{ disabled: deleteMutation.isPending }}
-      >
-        <p>Are you sure you want to delete this package?</p>
-        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
-      </Modal>
+      <Tabs
+        activeKey={activeTab}
+        onChange={(key) => setActiveTab(key as 'active' | 'completed')}
+        items={tabItems}
+        style={{ marginBottom: spacing.md }}
+      />
+
+      {isError && (
+        <Alert
+          message="Error loading packages"
+          description={error?.message || 'Failed to load packages'}
+          type="error"
+          showIcon
+          style={{ marginBottom: spacing.md }}
+        />
+      )}
+
+      <PackageGrid loading={isLoading}>
+        {!hasPackages && !isLoading ? (
+          <Card
+            hoverable
+            onClick={() => setIsModalOpen(true)}
+            style={{
+              minHeight: 140,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              border: '2px dashed',
+              borderColor: isDark ? '#3a3a3a' : '#d9d9d9',
+              background: 'transparent',
+            }}
+            bodyStyle={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+            }}
+          >
+            <PlusOutlined style={{ fontSize: 32, color: '#8c8c8c' }} />
+          </Card>
+        ) : (
+          sortedPackages.map((pkg) => (
+            <PackageCard
+              key={pkg.id}
+              package={pkg}
+              onClick={() => navigate(`/packages/${pkg.id}`)}
+            />
+          ))
+        )}
+      </PackageGrid>
+
+      {hasPackages && (
+        <FloatingActionButton
+          icon={<PlusOutlined />}
+          onClick={() => setIsModalOpen(true)}
+        />
+      )}
+
+      <PackageForm
+        open={isModalOpen}
+        onCancel={() => setIsModalOpen(false)}
+        onFinish={handleFormFinish}
+        isLoading={createMutation.isPending}
+      />
     </div>
   );
 };

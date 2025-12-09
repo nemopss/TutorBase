@@ -1,115 +1,162 @@
 import React from 'react';
-import { Card, Tag, Button, Space, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined, ClockCircleOutlined } from '@ant-design/icons';
+import { Card, Tag, Typography, Dropdown, Button } from 'antd';
+import type { MenuProps } from 'antd';
+import {
+  MoreOutlined,
+  ClockCircleOutlined,
+  CalendarOutlined,
+  CheckOutlined,
+  CloseOutlined,
+  DeleteOutlined,
+} from '@ant-design/icons';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 import { formatDateTime } from '../../utils/datetime';
 
 const { Text } = Typography;
 
+type LessonStatus = 'scheduled' | 'rescheduled' | 'completed' | 'cancelled';
+
 interface Lesson {
   id: number;
-  package_id: number;
-  package_title?: string;
-  learner_name?: string;
   scheduled_at: string;
-  status: string;
+  status: LessonStatus;
   duration_minutes?: number;
-  teacher_notes?: string;
-  timezone: string;
 }
 
 interface LessonCardProps {
   lesson: Lesson;
-  onEdit: (lesson: Lesson) => void;
-  onDelete: (id: number) => void;
-  onClick?: (lesson: Lesson) => void;
+  timezone: string;
+  onReschedule: (lessonId: number) => void;
+  onComplete: (lessonId: number) => void;
+  onCancel: (lessonId: number) => void;
+  onDelete: (lessonId: number) => void;
 }
 
-const getStatusColor = (status: string) => {
+/** Status to color mapping */
+const getStatusColor = (status: LessonStatus): string => {
   switch (status) {
-    case 'scheduled': return 'blue';
-    case 'completed': return 'green';
-    case 'cancelled': return 'red';
-    default: return 'default';
+    case 'scheduled':
+      return '#1890ff'; // blue
+    case 'rescheduled':
+      return '#faad14'; // gold
+    case 'completed':
+      return '#52c41a'; // green
+    case 'cancelled':
+      return '#ff4d4f'; // red
+    default:
+      return '#d9d9d9';
   }
 };
 
+/** Status to tag color mapping for Ant Design Tag */
+const getTagColor = (status: LessonStatus): string => {
+  switch (status) {
+    case 'scheduled':
+      return 'blue';
+    case 'rescheduled':
+      return 'gold';
+    case 'completed':
+      return 'green';
+    case 'cancelled':
+      return 'red';
+    default:
+      return 'default';
+  }
+};
+
+/**
+ * Lesson card with colored left border and action menu.
+ */
 const LessonCard: React.FC<LessonCardProps> = ({
   lesson,
-  onEdit,
+  timezone,
+  onReschedule,
+  onComplete,
+  onCancel,
   onDelete,
-  onClick,
 }) => {
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
+
+  const menuItems: MenuProps['items'] = [
+    {
+      key: 'reschedule',
+      icon: <CalendarOutlined />,
+      label: 'Reschedule',
+      onClick: () => onReschedule(lesson.id),
+    },
+    {
+      key: 'complete',
+      icon: <CheckOutlined />,
+      label: 'Mark as Completed',
+      onClick: () => onComplete(lesson.id),
+    },
+    {
+      key: 'cancel',
+      icon: <CloseOutlined />,
+      label: 'Cancel',
+      onClick: () => onCancel(lesson.id),
+    },
+    { type: 'divider' },
+    {
+      key: 'delete',
+      icon: <DeleteOutlined />,
+      label: 'Delete',
+      danger: true,
+      onClick: () => onDelete(lesson.id),
+    },
+  ];
+
+  const borderColor = getStatusColor(lesson.status);
 
   return (
     <Card
       size="small"
       style={{
-        marginBottom: spacing.sm,
-        cursor: onClick ? 'pointer' : 'default',
+        borderLeft: `4px solid ${borderColor}`,
         background: isDark ? '#1f1f1f' : '#ffffff',
         borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
       }}
-      onClick={() => onClick?.(lesson)}
-      actions={[
-        <Button
-          key="edit"
-          type="text"
-          icon={<EditOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(lesson);
-          }}
-        >
-          Edit
-        </Button>,
-        <Button
-          key="delete"
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(lesson.id);
-          }}
-        >
-          Delete
-        </Button>,
-      ]}
+      bodyStyle={{
+        padding: spacing.sm,
+      }}
     >
-      <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Text strong style={{ fontSize: 14 }}>
-            {formatDateTime(lesson.scheduled_at, { timezone: lesson.timezone })}
+      <div
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'flex-start',
+        }}
+      >
+        <div style={{ flex: 1 }}>
+          <Text strong style={{ fontSize: 14, display: 'block' }}>
+            {formatDateTime(lesson.scheduled_at, { timezone })}
           </Text>
-          <Tag color={getStatusColor(lesson.status)}>{lesson.status.toUpperCase()}</Tag>
-        </div>
-        
-        <div style={{ display: 'flex', gap: spacing.md, flexWrap: 'wrap' }}>
-          {lesson.package_title && (
-            <Text type="secondary">{lesson.package_title}</Text>
+          {lesson.duration_minutes && (
+            <Text
+              type="secondary"
+              style={{ fontSize: 12, display: 'flex', alignItems: 'center', gap: 4, marginTop: 4 }}
+            >
+              <ClockCircleOutlined />
+              {lesson.duration_minutes} min
+            </Text>
           )}
-          {lesson.learner_name && (
-            <Text type="secondary">• {lesson.learner_name}</Text>
-          )}
         </div>
-        
-        {lesson.duration_minutes && (
-          <Space size={spacing.xs}>
-            <ClockCircleOutlined style={{ color: '#8c8c8c' }} />
-            <Text type="secondary">{lesson.duration_minutes} min</Text>
-          </Space>
-        )}
-        
-        {lesson.teacher_notes && (
-          <Text type="secondary" style={{ fontSize: 12 }} ellipsis>
-            {lesson.teacher_notes}
-          </Text>
-        )}
-      </Space>
+        <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs }}>
+          <Tag color={getTagColor(lesson.status)}>
+            {lesson.status.toUpperCase()}
+          </Tag>
+          <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+            <Button
+              type="text"
+              icon={<MoreOutlined />}
+              size="small"
+              onClick={(e) => e.stopPropagation()}
+            />
+          </Dropdown>
+        </div>
+      </div>
     </Card>
   );
 };

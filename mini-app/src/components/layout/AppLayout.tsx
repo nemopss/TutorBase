@@ -35,11 +35,12 @@ const baseMenuItems: NonNullable<MenuProps['items']> = [
     icon: <AppstoreOutlined />,
     label: <Link to="/packages">Packages</Link>,
   },
-  {
-    key: '/lessons',
-    icon: <CalendarOutlined />,
-    label: <Link to="/lessons">Lessons</Link>,
-  },
+  // Lessons menu item hidden - lessons are now managed through Package Detail page
+  // {
+  //   key: '/lessons',
+  //   icon: <CalendarOutlined />,
+  //   label: <Link to="/lessons">Lessons</Link>,
+  // },
   {
     key: '/learners',
     icon: <TeamOutlined />,

@@ -1,6 +1,5 @@
-import React from 'react';
-import { Card, Tag, Progress, Button, Space, Typography } from 'antd';
-import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import React, { useState } from 'react';
+import { Card, Progress, Typography } from 'antd';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
@@ -16,128 +15,85 @@ interface Package {
   id: number;
   title: string;
   learner_name: string;
-  status: string;
   progress: PackageProgress;
-  price?: number | null;
-  payment_status?: string;
 }
 
 interface PackageCardProps {
   package: Package;
-  onEdit: (pkg: Package) => void;
-  onDelete: (id: number) => void;
-  onClick?: (pkg: Package) => void;
+  onClick?: () => void;
 }
 
+/**
+ * Simplified package card with circular progress.
+ * Shows: title (bold), learner name (light), circular progress with percentage.
+ * No action buttons - all actions through detail page.
+ */
 const PackageCard: React.FC<PackageCardProps> = ({
   package: pkg,
-  onEdit,
-  onDelete,
   onClick,
 }) => {
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
+  const [isPressed, setIsPressed] = useState(false);
 
   const progress = pkg.progress || { total: 0, completed: 0, cancelled: 0 };
   const percent = progress.total > 0
     ? Math.round(((progress.completed + progress.cancelled) / progress.total) * 100)
     : 0;
 
-  const statusColor = pkg.status === 'active' ? 'green' : 'volcano';
-
-  const formatCurrency = (value: number): string => {
-    return new Intl.NumberFormat('ru-RU', {
-      style: 'currency',
-      currency: 'RUB',
-      minimumFractionDigits: 0,
-      maximumFractionDigits: 0,
-    }).format(value);
-  };
-
-  const getPaymentStatusColor = (status?: string): string => {
-    switch (status) {
-      case 'paid': return 'green';
-      case 'partial': return 'orange';
-      case 'unpaid': return 'red';
-      default: return 'default';
-    }
-  };
-
-  const getPaymentStatusLabel = (status?: string): string => {
-    switch (status) {
-      case 'paid': return 'Оплачен';
-      case 'partial': return 'Частично';
-      case 'unpaid': return 'Не оплачен';
-      default: return '—';
-    }
-  };
-
   return (
     <Card
-      size="small"
+      hoverable
       style={{
-        marginBottom: spacing.sm,
-        cursor: onClick ? 'pointer' : 'default',
+        cursor: 'pointer',
         background: isDark ? '#1f1f1f' : '#ffffff',
         borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
+        transform: isPressed ? 'scale(0.98)' : 'scale(1)',
+        transition: 'transform 0.1s ease-out',
       }}
-      onClick={() => onClick?.(pkg)}
-      actions={[
-        <Button
-          key="edit"
-          type="text"
-          icon={<EditOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            onEdit(pkg);
-          }}
-        >
-          Edit
-        </Button>,
-        <Button
-          key="delete"
-          type="text"
-          danger
-          icon={<DeleteOutlined />}
-          onClick={(e) => {
-            e.stopPropagation();
-            onDelete(pkg.id);
-          }}
-        >
-          Delete
-        </Button>,
-      ]}
+      bodyStyle={{
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center',
+        padding: spacing.md,
+        gap: spacing.sm,
+      }}
+      onClick={onClick}
+      onMouseDown={() => setIsPressed(true)}
+      onMouseUp={() => setIsPressed(false)}
+      onMouseLeave={() => setIsPressed(false)}
+      onTouchStart={() => setIsPressed(true)}
+      onTouchEnd={() => setIsPressed(false)}
     >
-      <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>
-        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
-          <Text strong style={{ fontSize: 16 }}>{pkg.title}</Text>
-          <Tag color={statusColor}>{pkg.status?.toUpperCase() || 'UNKNOWN'}</Tag>
-        </div>
-        
-        <Text type="secondary">{pkg.learner_name}</Text>
-        
-        <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-          <Progress
-            percent={percent}
-            size="small"
-            strokeColor="#0f7b6c"
-            style={{ flex: 1, margin: 0 }}
-          />
-          <Text type="secondary" style={{ fontSize: 12, minWidth: 60 }}>
-            {progress.completed}+{progress.cancelled}/{progress.total}
-          </Text>
-        </div>
-
-        {/* Price and Payment Status */}
-        {(pkg.price !== undefined && pkg.price !== null) && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: spacing.xs }}>
-            <Text style={{ fontSize: 14 }}>{formatCurrency(pkg.price)}</Text>
-            <Tag color={getPaymentStatusColor(pkg.payment_status)}>
-              {getPaymentStatusLabel(pkg.payment_status)}
-            </Tag>
-          </div>
-        )}
-      </Space>
+      <Progress
+        type="circle"
+        percent={percent}
+        size={60}
+        strokeColor="#0f7b6c"
+        format={(p) => `${p}%`}
+      />
+      <Text
+        strong
+        style={{
+          fontSize: 16,
+          textAlign: 'center',
+          lineHeight: 1.3,
+        }}
+        ellipsis={{ rows: 2 }}
+      >
+        {pkg.title}
+      </Text>
+      <Text
+        type="secondary"
+        style={{
+          fontSize: 12,
+          fontWeight: 300,
+          textAlign: 'center',
+        }}
+        ellipsis
+      >
+        {pkg.learner_name}
+      </Text>
     </Card>
   );
 };
