@@ -150,18 +150,22 @@ const PackageCard: React.FC<PackageCardProps> = ({
       </div>
 
       {/* Lesson count + Status badge */}
-      <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm }}>
-        <Text type="secondary" style={{ fontSize: 12 }}>
+      <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm, flexWrap: 'wrap' }}>
+        <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
           {formatLessonCount(progress)}
         </Text>
-        <Tag color={getStatusBadgeColor(pkg.status)} style={{ margin: 0, fontSize: 11 }}>
+        <Tag color={getStatusBadgeColor(pkg.status)} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>
           {getStatusLabel(pkg.status)}
         </Tag>
       </div>
 
       {/* Next lesson date (active packages only) */}
       {isActive && (
-        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+        <Text 
+          type="secondary" 
+          style={{ fontSize: 12, display: 'block', marginTop: 4 }}
+          ellipsis
+        >
           {formatNextLessonDate(pkg.next_lesson_date)}
         </Text>
       )}
