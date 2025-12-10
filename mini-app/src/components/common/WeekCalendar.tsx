@@ -17,6 +17,8 @@ import { useDragAndDrop } from '../../hooks/useDragAndDrop';
 import TimeScale, { PIXELS_PER_HOUR, TIME_SCALE_WIDTH, TOTAL_HEIGHT } from './TimeScale';
 import LessonContextMenu from './LessonContextMenu';
 import CurrentTimeIndicator from './CurrentTimeIndicator';
+import type { Lesson } from './calendar-types';
+import { statusColors, DEFAULT_DURATION, DAYS_FULL } from './calendar-types';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -26,15 +28,6 @@ dayjs.extend(isSameOrAfter);
 dayjs.extend(isSameOrBefore);
 
 const { Text } = Typography;
-
-type LessonStatus = 'scheduled' | 'rescheduled' | 'completed' | 'cancelled';
-
-interface Lesson {
-  id: number;
-  scheduled_at: string;
-  status: LessonStatus;
-  duration_minutes?: number;
-}
 
 interface WeekCalendarProps {
   lessons: Lesson[];
@@ -47,43 +40,12 @@ interface WeekCalendarProps {
   onDelete?: (lessonId: number) => void;
 }
 
-/** Status colors for lesson blocks */
-const statusColors: Record<LessonStatus, { bg: string; bgDark: string; border: string; text: string }> = {
-  scheduled: {
-    bg: 'rgba(24, 144, 255, 0.15)',
-    bgDark: 'rgba(24, 144, 255, 0.25)',
-    border: '#1890ff',
-    text: '#1890ff',
-  },
-  rescheduled: {
-    bg: 'rgba(250, 173, 20, 0.15)',
-    bgDark: 'rgba(250, 173, 20, 0.25)',
-    border: '#faad14',
-    text: '#d48806',
-  },
-  completed: {
-    bg: 'rgba(82, 196, 26, 0.15)',
-    bgDark: 'rgba(82, 196, 26, 0.25)',
-    border: '#52c41a',
-    text: '#389e0d',
-  },
-  cancelled: {
-    bg: 'rgba(255, 77, 79, 0.15)',
-    bgDark: 'rgba(255, 77, 79, 0.25)',
-    border: '#ff4d4f',
-    text: '#cf1322',
-  },
-};
-
-const DAYS_FULL = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
-
 // Responsive constants
 const MOBILE_DAY_COUNT = 3;
 const DESKTOP_DAY_COUNT = 7;
 
 // Time-based positioning constants
 const MIN_LESSON_HEIGHT = 30; // Minimum height for very short lessons
-const DEFAULT_DURATION = 60;
 const DEFAULT_SCROLL_HOUR = 8; // Default scroll to 08:00
 
 /**
