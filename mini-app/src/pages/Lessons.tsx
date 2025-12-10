@@ -13,7 +13,7 @@ import RescheduleForm from '../components/forms/RescheduleForm';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import LessonCard from '../components/cards/LessonCard';
-import WeekCalendar from '../components/common/WeekCalendar';
+import CalendarContainer from '../components/common/CalendarContainer';
 import { dayjsInTimezone, formatDateTime, DEFAULT_TIMEZONE } from '../utils/datetime';
 
 dayjs.extend(updateLocale);
@@ -177,7 +177,7 @@ const Lessons: React.FC = () => {
     }
   };
 
-  // WeekCalendar handlers
+  // Calendar handlers
   const handleLessonClick = (lessonId: number) => {
     const lesson = calendarData?.items.find((l: Lesson) => l.id === lessonId);
     if (lesson) {
@@ -445,7 +445,7 @@ const Lessons: React.FC = () => {
           />
         </>
       ) : (
-        <WeekCalendar
+        <CalendarContainer
           lessons={calendarData?.items || []}
           timezone={DEFAULT_TIMEZONE}
           onLessonClick={handleLessonClick}

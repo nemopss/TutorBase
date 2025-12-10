@@ -30,7 +30,7 @@ import {
 import dayjs from 'dayjs';
 import api from '../services/api';
 import SegmentedProgress from '../components/common/SegmentedProgress';
-import WeekCalendar from '../components/common/WeekCalendar';
+import CalendarContainer from '../components/common/CalendarContainer';
 import PackageForm from '../components/forms/PackageForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
 import LessonForm from '../components/forms/LessonForm';
@@ -568,7 +568,7 @@ const PackageDetail: React.FC = () => {
       {isLoadingLessons ? (
         <Spin />
       ) : (
-        <WeekCalendar
+        <CalendarContainer
           lessons={lessonsData?.items || []}
           timezone={packageData?.timezone || 'UTC'}
           onLessonClick={handleLessonClick}
