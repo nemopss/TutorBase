@@ -80,12 +80,17 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
     return (
       <div
         key={lesson.id}
+        onClick={() => {
+          onLessonClick(lesson.id);
+          onClose();
+        }}
         style={{
           background: isDark ? colors.bgDark : colors.bg,
           borderLeft: `4px solid ${colors.border}`,
           borderRadius: 8,
           padding: spacing.sm,
           marginBottom: spacing.sm,
+          cursor: 'pointer',
         }}
       >
         {/* Time and status row */}
