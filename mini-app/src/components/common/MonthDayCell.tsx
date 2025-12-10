@@ -4,7 +4,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
 import type { Lesson } from './calendar-types';
-import { statusColors, DEFAULT_DURATION } from './calendar-types';
+import { statusColors } from './calendar-types';
 import { spacing } from '../../theme/tokens';
 
 const { Text } = Typography;

@@ -58,13 +58,13 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
     
     // Get the day of week for the first day (0 = Sunday, 1 = Monday, etc.)
     // We want Monday as first day, so adjust
-    let startDayOfWeek = startOfMonth.day();
-    if (startDayOfWeek === 0) startDayOfWeek = 7; // Sunday becomes 7
+    const startDayRaw = startOfMonth.day();
+    const startDayOfWeek = startDayRaw === 0 ? 7 : startDayRaw; // Sunday becomes 7
     const paddingBefore = startDayOfWeek - 1; // Days from previous month
     
     // Get the day of week for the last day
-    let endDayOfWeek = endOfMonth.day();
-    if (endDayOfWeek === 0) endDayOfWeek = 7;
+    const endDayRaw = endOfMonth.day();
+    const endDayOfWeek = endDayRaw === 0 ? 7 : endDayRaw;
     const paddingAfter = 7 - endDayOfWeek; // Days from next month
     
     const days: Dayjs[] = [];
