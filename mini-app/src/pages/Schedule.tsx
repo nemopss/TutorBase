@@ -2,27 +2,27 @@ import React, { useState } from 'react';
 import { Segmented, Spin, Alert, Typography } from 'antd';
 import { CalendarOutlined, UnorderedListOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
-import dayjs, { Dayjs } from 'dayjs';
 import api from '../services/api';
-import MonthCalendar from '../components/schedule/MonthCalendar';
-import WeekView from '../components/schedule/WeekView';
+import MonthCalendar from '../components/common/MonthCalendar';
+import WeekCalendar from '../components/common/WeekCalendar';
 import ListView from '../components/schedule/ListView';
 import LessonDrawer from '../components/schedule/LessonDrawer';
-import type { Lesson, ViewMode } from '../components/schedule/types';
+import type { Lesson as CommonLesson } from '../components/common/calendar-types';
+import type { Lesson as ScheduleLesson, ViewMode } from '../components/schedule/types';
+import { DEFAULT_TIMEZONE } from '../utils/datetime';
 
 const { Title } = Typography;
 
 const Schedule: React.FC = () => {
   const [viewMode, setViewMode] = useState<ViewMode>('month');
-  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<ScheduleLesson | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
-  const [currentDate] = useState<Dayjs>(dayjs());
 
   // Fetch all lessons for student
   const { data: lessonsData, isLoading, error } = useQuery({
     queryKey: ['lessons', 'schedule'],
     queryFn: async () => {
-      const { data } = await api.get<{ items: Lesson[], total: number }>('/lessons', {
+      const { data } = await api.get<{ items: CommonLesson[], total: number }>('/lessons', {
         params: { 
           limit: 100, // Max allowed by API validation
           sort_by: 'scheduled_at',
@@ -35,7 +35,23 @@ const Schedule: React.FC = () => {
 
   const lessons = lessonsData?.items || [];
 
-  const handleLessonClick = (lesson: Lesson) => {
+  // Handler for common calendar components (receives lessonId)
+  const handleLessonClickById = (lessonId: number) => {
+    const lesson = lessons.find(l => l.id === lessonId);
+    if (lesson) {
+      // Convert to ScheduleLesson format for drawer
+      setSelectedLesson({
+        id: lesson.id,
+        scheduled_at: lesson.scheduled_at,
+        status: lesson.status === 'rescheduled' ? 'scheduled' : lesson.status,
+        duration_minutes: lesson.duration_minutes || 60,
+      });
+      setDrawerOpen(true);
+    }
+  };
+
+  // Handler for ListView (receives full lesson object)
+  const handleLessonClickByObject = (lesson: ScheduleLesson) => {
     setSelectedLesson(lesson);
     setDrawerOpen(true);
   };
@@ -106,22 +122,30 @@ const Schedule: React.FC = () => {
       {viewMode === 'month' && (
         <MonthCalendar 
           lessons={lessons} 
-          onLessonClick={handleLessonClick}
+          timezone={DEFAULT_TIMEZONE}
+          onLessonClick={handleLessonClickById}
+          // Read-only mode: no edit callbacks
         />
       )}
 
       {viewMode === 'week' && (
-        <WeekView 
+        <WeekCalendar 
           lessons={lessons}
-          currentDate={currentDate}
-          onLessonClick={handleLessonClick}
+          timezone={DEFAULT_TIMEZONE}
+          onLessonClick={handleLessonClickById}
+          // Read-only mode: no edit callbacks
         />
       )}
 
       {viewMode === 'list' && (
         <ListView 
-          lessons={lessons}
-          onLessonClick={handleLessonClick}
+          lessons={lessons.map(l => ({
+            id: l.id,
+            scheduled_at: l.scheduled_at,
+            status: l.status === 'rescheduled' ? 'scheduled' : l.status,
+            duration_minutes: l.duration_minutes || 60,
+          }))}
+          onLessonClick={handleLessonClickByObject}
         />
       )}
 
