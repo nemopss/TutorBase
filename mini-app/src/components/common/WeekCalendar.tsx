@@ -545,14 +545,18 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     lessonId: null,
   });
 
-  // Context menu handlers
+  // Check if any edit actions are available
+  const hasEditActions = !!(onReschedule || onComplete || onCancel || onDelete);
+
+  // Context menu handlers - only show if edit actions are available
   const handleContextMenu = useCallback((lessonId: number, position: { x: number; y: number }) => {
+    if (!hasEditActions) return; // Don't show context menu in read-only mode
     setContextMenu({
       visible: true,
       position,
       lessonId,
     });
-  }, []);
+  }, [hasEditActions]);
 
   const handleCloseContextMenu = useCallback(() => {
     setContextMenu(prev => ({ ...prev, visible: false }));
@@ -1084,17 +1088,19 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
         </div>
       </div>
 
-      {/* Context menu */}
-      <LessonContextMenu
-        visible={contextMenu.visible}
-        position={contextMenu.position}
-        lessonId={contextMenu.lessonId || 0}
-        onReschedule={handleReschedule}
-        onComplete={handleComplete}
-        onCancel={handleCancel}
-        onDelete={handleDelete}
-        onClose={handleCloseContextMenu}
-      />
+      {/* Context menu - only render if edit actions are available */}
+      {hasEditActions && (
+        <LessonContextMenu
+          visible={contextMenu.visible}
+          position={contextMenu.position}
+          lessonId={contextMenu.lessonId || 0}
+          onReschedule={onReschedule ? handleReschedule : undefined}
+          onComplete={onComplete ? handleComplete : undefined}
+          onCancel={onCancel ? handleCancel : undefined}
+          onDelete={onDelete ? handleDelete : undefined}
+          onClose={handleCloseContextMenu}
+        />
+      )}
 
       {/* Legend */}
       <div style={{
