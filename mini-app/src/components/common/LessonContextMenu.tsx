@@ -11,10 +11,10 @@ interface LessonContextMenuProps {
   visible: boolean;
   position: { x: number; y: number };
   lessonId: number;
-  onReschedule: () => void;
-  onComplete: () => void;
-  onCancel: () => void;
-  onDelete: () => void;
+  onReschedule?: () => void;
+  onComplete?: () => void;
+  onCancel?: () => void;
+  onDelete?: () => void;
   onClose: () => void;
 }
 
@@ -39,9 +39,12 @@ const LessonContextMenu: React.FC<LessonContextMenuProps> = ({
   const isDark = resolvedTheme === 'dark';
   const menuRef = useRef<HTMLDivElement>(null);
 
+  // Count available menu items for height calculation
+  const menuItemCount = [onReschedule, onComplete, onCancel, onDelete].filter(Boolean).length;
+
   // Calculate adjusted position to keep menu within viewport
   const adjustedPosition = React.useMemo(() => {
-    const menuHeight = (4 * MENU_ITEM_HEIGHT) + (2 * MENU_PADDING);
+    const menuHeight = (menuItemCount * MENU_ITEM_HEIGHT) + (2 * MENU_PADDING);
     let x = position.x;
     let y = position.y;
 
@@ -62,7 +65,7 @@ const LessonContextMenu: React.FC<LessonContextMenuProps> = ({
     }
 
     return { x, y };
-  }, [position]);
+  }, [position, menuItemCount]);
 
   // Close on outside click
   useEffect(() => {
@@ -89,35 +92,43 @@ const LessonContextMenu: React.FC<LessonContextMenuProps> = ({
     };
   }, [visible, onClose]);
 
-  if (!visible) return null;
-
+  // Build menu items based on available callbacks
   const menuItems = [
-    { 
+    onReschedule && { 
       icon: <CalendarOutlined />, 
       label: 'Reschedule', 
       onClick: onReschedule,
       color: '#1890ff',
     },
-    { 
+    onComplete && { 
       icon: <CheckCircleOutlined />, 
       label: 'Mark as Completed', 
       onClick: onComplete,
       color: '#52c41a',
     },
-    { 
+    onCancel && { 
       icon: <CloseCircleOutlined />, 
       label: 'Cancel Lesson', 
       onClick: onCancel,
       color: '#faad14',
     },
-    { 
+    onDelete && { 
       icon: <DeleteOutlined />, 
       label: 'Delete', 
       onClick: onDelete,
       color: '#ff4d4f',
       danger: true,
     },
-  ];
+  ].filter(Boolean) as Array<{
+    icon: React.ReactNode;
+    label: string;
+    onClick: () => void;
+    color: string;
+    danger?: boolean;
+  }>;
+
+  // Don't show menu if no actions available
+  if (!visible || menuItems.length === 0) return null;
 
   return (
     <div

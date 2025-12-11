@@ -128,54 +128,64 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
           {duration} мин
         </Text>
 
-        {/* Action buttons */}
-        <Space size="small" wrap>
-          <Button
-            size="small"
-            icon={<CalendarOutlined />}
-            onClick={() => {
-              onReschedule?.(lesson.id);
-              onClose();
-            }}
-          >
-            Перенести
-          </Button>
-          {lesson.status !== 'completed' && (
-            <Button
-              size="small"
-              icon={<CheckCircleOutlined />}
-              onClick={() => {
-                onComplete?.(lesson.id);
-                onClose();
-              }}
-            >
-              Завершить
-            </Button>
-          )}
-          {lesson.status !== 'cancelled' && (
-            <Button
-              size="small"
-              icon={<CloseCircleOutlined />}
-              onClick={() => {
-                onCancel?.(lesson.id);
-                onClose();
-              }}
-            >
-              Отменить
-            </Button>
-          )}
-          <Button
-            size="small"
-            danger
-            icon={<DeleteOutlined />}
-            onClick={() => {
-              onDelete?.(lesson.id);
-              onClose();
-            }}
-          >
-            Удалить
-          </Button>
-        </Space>
+        {/* Action buttons - only show if any action callback is provided */}
+        {(onReschedule || onComplete || onCancel || onDelete) && (
+          <Space size="small" wrap>
+            {onReschedule && (
+              <Button
+                size="small"
+                icon={<CalendarOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onReschedule(lesson.id);
+                  onClose();
+                }}
+              >
+                Перенести
+              </Button>
+            )}
+            {onComplete && lesson.status !== 'completed' && (
+              <Button
+                size="small"
+                icon={<CheckCircleOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onComplete(lesson.id);
+                  onClose();
+                }}
+              >
+                Завершить
+              </Button>
+            )}
+            {onCancel && lesson.status !== 'cancelled' && (
+              <Button
+                size="small"
+                icon={<CloseCircleOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onCancel(lesson.id);
+                  onClose();
+                }}
+              >
+                Отменить
+              </Button>
+            )}
+            {onDelete && (
+              <Button
+                size="small"
+                danger
+                icon={<DeleteOutlined />}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  onDelete(lesson.id);
+                  onClose();
+                }}
+              >
+                Удалить
+              </Button>
+            )}
+          </Space>
+        )}
       </div>
     );
   };
