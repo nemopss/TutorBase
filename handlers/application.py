@@ -23,9 +23,12 @@ async def cb_to_menu(query: CallbackQuery, state: FSMContext):
     await state.clear()  # Сбрасываем анкету
     try:
         await query.message.edit_text(texts.TO_MENU_MESSAGE, reply_markup=start_keyboard())
-    except TelegramBadRequest:
-        await query.message.delete()
-        await query.message.answer(texts.TO_MENU_MESSAGE, reply_markup=start_keyboard())
+    except TelegramBadRequest as e:
+        if "there is no text in the message to edit" in e.message:
+            await query.message.edit_caption(caption=texts.TO_MENU_MESSAGE, reply_markup=start_keyboard())
+        else:
+            await query.message.delete()
+            await query.message.answer(texts.TO_MENU_MESSAGE, reply_markup=start_keyboard())
     finally:
         await query.answer()
 
@@ -86,16 +89,27 @@ async def cb_back(query: CallbackQuery, state: FSMContext):
 async def cb_start_apply(query: CallbackQuery, state: FSMContext):
     logging.info(f"User {query.from_user.id} (@{query.from_user.username}) started application process.")
 
-    # Создаем клавиатуру с одной кнопкой "Меню"
     menu_button_builder = InlineKeyboardBuilder()
     menu_button_builder.button(text='⬅️ В меню', callback_data='to_menu')
 
-    # Редактируем сообщение, убирая кнопки, и задаем первый вопрос с кнопкой "Меню"
-    prompt_msg = await query.message.edit_text(
-        texts.PROMPT_FOR_NAME,
-        reply_markup=menu_button_builder.as_markup()
-    )
-    await state.set_data({'last_bot_msg_id': prompt_msg.message_id})
+    prompt_msg = None
+    try:
+        prompt_msg = await query.message.edit_text(
+            texts.PROMPT_FOR_NAME,
+            reply_markup=menu_button_builder.as_markup()
+        )
+    except TelegramBadRequest as e:
+        if "there is no text in the message to edit" in e.message:
+            prompt_msg = await query.message.edit_caption(
+                caption=texts.PROMPT_FOR_NAME,
+                reply_markup=menu_button_builder.as_markup()
+            )
+        else:
+            raise
+
+    if prompt_msg:
+        await state.set_data({'last_bot_msg_id': prompt_msg.message_id})
+        
     await state.set_state(ApplyStates.name)
     await query.answer()
 
