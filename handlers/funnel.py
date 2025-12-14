@@ -1,6 +1,7 @@
 import logging
 
 from aiogram import F, Router, types
+from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery
@@ -23,9 +24,15 @@ async def cb_get_prices(query: CallbackQuery):
     builder.button(text="⬅️ В меню", callback_data="to_menu")
     builder.adjust(1)
 
-    # Заменяем текущее сообщение на новое, с предложением диагностики
-    await query.message.edit_text(texts.GET_PRICES_TEXT, reply_markup=builder.as_markup())
-    await query.answer()
+    try:
+        await query.message.edit_text(texts.GET_PRICES_TEXT, reply_markup=builder.as_markup())
+    except TelegramBadRequest as e:
+        if "there is no text in the message to edit" in e.message:
+            await query.message.edit_caption(caption=texts.GET_PRICES_TEXT, reply_markup=builder.as_markup())
+        else:
+            raise
+    finally:
+        await query.answer()
 
 
 @router.callback_query(F.data == "start_diagnostic")
