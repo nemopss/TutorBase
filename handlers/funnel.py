@@ -1,7 +1,6 @@
 import logging
 
 from aiogram import F, Router, types
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery
@@ -18,21 +17,16 @@ class DiagnosticStates(StatesGroup):
     convenient_time = State()
 
 @router.callback_query(F.data == "get_prices")
-async def cb_get_prices(query: CallbackQuery):
+async def cb_get_prices(query: CallbackQuery, state: FSMContext):
     builder = InlineKeyboardBuilder()
     builder.button(text="✅ Да, записаться", callback_data="start_diagnostic")
     builder.button(text="⬅️ В меню", callback_data="to_menu")
     builder.adjust(1)
 
-    try:
-        await query.message.edit_text(texts.GET_PRICES_TEXT, reply_markup=builder.as_markup())
-    except TelegramBadRequest as e:
-        if "there is no text in the message to edit" in e.message:
-            await query.message.edit_caption(caption=texts.GET_PRICES_TEXT, reply_markup=builder.as_markup())
-        else:
-            raise
-    finally:
-        await query.answer()
+    # Отправляем новое сообщение вместо редактирования (исходное с фото остаётся)
+    prompt_msg = await query.message.answer(texts.GET_PRICES_TEXT, reply_markup=builder.as_markup())
+    await state.set_data({'last_bot_msg_id': prompt_msg.message_id})
+    await query.answer()
 
 
 @router.callback_query(F.data == "start_diagnostic")
@@ -43,7 +37,16 @@ async def cb_start_diagnostic(query: CallbackQuery, state: FSMContext):
     builder.button(text="🏠 В меню", callback_data="to_menu")
     builder.adjust(1)
 
-    prompt_msg = await query.message.edit_text(
+    # Удаляем предыдущее сообщение бота и отправляем новое
+    data = await state.get_data()
+    last_bot_msg_id = data.get("last_bot_msg_id")
+    if last_bot_msg_id:
+        try:
+            await query.message.bot.delete_message(query.message.chat.id, last_bot_msg_id)
+        except Exception:
+            pass
+
+    prompt_msg = await query.message.answer(
         texts.PROMPT_FOR_DIAGNOSTIC_TIME,
         reply_markup=builder.as_markup()
     )

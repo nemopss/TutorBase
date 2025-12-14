@@ -2,7 +2,6 @@ import logging
 from datetime import datetime, timezone
 
 from aiogram import F, Router, types
-from aiogram.exceptions import TelegramBadRequest
 from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery
@@ -20,17 +19,21 @@ router = Router()
 @router.callback_query(F.data == "to_menu")
 async def cb_to_menu(query: CallbackQuery, state: FSMContext):
     logging.info(f"User {query.from_user.id} (@{query.from_user.username}) cancelled application process.")
+    
+    # Удаляем предыдущее сообщение бота (если есть)
+    data = await state.get_data()
+    last_bot_msg_id = data.get("last_bot_msg_id")
+    if last_bot_msg_id:
+        try:
+            await query.message.bot.delete_message(query.message.chat.id, last_bot_msg_id)
+        except Exception:
+            pass
+    
     await state.clear()  # Сбрасываем анкету
-    try:
-        await query.message.edit_text(texts.TO_MENU_MESSAGE, reply_markup=start_keyboard())
-    except TelegramBadRequest as e:
-        if "there is no text in the message to edit" in e.message:
-            await query.message.edit_caption(caption=texts.TO_MENU_MESSAGE, reply_markup=start_keyboard())
-        else:
-            await query.message.delete()
-            await query.message.answer(texts.TO_MENU_MESSAGE, reply_markup=start_keyboard())
-    finally:
-        await query.answer()
+    
+    # Отправляем новое сообщение с меню
+    await query.message.answer(texts.TO_MENU_MESSAGE, reply_markup=start_keyboard())
+    await query.answer()
 
 
 @router.callback_query(F.data == "reglament_reply")
@@ -92,24 +95,12 @@ async def cb_start_apply(query: CallbackQuery, state: FSMContext):
     menu_button_builder = InlineKeyboardBuilder()
     menu_button_builder.button(text='⬅️ В меню', callback_data='to_menu')
 
-    prompt_msg = None
-    try:
-        prompt_msg = await query.message.edit_text(
-            texts.PROMPT_FOR_NAME,
-            reply_markup=menu_button_builder.as_markup()
-        )
-    except TelegramBadRequest as e:
-        if "there is no text in the message to edit" in e.message:
-            prompt_msg = await query.message.edit_caption(
-                caption=texts.PROMPT_FOR_NAME,
-                reply_markup=menu_button_builder.as_markup()
-            )
-        else:
-            raise
-
-    if prompt_msg:
-        await state.set_data({'last_bot_msg_id': prompt_msg.message_id})
-        
+    # Отправляем новое сообщение вместо редактирования (исходное с фото остаётся)
+    prompt_msg = await query.message.answer(
+        texts.PROMPT_FOR_NAME,
+        reply_markup=menu_button_builder.as_markup()
+    )
+    await state.set_data({'last_bot_msg_id': prompt_msg.message_id})
     await state.set_state(ApplyStates.name)
     await query.answer()
 
