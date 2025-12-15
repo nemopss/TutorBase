@@ -52,6 +52,20 @@ from database.validators import escape_like_pattern
 # ============================================================================
 
 
+async def add_application_simple(session: AsyncSession, app_data: dict):
+    """Add new student application (simple version for bot).
+    
+    Creates application without tenant context (tenant_id=None).
+    Use this for single-tenant bot scenarios.
+    
+    Args:
+        session: Async database session
+        app_data: Application data dictionary
+    """
+    new_app = Application(**app_data, tenant_id=None)
+    session.add(new_app)
+
+
 async def add_application(session: AsyncSession, current_tenant: CurrentTenant, app_data: dict, tenant_id: Optional[int] = None):
     """Add new student application.
     
