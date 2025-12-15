@@ -40,6 +40,8 @@ export const getStatusBadgeColor = (status: string): string => {
   switch (status) {
     case 'active': return 'green';
     case 'completed': return 'blue';
+    case 'draft': return 'orange';
+    case 'cancelled': return 'red';
     default: return 'default';
   }
 };

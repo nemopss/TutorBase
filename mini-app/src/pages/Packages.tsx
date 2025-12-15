@@ -66,7 +66,7 @@ const Packages: React.FC = () => {
   const queryClient = useQueryClient();
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
-  const [activeTab, setActiveTab] = useState<'active' | 'completed'>('active');
+  const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'draft' | 'cancelled'>('active');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
   const { data, isLoading, error, isError } = useQuery<PackageListResponse, Error>({
@@ -106,6 +106,8 @@ const Packages: React.FC = () => {
   const tabItems = [
     { key: 'active', label: 'Active' },
     { key: 'completed', label: 'Completed' },
+    { key: 'draft', label: 'Drafts' },
+    { key: 'cancelled', label: 'Cancelled' },
   ];
 
   return (
@@ -117,7 +119,7 @@ const Packages: React.FC = () => {
 
       <Tabs
         activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as 'active' | 'completed')}
+        onChange={(key) => setActiveTab(key as 'active' | 'completed' | 'draft' | 'cancelled')}
         items={tabItems}
         style={{ marginBottom: spacing.md }}
       />
