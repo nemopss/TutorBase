@@ -179,7 +179,7 @@ async def state_time(message: types.Message, state: FSMContext, session: AsyncSe
     }
 
     try:
-        await crud.add_application(session, app_data)
+        await crud.add_application_simple(session, app_data)
         await session.commit()  # Commit the transaction
     except Exception as exc:
         await session.rollback()  # Rollback on error
