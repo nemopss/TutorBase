@@ -51,18 +51,19 @@ from database.validators import escape_like_pattern
 # Application CRUD Operations
 # ============================================================================
 
+#TEMP
 
-async def add_application_simple(session: AsyncSession, app_data: dict):
+async def add_application_simple(session: AsyncSession, app_data: dict, tenant_id: int = 1):
     """Add new student application (simple version for bot).
     
-    Creates application without tenant context (tenant_id=None).
-    Use this for single-tenant bot scenarios.
+    Creates application with specified tenant_id (default=1 for single-tenant bot).
     
     Args:
         session: Async database session
         app_data: Application data dictionary
+        tenant_id: Tenant ID (default 1)
     """
-    new_app = Application(**app_data, tenant_id=None)
+    new_app = Application(**app_data, tenant_id=tenant_id)
     session.add(new_app)
 
 
