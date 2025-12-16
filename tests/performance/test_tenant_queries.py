@@ -118,7 +118,7 @@ async def test_pagination_performance(db_session: AsyncSession, current_tenant: 
     """
     # Create test data
     learner = await factories.create_learner(db_session, tenant_id=current_tenant.tenant_id)
-    package = await factories.create_package(db_session, learner=learner)
+    package = await factories.create_package(db_session, learner=learner, status="active")
     
     # Create 200 lessons
     for i in range(200):
@@ -150,7 +150,7 @@ async def test_filtered_query_performance(db_session: AsyncSession, current_tena
     """
     # Create test data with different statuses
     learner = await factories.create_learner(db_session, tenant_id=current_tenant.tenant_id)
-    package = await factories.create_package(db_session, learner=learner)
+    package = await factories.create_package(db_session, learner=learner, status="active")
     
     for i in range(50):
         status = "completed" if i % 2 == 0 else "scheduled"

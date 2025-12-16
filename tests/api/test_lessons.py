@@ -30,7 +30,7 @@ async def test_list_lessons_requires_auth(client: AsyncClient):
 @pytest.mark.asyncio
 async def test_list_all_lessons(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session, display_name="Alice Johnson")
-    package = await factories.create_package(db_session, learner=learner, title="Speaking Course")
+    package = await factories.create_package(db_session, learner=learner, title="Speaking Course", status="active")
     scheduled = datetime(2024, 6, 1, 9, 0, tzinfo=timezone.utc)
     await factories.create_lesson(db_session, package=package, scheduled_at=scheduled)
     await db_session.commit()

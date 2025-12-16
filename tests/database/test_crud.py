@@ -193,7 +193,7 @@ async def test_lesson_package_crud(db_session: AsyncSession, current_tenant: Cur
 async def test_lesson_crud(db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     await db_session.flush()
-    package = await factories.create_package(db_session, learner=learner)
+    package = await factories.create_package(db_session, learner=learner, status="active")
     await db_session.flush()
     lesson = await crud.create_lesson(
         db_session,
