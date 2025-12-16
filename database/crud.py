@@ -1427,6 +1427,10 @@ async def list_all_lessons(
     needs_package_join = False
     needs_learner_join = False
 
+    # Exclude lessons from draft packages (they shouldn't appear in calendar)
+    needs_package_join = True
+    conditions.append(LessonPackage.status != 'draft')
+
     if status:
         conditions.append(Lesson.status == status)
 

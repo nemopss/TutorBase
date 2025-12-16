@@ -107,7 +107,7 @@ async def test_list_lessons(db_session: AsyncSession, current_tenant: CurrentTen
 @pytest.mark.asyncio
 async def test_list_all_lessons(db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session, display_name="Global Student")
-    package = await factories.create_package(db_session, learner=learner, title="Global Package")
+    package = await factories.create_package(db_session, learner=learner, title="Global Package", status="active")
     await factories.create_lesson(db_session, package=package, sequence_index=1)
     await db_session.flush()
 
