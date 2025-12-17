@@ -1,19 +1,17 @@
 import React from 'react';
-import { Card, Select, Button, Avatar, Space, Typography } from 'antd';
+import { Card, Button, Avatar, Space, Typography } from 'antd';
 import { UserOutlined, GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
 import PageHeader from '../components/common/PageHeader';
 import LanguageSelector from '../components/common/LanguageSelector';
-import { useThemeMode } from '../theme/ThemeProvider';
-import type { ThemeMode } from '../theme/ThemeProvider';
+import ThemeSelector from '../components/common/ThemeSelector';
 
 const { Title, Text } = Typography;
 
 const Settings: React.FC = () => {
   const { t } = useTranslation();
   const { user, logout } = useAuth();
-  const { mode, setMode } = useThemeMode();
 
   return (
     <div>
@@ -76,20 +74,11 @@ const Settings: React.FC = () => {
         style={{ marginBottom: 24 }}
       >
         <div>
-          <Text strong style={{ display: 'block', marginBottom: 8 }}>
+          <Text strong style={{ display: 'block', marginBottom: 12 }}>
             {t('pages.settings.theme')}
           </Text>
-          <Select
-            value={mode}
-            onChange={(value: ThemeMode) => setMode(value)}
-            style={{ width: '100%' }}
-            options={[
-              { value: 'auto', label: t('pages.settings.themeAuto') },
-              { value: 'light', label: t('pages.settings.themeLight') },
-              { value: 'dark', label: t('pages.settings.themeDark') },
-            ]}
-          />
-          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+          <ThemeSelector />
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
             {t('pages.settings.themeHelp')}
           </Text>
         </div>

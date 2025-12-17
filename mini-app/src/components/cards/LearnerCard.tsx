@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, Tag, Switch, Space, Typography, Tooltip, Button } from 'antd';
 import { BellOutlined, BellFilled, IdcardOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
 const { Text } = Typography;
@@ -32,8 +32,8 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
   onClick,
 }) => {
   const { t } = useTranslation();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const colors = resolvedTheme.colors;
 
   return (
     <Card
@@ -41,8 +41,8 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
       style={{
         marginBottom: spacing.sm,
         cursor: onClick ? 'pointer' : 'default',
-        background: isDark ? '#1f1f1f' : '#ffffff',
-        borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
+        background: colors.bgSecondary,
+        borderColor: colors.borderPrimary,
       }}
       onClick={() => onClick?.(learner)}
       actions={[

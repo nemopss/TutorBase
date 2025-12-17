@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, Tag, Button, Space, Typography, Tooltip } from 'antd';
 import { CopyOutlined, CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
 const { Text } = Typography;
@@ -30,8 +30,8 @@ const InviteCodeCard: React.FC<InviteCodeCardProps> = ({
   onDelete,
   onClick,
 }) => {
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const colors = resolvedTheme.colors;
 
   const isUsed = !!inviteCode.used_at;
   const isExpired = dayjs(inviteCode.expires_at).isBefore(dayjs());
@@ -65,8 +65,8 @@ const InviteCodeCard: React.FC<InviteCodeCardProps> = ({
       style={{
         marginBottom: spacing.sm,
         cursor: onClick ? 'pointer' : 'default',
-        background: isDark ? '#1f1f1f' : '#ffffff',
-        borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
+        background: colors.bgSecondary,
+        borderColor: colors.borderPrimary,
       }}
       onClick={() => onClick?.(inviteCode)}
       actions={[

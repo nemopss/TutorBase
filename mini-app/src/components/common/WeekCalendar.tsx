@@ -9,7 +9,7 @@ import isoWeek from 'dayjs/plugin/isoWeek';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 import { useResponsive } from '../../hooks/useResponsive';
 import { useLongPress } from '../../hooks/useLongPress';
@@ -124,16 +124,18 @@ const DayColumn: React.FC<DayColumnProps> = ({
   onTouchEnd: onDropTouchEnd,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const themeColors = resolvedTheme.colors;
 
   // Determine background color based on drop target state
   const getBackground = () => {
     if (isDropTarget) {
-      return isDark ? 'rgba(24, 144, 255, 0.2)' : 'rgba(24, 144, 255, 0.1)';
+      return isDark ? `${themeColors.accentPrimary}33` : `${themeColors.accentPrimary}1a`;
     }
     if (isToday) {
-      return isDark ? '#1a1a2e' : '#f0f7ff';
+      return isDark ? `${themeColors.accentPrimary}1a` : `${themeColors.accentPrimary}0d`;
     }
-    return isDark ? '#141414' : '#ffffff';
+    return themeColors.bgPrimary;
   };
 
   const handleMouseEnter = (e: React.MouseEvent) => {
@@ -175,7 +177,7 @@ const DayColumn: React.FC<DayColumnProps> = ({
         height: TOTAL_HEIGHT,
         cursor: onAddLesson ? 'pointer' : 'default',
         transition: 'background 0.15s ease',
-        border: isDropTarget ? '2px dashed #1890ff' : '2px solid transparent',
+        border: isDropTarget ? `2px dashed ${themeColors.accentPrimary}` : '2px solid transparent',
       }}
     >
       {/* Hour grid lines */}
@@ -187,7 +189,7 @@ const DayColumn: React.FC<DayColumnProps> = ({
             top: hour * PIXELS_PER_HOUR,
             left: 0,
             right: 0,
-            borderTop: `1px solid ${isDark ? '#303030' : '#e8e8e8'}`,
+            borderTop: `1px solid ${themeColors.borderPrimary}`,
           }}
         />
       ))}
@@ -227,15 +229,15 @@ const DayColumn: React.FC<DayColumnProps> = ({
             left: 4,
             right: 4,
             height: Math.max(MIN_LESSON_HEIGHT, (dragPreview.duration / 60) * PIXELS_PER_HOUR),
-            background: 'rgba(24, 144, 255, 0.2)',
-            border: '2px dashed #1890ff',
+            background: `${themeColors.accentPrimary}33`,
+            border: `2px dashed ${themeColors.accentPrimary}`,
             borderRadius: 6,
             pointerEvents: 'none',
             zIndex: 50,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'center',
-            color: '#1890ff',
+            color: themeColors.accentPrimary,
             fontSize: 12,
             fontWeight: 600,
             // Smooth animation when snapping to 30-min intervals
@@ -533,8 +535,9 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
   onDelete,
 }) => {
   const { t } = useTranslation();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme.colorScheme === 'dark';
+  const colors = resolvedTheme.colors;
   const { isMobile } = useResponsive();
   
   // Translated days of week
@@ -909,12 +912,12 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
         display: 'grid',
         gridTemplateColumns: `${TIME_SCALE_WIDTH}px repeat(${dayCount}, 1fr)`,
         gap: 1,
-        background: isDark ? '#303030' : '#e8e8e8',
+        background: colors.borderPrimary,
         borderRadius: '8px 8px 0 0',
         overflow: 'hidden',
       }}>
         {/* Empty cell above time scale */}
-        <div style={{ background: isDark ? '#1f1f1f' : '#fafafa' }} />
+        <div style={{ background: colors.bgTertiary }} />
         
         {/* Day headers */}
         {weekDays.map((day, index) => {
@@ -925,7 +928,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
             <div
               key={`header-${index}`}
               style={{
-                background: isDark ? '#1f1f1f' : '#fafafa',
+                background: colors.bgTertiary,
                 padding: `${spacing.xs}px ${spacing.xs}px`,
                 textAlign: 'center',
               }}
@@ -940,8 +943,8 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
                 strong={isToday}
                 style={{ 
                   fontSize: 16,
-                  color: isToday ? '#1890ff' : undefined,
-                  background: isToday ? 'rgba(24, 144, 255, 0.1)' : undefined,
+                  color: isToday ? colors.accentPrimary : undefined,
+                  background: isToday ? `${colors.accentPrimary}1a` : undefined,
                   borderRadius: '50%',
                   width: 28,
                   height: 28,
@@ -959,11 +962,12 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
       {/* Scrollable calendar body with time scale and carousel */}
       <div
         ref={scrollContainerRef}
+        className="week-calendar-scroll"
         style={{
           display: 'flex',
           flex: 1,
           overflow: 'auto',
-          background: isDark ? '#303030' : '#e8e8e8',
+          background: colors.borderPrimary,
           borderRadius: '0 0 8px 8px',
           position: 'relative',
         }}

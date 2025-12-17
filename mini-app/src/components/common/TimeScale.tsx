@@ -1,6 +1,6 @@
 import React from 'react';
 import { Typography } from 'antd';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 
 const { Text } = Typography;
 
@@ -22,8 +22,8 @@ const TimeScale: React.FC<TimeScaleProps> = ({
   startHour = 0,
   endHour = 24,
 }) => {
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const colors = resolvedTheme.colors;
   
   const hours = Array.from(
     { length: endHour - startHour },
@@ -37,7 +37,8 @@ const TimeScale: React.FC<TimeScaleProps> = ({
         height: TOTAL_HEIGHT,
         position: 'relative',
         flexShrink: 0,
-        borderRight: `1px solid ${isDark ? '#303030' : '#e8e8e8'}`,
+        borderRight: `1px solid ${colors.borderPrimary}`,
+        background: colors.bgSecondary,
       }}
     >
       {hours.map((hour) => (

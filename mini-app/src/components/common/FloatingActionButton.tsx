@@ -1,6 +1,6 @@
 import React from 'react';
 import { Button } from 'antd';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 
 interface FloatingActionButtonProps {
   /** Icon to display in the button */
@@ -20,12 +20,12 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
   onClick,
   position = 'bottom-right',
 }) => {
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme.colorScheme === 'dark';
 
   const positionStyles = position === 'bottom-right'
-    ? { right: 24, left: 'auto' }
-    : { left: 24, right: 'auto' };
+    ? { right: 32, left: 'auto' }
+    : { left: 32, right: 'auto' };
 
   return (
     <Button
@@ -35,7 +35,7 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
       onClick={onClick}
       style={{
         position: 'fixed',
-        bottom: 24,
+        bottom: 32,
         ...positionStyles,
         width: 56,
         height: 56,

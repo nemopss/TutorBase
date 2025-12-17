@@ -8,7 +8,7 @@ import isoWeek from 'dayjs/plugin/isoWeek';
 import { useTranslation } from 'react-i18next';
 import type { Lesson } from './calendar-types';
 import { DEFAULT_DURATION } from './calendar-types';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { useResponsive } from '../../hooks/useResponsive';
 import { spacing } from '../../theme/tokens';
 import MonthDayCell from './MonthDayCell';
@@ -42,8 +42,9 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
   onDelete,
 }) => {
   const { t } = useTranslation();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme.colorScheme === 'dark';
+  const colors = resolvedTheme.colors;
   const { isMobile } = useResponsive();
   
   // Translated days of week
@@ -216,9 +217,9 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
       <div style={{
         display: 'grid',
         gridTemplateColumns: 'repeat(7, 1fr)',
-        background: isDark ? '#1f1f1f' : '#fafafa',
+        background: colors.bgTertiary,
         borderRadius: '8px 8px 0 0',
-        borderBottom: `1px solid ${isDark ? '#303030' : '#f0f0f0'}`,
+        borderBottom: `1px solid ${colors.borderPrimary}`,
       }}>
         {daysShort.map((day, index) => (
           <div
@@ -244,10 +245,10 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
         gridTemplateColumns: 'repeat(7, 1fr)',
         gridTemplateRows: `repeat(${rowCount}, 1fr)`,
         flex: 1,
-        background: isDark ? '#141414' : '#ffffff',
+        background: colors.bgPrimary,
         borderRadius: '0 0 8px 8px',
         overflow: 'hidden',
-        border: `1px solid ${isDark ? '#303030' : '#f0f0f0'}`,
+        border: `1px solid ${colors.borderPrimary}`,
         borderTop: 'none',
       }}>
         {monthDays.map((day, index) => {

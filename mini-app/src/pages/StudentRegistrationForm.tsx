@@ -4,7 +4,7 @@ import { Form, Input, Button, Typography, Space, Alert, Card, Collapse, theme } 
 import { ArrowLeftOutlined, CopyOutlined, QuestionCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
-import { useThemeMode } from '../theme/ThemeProvider';
+import { useTheme } from '../theme/ThemeProvider';
 
 const { Title, Text, Paragraph } = Typography;
 const { Panel } = Collapse;
@@ -19,9 +19,9 @@ const StudentRegistrationForm: React.FC = () => {
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { registerStudent } = useAuth();
-    const { resolvedTheme } = useThemeMode();
+    const { resolvedTheme } = useTheme();
     const { token } = theme.useToken();
-    const isDark = resolvedTheme === 'dark';
+    const isDark = resolvedTheme.colorScheme === 'dark';
     const [form] = Form.useForm();
 
     const [loading, setLoading] = useState(false);

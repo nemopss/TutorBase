@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { Card, Progress, Typography, Tag } from 'antd';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
 const { Text } = Typography;
@@ -52,8 +52,8 @@ const PackageCard: React.FC<PackageCardProps> = ({
   onClick,
 }) => {
   const { t } = useTranslation();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const colors = resolvedTheme.colors;
   const [isPressed, setIsPressed] = useState(false);
 
   const progress = pkg.progress || { total: 0, completed: 0, cancelled: 0 };
@@ -83,8 +83,8 @@ const PackageCard: React.FC<PackageCardProps> = ({
       hoverable
       style={{
         cursor: 'pointer',
-        background: isDark ? '#1f1f1f' : '#ffffff',
-        borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
+        background: colors.bgSecondary,
+        borderColor: colors.borderPrimary,
         transform: isPressed ? 'scale(0.98)' : 'scale(1)',
         transition: 'transform 0.1s ease-out',
       }}
@@ -129,7 +129,7 @@ const PackageCard: React.FC<PackageCardProps> = ({
           type="circle"
           percent={percent}
           size={48}
-          strokeColor="#0f7b6c"
+          strokeColor={colors.accentSuccess}
           format={() => null}
         />
       </div>

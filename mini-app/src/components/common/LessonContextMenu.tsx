@@ -6,7 +6,7 @@ import {
   DeleteOutlined 
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 
 interface LessonContextMenuProps {
   visible: boolean;
@@ -37,8 +37,8 @@ const LessonContextMenu: React.FC<LessonContextMenuProps> = ({
   onClose,
 }) => {
   const { t } = useTranslation();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme.colorScheme === 'dark';
   const menuRef = useRef<HTMLDivElement>(null);
 
   // Count available menu items for height calculation

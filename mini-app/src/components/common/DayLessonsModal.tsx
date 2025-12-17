@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import type { Lesson } from './calendar-types';
 import { statusColors, DEFAULT_DURATION } from './calendar-types';
 import { useResponsive } from '../../hooks/useResponsive';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
 const { Text, Title } = Typography;
@@ -47,8 +47,8 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
 }) => {
   const { t } = useTranslation();
   const { isMobile } = useResponsive();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme.colorScheme === 'dark';
 
   // Sort lessons by time
   const sortedLessons = useMemo(() => {

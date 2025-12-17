@@ -1,18 +1,18 @@
-import { useThemeMode } from '../theme/ThemeProvider';
+import { useTheme } from "../theme/ThemeProvider";
 
 export const useResponsiveStyles = () => {
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme.colorScheme === "dark";
 
   const cardStyle = {
-    background: isDark ? '#1f1f1f' : '#ffffff',
-    borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
+    background: resolvedTheme.colors.bgSecondary,
+    borderColor: resolvedTheme.colors.borderPrimary,
   };
 
-  const textColor = isDark ? '#ffffff' : '#000000';
-  const subtitleColor = isDark ? '#a0a0a0' : '#8c8c8c';
-  const borderColor = isDark ? '#3a3a3a' : '#e8e8e8';
-  const chartGridColor = isDark ? '#3a3a3a' : '#e8e8e8';
+  const textColor = resolvedTheme.colors.textPrimary;
+  const subtitleColor = resolvedTheme.colors.textSecondary;
+  const borderColor = resolvedTheme.colors.borderPrimary;
+  const chartGridColor = resolvedTheme.colors.borderPrimary;
 
   const tooltipStyle = {
     backgroundColor: cardStyle.background,
@@ -27,6 +27,7 @@ export const useResponsiveStyles = () => {
     borderColor,
     chartGridColor,
     tooltipStyle,
-    colorScheme: resolvedTheme,
+    colorScheme: resolvedTheme.colorScheme,
+    isDark,
   };
 };

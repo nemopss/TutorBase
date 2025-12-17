@@ -2,7 +2,7 @@ import React from 'react';
 import { Card, Tag, Button, Space, Typography } from 'antd';
 import { EditOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
 const { Text } = Typography;
@@ -56,8 +56,8 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
   onEdit,
   onClick,
 }) => {
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const colors = resolvedTheme.colors;
 
   const packageLabel = packageInfo
     ? `${packageInfo.title} (${packageInfo.learner_name})`
@@ -69,8 +69,8 @@ const ReminderCard: React.FC<ReminderCardProps> = ({
       style={{
         marginBottom: spacing.sm,
         cursor: onClick ? 'pointer' : 'default',
-        background: isDark ? '#1f1f1f' : '#ffffff',
-        borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
+        background: colors.bgSecondary,
+        borderColor: colors.borderPrimary,
       }}
       onClick={() => onClick?.(reminder)}
       actions={[

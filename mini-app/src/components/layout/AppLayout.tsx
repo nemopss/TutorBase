@@ -18,7 +18,7 @@ import {
   DollarOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { useAuth } from '../../auth/AuthProvider';
 import TenantSwitcher from '../common/TenantSwitcher';
 import TenantIndicator from '../common/TenantIndicator';
@@ -34,8 +34,9 @@ const SIDEBAR_COLLAPSED_KEY = 'tutorbase_sidebar_collapsed';
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { t } = useTranslation();
   const location = useLocation();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme.colorScheme === 'dark';
+  const colors = resolvedTheme.colors;
   const [drawerVisible, setDrawerVisible] = useState(false);
   const [isMobile, setIsMobile] = useState(window.innerWidth < 768);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
@@ -180,8 +181,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         padding: sidebarCollapsed ? '20px 8px' : '20px 16px',
         fontSize: sidebarCollapsed ? '16px' : '18px',
         fontWeight: 600,
-        color: isDark ? '#ffffff' : '#37352f',
-        borderBottom: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+        color: colors.textPrimary,
+        borderBottom: `1px solid ${colors.borderPrimary}`,
         textAlign: 'center',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
@@ -193,7 +194,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       {isAdmin && (
         <div style={{
           padding: '16px',
-          borderBottom: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+          borderBottom: `1px solid ${colors.borderPrimary}`,
         }}>
           <TenantSwitcher />
         </div>
@@ -209,14 +210,14 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           border: 'none',
           marginTop: '8px',
           fontSize: '14px',
-          color: isDark ? '#ffffff' : '#37352f',
+          color: colors.textPrimary,
         }}
       />
     </>
   );
 
   return (
-    <Layout style={{ minHeight: '100vh', background: isDark ? '#191919' : '#ffffff' }}>
+    <Layout style={{ minHeight: '100vh', background: colors.bgPrimary }}>
       {/* Desktop Sidebar */}
       {!isMobile && (
         <Sider
@@ -226,8 +227,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           width={240}
           collapsedWidth={80}
           style={{
-            background: isDark ? '#252525' : '#f7f7f5',
-            borderRight: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+            background: colors.bgSecondary,
+            borderRight: `1px solid ${colors.borderPrimary}`,
             overflow: 'auto',
             height: '100vh',
             position: 'fixed',
@@ -241,9 +242,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             <div style={{
               padding: '12px',
               textAlign: 'center',
-              borderTop: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+              borderTop: `1px solid ${colors.borderPrimary}`,
               cursor: 'pointer',
-              color: isDark ? '#ffffff' : '#37352f',
+              color: colors.textPrimary,
             }}>
               {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             </div>
@@ -257,8 +258,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           {isAdmin && !sidebarCollapsed && (
             <div style={{
               padding: '16px',
-              borderTop: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
-              background: isDark ? '#1f1f1f' : '#fafafa',
+              borderTop: `1px solid ${colors.borderPrimary}`,
+              background: colors.bgTertiary,
             }}>
               <TenantIndicator />
             </div>
@@ -276,7 +277,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           styles={{
             body: {
               padding: 0,
-              background: isDark ? '#252525' : '#f7f7f5',
+              background: colors.bgSecondary,
             },
           }}
         >
@@ -285,7 +286,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           {hasStaffAccess && !isAdmin && (
             <div style={{
               padding: '16px',
-              borderTop: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+              borderTop: `1px solid ${colors.borderPrimary}`,
             }}>
               <TenantSwitcher />
             </div>
@@ -293,13 +294,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         </Drawer>
       )}
 
-      <Layout style={{ marginLeft: isMobile ? 0 : (sidebarCollapsed ? 80 : 240), background: isDark ? '#191919' : '#ffffff', transition: 'margin-left 0.2s' }}>
+      <Layout style={{ marginLeft: isMobile ? 0 : (sidebarCollapsed ? 80 : 240), background: colors.bgPrimary, transition: 'margin-left 0.2s' }}>
         {/* Mobile Header with Hamburger */}
         {isMobile && (
           <div style={{
             padding: '12px 16px',
-            background: isDark ? '#252525' : '#ffffff',
-            borderBottom: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+            background: colors.bgSecondary,
+            borderBottom: `1px solid ${colors.borderPrimary}`,
             display: 'flex',
             alignItems: 'center',
             justifyContent: 'space-between',
@@ -321,10 +322,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         <Content style={{
           margin: isMobile ? '16px' : '24px',
           padding: isMobile ? '16px' : '32px',
-          background: isDark ? '#252525' : '#ffffff',
+          background: colors.bgSecondary,
           minHeight: isMobile ? 'calc(100vh - 120px)' : 'calc(100vh - 48px)',
           borderRadius: '8px',
-          border: isDark ? '1px solid #3a3a3a' : '1px solid #e8e8e8',
+          border: `1px solid ${colors.borderPrimary}`,
         }}>
           {children}
         </Content>

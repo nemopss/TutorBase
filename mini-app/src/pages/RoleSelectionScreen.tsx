@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { Card, Typography, Space, Tag, theme } from 'antd';
 import { UserOutlined, TeamOutlined, RightOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '../theme/ThemeProvider';
+import { useTheme } from '../theme/ThemeProvider';
 
 const { Title, Text } = Typography;
 
@@ -48,9 +48,9 @@ const RoleCard: React.FC<RoleCardProps> = ({
 const RoleSelectionScreen: React.FC = () => {
     const { t } = useTranslation();
     const navigate = useNavigate();
-    const { resolvedTheme } = useThemeMode();
+    const { resolvedTheme } = useTheme();
     const { token } = theme.useToken();
-    const isDark = resolvedTheme === 'dark';
+    const isDark = resolvedTheme.colorScheme === 'dark';
 
     return (
         <div style={{

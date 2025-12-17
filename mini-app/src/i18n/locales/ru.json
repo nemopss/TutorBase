@@ -203,6 +203,15 @@
       "themeAuto": "Авто (как в Telegram)",
       "themeLight": "Светлая",
       "themeDark": "Тёмная",
+      "themes": {
+        "auto": "Авто",
+        "light": "Светлая",
+        "dark": "Тёмная",
+        "aqua": "Aqua",
+        "tokyonight": "Tokyo Night",
+        "gruvbox": "Gruvbox",
+        "darkplus": "Dark+"
+      },
       "notifications": "Уведомления",
       "enableNotifications": "Включить уведомления",
       "lessonReminders": "Напоминания об уроках",

@@ -201,6 +201,15 @@
       "themeAuto": "자동 (텔레그램 따라가기)",
       "themeLight": "라이트",
       "themeDark": "다크",
+      "themes": {
+        "auto": "자동",
+        "light": "라이트",
+        "dark": "다크",
+        "aqua": "Aqua",
+        "tokyonight": "Tokyo Night",
+        "gruvbox": "Gruvbox",
+        "darkplus": "Dark+"
+      },
       "notifications": "알림",
       "enableNotifications": "알림 활성화",
       "lessonReminders": "수업 알림",
