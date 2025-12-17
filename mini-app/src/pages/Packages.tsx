@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Tabs, message, Alert, Card } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PackageForm from '../components/forms/PackageForm';
 import PageHeader from '../components/common/PageHeader';
@@ -62,6 +63,7 @@ const createPackage = async (values: any) => {
 
 // --- Component --- //
 const Packages: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useThemeMode();
@@ -88,12 +90,12 @@ const Packages: React.FC = () => {
   const createMutation = useMutation({
     mutationFn: createPackage,
     onSuccess: () => {
-      message.success('Package created successfully!');
+      message.success(t('success.created'));
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       setIsModalOpen(false);
     },
     onError: (error: Error) => {
-      message.error(`An error occurred: ${error.message}`);
+      message.error(t('errors.createFailed', { message: error.message }));
     },
   });
 
@@ -104,17 +106,17 @@ const Packages: React.FC = () => {
   const hasPackages = sortedPackages.length > 0;
 
   const tabItems = [
-    { key: 'active', label: 'Active' },
-    { key: 'completed', label: 'Completed' },
-    { key: 'draft', label: 'Drafts' },
-    { key: 'cancelled', label: 'Cancelled' },
+    { key: 'active', label: t('pages.packages.status.active') },
+    { key: 'completed', label: t('pages.packages.status.completed') },
+    { key: 'draft', label: t('pages.packages.status.draft') },
+    { key: 'cancelled', label: t('pages.packages.status.cancelled') },
   ];
 
   return (
     <div>
       <PageHeader
-        title="Packages"
-        subtitle="Manage lesson packages for your students"
+        title={t('pages.packages.title')}
+        subtitle={t('pages.packages.subtitle')}
       />
 
       <Tabs
@@ -126,8 +128,8 @@ const Packages: React.FC = () => {
 
       {isError && (
         <Alert
-          message="Error loading packages"
-          description={error?.message || 'Failed to load packages'}
+          message={t('errors.loadFailed', { message: '' })}
+          description={error?.message || t('common.error')}
           type="error"
           showIcon
           style={{ marginBottom: spacing.md }}

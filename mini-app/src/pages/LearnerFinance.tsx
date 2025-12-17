@@ -31,6 +31,7 @@ import {
 } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
@@ -86,6 +87,7 @@ const formatCurrency = (value: number): string => {
 
 // --- Component --- //
 const LearnerFinance: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -159,13 +161,13 @@ const LearnerFinance: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['learnerFinance', learnerId] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       queryClient.invalidateQueries({ queryKey: ['financeDashboard'] });
-      message.success(editingPayment ? 'Платёж обновлён' : 'Платёж записан');
+      message.success(editingPayment ? t('pages.finance.paymentUpdated') : t('pages.finance.paymentRecorded'));
       setIsPaymentModalOpen(false);
       setEditingPayment(null);
       form.resetFields();
     },
     onError: (err: Error) => {
-      message.error(`Ошибка: ${err.message}`);
+      message.error(t('errors.saveFailed', { message: err.message }));
     },
   });
 
@@ -180,12 +182,12 @@ const LearnerFinance: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['learnerFinance', learnerId] });
       queryClient.invalidateQueries({ queryKey: ['learners'] });
-      message.success('Тариф обновлён');
+      message.success(t('pages.finance.rateUpdated'));
       setIsRateModalOpen(false);
       rateForm.resetFields();
     },
     onError: (err: Error) => {
-      message.error(`Ошибка: ${err.message}`);
+      message.error(t('errors.saveFailed', { message: err.message }));
     },
   });
 
@@ -257,12 +259,12 @@ const LearnerFinance: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['learnerFinance', learnerId] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       queryClient.invalidateQueries({ queryKey: ['financeDashboard'] });
-      message.success('Платёж удалён');
+      message.success(t('pages.finance.paymentDeleted'));
       setDeleteModalOpen(false);
       setPaymentToDelete(null);
     },
     onError: (err: Error) => {
-      message.error(`Ошибка: ${err.message}`);
+      message.error(t('errors.deleteFailed', { message: err.message }));
     },
   });
 
@@ -279,7 +281,7 @@ const LearnerFinance: React.FC = () => {
 
   const paymentColumns: TableProps<Payment>['columns'] = [
     {
-      title: 'Дата',
+      title: t('pages.finance.date'),
       dataIndex: 'paid_at',
       key: 'paid_at',
       render: (date: string) => dayjs(date).format('DD.MM.YYYY'),
@@ -287,7 +289,7 @@ const LearnerFinance: React.FC = () => {
       defaultSortOrder: 'descend',
     },
     {
-      title: 'Сумма',
+      title: t('pages.finance.amount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (amount: number) => (
@@ -296,13 +298,13 @@ const LearnerFinance: React.FC = () => {
       align: 'right',
     },
     {
-      title: 'Пакет',
+      title: t('pages.finance.package'),
       dataIndex: 'package_title',
       key: 'package_title',
       render: (title: string | null) => title || '—',
     },
     {
-      title: 'Примечание',
+      title: t('pages.finance.note'),
       dataIndex: 'notes',
       key: 'notes',
       render: (notes: string | null) => notes || '—',
@@ -318,20 +320,20 @@ const LearnerFinance: React.FC = () => {
             type="text"
             icon={<CopyOutlined />}
             onClick={() => handleRepeatPayment(record)}
-            title="Повторить"
+            title={t('pages.finance.repeat')}
           />
           <Button
             type="text"
             icon={<EditOutlined />}
             onClick={() => handleEditPayment(record)}
-            title="Редактировать"
+            title={t('common.edit')}
           />
           <Button
             type="text"
             danger
             icon={<DeleteOutlined />}
             onClick={() => handleDeletePayment(record)}
-            title="Удалить"
+            title={t('common.delete')}
           />
         </Space>
       ),
@@ -343,25 +345,25 @@ const LearnerFinance: React.FC = () => {
   }
 
   if (isError) {
-    return <Alert message="Ошибка загрузки" description={error.message} type="error" />;
+    return <Alert message={t('errors.loadFailed', { message: '' })} description={error.message} type="error" />;
   }
 
   return (
     <div>
       <PageHeader
-        title={`Финансы: ${learner?.display_name || 'Ученик'}`}
-        subtitle="История платежей и задолженность"
+        title={`${t('pages.finance.title')}: ${learner?.display_name || t('pages.learners.learner')}`}
+        subtitle={t('pages.finance.subtitle')}
         actions={
           <Space>
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/learners')}>
-              Назад
+              {t('common.back')}
             </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
               onClick={() => setIsPaymentModalOpen(true)}
             >
-              Записать платёж
+              {t('pages.finance.recordPayment')}
             </Button>
           </Space>
         }
@@ -372,10 +374,10 @@ const LearnerFinance: React.FC = () => {
         <Col xs={24} sm={8}>
           <Card style={cardStyle}>
             <Statistic
-              title="Тариф за урок"
+              title={t('pages.finance.lessonRate')}
               value={finance?.lesson_rate || 0}
               prefix={<DollarOutlined />}
-              formatter={(value) => (value ? formatCurrency(Number(value)) : 'Не задан')}
+              formatter={(value) => (value ? formatCurrency(Number(value)) : t('pages.finance.notSet'))}
               valueStyle={{ color: textColor }}
             />
             <Button
@@ -384,14 +386,14 @@ const LearnerFinance: React.FC = () => {
               onClick={openRateModal}
               style={{ padding: 0, marginTop: 8 }}
             >
-              {finance?.lesson_rate ? 'Изменить' : 'Задать тариф'}
+              {finance?.lesson_rate ? t('pages.finance.changeRate') : t('pages.finance.setRate')}
             </Button>
           </Card>
         </Col>
         <Col xs={24} sm={8}>
           <Card style={cardStyle}>
             <Statistic
-              title="Задолженность"
+              title={t('pages.finance.outstanding')}
               value={finance?.outstanding_balance || 0}
               prefix={<DollarOutlined />}
               formatter={(value) => formatCurrency(Number(value))}
@@ -404,7 +406,7 @@ const LearnerFinance: React.FC = () => {
         <Col xs={24} sm={8}>
           <Card style={cardStyle}>
             <Statistic
-              title="Всего оплачено"
+              title={t('pages.finance.totalPaid')}
               value={finance?.total_paid || 0}
               prefix={<DollarOutlined />}
               formatter={(value) => formatCurrency(Number(value))}
@@ -415,14 +417,14 @@ const LearnerFinance: React.FC = () => {
       </Row>
 
       {/* Payment History */}
-      <Card title="История платежей" style={{ ...cardStyle, marginTop: 24 }}>
+      <Card title={t('pages.finance.paymentHistory')} style={{ ...cardStyle, marginTop: 24 }}>
         <ResponsiveDataView<Payment>
           data={finance?.payment_history || []}
           columns={paymentColumns}
           rowKey="id"
-          emptyText="Нет платежей"
-          emptyDescription="Записи о платежах появятся здесь"
-          emptyActionText="Записать платёж"
+          emptyText={t('pages.finance.noPayments')}
+          emptyDescription={t('pages.finance.noPaymentsDescription')}
+          emptyActionText={t('pages.finance.recordPayment')}
           onEmptyAction={() => setIsPaymentModalOpen(true)}
           pagination={{ pageSize: 10 }}
           renderCard={(payment) => (
@@ -441,7 +443,7 @@ const LearnerFinance: React.FC = () => {
                   icon={<CopyOutlined />}
                   onClick={() => handleRepeatPayment(payment)}
                 >
-                  Повторить
+                  {t('pages.finance.repeat')}
                 </Button>,
                 <Button
                   key="edit"
@@ -449,7 +451,7 @@ const LearnerFinance: React.FC = () => {
                   icon={<EditOutlined />}
                   onClick={() => handleEditPayment(payment)}
                 >
-                  Изменить
+                  {t('common.edit')}
                 </Button>,
                 <Button
                   key="delete"
@@ -458,7 +460,7 @@ const LearnerFinance: React.FC = () => {
                   icon={<DeleteOutlined />}
                   onClick={() => handleDeletePayment(payment)}
                 >
-                  Удалить
+                  {t('common.delete')}
                 </Button>,
               ]}
             >
@@ -473,7 +475,7 @@ const LearnerFinance: React.FC = () => {
                   </Space>
                 </div>
                 {payment.package_title && (
-                  <Text type="secondary">Пакет: {payment.package_title}</Text>
+                  <Text type="secondary">{t('pages.finance.package')}: {payment.package_title}</Text>
                 )}
                 {payment.notes && (
                   <Text type="secondary" style={{ fontStyle: 'italic' }}>
@@ -488,7 +490,7 @@ const LearnerFinance: React.FC = () => {
 
       {/* Payment Modal */}
       <Modal
-        title={editingPayment ? 'Редактировать платёж' : 'Записать платёж'}
+        title={editingPayment ? t('pages.finance.editPayment') : t('pages.finance.recordPayment')}
         open={isPaymentModalOpen}
         onOk={handleCreatePayment}
         onCancel={() => {
@@ -497,21 +499,21 @@ const LearnerFinance: React.FC = () => {
           form.resetFields();
         }}
         confirmLoading={createPaymentMutation.isPending}
-        okText={editingPayment ? 'Сохранить' : 'Записать'}
-        cancelText="Отмена"
+        okText={editingPayment ? t('common.save') : t('pages.finance.recordPayment')}
+        cancelText={t('common.cancel')}
       >
         <Form form={form} layout="vertical" initialValues={{ paid_at: dayjs() }}>
           <Form.Item
             name="amount"
-            label="Сумма"
+            label={t('pages.finance.amount')}
             rules={[
-              { required: true, message: 'Введите сумму' },
-              { type: 'number', min: 1, message: 'Сумма должна быть положительной' },
+              { required: true, message: t('common.required') },
+              { type: 'number', min: 1, message: t('pages.finance.amountPositive') },
             ]}
           >
             <InputNumber
               style={{ width: '100%' }}
-              placeholder="например, 5000"
+              placeholder="5000"
               min={1}
               precision={2}
             />
@@ -519,15 +521,15 @@ const LearnerFinance: React.FC = () => {
 
           <Form.Item
             name="paid_at"
-            label="Дата платежа"
-            rules={[{ required: true, message: 'Выберите дату' }]}
+            label={t('pages.finance.paymentDate')}
+            rules={[{ required: true, message: t('common.required') }]}
           >
             <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
           </Form.Item>
 
-          <Form.Item name="package_id" label="Пакет (опционально)">
+          <Form.Item name="package_id" label={t('pages.finance.packageOptional')}>
             <Select
-              placeholder="Выберите пакет"
+              placeholder={t('forms.package.learnerPlaceholder')}
               allowClear
               onChange={handlePackageSelect}
               options={packages?.items.map((pkg) => {
@@ -543,38 +545,38 @@ const LearnerFinance: React.FC = () => {
             />
           </Form.Item>
 
-          <Form.Item name="notes" label="Примечание">
-            <Input.TextArea rows={2} placeholder="Комментарий к платежу" />
+          <Form.Item name="notes" label={t('pages.finance.note')}>
+            <Input.TextArea rows={2} placeholder={t('pages.finance.notePlaceholder')} />
           </Form.Item>
         </Form>
       </Modal>
 
       {/* Delete Confirmation Modal */}
       <Modal
-        title="Удалить платёж"
+        title={t('pages.finance.deletePayment')}
         open={deleteModalOpen}
         onOk={confirmDeletePayment}
         onCancel={() => {
           setDeleteModalOpen(false);
           setPaymentToDelete(null);
         }}
-        okText="Удалить"
-        cancelText="Отмена"
+        okText={t('common.delete')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true, loading: deletePaymentMutation.isPending }}
       >
-        <p>Вы уверены, что хотите удалить платёж?</p>
+        <p>{t('pages.finance.deletePaymentConfirm')}</p>
         {paymentToDelete && (
           <p>
-            <strong>{formatCurrency(paymentToDelete.amount)}</strong> от{' '}
+            <strong>{formatCurrency(paymentToDelete.amount)}</strong> —{' '}
             {dayjs(paymentToDelete.paid_at).format('DD.MM.YYYY')}
           </p>
         )}
-        <p style={{ color: '#8c8c8c' }}>Статус оплаты пакета будет пересчитан.</p>
+        <p style={{ color: '#8c8c8c' }}>{t('pages.finance.paymentStatusRecalculated')}</p>
       </Modal>
 
       {/* Rate Edit Modal */}
       <Modal
-        title="Тариф за урок"
+        title={t('pages.finance.lessonRate')}
         open={isRateModalOpen}
         onOk={handleUpdateRate}
         onCancel={() => {
@@ -582,26 +584,26 @@ const LearnerFinance: React.FC = () => {
           rateForm.resetFields();
         }}
         confirmLoading={updateRateMutation.isPending}
-        okText="Сохранить"
-        cancelText="Отмена"
+        okText={t('common.save')}
+        cancelText={t('common.cancel')}
       >
         <Form form={rateForm} layout="vertical">
           <Form.Item
             name="lesson_rate"
-            label="Стоимость одного урока (₽)"
+            label={t('pages.finance.lessonRateCost')}
             rules={[
-              { type: 'number', min: 0, message: 'Стоимость должна быть положительной' },
+              { type: 'number', min: 0, message: t('pages.finance.amountPositive') },
             ]}
           >
             <InputNumber
               style={{ width: '100%' }}
-              placeholder="например, 1500"
+              placeholder="1500"
               min={0}
               precision={2}
             />
           </Form.Item>
           <p style={{ color: '#8c8c8c', fontSize: 12 }}>
-            Новый тариф будет применяться только к новым пакетам. Существующие пакеты сохранят свою цену.
+            {t('pages.finance.newRateNote')}
           </p>
         </Form>
       </Modal>

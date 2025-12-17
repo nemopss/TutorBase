@@ -11,6 +11,7 @@ import {
 } from '@ant-design/icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
@@ -67,7 +68,6 @@ interface PackageListResponse {
 
 // --- API Fetchers --- //
 const fetchMetrics = async (): Promise<MetricsSummary> => {
-  // Filter by current calendar month
   const startOfMonth = dayjs().startOf('month').toISOString();
   const endOfMonth = dayjs().endOf('month').toISOString();
   const { data } = await api.get('/metrics/summary', {
@@ -113,6 +113,7 @@ const fetchActivePackages = async (): Promise<PackageListResponse> => {
 
 // --- Component --- //
 const Dashboard: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { cardStyle, textColor, subtitleColor, chartGridColor, tooltipStyle } = useResponsiveStyles();
   const { isMobile } = useResponsive();
@@ -153,7 +154,7 @@ const Dashboard: React.FC = () => {
   }
 
   if (isErrorMetrics) {
-    return <Alert message="Error fetching metrics" description={errorMetrics.message} type="error" />;
+    return <Alert message={t('errors.fetchMetrics')} description={errorMetrics.message} type="error" />;
   }
 
   // Prepare chart data
@@ -162,20 +163,20 @@ const Dashboard: React.FC = () => {
     lessons: item.value,
   })) || [];
 
-  // Prepare pie chart data
+  // Prepare pie chart data with translated names
   const totalLessons = Object.values(metricsData?.lessons || {}).reduce((a, b) => a + b, 0);
   const pieData = [
-    { name: 'Scheduled', value: metricsData?.lessons.scheduled || 0, color: '#1890ff' },
-    { name: 'Rescheduled', value: metricsData?.lessons.rescheduled || 0, color: '#faad14' },
-    { name: 'Completed', value: metricsData?.lessons.completed || 0, color: '#52c41a' },
-    { name: 'Cancelled', value: metricsData?.lessons.cancelled || 0, color: '#ff4d4f' },
+    { name: t('pages.dashboard.scheduled'), value: metricsData?.lessons.scheduled || 0, color: '#1890ff' },
+    { name: t('pages.dashboard.rescheduled'), value: metricsData?.lessons.rescheduled || 0, color: '#faad14' },
+    { name: t('pages.dashboard.completed'), value: metricsData?.lessons.completed || 0, color: '#52c41a' },
+    { name: t('pages.dashboard.cancelled'), value: metricsData?.lessons.cancelled || 0, color: '#ff4d4f' },
   ].filter(item => item.value > 0);
 
   return (
     <div>
       <PageHeader 
-        title="Dashboard"
-        subtitle="Overview of your lessons and packages"
+        title={t('pages.dashboard.title')}
+        subtitle={t('pages.dashboard.subtitle')}
         actions={
           <Space wrap size="small" style={{ display: 'flex', flexWrap: 'wrap' }}>
             <Button 
@@ -184,14 +185,14 @@ const Dashboard: React.FC = () => {
               onClick={() => navigate('/packages')}
               size="middle"
             >
-              New Package
+              {t('pages.dashboard.newPackage')}
             </Button>
             <Button 
               icon={<CalendarOutlined />} 
               onClick={() => navigate('/lessons')}
               size="middle"
             >
-              View Lessons
+              {t('pages.dashboard.viewLessons')}
             </Button>
           </Space>
         }
@@ -200,14 +201,14 @@ const Dashboard: React.FC = () => {
       {/* Key Metrics - Current Month */}
       <div style={{ marginBottom: 8 }}>
         <span style={{ color: subtitleColor, fontSize: 12 }}>
-          Statistics for {dayjs().format('MMMM YYYY')}
+          {t('pages.dashboard.statistics', { month: dayjs().format('MMMM YYYY') })}
         </span>
       </div>
       <Row gutter={[12, 12]}>
         <Col xs={12} sm={12} lg={6}>
           <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
             <Statistic
-              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>Total</span>}
+              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>{t('pages.dashboard.total')}</span>}
               value={totalLessons}
               prefix={<ClockCircleOutlined />}
               valueStyle={{ color: textColor, fontSize: isMobile ? 20 : 24 }}
@@ -217,7 +218,7 @@ const Dashboard: React.FC = () => {
         <Col xs={12} sm={12} lg={6}>
           <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
             <Statistic
-              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>Completed</span>}
+              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>{t('pages.dashboard.completed')}</span>}
               value={metricsData?.lessons.completed || 0}
               valueStyle={{ color: '#52c41a', fontSize: isMobile ? 20 : 24 }}
               prefix={<CheckCircleOutlined />}
@@ -227,7 +228,7 @@ const Dashboard: React.FC = () => {
         <Col xs={12} sm={12} lg={6}>
           <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
             <Statistic
-              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>Scheduled</span>}
+              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>{t('pages.dashboard.scheduled')}</span>}
               value={metricsData?.lessons.scheduled || 0}
               valueStyle={{ color: '#1890ff', fontSize: isMobile ? 20 : 24 }}
               prefix={<ClockCircleOutlined />}
@@ -237,7 +238,7 @@ const Dashboard: React.FC = () => {
         <Col xs={12} sm={12} lg={6}>
           <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
             <Statistic
-              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>Cancelled</span>}
+              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>{t('pages.dashboard.cancelled')}</span>}
               value={metricsData?.lessons.cancelled || 0}
               valueStyle={{ color: '#ff4d4f', fontSize: isMobile ? 20 : 24 }}
               prefix={<CloseCircleOutlined />}
@@ -249,7 +250,7 @@ const Dashboard: React.FC = () => {
       {/* Charts Row */}
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={16}>
-          <Card title="Lessons Over Time (Last 30 Days)" bordered={false} style={cardStyle}>
+          <Card title={t('pages.dashboard.lessonsOverTime')} bordered={false} style={cardStyle}>
             <ResponsiveContainer width="100%" height={currentChartHeight}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
@@ -257,13 +258,13 @@ const Dashboard: React.FC = () => {
                 <YAxis stroke={textColor} tick={{ fontSize: isMobile ? 10 : 12 }} />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} />
-                <Line type="monotone" dataKey="lessons" stroke="#1890ff" strokeWidth={2} />
+                <Line type="monotone" dataKey="lessons" stroke="#1890ff" strokeWidth={2} name={t('navigation.lessons')} />
               </LineChart>
             </ResponsiveContainer>
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="Lessons by Status" bordered={false} style={cardStyle}>
+          <Card title={t('pages.dashboard.lessonsByStatus')} bordered={false} style={cardStyle}>
             <ResponsiveContainer width="100%" height={currentChartHeight}>
               <PieChart>
                 <Pie
@@ -293,14 +294,14 @@ const Dashboard: React.FC = () => {
         </Col>
       </Row>
 
-      {/* Active Packages & Calendar */}
+      {/* Active Packages & Upcoming Lessons */}
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={12}>
           <Card 
-            title="Active Packages" 
+            title={t('pages.dashboard.activePackages')} 
             bordered={false}
             style={cardStyle}
-            extra={<Button type="link" onClick={() => navigate('/packages')}>View All</Button>}
+            extra={<Button type="link" onClick={() => navigate('/packages')}>{t('common.viewAll')}</Button>}
           >
             <List
               dataSource={packagesData?.items || []}
@@ -313,7 +314,7 @@ const Dashboard: React.FC = () => {
                 >
                   <List.Item.Meta
                     title={pkg.title}
-                    description={`Learner: ${pkg.learner_name}`}
+                    description={`${t('pages.dashboard.learner')}: ${pkg.learner_name}`}
                   />
                   <div style={{ textAlign: 'right' }}>
                     <Progress 
@@ -332,11 +333,11 @@ const Dashboard: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="Upcoming Lessons" bordered={false} style={cardStyle}>
+          <Card title={t('pages.dashboard.upcomingLessons')} bordered={false} style={cardStyle}>
             {isLoadingLessons ? (
               <Spin />
             ) : isErrorLessons ? (
-              <Alert message="Error fetching lessons" description={errorLessons.message} type="error" />
+              <Alert message={t('errors.fetchLessons')} description={errorLessons.message} type="error" />
             ) : (
               <List
                 dataSource={lessonsData?.items}
@@ -345,7 +346,7 @@ const Dashboard: React.FC = () => {
                     <List.Item.Meta
                       avatar={<CalendarOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
                       title={formatDateTime(item.scheduled_at, { timezone: item.timezone, format: 'MMM DD, YYYY HH:mm' })}
-                      description={item.learner_name || item.package_title || `Status: ${item.status}`}
+                      description={item.learner_name || item.package_title || `${t('common.status')}: ${item.status}`}
                     />
                   </List.Item>
                 )}

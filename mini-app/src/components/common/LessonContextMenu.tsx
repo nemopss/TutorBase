@@ -5,6 +5,7 @@ import {
   CloseCircleOutlined, 
   DeleteOutlined 
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../theme/ThemeProvider';
 
 interface LessonContextMenuProps {
@@ -35,6 +36,7 @@ const LessonContextMenu: React.FC<LessonContextMenuProps> = ({
   onDelete,
   onClose,
 }) => {
+  const { t } = useTranslation();
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
   const menuRef = useRef<HTMLDivElement>(null);
@@ -96,25 +98,25 @@ const LessonContextMenu: React.FC<LessonContextMenuProps> = ({
   const menuItems = [
     onReschedule && { 
       icon: <CalendarOutlined />, 
-      label: 'Reschedule', 
+      label: t('calendar.reschedule'), 
       onClick: onReschedule,
       color: '#1890ff',
     },
     onComplete && { 
       icon: <CheckCircleOutlined />, 
-      label: 'Mark as Completed', 
+      label: t('pages.lessons.markCompleted'), 
       onClick: onComplete,
       color: '#52c41a',
     },
     onCancel && { 
       icon: <CloseCircleOutlined />, 
-      label: 'Cancel Lesson', 
+      label: t('pages.lessons.cancelLesson'), 
       onClick: onCancel,
       color: '#faad14',
     },
     onDelete && { 
       icon: <DeleteOutlined />, 
-      label: 'Delete', 
+      label: t('common.delete'), 
       onClick: onDelete,
       color: '#ff4d4f',
       danger: true,

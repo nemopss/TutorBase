@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { Form, Input, Select, DatePicker } from 'antd';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
@@ -10,7 +11,6 @@ import ResponsiveModal from '../common/ResponsiveModal';
 dayjs.extend(utc);
 dayjs.extend(timezone);
 
-// --- Types --- //
 interface Learner {
   id: number;
   display_name: string;
@@ -40,7 +40,6 @@ interface PackageFormProps {
   initialValues?: any;
 }
 
-// --- API Fetcher --- //
 const fetchLearners = async (): Promise<LearnerListResponse> => {
   const { data } = await api.get('/learners');
   return data;
@@ -51,8 +50,8 @@ const fetchTemplates = async (): Promise<TemplateListResponse> => {
   return data;
 };
 
-// --- Component --- //
 const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isLoading, initialValues }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
   const MSK_TZ = 'Europe/Moscow';
 
@@ -90,9 +89,9 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
   return (
     <ResponsiveModal
       open={open}
-      title={isEditing ? `Edit Package${initialValues?.title ? `: ${initialValues.title}` : ''}` : "Create New Package"}
-      okText={isEditing ? "Save" : "Create"}
-      cancelText="Cancel"
+      title={isEditing ? t('forms.package.editTitle') : t('forms.package.title')}
+      okText={isEditing ? t('common.save') : t('common.create')}
+      cancelText={t('common.cancel')}
       onCancel={onCancel}
       onOk={() => {
         form
@@ -113,7 +112,6 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
               timezone: resolvedTimezone,
             };
 
-            // Обрабатываем даты правильно
             if (startDateValue) {
               if (isEditing) {
                 const originalDate = initialValues?.start_date ? dayjs(initialValues.start_date).tz(MSK_TZ).format('YYYY-MM-DD') : null;
@@ -154,14 +152,11 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
               formattedValues.total_lessons = totalLessons;
             }
 
-            // Удаляем поля которые не нужно отправлять
             if (!isEditing) {
-              // При создании удаляем template_id если не выбран
               if (!formattedValues.template_id) {
                 delete formattedValues.template_id;
               }
             } else {
-              // При редактировании удаляем learner_id и template_id (они не должны меняться)
               delete formattedValues.learner_id;
               delete formattedValues.template_id;
             }
@@ -181,22 +176,22 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
       <Form form={form} layout="vertical" name="package_form">
         <Form.Item
           name="title"
-          label="Package Title"
-          rules={[{ required: !isEditing, message: 'Please enter the package title!' }]}
+          label={t('forms.package.titleLabel')}
+          rules={[{ required: !isEditing, message: t('forms.package.titleRequired') }]}
         >
-          <Input placeholder="e.g., English Course - Spring 2024" />
+          <Input placeholder={t('forms.package.titlePlaceholder')} />
         </Form.Item>
         
         {!isEditing && (
           <>
             <Form.Item
               name="template_id"
-              label="Template (optional)"
+              label={t('forms.package.templateLabel')}
             >
               <Select
                 allowClear
                 showSearch
-                placeholder="Select a template to pre-fill lessons"
+                placeholder={t('forms.package.templatePlaceholder')}
                 loading={isLoadingTemplates}
                 optionFilterProp="label"
                 filterOption={(input, option) => String(option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
@@ -209,12 +204,12 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
             
             <Form.Item
               name="learner_id"
-              label="Learner"
-              rules={[{ required: true, message: 'Please select a learner!' }]}
+              label={t('forms.package.learnerLabel')}
+              rules={[{ required: true, message: t('forms.package.learnerRequired') }]}
             >
               <Select
                 showSearch
-                placeholder="Select a learner"
+                placeholder={t('forms.package.learnerPlaceholder')}
                 loading={isLoadingLearners}
                 optionFilterProp="children"
                 filterOption={(input, option) => (option?.label ?? '').toLowerCase().includes(input.toLowerCase())}
@@ -226,23 +221,23 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
 
         <Form.Item
           name="status"
-          label="Status"
+          label={t('forms.package.statusLabel')}
           initialValue="draft"
         >
           <Select
             options={[
-              { value: 'draft', label: 'Draft' },
-              { value: 'active', label: 'Active' },
-              { value: 'completed', label: 'Completed' },
-              { value: 'cancelled', label: 'Cancelled' },
+              { value: 'draft', label: t('pages.packages.status.draft') },
+              { value: 'active', label: t('pages.packages.status.active') },
+              { value: 'completed', label: t('pages.packages.status.completed') },
+              { value: 'cancelled', label: t('pages.packages.status.cancelled') },
             ]}
           />
         </Form.Item>
 
         <Form.Item
           name="start_date"
-          label="Start Date"
-          rules={shouldRequireStartDate ? [{ required: true, message: 'Start date is required when using a template.' }] : []}
+          label={t('forms.package.startDateLabel')}
+          rules={shouldRequireStartDate ? [{ required: true, message: t('forms.package.startDateRequired') }] : []}
         >
           <DatePicker 
             style={{ width: '100%' }} 
@@ -251,21 +246,12 @@ const PackageForm: React.FC<PackageFormProps> = ({ open, onCancel, onFinish, isL
           />
         </Form.Item>
 
-        {/* <Form.Item name="end_date" label="End Date">
-          <DatePicker style={{ width: '100%' }} format="YYYY-MM-DD" />
-        </Form.Item>
-        */}
-
-        {/* timezone removed from the form UI; resolved from template or defaulted on submit */}
-
-       
-
-        <Form.Item name="total_lessons" label="Total Lessons (optional)">
-          <Input type="number" min={1} placeholder="e.g., 20" />
+        <Form.Item name="total_lessons" label={t('forms.package.totalLessonsLabel')}>
+          <Input type="number" min={1} placeholder={t('forms.package.totalLessonsPlaceholder')} />
         </Form.Item>
 
-        <Form.Item name="notes" label="Notes">
-          <Input.TextArea rows={3} placeholder="Additional notes about this package..." />
+        <Form.Item name="notes" label={t('forms.package.notesLabel')}>
+          <Input.TextArea rows={3} placeholder={t('forms.package.notesPlaceholder')} />
         </Form.Item>
       </Form>
     </ResponsiveModal>

@@ -28,6 +28,7 @@ import {
   ClockCircleOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import SegmentedProgress from '../components/common/SegmentedProgress';
 import CalendarContainer from '../components/common/CalendarContainer';
@@ -126,6 +127,7 @@ const getStatusColor = (status: string): string => {
 
 // --- Component --- //
 const PackageDetail: React.FC = () => {
+  const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -171,14 +173,14 @@ const PackageDetail: React.FC = () => {
       return data;
     },
     onSuccess: () => {
-      message.success('Lesson created');
+      message.success(t('success.created'));
       queryClient.invalidateQueries({ queryKey: ['packageLessons', id] });
       queryClient.invalidateQueries({ queryKey: ['package', id] });
       setIsAddLessonModalOpen(false);
       setNewLessonDate(null);
     },
     onError: (error: Error) => {
-      message.error(`Error: ${error.message}`);
+      message.error(t('errors.createFailed', { message: error.message }));
     },
   });
 
@@ -189,32 +191,32 @@ const PackageDetail: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['package', id] });
     },
     onError: (error: Error) => {
-      message.error(`Error: ${error.message}`);
+      message.error(t('errors.updateFailed', { message: error.message }));
     },
   });
 
   const deleteLessonMutation = useMutation({
     mutationFn: deleteLesson,
     onSuccess: () => {
-      message.success('Lesson deleted');
+      message.success(t('success.deleted'));
       queryClient.invalidateQueries({ queryKey: ['packageLessons', id] });
       queryClient.invalidateQueries({ queryKey: ['package', id] });
       setIsDeleteLessonModalOpen(false);
       setSelectedLessonId(null);
     },
     onError: (error: Error) => {
-      message.error(`Error: ${error.message}`);
+      message.error(t('errors.deleteFailed', { message: error.message }));
     },
   });
 
   const deletePackageMutation = useMutation({
     mutationFn: deletePackage,
     onSuccess: () => {
-      message.success('Package deleted');
+      message.success(t('success.deleted'));
       navigate('/packages');
     },
     onError: (error: Error) => {
-      message.error(`Error: ${error.message}`);
+      message.error(t('errors.deleteFailed', { message: error.message }));
     },
   });
 
@@ -230,13 +232,13 @@ const PackageDetail: React.FC = () => {
       return data;
     },
     onSuccess: () => {
-      message.success('Payment recorded');
+      message.success(t('pages.finance.paymentRecorded'));
       queryClient.invalidateQueries({ queryKey: ['package', id] });
       setIsPaymentModalOpen(false);
       paymentForm.resetFields();
     },
     onError: (error: Error) => {
-      message.error(`Error: ${error.message}`);
+      message.error(t('errors.saveFailed', { message: error.message }));
     },
   });
 
@@ -246,12 +248,12 @@ const PackageDetail: React.FC = () => {
       return data;
     },
     onSuccess: () => {
-      message.success('Package updated');
+      message.success(t('success.updated'));
       queryClient.invalidateQueries({ queryKey: ['package', id] });
       setIsEditModalOpen(false);
     },
     onError: (error: Error) => {
-      message.error(`Error: ${error.message}`);
+      message.error(t('errors.updateFailed', { message: error.message }));
     },
   });
 
@@ -300,7 +302,7 @@ const PackageDetail: React.FC = () => {
       { lessonId: selectedLessonId, values: updateValues },
       {
         onSuccess: () => {
-          message.success('Lesson rescheduled');
+          message.success(t('pages.lessons.lessonRescheduled'));
           setIsRescheduleModalOpen(false);
           setSelectedLessonId(null);
           setSelectedLesson(null);
@@ -320,7 +322,7 @@ const PackageDetail: React.FC = () => {
       { lessonId: selectedLessonId, values: { status: 'completed' } },
       {
         onSuccess: () => {
-          message.success('Lesson marked as completed');
+          message.success(t('pages.lessons.lessonCompleted'));
           setIsCompleteLessonModalOpen(false);
           setSelectedLessonId(null);
         },
@@ -339,7 +341,7 @@ const PackageDetail: React.FC = () => {
       { lessonId: selectedLessonId, values: { status: 'cancelled' } },
       {
         onSuccess: () => {
-          message.success('Lesson cancelled');
+          message.success(t('pages.lessons.lessonCancelled'));
           setIsCancelLessonModalOpen(false);
           setSelectedLessonId(null);
         },
@@ -374,7 +376,7 @@ const PackageDetail: React.FC = () => {
   }
 
   if (isErrorPackage) {
-    return <Alert message="Error" description={errorPackage.message} type="error" />;
+    return <Alert message={t('common.error')} description={errorPackage.message} type="error" />;
   }
 
   const progress = packageData?.progress || { total: 0, completed: 0, cancelled: 0 };
@@ -428,7 +430,7 @@ const PackageDetail: React.FC = () => {
             <div style={cardTitleStyle}>
               <CalendarOutlined style={iconStyle} />
               <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Даты
+                {t('pages.finance.dates')}
               </Text>
             </div>
             <Button
@@ -439,11 +441,11 @@ const PackageDetail: React.FC = () => {
             />
           </div>
           <div style={rowStyle}>
-            <Text type="secondary">Начало:</Text>
+            <Text type="secondary">{t('pages.finance.start')}:</Text>
             <Text>{packageData?.start_date ? formatDate(packageData.start_date, { timezone: packageData.timezone }) : '—'}</Text>
           </div>
           <div style={rowStyle}>
-            <Text type="secondary">Конец:</Text>
+            <Text type="secondary">{t('pages.finance.end')}:</Text>
             <Text>{packageData?.end_date ? formatDate(packageData.end_date, { timezone: packageData.timezone }) : '—'}</Text>
           </div>
         </div>
@@ -454,24 +456,24 @@ const PackageDetail: React.FC = () => {
             <div style={cardTitleStyle}>
               <BookOutlined style={iconStyle} />
               <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Уроки
+                {t('pages.finance.lessons')}
               </Text>
             </div>
             <Text type="secondary" style={{ fontSize: 13 }}>
-              {progress.total} всего
+              {progress.total} {t('pages.finance.total')}
             </Text>
           </div>
           <div style={rowStyle}>
             <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
-            <Text>{progress.completed} завершено</Text>
+            <Text>{progress.completed} {t('pages.finance.completed')}</Text>
           </div>
           <div style={rowStyle}>
             <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 16 }} />
-            <Text>{progress.cancelled} отменено</Text>
+            <Text>{progress.cancelled} {t('pages.finance.cancelled')}</Text>
           </div>
           <div style={rowStyle}>
             <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
-            <Text>{remaining} осталось</Text>
+            <Text>{remaining} {t('pages.finance.remaining')}</Text>
           </div>
         </div>
 
@@ -481,7 +483,7 @@ const PackageDetail: React.FC = () => {
             <div style={cardTitleStyle}>
               <DollarOutlined style={iconStyle} />
               <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Оплата
+                {t('pages.finance.payment')}
               </Text>
             </div>
             <Button
@@ -491,23 +493,23 @@ const PackageDetail: React.FC = () => {
               onClick={openPaymentModal}
               disabled={!packageData?.price}
             >
-              Добавить
+              {t('pages.finance.add')}
             </Button>
           </div>
           <div style={rowStyle}>
-            <Text type="secondary">Цена:</Text>
+            <Text type="secondary">{t('pages.finance.price')}:</Text>
             <Text strong>{packageData?.price ? formatCurrency(packageData.price) : '—'}</Text>
           </div>
           {packageData?.total_paid !== undefined && packageData.total_paid > 0 && (
             <div style={rowStyle}>
-              <Text type="secondary">Оплачено:</Text>
+              <Text type="secondary">{t('pages.finance.paid')}:</Text>
               <Text style={{ color: '#52c41a' }}>{formatCurrency(packageData.total_paid)}</Text>
             </div>
           )}
           <div style={{ ...rowStyle, marginTop: 4 }}>
             <Tag color={getPaymentStatusColor(packageData?.payment_status)} style={{ margin: 0 }}>
-              {packageData?.payment_status === 'paid' ? 'Оплачено' : 
-               packageData?.payment_status === 'partial' ? 'Частично' : 'Не оплачено'}
+              {packageData?.payment_status === 'paid' ? t('pages.finance.paid') : 
+               packageData?.payment_status === 'partial' ? t('pages.finance.partial') : t('pages.finance.unpaid')}
             </Tag>
           </div>
         </div>
@@ -518,7 +520,7 @@ const PackageDetail: React.FC = () => {
             <div style={cardTitleStyle}>
               <FileTextOutlined style={iconStyle} />
               <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                Заметки
+                {t('pages.finance.notes')}
               </Text>
             </div>
             <Button
@@ -529,7 +531,7 @@ const PackageDetail: React.FC = () => {
             />
           </div>
           <Text type={packageData?.notes ? undefined : 'secondary'} style={{ whiteSpace: 'pre-wrap' }}>
-            {packageData?.notes || 'Нет заметок'}
+            {packageData?.notes || t('pages.finance.noNotes')}
           </Text>
         </div>
       </div>
@@ -542,7 +544,7 @@ const PackageDetail: React.FC = () => {
           style={{ fontSize: 12 }}
           onClick={() => setIsDeletePackageModalOpen(true)}
         >
-          Удалить пакет
+          {t('pages.finance.deletePackage')}
         </Button>
       </div>
     </div>
@@ -583,8 +585,8 @@ const PackageDetail: React.FC = () => {
   );
 
   const tabItems = [
-    { key: 'lessons', label: 'Lessons', children: lessonsContent },
-    { key: 'details', label: 'Details', children: detailsContent },
+    { key: 'lessons', label: t('navigation.lessons'), children: lessonsContent },
+    { key: 'details', label: t('packageDetail.details'), children: detailsContent },
   ];
 
   return (
@@ -600,7 +602,7 @@ const PackageDetail: React.FC = () => {
         }}
       >
         <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/packages')}>
-          Back
+          {t('common.back')}
         </Button>
         <SegmentedProgress
           total={progress.total}
@@ -631,30 +633,30 @@ const PackageDetail: React.FC = () => {
 
       {/* Payment Modal */}
       <Modal
-        title="Add Payment"
+        title={t('pages.finance.recordPayment')}
         open={isPaymentModalOpen}
         onOk={() => paymentForm.validateFields().then((values) => createPaymentMutation.mutate(values))}
         onCancel={() => setIsPaymentModalOpen(false)}
         confirmLoading={createPaymentMutation.isPending}
-        okText="Add"
-        cancelText="Cancel"
+        okText={t('common.add')}
+        cancelText={t('common.cancel')}
       >
         <Form form={paymentForm} layout="vertical">
           <Form.Item
             name="amount"
-            label="Amount"
-            rules={[{ required: true, message: 'Enter amount' }]}
+            label={t('pages.finance.amount')}
+            rules={[{ required: true, message: t('common.required') }]}
           >
             <InputNumber style={{ width: '100%' }} min={1} />
           </Form.Item>
           <Form.Item
             name="paid_at"
-            label="Date"
-            rules={[{ required: true, message: 'Select date' }]}
+            label={t('pages.finance.date')}
+            rules={[{ required: true, message: t('common.required') }]}
           >
             <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
           </Form.Item>
-          <Form.Item name="notes" label="Notes">
+          <Form.Item name="notes" label={t('pages.finance.notes')}>
             <Input.TextArea rows={2} />
           </Form.Item>
         </Form>
@@ -694,62 +696,62 @@ const PackageDetail: React.FC = () => {
 
       {/* Delete Package Modal */}
       <Modal
-        title="Delete Package"
+        title={t('pages.finance.deletePackage')}
         open={isDeletePackageModalOpen}
         onOk={confirmDeletePackage}
         onCancel={() => setIsDeletePackageModalOpen(false)}
-        okText="Delete"
+        okText={t('common.delete')}
         okButtonProps={{ danger: true, loading: deletePackageMutation.isPending }}
       >
-        <p>Are you sure you want to delete this package?</p>
-        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+        <p>{t('packageDetail.deletePackageConfirm')}</p>
+        <p style={{ color: '#8c8c8c' }}>{t('pages.lessons.deleteIrreversible')}</p>
       </Modal>
 
       {/* Delete Lesson Modal */}
       <Modal
-        title="Delete Lesson"
+        title={t('pages.lessons.deleteTitle')}
         open={isDeleteLessonModalOpen}
         onOk={confirmDeleteLesson}
         onCancel={() => {
           setIsDeleteLessonModalOpen(false);
           setSelectedLessonId(null);
         }}
-        okText="Delete"
+        okText={t('common.delete')}
         okButtonProps={{ danger: true, loading: deleteLessonMutation.isPending }}
       >
-        <p>Are you sure you want to delete this lesson?</p>
-        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+        <p>{t('pages.lessons.deleteConfirm')}</p>
+        <p style={{ color: '#8c8c8c' }}>{t('pages.lessons.deleteIrreversible')}</p>
       </Modal>
 
       {/* Complete Lesson Modal */}
       <Modal
-        title="Mark as Completed"
+        title={t('pages.lessons.markCompleted')}
         open={isCompleteLessonModalOpen}
         onOk={confirmComplete}
         onCancel={() => {
           setIsCompleteLessonModalOpen(false);
           setSelectedLessonId(null);
         }}
-        okText="Complete"
+        okText={t('common.confirm')}
         confirmLoading={updateLessonMutation.isPending}
       >
-        <p>Mark this lesson as completed?</p>
+        <p>{t('pages.lessons.markCompletedConfirm')}</p>
       </Modal>
 
       {/* Cancel Lesson Modal */}
       <Modal
-        title="Cancel Lesson"
+        title={t('pages.lessons.cancelLesson')}
         open={isCancelLessonModalOpen}
         onOk={confirmCancel}
         onCancel={() => {
           setIsCancelLessonModalOpen(false);
           setSelectedLessonId(null);
         }}
-        okText="Yes, Cancel"
+        okText={t('common.yes')}
         okButtonProps={{ danger: true }}
         confirmLoading={updateLessonMutation.isPending}
       >
-        <p>Are you sure you want to cancel this lesson?</p>
+        <p>{t('pages.lessons.cancelConfirm')}</p>
       </Modal>
 
       {/* Add Lesson Modal */}

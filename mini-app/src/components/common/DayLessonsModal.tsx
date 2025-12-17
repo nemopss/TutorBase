@@ -9,6 +9,7 @@ import {
 } from '@ant-design/icons';
 import type { Dayjs } from 'dayjs';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import type { Lesson } from './calendar-types';
 import { statusColors, DEFAULT_DURATION } from './calendar-types';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -44,6 +45,7 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
   onCancel,
   onDelete,
 }) => {
+  const { t } = useTranslation();
   const { isMobile } = useResponsive();
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
@@ -75,7 +77,7 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
     const time = dayjs(lesson.scheduled_at).tz(timezone);
     const duration = lesson.duration_minutes || DEFAULT_DURATION;
     const endTime = time.add(duration, 'minute');
-    const statusLabel = lesson.status.charAt(0).toUpperCase() + lesson.status.slice(1);
+    const statusLabel = t(`calendar.status.${lesson.status}`);
 
     return (
       <div
@@ -125,7 +127,7 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
 
         {/* Duration */}
         <Text type="secondary" style={{ fontSize: 13, display: 'block', marginBottom: spacing.sm }}>
-          {duration} мин
+          {duration} {t('calendar.min')}
         </Text>
 
         {/* Action buttons - only show if any action callback is provided */}
@@ -141,7 +143,7 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
                   onClose();
                 }}
               >
-                Перенести
+                {t('calendar.reschedule')}
               </Button>
             )}
             {onComplete && lesson.status !== 'completed' && (
@@ -154,7 +156,7 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
                   onClose();
                 }}
               >
-                Завершить
+                {t('calendar.complete')}
               </Button>
             )}
             {onCancel && lesson.status !== 'cancelled' && (
@@ -167,7 +169,7 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
                   onClose();
                 }}
               >
-                Отменить
+                {t('calendar.cancel')}
               </Button>
             )}
             {onDelete && (
@@ -181,7 +183,7 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
                   onClose();
                 }}
               >
-                Удалить
+                {t('common.delete')}
               </Button>
             )}
           </Space>
@@ -198,7 +200,7 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
           <Title level={5} style={{ margin: 0 }}>{title}</Title>
           {lessons.length > 0 && (
             <Text type="secondary" style={{ fontSize: 13 }}>
-              {lessons.length} {lessons.length === 1 ? 'урок' : 'уроков'} • {Math.round(totalMinutes / 60 * 10) / 10}ч
+              {lessons.length} {lessons.length === 1 ? t('calendar.lesson') : t('calendar.lessons')} • {Math.round(totalMinutes / 60 * 10) / 10}{t('calendar.hours')}
             </Text>
           )}
         </div>
@@ -212,7 +214,7 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
             onClick={handleAddLesson}
             block={isMobile}
           >
-            Добавить урок
+            {t('calendar.addLesson')}
           </Button>
         ) : null
       }
@@ -221,7 +223,7 @@ const DayLessonsModal: React.FC<DayLessonsModalProps> = ({
     >
       {sortedLessons.length === 0 ? (
         <Empty 
-          description="Нет уроков на этот день"
+          description={t('calendar.noLessonsToday')}
           image={Empty.PRESENTED_IMAGE_SIMPLE}
         />
       ) : (

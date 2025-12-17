@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Form, Input, Button, Typography, Space, Alert, Card, List, theme } from 'antd';
 import { ArrowLeftOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
 import { useThemeMode } from '../theme/ThemeProvider';
 
@@ -14,6 +15,7 @@ interface FormData {
 }
 
 const TutorRegistrationForm: React.FC = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { registerTutor } = useAuth();
     const { resolvedTheme } = useThemeMode();
@@ -39,17 +41,17 @@ const TutorRegistrationForm: React.FC = () => {
 
         } catch (err: any) {
             console.error('Registration failed:', err);
-            setError(err.response?.data?.detail || 'Registration failed. Please try again.');
+            setError(err.response?.data?.detail || t('pages.tutorRegistration.genericError'));
         } finally {
             setLoading(false);
         }
     };
 
     const benefits = [
-        'Up to 5 students during trial',
-        'Unlimited lessons and packages',
-        'Automated reminders',
-        'No credit card required',
+        t('pages.tutorRegistration.benefit1'),
+        t('pages.tutorRegistration.benefit2'),
+        t('pages.tutorRegistration.benefit3'),
+        t('pages.tutorRegistration.benefit4'),
     ];
 
     return (
@@ -74,10 +76,10 @@ const TutorRegistrationForm: React.FC = () => {
                     />
                     <div>
                         <Title level={4} style={{ margin: 0 }}>
-                            Create Your School
+                            {t('pages.tutorRegistration.title')}
                         </Title>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                            Start your 14-day free trial
+                            {t('pages.tutorRegistration.subtitle')}
                         </Text>
                     </div>
                 </Space>
@@ -96,57 +98,57 @@ const TutorRegistrationForm: React.FC = () => {
                     autoComplete="off"
                 >
                     <Form.Item
-                        label="School Name"
+                        label={t('pages.tutorRegistration.schoolNameLabel')}
                         name="school_name"
                         rules={[
-                            { required: true, message: 'Please enter your school name' },
-                            { min: 2, message: 'School name must be at least 2 characters' }
+                            { required: true, message: t('pages.tutorRegistration.schoolNameRequired') },
+                            { min: 2, message: t('pages.tutorRegistration.schoolNameMinLength') }
                         ]}
                     >
                         <Input
-                            placeholder="e.g., Math Tutoring by John"
+                            placeholder={t('pages.tutorRegistration.schoolNamePlaceholder')}
                             size="large"
                             autoFocus
                         />
                     </Form.Item>
 
                     <Form.Item
-                        label="Contact Email"
+                        label={t('pages.tutorRegistration.contactEmailLabel')}
                         name="contact_email"
                         rules={[
-                            { type: 'email', message: 'Please enter a valid email address' }
+                            { type: 'email', message: t('pages.tutorRegistration.contactEmailInvalid') }
                         ]}
                     >
                         <Input
-                            placeholder="your@email.com (optional)"
+                            placeholder={t('pages.tutorRegistration.contactEmailPlaceholder')}
                             size="large"
                             type="email"
                         />
                     </Form.Item>
 
                     <Form.Item
-                        label="Your Name"
+                        label={t('pages.tutorRegistration.yourNameLabel')}
                         name="tutor_name"
                     >
                         <Input
-                            placeholder="Leave empty to use your Telegram name"
+                            placeholder={t('pages.tutorRegistration.yourNamePlaceholder')}
                             size="large"
                         />
                     </Form.Item>
 
                     <Form.Item>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                            By creating an account, you agree to our{' '}
-                            <a href="/terms">Terms of Service</a>
-                            {' '}and{' '}
-                            <a href="/privacy">Privacy Policy</a>
+                            {t('pages.tutorRegistration.termsText')}{' '}
+                            <a href="/terms">{t('pages.tutorRegistration.termsOfService')}</a>
+                            {' '}{t('pages.tutorRegistration.and')}{' '}
+                            <a href="/privacy">{t('pages.tutorRegistration.privacyPolicy')}</a>
                         </Text>
                     </Form.Item>
 
                     {error && (
                         <Form.Item>
                             <Alert
-                                message="Registration Failed"
+                                message={t('pages.tutorRegistration.registrationFailed')}
                                 description={error}
                                 type="error"
                                 showIcon
@@ -164,14 +166,14 @@ const TutorRegistrationForm: React.FC = () => {
                             loading={loading}
                             block
                         >
-                            {loading ? 'Creating School...' : 'Create School & Start Trial'}
+                            {loading ? t('pages.tutorRegistration.submitting') : t('pages.tutorRegistration.submit')}
                         </Button>
                     </Form.Item>
                 </Form>
 
                 {/* Benefits Card */}
                 <Card
-                    title="What's included in your trial:"
+                    title={t('pages.tutorRegistration.trialBenefits')}
                     style={{ marginTop: 24 }}
                 >
                     <List

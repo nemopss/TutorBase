@@ -2,6 +2,7 @@ import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Card, Typography, Space, Tag, theme } from 'antd';
 import { UserOutlined, TeamOutlined, RightOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../theme/ThemeProvider';
 
 const { Title, Text } = Typography;
@@ -45,6 +46,7 @@ const RoleCard: React.FC<RoleCardProps> = ({
 };
 
 const RoleSelectionScreen: React.FC = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const { resolvedTheme } = useThemeMode();
     const { token } = theme.useToken();
@@ -63,10 +65,10 @@ const RoleSelectionScreen: React.FC = () => {
                 textAlign: 'center'
             }}>
                 <Title level={2} style={{ marginBottom: 8 }}>
-                    Welcome to TutorBase!
+                    {t('pages.roleSelection.title')}
                 </Title>
                 <Text type="secondary">
-                    Choose your role to get started
+                    {t('pages.roleSelection.subtitle')}
                 </Text>
             </div>
 
@@ -80,17 +82,17 @@ const RoleSelectionScreen: React.FC = () => {
             }}>
                 <RoleCard
                     icon={<UserOutlined />}
-                    title="I'm a Tutor"
-                    description="Create your school and manage students"
-                    badge="14-day free trial"
+                    title={t('pages.roleSelection.tutorTitle')}
+                    description={t('pages.roleSelection.tutorDescription')}
+                    badge={t('pages.roleSelection.tutorBadge')}
                     onClick={() => navigate('/register/tutor')}
                 />
 
                 <RoleCard
                     icon={<TeamOutlined />}
-                    title="I'm a Student"
-                    description="Join your tutor's school with an invite code"
-                    badge="Always free"
+                    title={t('pages.roleSelection.studentTitle')}
+                    description={t('pages.roleSelection.studentDescription')}
+                    badge={t('pages.roleSelection.studentBadge')}
                     onClick={() => navigate('/register/student')}
                 />
             </div>

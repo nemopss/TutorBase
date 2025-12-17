@@ -14,6 +14,7 @@ import {
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
+import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
@@ -73,13 +74,6 @@ const statusColors: Record<LessonStatus, { bg: string; bgDark: string; border: s
   },
 };
 
-const statusLabels: Record<LessonStatus, string> = {
-  scheduled: 'Scheduled',
-  rescheduled: 'Rescheduled',
-  completed: 'Completed',
-  cancelled: 'Cancelled',
-};
-
 /**
  * Lesson card with colored background indicating status.
  * Designed for future expansion (location, meeting links, topics, etc.)
@@ -93,6 +87,7 @@ const LessonCard: React.FC<LessonCardProps> = ({
   onDelete,
   onClick,
 }) => {
+  const { t } = useTranslation();
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
   const [isHovered, setIsHovered] = useState(false);
@@ -107,7 +102,7 @@ const LessonCard: React.FC<LessonCardProps> = ({
     {
       key: 'reschedule',
       icon: <CalendarOutlined />,
-      label: 'Reschedule',
+      label: t('pages.lessons.reschedule'),
       onClick: (e) => {
         e.domEvent.stopPropagation();
         onReschedule(lesson.id);
@@ -116,7 +111,7 @@ const LessonCard: React.FC<LessonCardProps> = ({
     {
       key: 'complete',
       icon: <CheckOutlined />,
-      label: 'Mark as Completed',
+      label: t('pages.lessons.markCompleted'),
       onClick: (e) => {
         e.domEvent.stopPropagation();
         onComplete(lesson.id);
@@ -125,7 +120,7 @@ const LessonCard: React.FC<LessonCardProps> = ({
     {
       key: 'cancel',
       icon: <CloseOutlined />,
-      label: 'Cancel',
+      label: t('common.cancel'),
       onClick: (e) => {
         e.domEvent.stopPropagation();
         onCancel(lesson.id);
@@ -135,7 +130,7 @@ const LessonCard: React.FC<LessonCardProps> = ({
     {
       key: 'delete',
       icon: <DeleteOutlined />,
-      label: 'Delete',
+      label: t('common.delete'),
       danger: true,
       onClick: (e) => {
         e.domEvent.stopPropagation();
@@ -185,7 +180,7 @@ const LessonCard: React.FC<LessonCardProps> = ({
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs }}>
           <Tag color={colors.tag} style={{ margin: 0 }}>
-            {statusLabels[lesson.status]}
+            {t(`pages.lessons.status.${lesson.status}`)}
           </Tag>
           <Dropdown menu={{ items: menuItems }} trigger={['click']} placement="bottomRight">
             <Button
@@ -212,7 +207,7 @@ const LessonCard: React.FC<LessonCardProps> = ({
         <Text type="secondary" style={{ fontSize: 14 }}>
           {date.format('HH:mm')}
           {endTime && ` – ${endTime.format('HH:mm')}`}
-          {lesson.duration_minutes && ` (${lesson.duration_minutes} min)`}
+          {lesson.duration_minutes && ` (${lesson.duration_minutes} ${t('pages.lessons.minutes')})`}
         </Text>
       </div>
 
@@ -240,7 +235,7 @@ const LessonCard: React.FC<LessonCardProps> = ({
               style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: 13 }}
             >
               <VideoCameraOutlined />
-              Join
+              {t('lessonCard.join')}
             </a>
           )}
         </div>

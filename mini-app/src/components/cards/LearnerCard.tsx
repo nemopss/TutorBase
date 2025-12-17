@@ -1,6 +1,7 @@
 import React from 'react';
 import { Card, Tag, Switch, Space, Typography, Tooltip, Button } from 'antd';
 import { BellOutlined, BellFilled, IdcardOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
@@ -30,6 +31,7 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
   isToggling = false,
   onClick,
 }) => {
+  const { t } = useTranslation();
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
 
@@ -54,7 +56,7 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
               onFinance(learner.id);
             }}
           >
-            Финансы
+            {t('pages.learners.finance')}
           </Button>,
         ] : []),
         ...(onDelete ? [
@@ -68,7 +70,7 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
               onDelete(learner.id);
             }}
           >
-            Delete
+            {t('common.delete')}
           </Button>,
         ] : []),
       ]}
@@ -80,16 +82,16 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
             <Text strong>{learner.display_name}</Text>
           </Space>
           <Tag color={learner.notifications_enabled ? 'green' : 'red'}>
-            {learner.notifications_enabled ? 'Notifications On' : 'Notifications Off'}
+            {learner.notifications_enabled ? t('pages.learners.notificationsOn') : t('pages.learners.notificationsOff')}
           </Tag>
         </div>
         
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <Text type="secondary" copyable={learner.chat_id ? { text: String(learner.chat_id) } : false}>
-            Chat ID: {learner.chat_id || '—'}
+            {t('pages.learners.chatId')}: {learner.chat_id || '—'}
           </Text>
           
-          <Tooltip title={learner.notifications_enabled ? 'Disable notifications' : 'Enable notifications'}>
+          <Tooltip title={learner.notifications_enabled ? t('pages.learners.notificationsOff') : t('pages.learners.notificationsOn')}>
             <Switch
               checked={learner.notifications_enabled}
               onChange={() => {

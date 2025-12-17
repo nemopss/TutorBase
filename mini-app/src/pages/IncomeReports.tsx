@@ -22,6 +22,7 @@ import {
 } from '@ant-design/icons';
 import type { TableProps } from 'antd';
 import dayjs, { Dayjs } from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
@@ -85,6 +86,7 @@ const getDefaultDates = (period: PeriodType): [Dayjs, Dayjs] => {
 
 // --- Component --- //
 const IncomeReports: React.FC = () => {
+  const { t } = useTranslation();
   const { cardStyle, textColor } = useResponsiveStyles();
   const [period, setPeriod] = useState<PeriodType>('month');
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(getDefaultDates('month'));
@@ -174,9 +176,9 @@ const IncomeReports: React.FC = () => {
       link.remove();
       window.URL.revokeObjectURL(url);
       
-      message.success('Отчёт экспортирован');
+      message.success(t('pages.incomeReports.exportSuccess'));
     } catch {
-      message.error('Ошибка экспорта отчёта');
+      message.error(t('pages.incomeReports.exportError'));
     } finally {
       setIsExporting(false);
     }
@@ -184,12 +186,12 @@ const IncomeReports: React.FC = () => {
 
   const learnerColumns: TableProps<LearnerIncome>['columns'] = [
     {
-      title: 'Ученик',
+      title: t('pages.incomeReports.learner'),
       dataIndex: 'learner_name',
       key: 'learner_name',
     },
     {
-      title: 'Сумма',
+      title: t('pages.incomeReports.amount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (amount: number) => formatCurrency(amount),
@@ -201,12 +203,12 @@ const IncomeReports: React.FC = () => {
 
   const packageColumns: TableProps<PackageIncome>['columns'] = [
     {
-      title: 'Пакет',
+      title: t('pages.incomeReports.package'),
       dataIndex: 'package_title',
       key: 'package_title',
     },
     {
-      title: 'Сумма',
+      title: t('pages.incomeReports.amount'),
       dataIndex: 'amount',
       key: 'amount',
       render: (amount: number) => formatCurrency(amount),
@@ -221,7 +223,7 @@ const IncomeReports: React.FC = () => {
   }
 
   if (isError) {
-    return <Alert message="Ошибка загрузки отчёта" description={error.message} type="error" />;
+    return <Alert message={t('errors.loadFailed', { message: '' })} description={error.message} type="error" />;
   }
 
   const changePercent = report?.change_percent || 0;
@@ -229,8 +231,8 @@ const IncomeReports: React.FC = () => {
   return (
     <div>
       <PageHeader
-        title="Отчёты о доходах"
-        subtitle="Анализ доходов по периодам"
+        title={t('pages.incomeReports.title')}
+        subtitle={t('pages.incomeReports.subtitle')}
         actions={
           <Button
             type="primary"
@@ -238,7 +240,7 @@ const IncomeReports: React.FC = () => {
             onClick={handleExport}
             loading={isExporting}
           >
-            Экспорт CSV
+            {t('pages.incomeReports.exportCsv')}
           </Button>
         }
       />
@@ -251,10 +253,10 @@ const IncomeReports: React.FC = () => {
             onChange={handlePeriodChange}
             style={{ width: 160 }}
             options={[
-              { value: 'month', label: 'По месяцам' },
-              { value: 'quarter', label: 'Текущий квартал' },
-              { value: 'all', label: 'За всё время' },
-              { value: 'custom', label: 'Произвольный' },
+              { value: 'month', label: t('pages.incomeReports.period.month') },
+              { value: 'quarter', label: t('pages.incomeReports.period.quarter') },
+              { value: 'all', label: t('pages.incomeReports.period.all') },
+              { value: 'custom', label: t('pages.incomeReports.period.custom') },
             ]}
           />
           {period === 'month' && (
@@ -281,7 +283,7 @@ const IncomeReports: React.FC = () => {
         <Col xs={24} sm={8}>
           <Card style={cardStyle}>
             <Statistic
-              title="Общий доход"
+              title={t('pages.incomeReports.totalIncome')}
               value={report?.total || 0}
               prefix={<DollarOutlined />}
               formatter={(value) => formatCurrency(Number(value))}
@@ -292,7 +294,7 @@ const IncomeReports: React.FC = () => {
         <Col xs={24} sm={8}>
           <Card style={cardStyle}>
             <Statistic
-              title="Предыдущий период"
+              title={t('pages.incomeReports.previousPeriod')}
               value={report?.previous_period_total || 0}
               formatter={(value) => formatCurrency(Number(value))}
               valueStyle={{ color: textColor }}
@@ -302,7 +304,7 @@ const IncomeReports: React.FC = () => {
         <Col xs={24} sm={8}>
           <Card style={cardStyle}>
             <Statistic
-              title="Изменение"
+              title={t('pages.incomeReports.change')}
               value={Math.abs(changePercent)}
               precision={1}
               prefix={changePercent >= 0 ? <RiseOutlined /> : <FallOutlined />}
@@ -316,26 +318,26 @@ const IncomeReports: React.FC = () => {
       {/* Breakdown Tables */}
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={12}>
-          <Card title="По ученикам" bordered={false} style={cardStyle}>
+          <Card title={t('pages.incomeReports.byLearners')} bordered={false} style={cardStyle}>
             <Table
               dataSource={report?.by_learner || []}
               columns={learnerColumns}
               rowKey="learner_id"
               pagination={false}
               size="small"
-              locale={{ emptyText: 'Нет данных' }}
+              locale={{ emptyText: t('pages.incomeReports.noData') }}
             />
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="По пакетам" bordered={false} style={cardStyle}>
+          <Card title={t('pages.incomeReports.byPackages')} bordered={false} style={cardStyle}>
             <Table
               dataSource={report?.by_package || []}
               columns={packageColumns}
               rowKey="package_id"
               pagination={false}
               size="small"
-              locale={{ emptyText: 'Нет данных' }}
+              locale={{ emptyText: t('pages.incomeReports.noData') }}
             />
           </Card>
         </Col>

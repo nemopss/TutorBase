@@ -1,9 +1,11 @@
 import { Card, Typography, Button } from 'antd';
 import { LockOutlined, ReloadOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useTelegram } from '../hooks/useTelegram';
 import { useAuth } from '../auth/AuthProvider';
 
 const AccessDenied = () => {
+  const { t } = useTranslation();
   const { tg } = useTelegram();
   const { user } = useAuth();
 
@@ -24,10 +26,10 @@ const AccessDenied = () => {
       >
         <LockOutlined style={{ fontSize: 48, color: '#fa8c16' }} />
         <Typography.Title level={3} style={{ marginTop: 16 }}>
-          Доступ ограничен
+          {t('pages.accessDenied.title')}
         </Typography.Title>
         <Typography.Paragraph type="secondary">
-          {user?.display_name}, эта часть мини-приложения закрыта. Пожалуйста, обратитесь к администратору, чтобы получить доступ.
+          {t('pages.accessDenied.restrictedMessage', { name: user?.display_name })}
         </Typography.Paragraph>
         <Button
           type="primary"
@@ -35,7 +37,7 @@ const AccessDenied = () => {
           onClick={() => window.location.reload()}
           block
         >
-          Обновить
+          {t('pages.accessDenied.refresh')}
         </Button>
         {tg && (
           <Button
@@ -43,7 +45,7 @@ const AccessDenied = () => {
             onClick={() => tg.close()}
             block
           >
-            Закрыть Mini App
+            {t('pages.accessDenied.closeMiniApp')}
           </Button>
         )}
       </Card>

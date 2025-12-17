@@ -1,5 +1,7 @@
 import React, { useState } from 'react';
 import { Card, Progress, Typography, Tag } from 'antd';
+import { useTranslation } from 'react-i18next';
+import dayjs from 'dayjs';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
@@ -26,14 +28,6 @@ interface PackageCardProps {
 }
 
 /**
- * Format lesson count as "X/Y уроков"
- */
-export const formatLessonCount = (progress: PackageProgress): string => {
-  const done = progress.completed + progress.cancelled;
-  return `${done}/${progress.total} уроков`;
-};
-
-/**
  * Get badge color for package status
  */
 export const getStatusBadgeColor = (status: string): string => {
@@ -47,33 +41,6 @@ export const getStatusBadgeColor = (status: string): string => {
 };
 
 /**
- * Get status label in Russian
- */
-const getStatusLabel = (status: string): string => {
-  switch (status) {
-    case 'active': return 'Активен';
-    case 'completed': return 'Завершён';
-    case 'cancelled': return 'Отменён';
-    case 'draft': return 'Черновик';
-    default: return status;
-  }
-};
-
-/**
- * Format next lesson date as "Следующий: DD MMM" or "Нет запланированных"
- */
-export const formatNextLessonDate = (dateStr?: string | null): string => {
-  if (!dateStr) return 'Нет запланированных';
-  
-  const date = new Date(dateStr);
-  const day = date.getDate();
-  const months = ['янв', 'фев', 'мар', 'апр', 'май', 'июн', 'июл', 'авг', 'сен', 'окт', 'ноя', 'дек'];
-  const month = months[date.getMonth()];
-  
-  return `Следующий: ${day} ${month}`;
-};
-
-/**
  * Package card with new layout:
  * - Title + learner name on the left
  * - Progress ring on the right (no percentage)
@@ -84,6 +51,7 @@ const PackageCard: React.FC<PackageCardProps> = ({
   package: pkg,
   onClick,
 }) => {
+  const { t } = useTranslation();
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
   const [isPressed, setIsPressed] = useState(false);
@@ -94,6 +62,21 @@ const PackageCard: React.FC<PackageCardProps> = ({
     : 0;
 
   const isActive = pkg.status === 'active';
+
+  // Format lesson count
+  const formatLessonCount = (): string => {
+    const done = progress.completed + progress.cancelled;
+    return `${done}/${progress.total} ${t('pages.packages.lessons')}`;
+  };
+
+  // Format next lesson date
+  const formatNextLessonDate = (dateStr?: string | null): string => {
+    if (!dateStr) return t('packageCard.noScheduled');
+    
+    const formattedDate = dayjs(dateStr).format('D MMM');
+    
+    return t('packageCard.nextLesson', { date: formattedDate });
+  };
 
   return (
     <Card
@@ -154,10 +137,10 @@ const PackageCard: React.FC<PackageCardProps> = ({
       {/* Lesson count + Status badge */}
       <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, marginTop: spacing.sm, flexWrap: 'wrap' }}>
         <Text type="secondary" style={{ fontSize: 12, whiteSpace: 'nowrap' }}>
-          {formatLessonCount(progress)}
+          {formatLessonCount()}
         </Text>
         <Tag color={getStatusBadgeColor(pkg.status)} style={{ margin: 0, fontSize: 11, flexShrink: 0 }}>
-          {getStatusLabel(pkg.status)}
+          {t(`pages.packages.status.${pkg.status}`)}
         </Tag>
       </div>
 

@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, Space, Modal, message, Alert } from 'antd';
 import type { TableProps } from 'antd';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import TemplateForm from '../components/forms/TemplateForm';
 import PageHeader from '../components/common/PageHeader';
@@ -49,6 +50,7 @@ const duplicateTemplate = async (id: number) => {
 
 // --- Component --- //
 const Templates: React.FC = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
@@ -79,7 +81,7 @@ const Templates: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['templates'] });
     },
     onError: (error: Error) => {
-      message.error(`An error occurred: ${error.message}`);
+      message.error(t('errors.serverError') + `: ${error.message}`);
     }
   };
 
@@ -87,7 +89,7 @@ const Templates: React.FC = () => {
     mutationFn: createTemplate, 
     ...mutationOptions, 
     onSuccess: () => { 
-      message.success('Template created!'); 
+      message.success(t('pages.templates.templateCreated')); 
       mutationOptions.onSuccess();
       setIsModalOpen(false);
     }
@@ -97,7 +99,7 @@ const Templates: React.FC = () => {
     mutationFn: updateTemplate, 
     ...mutationOptions, 
     onSuccess: () => { 
-      message.success('Template updated!'); 
+      message.success(t('pages.templates.templateUpdated')); 
       mutationOptions.onSuccess();
       setIsModalOpen(false);
     }
@@ -107,11 +109,11 @@ const Templates: React.FC = () => {
     mutationFn: deleteTemplate, 
     onSuccess: () => { 
       queryClient.invalidateQueries({ queryKey: ['templates'] });
-      message.success('Template deleted!');
+      message.success(t('pages.templates.templateDeleted'));
     },
     onError: (error: any) => {
       console.error('Delete error:', error);
-      message.error(`Failed to delete template: ${error.response?.data?.detail || error.message}`);
+      message.error(t('errors.deleteFailed', { message: error.response?.data?.detail || error.message }));
     }
   });
   
@@ -119,7 +121,7 @@ const Templates: React.FC = () => {
     mutationFn: duplicateTemplate, 
     ...mutationOptions, 
     onSuccess: () => { 
-      message.success('Template duplicated!'); 
+      message.success(t('pages.templates.templateDuplicated')); 
       mutationOptions.onSuccess();
     }
   });
@@ -147,33 +149,33 @@ const Templates: React.FC = () => {
 
   const columns: TableProps<Template>['columns'] = [
     {
-      title: 'Name',
+      title: t('pages.templates.name'),
       dataIndex: 'name',
       key: 'name',
     },
     {
-      title: 'Description',
+      title: t('pages.templates.description'),
       dataIndex: 'description',
       key: 'description',
     },
     {
-      title: 'Lessons',
+      title: t('pages.templates.lessonCount'),
       dataIndex: 'lesson_count',
       key: 'lesson_count',
     },
     {
-      title: 'Duration (days)',
+      title: t('pages.templates.durationDays'),
       dataIndex: 'duration_days',
       key: 'duration_days',
     },
     {
-      title: 'Actions',
+      title: t('common.actions'),
       key: 'actions',
       render: (_, record) => (
         <Space size="middle">
-          <Button type="link" onClick={() => { setEditingTemplate(record); setIsModalOpen(true); }}>Edit</Button>
-          <Button type="link" onClick={() => duplicateMutation.mutate(record.id)}>Duplicate</Button>
-          <Button type="link" danger onClick={() => handleDelete(record.id)}>Delete</Button>
+          <Button type="link" onClick={() => { setEditingTemplate(record); setIsModalOpen(true); }}>{t('common.edit')}</Button>
+          <Button type="link" onClick={() => duplicateMutation.mutate(record.id)}>{t('pages.templates.duplicate')}</Button>
+          <Button type="link" danger onClick={() => handleDelete(record.id)}>{t('common.delete')}</Button>
         </Space>
       ),
     },
@@ -185,17 +187,17 @@ const Templates: React.FC = () => {
   return (
     <div>
       <PageHeader 
-        title="Templates"
-        subtitle="Manage lesson package templates"
+        title={t('pages.templates.title')}
+        subtitle={t('pages.templates.subtitle')}
         actions={
           <Button type="primary" onClick={() => { setEditingTemplate(null); setIsModalOpen(true); }}>
-            Create Template
+            {t('pages.templates.createTemplate')}
           </Button>
         }
       />
       {showError && (
         <Alert 
-          message="Error loading templates" 
+          message={t('errors.loadFailed', { message: '' })} 
           description={error.message} 
           type="error" 
           showIcon
@@ -207,16 +209,16 @@ const Templates: React.FC = () => {
         loading={isLoading}
         columns={columns}
         rowKey="id"
-        emptyText="No templates yet"
-        emptyDescription="Create a template to quickly generate lesson packages with predefined schedules"
-        emptyActionText="Create Template"
+        emptyText={t('pages.templates.noTemplates')}
+        emptyDescription={t('pages.templates.noTemplatesDescription')}
+        emptyActionText={t('pages.templates.createTemplate')}
         onEmptyAction={() => { setEditingTemplate(null); setIsModalOpen(true); }}
         renderCard={(template) => (
           <TemplateCard
             key={template.id}
             template={template}
-            onEdit={(t) => {
-              setEditingTemplate(t);
+            onEdit={(tmpl) => {
+              setEditingTemplate(tmpl);
               setIsModalOpen(true);
             }}
             onDuplicate={(id) => duplicateMutation.mutate(id)}
@@ -239,15 +241,16 @@ const Templates: React.FC = () => {
 
       <Modal
         open={deleteModalOpen}
-        title="Delete Template"
+        title={t('pages.templates.deleteTitle')}
         onCancel={() => setDeleteModalOpen(false)}
         onOk={confirmDelete}
-        okText="Delete"
+        okText={t('common.delete')}
+        cancelText={t('common.cancel')}
         okType="danger"
         confirmLoading={deleteMutation.isPending}
       >
-        <p>Are you sure you want to delete this template?</p>
-        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+        <p>{t('pages.templates.deleteConfirm')}</p>
+        <p style={{ color: '#8c8c8c' }}>{t('pages.templates.deleteIrreversible')}</p>
       </Modal>
     </div>
   );

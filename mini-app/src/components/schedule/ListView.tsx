@@ -1,8 +1,9 @@
 import React from 'react';
 import { List, Badge, Typography, Empty } from 'antd';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import type { Lesson } from './types';
-import { STATUS_COLORS, STATUS_LABELS } from './types';
+import { STATUS_COLORS } from './types';
 
 const { Text } = Typography;
 
@@ -12,6 +13,8 @@ interface ListViewProps {
 }
 
 const ListView: React.FC<ListViewProps> = ({ lessons, onLessonClick }) => {
+  const { t } = useTranslation();
+  
   // Group lessons by date
   const groupedLessons = lessons.reduce((acc, lesson) => {
     const date = dayjs(lesson.scheduled_at).format('YYYY-MM-DD');
@@ -26,7 +29,7 @@ const ListView: React.FC<ListViewProps> = ({ lessons, onLessonClick }) => {
   const sortedDates = Object.keys(groupedLessons).sort();
 
   if (lessons.length === 0) {
-    return <Empty description="Нет уроков" />;
+    return <Empty description={t('pages.lessons.noLessons')} />;
   }
 
   return (
@@ -41,7 +44,7 @@ const ListView: React.FC<ListViewProps> = ({ lessons, onLessonClick }) => {
             renderItem={(lesson) => {
               const lessonTime = dayjs(lesson.scheduled_at);
               const statusColor = STATUS_COLORS[lesson.status];
-              const statusLabel = STATUS_LABELS[lesson.status];
+              const statusLabel = t(`calendar.status.${lesson.status}`);
 
               return (
                 <List.Item
@@ -53,7 +56,7 @@ const ListView: React.FC<ListViewProps> = ({ lessons, onLessonClick }) => {
                       <div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
                         <Text strong>{lessonTime.format('HH:mm')}</Text>
                         {lesson.duration_minutes && (
-                          <Text type="secondary">({lesson.duration_minutes} мин)</Text>
+                          <Text type="secondary">({lesson.duration_minutes} {t('calendar.min')})</Text>
                         )}
                       </div>
                     }

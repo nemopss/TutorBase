@@ -1,6 +1,7 @@
 import React, { useEffect } from 'react';
 import { Form, Input, InputNumber, Select, Button, Space, TimePicker } from 'antd';
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import ResponsiveModal from '../common/ResponsiveModal';
 
@@ -12,18 +13,19 @@ interface TemplateFormProps {
   initialValues?: any;
 }
 
-const WEEKDAY_OPTIONS = [
-  { label: 'Monday', value: 0 },
-  { label: 'Tuesday', value: 1 },
-  { label: 'Wednesday', value: 2 },
-  { label: 'Thursday', value: 3 },
-  { label: 'Friday', value: 4 },
-  { label: 'Saturday', value: 5 },
-  { label: 'Sunday', value: 6 },
-];
-
 const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, isLoading, initialValues }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
+
+  const WEEKDAY_OPTIONS = [
+    { label: t('calendar.days.mon'), value: 0 },
+    { label: t('calendar.days.tue'), value: 1 },
+    { label: t('calendar.days.wed'), value: 2 },
+    { label: t('calendar.days.thu'), value: 3 },
+    { label: t('calendar.days.fri'), value: 4 },
+    { label: t('calendar.days.sat'), value: 5 },
+    { label: t('calendar.days.sun'), value: 6 },
+  ];
 
   useEffect(() => {
     if (open) {
@@ -58,9 +60,9 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
   return (
     <ResponsiveModal
       open={open}
-      title={isEditing ? "Edit Template" : "Create New Template"}
-      okText={isEditing ? "Save" : "Create"}
-      cancelText="Cancel"
+      title={isEditing ? t('forms.template.editTitle') : t('forms.template.title')}
+      okText={isEditing ? t('common.save') : t('common.create')}
+      cancelText={t('common.cancel')}
       onCancel={onCancel}
       onOk={() => form.validateFields().then(handleFinish).catch(info => {
         if (import.meta.env.DEV) {
@@ -74,19 +76,19 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
       <Form form={form} layout="vertical" name="template_form" autoComplete="off">
         <Form.Item
           name="name"
-          label="Template Name"
-          rules={[{ required: true, message: 'Please enter the template name!' }]}
+          label={t('forms.template.nameLabel')}
+          rules={[{ required: true, message: t('forms.template.nameRequired') }]}
         >
-          <Input />
+          <Input placeholder={t('forms.template.namePlaceholder')} />
         </Form.Item>
-        <Form.Item name="description" label="Description">
-          <Input.TextArea rows={2} />
+        <Form.Item name="description" label={t('forms.template.descriptionLabel')}>
+          <Input.TextArea rows={2} placeholder={t('forms.template.descriptionPlaceholder')} />
         </Form.Item>
-        <Form.Item name="lesson_count" label="Number of Lessons to Generate">
-          <InputNumber min={1} style={{ width: '100%' }} />
+        <Form.Item name="lesson_count" label={t('forms.template.lessonCountLabel')}>
+          <InputNumber min={1} style={{ width: '100%' }} placeholder={t('forms.template.lessonCountPlaceholder')} />
         </Form.Item>
 
-        <p>Weekly Schedule</p>
+        <p>{t('forms.template.weeklySchedule')}</p>
         <Form.List name="weekly_schedule">
           {(fields, { add, remove }) => (
             <>
@@ -95,23 +97,23 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
                   <Form.Item
                     {...restField}
                     name={[name, 'day']}
-                    rules={[{ required: true, message: 'Missing day' }]}
+                    rules={[{ required: true, message: t('forms.template.dayRequired') }]}
                   >
-                    <Select options={WEEKDAY_OPTIONS} placeholder="Day" style={{ width: 150 }} />
+                    <Select options={WEEKDAY_OPTIONS} placeholder={t('forms.template.dayPlaceholder')} style={{ width: 150 }} />
                   </Form.Item>
                   <Form.Item
                     {...restField}
                     name={[name, 'time']}
-                    rules={[{ required: true, message: 'Missing time' }]}
+                    rules={[{ required: true, message: t('forms.template.timeRequired') }]}
                   >
-                    <TimePicker format="HH:mm" />
+                    <TimePicker format="HH:mm" placeholder={t('forms.template.timePlaceholder')} />
                   </Form.Item>
                   <MinusCircleOutlined onClick={() => remove(name)} />
                 </Space>
               ))}
               <Form.Item>
                 <Button type="dashed" onClick={() => add()} block icon={<PlusOutlined />}>
-                  Add Schedule Rule
+                  {t('forms.template.addScheduleRule')}
                 </Button>
               </Form.Item>
             </>

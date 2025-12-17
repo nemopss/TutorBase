@@ -4,6 +4,7 @@ import { Card, Row, Col, Statistic, DatePicker, Space, Button, Table, Spin } fro
 import { DownloadOutlined, BarChartOutlined, PieChartOutlined, LineChartOutlined } from '@ant-design/icons';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import dayjs, { Dayjs } from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
@@ -81,6 +82,7 @@ const fetchAllPackages = async (): Promise<PackageListResponse> => {
 
 
 const Analytics: React.FC = () => {
+  const { t } = useTranslation();
   const { cardStyle, textColor, chartGridColor, tooltipStyle } = useResponsiveStyles();
   const { isMobile } = useResponsive();
   const currentChartHeight = isMobile ? chartHeight.mobile : chartHeight.desktop;
@@ -165,8 +167,8 @@ const Analytics: React.FC = () => {
   return (
     <div>
       <PageHeader 
-        title="Analytics"
-        subtitle="Insights and statistics about your lessons"
+        title={t('pages.analytics.title')}
+        subtitle={t('pages.analytics.subtitle')}
         actions={
           <Space wrap size="small" direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: isMobile ? '100%' : 'auto' }}>
             <RangePicker
@@ -181,7 +183,7 @@ const Analytics: React.FC = () => {
               ) : undefined}
             />
             <Button icon={<DownloadOutlined />} onClick={handleExport} block={isMobile}>
-              Export CSV
+              {t('pages.analytics.exportCsv')}
             </Button>
           </Space>
         }
@@ -192,7 +194,7 @@ const Analytics: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card style={cardStyle}>
             <Statistic
-              title="Total Lessons (Period)"
+              title={t('pages.analytics.totalLessonsPeriod')}
               value={(lessonsData?.items || []).reduce((sum, item) => sum + item.value, 0)}
               prefix={<LineChartOutlined />}
               valueStyle={{ color: textColor }}
@@ -202,7 +204,7 @@ const Analytics: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card style={cardStyle}>
             <Statistic
-              title="Total Reminders (Period)"
+              title={t('pages.analytics.totalRemindersPeriod')}
               value={(remindersData?.items || []).reduce((sum, item) => sum + item.value, 0)}
               prefix={<BarChartOutlined />}
               valueStyle={{ color: textColor }}
@@ -212,7 +214,7 @@ const Analytics: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card style={cardStyle}>
             <Statistic
-              title="Active Learners"
+              title={t('pages.analytics.activeLearners')}
               value={learnerData.length}
               prefix={<PieChartOutlined />}
               valueStyle={{ color: textColor }}
@@ -222,7 +224,7 @@ const Analytics: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card style={cardStyle}>
             <Statistic
-              title="Total Packages"
+              title={t('pages.analytics.totalPackages')}
               value={packagesData?.items.length || 0}
               prefix={<BarChartOutlined />}
               valueStyle={{ color: textColor }}
@@ -234,7 +236,7 @@ const Analytics: React.FC = () => {
       {/* Charts */}
       <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
         <Col xs={24} lg={16}>
-          <Card title="Lessons & Reminders Over Time" style={cardStyle}>
+          <Card title={t('pages.analytics.lessonsRemindersOverTime')} style={cardStyle}>
             <ResponsiveContainer width="100%" height={currentChartHeight}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
@@ -242,21 +244,21 @@ const Analytics: React.FC = () => {
                 <YAxis stroke={textColor} tick={{ fontSize: isMobile ? 10 : 12 }} />
                 <Tooltip contentStyle={tooltipStyle} />
                 <Legend wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} />
-                <Line type="monotone" dataKey="lessons" stroke="#1890ff" strokeWidth={2} name="Lessons" />
-                <Line type="monotone" dataKey="reminders" stroke="#52c41a" strokeWidth={2} name="Reminders" />
+                <Line type="monotone" dataKey="lessons" stroke="#1890ff" strokeWidth={2} name={t('pages.analytics.lessons')} />
+                <Line type="monotone" dataKey="reminders" stroke="#52c41a" strokeWidth={2} name={t('pages.analytics.reminders')} />
               </LineChart>
             </ResponsiveContainer>
           </Card>
         </Col>
         <Col xs={24} lg={8}>
-          <Card title="Top 5 Learners by Completed Lessons" style={cardStyle}>
+          <Card title={t('pages.analytics.topLearners')} style={cardStyle}>
             <ResponsiveContainer width="100%" height={currentChartHeight}>
               <BarChart data={topLearners} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
                 <XAxis type="number" stroke={textColor} tick={{ fontSize: isMobile ? 10 : 12 }} />
                 <YAxis dataKey="name" type="category" width={isMobile ? 60 : 100} stroke={textColor} tick={{ fontSize: isMobile ? 10 : 12 }} />
                 <Tooltip contentStyle={tooltipStyle} />
-                <Bar dataKey="completed" fill="#52c41a" />
+                <Bar dataKey="completed" fill="#52c41a" name={t('pages.dashboard.completed')} />
               </BarChart>
             </ResponsiveContainer>
           </Card>
@@ -264,7 +266,7 @@ const Analytics: React.FC = () => {
       </Row>
 
       {/* Learner Breakdown Table */}
-      <Card title="Learner Breakdown" style={cardStyle}>
+      <Card title={t('pages.analytics.learnerBreakdown')} style={cardStyle}>
         <Table
           dataSource={learnerData}
           rowKey="name"
@@ -272,32 +274,32 @@ const Analytics: React.FC = () => {
           pagination={{ pageSize: 10 }}
           columns={[
             {
-              title: 'Learner',
+              title: t('pages.learners.learner'),
               dataIndex: 'name',
               key: 'name',
             },
             {
-              title: 'Packages',
+              title: t('navigation.packages'),
               dataIndex: 'packages',
               key: 'packages',
             },
             {
-              title: 'Total Lessons',
+              title: t('pages.analytics.totalLessons'),
               dataIndex: 'total',
               key: 'total',
             },
             {
-              title: 'Completed',
+              title: t('pages.dashboard.completed'),
               dataIndex: 'completed',
               key: 'completed',
             },
             {
-              title: 'Cancelled',
+              title: t('pages.dashboard.cancelled'),
               dataIndex: 'cancelled',
               key: 'cancelled',
             },
             {
-              title: 'Completion Rate',
+              title: t('pages.analytics.completionRate'),
               key: 'rate',
               render: (_: any, record: any) => 
                 record.total > 0 ? `${Math.round(((record.completed + record.cancelled) / record.total) * 100)}%` : '0%',

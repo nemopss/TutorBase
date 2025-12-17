@@ -1,7 +1,9 @@
 import React from 'react';
 import { Card, Tag, Select, Space, Typography } from 'antd';
+import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
+import i18n from '../../i18n';
 
 const { Text } = Typography;
 
@@ -17,28 +19,17 @@ interface UserRecord {
   lastLoginAt: string | null;
 }
 
-const roleLabels: Record<UserRole, string> = {
-  admin: 'Админ',
-  teacher: 'Преподаватель',
-  viewer: 'Наблюдатель',
-};
-
 const roleColors: Record<UserRole, string> = {
   admin: 'magenta',
   teacher: 'blue',
   viewer: 'default',
 };
 
-const roleOptions = [
-  { value: 'viewer', label: roleLabels.viewer },
-  { value: 'teacher', label: roleLabels.teacher },
-  { value: 'admin', label: roleLabels.admin },
-];
-
 const formatDateTime = (value: string | null) => {
   if (!value) return '—';
   try {
-    return new Date(value).toLocaleString('ru-RU', {
+    const locale = i18n.language === 'ko' ? 'ko-KR' : i18n.language === 'en' ? 'en-US' : 'ru-RU';
+    return new Date(value).toLocaleString(locale, {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
@@ -65,10 +56,23 @@ const UserCard: React.FC<UserCardProps> = ({
   isUpdating = false,
   onClick,
 }) => {
+  const { t } = useTranslation();
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
 
   const isCurrentUser = user.id === currentUserId;
+  
+  const roleLabels: Record<UserRole, string> = {
+    admin: t('pages.admin.roles.admin'),
+    teacher: t('pages.admin.roles.teacher'),
+    viewer: t('pages.admin.roles.viewer'),
+  };
+
+  const roleOptions = [
+    { value: 'viewer', label: roleLabels.viewer },
+    { value: 'teacher', label: roleLabels.teacher },
+    { value: 'admin', label: roleLabels.admin },
+  ];
 
   return (
     <Card
@@ -93,7 +97,7 @@ const UserCard: React.FC<UserCardProps> = ({
         
         <Space direction="vertical" size={2}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            {user.username ? `@${user.username}` : 'No username'}
+            {user.username ? `@${user.username}` : '—'}
           </Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
             Telegram ID: {user.telegramId ?? '—'}
@@ -102,15 +106,15 @@ const UserCard: React.FC<UserCardProps> = ({
         
         <Space direction="vertical" size={2}>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Последний вход: {formatDateTime(user.lastLoginAt)}
+            {t('pages.admin.lastLogin')}: {formatDateTime(user.lastLoginAt)}
           </Text>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Создан: {formatDateTime(user.createdAt)}
+            {t('pages.admin.created')}: {formatDateTime(user.createdAt)}
           </Text>
         </Space>
         
         <div style={{ paddingTop: spacing.xs }}>
-          <Text type="secondary" style={{ fontSize: 12, marginRight: spacing.sm }}>Изменить роль:</Text>
+          <Text type="secondary" style={{ fontSize: 12, marginRight: spacing.sm }}>{t('pages.admin.role')}:</Text>
           <Select<UserRole>
             value={user.role}
             options={roleOptions}

@@ -3,6 +3,7 @@ import { Form, DatePicker, InputNumber, Select, Input } from 'antd';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
+import { useTranslation } from 'react-i18next';
 import ResponsiveModal from '../common/ResponsiveModal';
 
 dayjs.extend(utc);
@@ -22,6 +23,7 @@ interface LessonFormProps {
 const { Option } = Select;
 
 const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoading, initialValues, mode }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
 
   useEffect(() => {
@@ -43,9 +45,9 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
   return (
     <ResponsiveModal
       open={open}
-      title={isEditing ? "Edit Lesson" : "Add New Lesson"}
-      okText={isEditing ? "Save" : "Create"}
-      cancelText="Cancel"
+      title={isEditing ? t('forms.lesson.editTitle') : t('forms.lesson.title')}
+      okText={isEditing ? t('common.save') : t('common.create')}
+      cancelText={t('common.cancel')}
       onCancel={onCancel}
       onOk={() => {
         form
@@ -83,23 +85,23 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
       <Form form={form} layout="vertical" name="lesson_form">
         <Form.Item
           name="scheduled_at"
-          label="Scheduled At"
-          rules={[{ required: true, message: 'Please select the date and time!' }]}
+          label={t('forms.lesson.dateTimeLabel')}
+          rules={[{ required: true, message: t('common.required') }]}
         >
           <DatePicker showTime format="YYYY-MM-DD HH:mm:ss" style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item name="duration_minutes" label="Duration (minutes)">
+        <Form.Item name="duration_minutes" label={t('forms.lesson.durationLabel')}>
           <InputNumber min={1} style={{ width: '100%' }} />
         </Form.Item>
-        <Form.Item name="status" label="Status" initialValue={isEditing ? undefined : "scheduled"}>
+        <Form.Item name="status" label={t('forms.lesson.statusLabel')} initialValue={isEditing ? undefined : "scheduled"}>
           <Select>
-            <Option value="scheduled">Scheduled</Option>
-            <Option value="rescheduled">Rescheduled</Option>
-            <Option value="completed">Completed</Option>
-            <Option value="cancelled">Cancelled</Option>
+            <Option value="scheduled">{t('pages.lessons.status.scheduled')}</Option>
+            <Option value="rescheduled">{t('pages.lessons.status.rescheduled')}</Option>
+            <Option value="completed">{t('pages.lessons.status.completed')}</Option>
+            <Option value="cancelled">{t('pages.lessons.status.cancelled')}</Option>
           </Select>
         </Form.Item>
-        <Form.Item name="teacher_notes" label="Notes">
+        <Form.Item name="teacher_notes" label={t('forms.lesson.notesLabel')}>
           <Input.TextArea rows={2} />
         </Form.Item>
       </Form>

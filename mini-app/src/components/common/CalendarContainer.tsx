@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Segmented } from 'antd';
 import { CalendarOutlined, AppstoreOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import type { Lesson } from './calendar-types';
 import WeekCalendar from './WeekCalendar';
 import MonthCalendar from './MonthCalendar';
@@ -31,16 +32,17 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   onDelete,
   defaultView = 'week',
 }) => {
+  const { t } = useTranslation();
   const [view, setView] = useState<CalendarView>(defaultView);
 
   const viewOptions = [
     {
-      label: 'Неделя',
+      label: t('calendar.week'),
       value: 'week' as CalendarView,
       icon: <CalendarOutlined />,
     },
     {
-      label: 'Месяц',
+      label: t('calendar.month'),
       value: 'month' as CalendarView,
       icon: <AppstoreOutlined />,
     },

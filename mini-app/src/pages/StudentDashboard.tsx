@@ -4,6 +4,7 @@ import {
   BookOutlined,
   ClockCircleOutlined,
 } from "@ant-design/icons";
+import { useTranslation } from 'react-i18next';
 import { useAuth } from "../auth/AuthProvider";
 import { useQuery } from "@tanstack/react-query";
 import api from "../services/api";
@@ -37,6 +38,7 @@ interface Package {
 }
 
 const StudentDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
 
   const { data: learner, isLoading: isLoadingLearner } = useQuery({
@@ -88,16 +90,16 @@ const StudentDashboard: React.FC = () => {
     <div style={{ padding: "16px" }}>
       <div style={{ marginBottom: 24 }}>
         <Title level={2} style={{ margin: 0 }}>
-          Hello, {learner?.display_name || user?.display_name || "Student"}!
+          {t('studentDashboard.hello', { name: learner?.display_name || user?.display_name || t('studentDashboard.student') })}
         </Title>
-        <Text type="secondary">Welcome to your learning dashboard</Text>
+        <Text type="secondary">{t('studentDashboard.welcome')}</Text>
       </div>
 
       <Row gutter={[16, 16]}>
         <Col xs={24} sm={12}>
           <Card>
             <Statistic
-              title="Upcoming Lessons"
+              title={t('studentDashboard.upcomingLessons')}
               value={lessonsData?.total || 0}
               prefix={<ClockCircleOutlined />}
               valueStyle={{ color: "#2383e2" }}
@@ -107,7 +109,7 @@ const StudentDashboard: React.FC = () => {
         <Col xs={24} sm={12}>
           <Card>
             <Statistic
-              title="Active Courses"
+              title={t('studentDashboard.activeCourses')}
               value={activePackages.length}
               prefix={<BookOutlined />}
               valueStyle={{ color: "#0f7b6c" }}
@@ -117,32 +119,32 @@ const StudentDashboard: React.FC = () => {
       </Row>
 
       <div style={{ marginTop: 24 }}>
-        <Card title="Next Lesson">
+        <Card title={t('studentDashboard.nextLesson')}>
           {nextLesson ? (
             <div>
               <Text strong>{dayjs(nextLesson.scheduled_at).format('MMMM D, h:mm A')}</Text>
               <br />
-              <Text type="secondary">{nextLesson.duration_minutes} minutes</Text>
+              <Text type="secondary">{nextLesson.duration_minutes} {t('pages.lessons.minutes')}</Text>
             </div>
           ) : (
             <div style={{ textAlign: "center", padding: "24px 0" }}>
-              <Text type="secondary">No upcoming lessons scheduled</Text>
+              <Text type="secondary">{t('studentDashboard.noUpcomingLessons')}</Text>
             </div>
           )}
         </Card>
       </div>
 
       <div style={{ marginTop: 24 }}>
-        <Card title="Your Courses">
+        <Card title={t('studentDashboard.yourCourses')}>
           <List
             dataSource={activePackages}
             renderItem={(pkg) => (
               <List.Item>
                 <List.Item.Meta
                   title={pkg.title}
-                  description={`Progress: ${pkg.progress.completed} / ${pkg.progress.total} lessons`}
+                  description={t('studentDashboard.progress', { completed: pkg.progress.completed, total: pkg.progress.total })}
                 />
-                <Tag color="green">{pkg.status}</Tag>
+                <Tag color="green">{t(`pages.packages.status.${pkg.status}`)}</Tag>
               </List.Item>
             )}
           />

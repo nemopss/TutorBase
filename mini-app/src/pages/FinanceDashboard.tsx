@@ -18,6 +18,7 @@ import {
   Tooltip,
   ResponsiveContainer,
 } from 'recharts';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
@@ -89,6 +90,7 @@ const formatMonth = (month: string): string => {
 
 // --- Component --- //
 const FinanceDashboard: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const { cardStyle, textColor, chartGridColor, tooltipStyle } = useResponsiveStyles();
   const { isMobile } = useResponsive();
@@ -115,7 +117,7 @@ const FinanceDashboard: React.FC = () => {
   }
 
   if (isError) {
-    return <Alert message="Ошибка загрузки данных" description={error.message} type="error" />;
+    return <Alert message={t('errors.loadFailed', { message: '' })} description={error.message} type="error" />;
   }
 
   // Calculate income change percentage, handling edge cases
@@ -141,15 +143,15 @@ const FinanceDashboard: React.FC = () => {
   return (
     <div>
       <PageHeader
-        title="Финансы"
-        subtitle="Обзор доходов и задолженностей"
+        title={t('pages.finance.title')}
+        subtitle={t('pages.finance.subtitle')}
         actions={
           <Button
             type="primary"
             icon={<FileTextOutlined />}
             onClick={() => navigate('/finance/reports')}
           >
-            Отчёты
+            {t('pages.finance.reports')}
           </Button>
         }
       />
@@ -159,7 +161,7 @@ const FinanceDashboard: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card style={cardStyle}>
             <Statistic
-              title="Доход за месяц"
+              title={t('pages.finance.currentMonthIncome')}
               value={metrics?.current_month_income || 0}
               prefix={<DollarOutlined />}
               formatter={(value) => formatCurrency(Number(value))}
@@ -170,7 +172,7 @@ const FinanceDashboard: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card style={cardStyle}>
             <Statistic
-              title="Прошлый месяц"
+              title={t('pages.finance.previousMonthIncome')}
               value={metrics?.previous_month_income || 0}
               prefix={incomeChange >= 0 ? <RiseOutlined /> : <FallOutlined />}
               formatter={(value) => formatCurrency(Number(value))}
@@ -188,7 +190,7 @@ const FinanceDashboard: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card style={cardStyle}>
             <Statistic
-              title="Общая задолженность"
+              title={t('pages.finance.totalOutstanding')}
               value={metrics?.total_outstanding || 0}
               prefix={<DollarOutlined />}
               formatter={(value) => formatCurrency(Number(value))}
@@ -199,7 +201,7 @@ const FinanceDashboard: React.FC = () => {
         <Col xs={24} sm={12} lg={6}>
           <Card style={cardStyle}>
             <Statistic
-              title="Должников"
+              title={t('pages.finance.debtorsCount')}
               value={metrics?.unpaid_learners_count || 0}
               prefix={<UserOutlined />}
               valueStyle={{ color: (metrics?.unpaid_learners_count || 0) > 0 ? '#ff4d4f' : textColor }}
@@ -211,7 +213,7 @@ const FinanceDashboard: React.FC = () => {
       {/* Chart and Outstanding List */}
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={16}>
-          <Card title="Доходы за 6 месяцев" bordered={false} style={cardStyle}>
+          <Card title={t('pages.finance.incomeChart')} bordered={false} style={cardStyle}>
             <ResponsiveContainer width="100%" height={currentChartHeight}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
@@ -223,7 +225,7 @@ const FinanceDashboard: React.FC = () => {
                 />
                 <Tooltip
                   contentStyle={tooltipStyle}
-                  formatter={(value: number) => [formatCurrency(value), 'Доход']}
+                  formatter={(value: number) => [formatCurrency(value), t('pages.finance.income')]}
                 />
                 <Line
                   type="monotone"
@@ -238,18 +240,18 @@ const FinanceDashboard: React.FC = () => {
         </Col>
         <Col xs={24} lg={8}>
           <Card
-            title="Ученики с задолженностью"
+            title={t('pages.finance.learnersWithDebt')}
             bordered={false}
             style={cardStyle}
             extra={
               <Button type="link" onClick={() => navigate('/learners')}>
-                Все
+                {t('pages.finance.all')}
               </Button>
             }
           >
             <List
               dataSource={learnersWithBalance || []}
-              locale={{ emptyText: 'Нет задолженностей' }}
+              locale={{ emptyText: t('pages.finance.noDebts') }}
               renderItem={(item) => (
                 <List.Item
                   key={item.learner_id}
@@ -264,7 +266,7 @@ const FinanceDashboard: React.FC = () => {
                         navigate(`/learners/${item.learner_id}/finance`);
                       }}
                     >
-                      Оплата
+                      {t('pages.finance.payment')}
                     </Button>,
                   ]}
                 >

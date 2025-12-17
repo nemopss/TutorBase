@@ -6,6 +6,7 @@ import { CalendarOutlined, UnorderedListOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import updateLocale from 'dayjs/plugin/updateLocale';
 import 'dayjs/locale/ru';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import LessonForm from '../components/forms/LessonForm';
@@ -41,12 +42,7 @@ interface LessonListResponse {
   items: Lesson[];
 }
 
-const STATUS_OPTIONS = [
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'rescheduled', label: 'Rescheduled' },
-  { value: 'completed', label: 'Completed' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
+// Status options will be generated with translations in component
 
 // --- API Fetchers --- //
 const fetchLessons = async (status: string | null, search: string, limit: number, offset: number): Promise<LessonListResponse> => {
@@ -97,7 +93,16 @@ const deleteLesson = async (lessonId: number) => {
 
 // --- Component --- //
 const Lessons: React.FC = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
+
+  // Status options with translations
+  const STATUS_OPTIONS = [
+    { value: 'scheduled', label: t('pages.lessons.status.scheduled') },
+    { value: 'rescheduled', label: t('pages.lessons.status.rescheduled') },
+    { value: 'completed', label: t('pages.lessons.status.completed') },
+    { value: 'cancelled', label: t('pages.lessons.status.cancelled') },
+  ];
   const [viewMode, setViewMode] = useState<'table' | 'calendar'>('calendar');
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(50);
@@ -139,10 +144,10 @@ const Lessons: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['lessons'] });
       setIsModalOpen(false);
       setEditingLesson(null);
-      message.success('Lesson updated successfully!');
+      message.success(t('success.updated'));
     },
     onError: (error: Error) => {
-      message.error(`An error occurred: ${error.message}`);
+      message.error(t('errors.updateFailed', { message: error.message }));
     }
   });
 
@@ -150,11 +155,11 @@ const Lessons: React.FC = () => {
     mutationFn: deleteLesson,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lessons'] });
-      message.success('Lesson deleted successfully!');
+      message.success(t('success.deleted'));
     },
     onError: (error: Error) => {
       console.error('Delete lesson error:', error);
-      message.error(`Failed to delete lesson: ${error.message}`);
+      message.error(t('errors.deleteFailed', { message: error.message }));
     }
   });
 
@@ -219,7 +224,7 @@ const Lessons: React.FC = () => {
       { lessonId: selectedLessonId, values: updateValues },
       {
         onSuccess: () => {
-          message.success('Lesson rescheduled');
+          message.success(t('pages.lessons.lessonRescheduled'));
           setIsRescheduleModalOpen(false);
           setSelectedLessonId(null);
           setSelectedLesson(null);
@@ -239,7 +244,7 @@ const Lessons: React.FC = () => {
       { lessonId: selectedLessonId, values: { status: 'completed' } },
       {
         onSuccess: () => {
-          message.success('Lesson marked as completed');
+          message.success(t('pages.lessons.lessonCompleted'));
           setIsCompleteLessonModalOpen(false);
           setSelectedLessonId(null);
         },
@@ -258,7 +263,7 @@ const Lessons: React.FC = () => {
       { lessonId: selectedLessonId, values: { status: 'cancelled' } },
       {
         onSuccess: () => {
-          message.success('Lesson cancelled');
+          message.success(t('pages.lessons.lessonCancelled'));
           setIsCancelLessonModalOpen(false);
           setSelectedLessonId(null);
         },
@@ -283,7 +288,7 @@ const Lessons: React.FC = () => {
 
   const columns: TableProps<Lesson>['columns'] = [
     {
-      title: 'Scheduled At',
+      title: t('pages.lessons.scheduledAt'),
       dataIndex: 'scheduled_at',
       key: 'scheduled_at',
       render: (_: string, record) => formatDateTime(record.scheduled_at, { timezone: record.timezone }),
@@ -291,49 +296,49 @@ const Lessons: React.FC = () => {
       width: 180,
     },
     {
-      title: 'Package',
+      title: t('pages.lessons.package'),
       dataIndex: 'package_title',
       key: 'package_title',
       render: (title: string) => title || '-',
       ellipsis: true,
     },
     {
-      title: 'Learner',
+      title: t('pages.lessons.learner'),
       dataIndex: 'learner_name',
       key: 'learner_name',
       render: (name: string) => name || '-',
     },
     {
-      title: 'Status',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => <Tag color={getStatusColor(status)}>{status.toUpperCase()}</Tag>,
+      render: (status: string) => <Tag color={getStatusColor(status)}>{t(`pages.lessons.status.${status}`)}</Tag>,
       filters: STATUS_OPTIONS.map(option => ({ text: option.label, value: option.value })),
       onFilter: (value, record) => record.status === value,
       width: 120,
     },
     {
-      title: 'Duration',
+      title: t('pages.lessons.duration'),
       dataIndex: 'duration_minutes',
       key: 'duration_minutes',
-      render: (duration: number) => duration ? `${duration} min` : '-',
+      render: (duration: number) => duration ? `${duration} ${t('pages.lessons.minutes')}` : '-',
       width: 100,
     },
     {
-      title: 'Notes',
+      title: t('pages.lessons.notes'),
       dataIndex: 'teacher_notes',
       key: 'teacher_notes',
       render: (notes: string) => notes ? notes.substring(0, 40) + (notes.length > 40 ? '...' : '') : '-',
       ellipsis: true,
     },
     {
-      title: 'Actions',
+      title: t('common.actions'),
       key: 'actions',
       width: 150,
       render: (_, record) => (
         <Space size="small">
-          <Button type="link" size="small" onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>Edit</Button>
-          <Button type="link" size="small" danger onClick={() => handleDelete(record.id)}>Delete</Button>
+          <Button type="link" size="small" onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>{t('common.edit')}</Button>
+          <Button type="link" size="small" danger onClick={() => handleDelete(record.id)}>{t('common.delete')}</Button>
         </Space>
       ),
     },
@@ -347,8 +352,8 @@ const Lessons: React.FC = () => {
   return (
     <div>
       <PageHeader 
-        title="Lessons"
-        subtitle="View and manage all lessons"
+        title={t('pages.lessons.title')}
+        subtitle={t('pages.lessons.subtitle')}
         actions={
           <Space>
             <Button 
@@ -356,14 +361,14 @@ const Lessons: React.FC = () => {
               type={viewMode === 'table' ? 'primary' : 'default'}
               onClick={() => setViewMode('table')}
             >
-              Table
+              {t('pages.lessons.table')}
             </Button>
             <Button 
               icon={<CalendarOutlined />} 
               type={viewMode === 'calendar' ? 'primary' : 'default'}
               onClick={() => setViewMode('calendar')}
             >
-              Calendar
+              {t('pages.lessons.calendar')}
             </Button>
           </Space>
         }
@@ -373,7 +378,7 @@ const Lessons: React.FC = () => {
         <>
           <Space style={{ marginBottom: 16 }} wrap>
             <Input.Search
-              placeholder="Search lessons..."
+              placeholder={t('pages.lessons.searchPlaceholder')}
               allowClear
               onSearch={(value) => {
                 setSearchTerm(value);
@@ -386,7 +391,7 @@ const Lessons: React.FC = () => {
               style={{ width: 300 }}
             />
             <Select
-              placeholder="Filter by status"
+              placeholder={t('pages.lessons.filterByStatus')}
               allowClear
               style={{ width: 200 }}
               options={STATUS_OPTIONS}
@@ -402,8 +407,8 @@ const Lessons: React.FC = () => {
             loading={isLoading}
             columns={columns}
             rowKey="id"
-            emptyText="No lessons found"
-            emptyDescription="Lessons will appear here once you create packages and schedule lessons"
+            emptyText={t('pages.lessons.noLessons')}
+            emptyDescription={t('pages.lessons.noLessonsDescription')}
             renderCard={(lesson) => (
               <LessonCard
                 key={lesson.id}
@@ -440,7 +445,7 @@ const Lessons: React.FC = () => {
               total: data?.total,
               showSizeChanger: true,
               showQuickJumper: true,
-              showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} lessons`,
+              showTotal: (total, range) => t('pages.lessons.showTotal', { start: range[0], end: range[1], total }),
             }}
           />
         </>
@@ -466,14 +471,15 @@ const Lessons: React.FC = () => {
 
       <Modal
         open={deleteModalOpen}
-        title="Delete Lesson"
+        title={t('pages.lessons.deleteTitle')}
         onCancel={() => setDeleteModalOpen(false)}
         onOk={confirmDelete}
-        okText="Delete"
+        okText={t('common.delete')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
       >
-        <p>Are you sure you want to delete this lesson?</p>
-        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+        <p>{t('pages.lessons.deleteConfirm')}</p>
+        <p style={{ color: '#8c8c8c' }}>{t('pages.lessons.deleteIrreversible')}</p>
       </Modal>
 
       {/* Reschedule Modal */}
@@ -492,33 +498,35 @@ const Lessons: React.FC = () => {
 
       {/* Complete Lesson Modal */}
       <Modal
-        title="Mark as Completed"
+        title={t('pages.lessons.markCompleted')}
         open={isCompleteLessonModalOpen}
         onOk={confirmComplete}
         onCancel={() => {
           setIsCompleteLessonModalOpen(false);
           setSelectedLessonId(null);
         }}
-        okText="Complete"
+        okText={t('common.confirm')}
+        cancelText={t('common.cancel')}
         confirmLoading={updateMutation.isPending}
       >
-        <p>Mark this lesson as completed?</p>
+        <p>{t('pages.lessons.markCompletedConfirm')}</p>
       </Modal>
 
       {/* Cancel Lesson Modal */}
       <Modal
-        title="Cancel Lesson"
+        title={t('pages.lessons.cancelLesson')}
         open={isCancelLessonModalOpen}
         onOk={confirmCancel}
         onCancel={() => {
           setIsCancelLessonModalOpen(false);
           setSelectedLessonId(null);
         }}
-        okText="Yes, Cancel"
+        okText={t('common.yes')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true }}
         confirmLoading={updateMutation.isPending}
       >
-        <p>Are you sure you want to cancel this lesson?</p>
+        <p>{t('pages.lessons.cancelConfirm')}</p>
       </Modal>
     </div>
   );

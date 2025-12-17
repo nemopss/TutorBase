@@ -1,6 +1,7 @@
 import React from 'react';
 import { Modal, Form, DatePicker, TimePicker, InputNumber, Typography } from 'antd';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 
 const { Text } = Typography;
 
@@ -25,6 +26,7 @@ const RescheduleForm: React.FC<RescheduleFormProps> = ({
   currentDateTime,
   currentDuration,
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
 
   React.useEffect(() => {
@@ -49,42 +51,42 @@ const RescheduleForm: React.FC<RescheduleFormProps> = ({
 
   return (
     <Modal
-      title="Reschedule Lesson"
+      title={t('rescheduleForm.title')}
       open={open}
       onOk={handleOk}
       onCancel={onCancel}
       confirmLoading={isLoading}
-      okText="Reschedule"
-      cancelText="Cancel"
+      okText={t('pages.lessons.reschedule')}
+      cancelText={t('common.cancel')}
       destroyOnClose
     >
       {currentDateTime && (
         <div style={{ marginBottom: 16, padding: '8px 12px', background: 'rgba(0,0,0,0.02)', borderRadius: 8 }}>
           <Text type="secondary" style={{ fontSize: 13 }}>
-            Current: {dayjs(currentDateTime).format('ddd, MMM D, YYYY • HH:mm')}
-            {currentDuration && ` (${currentDuration} min)`}
+            {t('rescheduleForm.current')}: {dayjs(currentDateTime).format('ddd, MMM D, YYYY • HH:mm')}
+            {currentDuration && ` (${currentDuration} ${t('pages.lessons.minutes')})`}
           </Text>
         </div>
       )}
       <Form form={form} layout="vertical">
         <Form.Item
           name="date"
-          label="New Date"
-          rules={[{ required: true, message: 'Please select a date' }]}
+          label={t('rescheduleForm.newDate')}
+          rules={[{ required: true, message: t('common.required') }]}
         >
           <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
         </Form.Item>
         <Form.Item
           name="time"
-          label="New Time"
-          rules={[{ required: true, message: 'Please select a time' }]}
+          label={t('rescheduleForm.newTime')}
+          rules={[{ required: true, message: t('common.required') }]}
         >
           <TimePicker style={{ width: '100%' }} format="HH:mm" minuteStep={5} />
         </Form.Item>
         <Form.Item
           name="duration_minutes"
-          label="Duration (minutes)"
-          rules={[{ required: true, message: 'Please enter duration' }]}
+          label={t('forms.lesson.durationLabel')}
+          rules={[{ required: true, message: t('common.required') }]}
         >
           <InputNumber 
             style={{ width: '100%' }} 

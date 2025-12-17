@@ -8,6 +8,7 @@ import weekOfYear from 'dayjs/plugin/weekOfYear';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import isSameOrBefore from 'dayjs/plugin/isSameOrBefore';
+import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -18,7 +19,7 @@ import TimeScale, { PIXELS_PER_HOUR, TIME_SCALE_WIDTH, TOTAL_HEIGHT } from './Ti
 import LessonContextMenu from './LessonContextMenu';
 import CurrentTimeIndicator from './CurrentTimeIndicator';
 import type { Lesson } from './calendar-types';
-import { statusColors, DEFAULT_DURATION, DAYS_FULL } from './calendar-types';
+import { statusColors, DEFAULT_DURATION } from './calendar-types';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -293,6 +294,7 @@ const LessonBlock: React.FC<LessonBlockProps> = ({
   dragHandlers,
   wasDragPerformedRef,
 }) => {
+  const { t } = useTranslation();
   // Track if we're dragging to prevent click
   const isDraggingRef = useRef(false);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -301,7 +303,7 @@ const LessonBlock: React.FC<LessonBlockProps> = ({
   const duration = lesson.duration_minutes || DEFAULT_DURATION;
   const endTime = lessonTime.add(duration, 'minute');
   const colors = statusColors[lesson.status];
-  const statusLabel = lesson.status.charAt(0).toUpperCase() + lesson.status.slice(1);
+  const statusLabel = t(`calendar.status.${lesson.status}`);
   const top = getLessonTop(lesson.scheduled_at, tz);
   const height = getLessonHeight(lesson.duration_minutes);
 
@@ -530,9 +532,21 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
   onCancel,
   onDelete,
 }) => {
+  const { t } = useTranslation();
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
   const { isMobile } = useResponsive();
+  
+  // Translated days of week
+  const daysFull = [
+    t('calendar.days.mon'),
+    t('calendar.days.tue'),
+    t('calendar.days.wed'),
+    t('calendar.days.thu'),
+    t('calendar.days.fri'),
+    t('calendar.days.sat'),
+    t('calendar.days.sun'),
+  ];
   
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -875,13 +889,13 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
               // Keep space reserved to prevent layout shift
             }}
           >
-            Today
+            {t('calendar.today')}
           </Button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: spacing.md }}>
           {weekStats.totalLessons > 0 && (
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {weekStats.totalLessons} lessons • {weekStats.totalHours}h
+              {weekStats.totalLessons} {t('calendar.lessons')} • {weekStats.totalHours}{t('calendar.hours')}
             </Text>
           )}
           <Text strong style={{ fontSize: 14 }}>
@@ -920,7 +934,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
                 type="secondary" 
                 style={{ fontSize: 11, display: 'block' }}
               >
-                {DAYS_FULL[dayIndex]}
+                {daysFull[dayIndex]}
               </Text>
               <Text 
                 strong={isToday}
@@ -1120,7 +1134,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
               borderLeft: `3px solid ${colors.border}`,
             }} />
             <Text type="secondary" style={{ fontSize: 11 }}>
-              {status.charAt(0).toUpperCase() + status.slice(1)}
+              {t(`calendar.status.${status}`)}
             </Text>
           </div>
         ))}

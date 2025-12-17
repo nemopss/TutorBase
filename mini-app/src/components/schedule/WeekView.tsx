@@ -2,6 +2,7 @@ import React, { useMemo, useState } from 'react';
 import { Card, Typography, theme } from 'antd';
 import { DownOutlined, RightOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import type { Lesson } from './types';
 import { STATUS_COLORS } from './types';
 import { useResponsive } from '../../hooks/useResponsive';
@@ -16,6 +17,7 @@ interface WeekViewProps {
 }
 
 const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick }) => {
+  const { t } = useTranslation();
   const { token } = theme.useToken();
   const { isMobile } = useResponsive();
   const [expandedDays, setExpandedDays] = useState<string[]>([dayjs().format('YYYY-MM-DD')]);
@@ -73,7 +75,7 @@ const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick
         </div>
         {lesson.duration_minutes && (
           <div style={{ fontSize: 12, color: token.colorTextSecondary, marginTop: 4 }}>
-            {lesson.duration_minutes} мин
+            {lesson.duration_minutes} {t('calendar.min')}
           </div>
         )}
       </div>
@@ -124,7 +126,7 @@ const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick
                   </div>
                   {dayLessons.length > 0 && (
                     <Text type="secondary" style={{ fontSize: 12 }}>
-                      ({dayLessons.length} {dayLessons.length === 1 ? 'урок' : 'уроков'})
+                      ({dayLessons.length} {dayLessons.length === 1 ? t('calendar.lesson') : t('calendar.lessons')})
                     </Text>
                   )}
                 </div>
@@ -134,7 +136,7 @@ const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick
               {isExpanded && (
                 <div style={{ marginTop: spacing.sm }}>
                   {dayLessons.length === 0 ? (
-                    <Text type="secondary" style={{ fontSize: 12 }}>Нет уроков</Text>
+                    <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.lessons.noLessons')}</Text>
                   ) : (
                     <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.sm }}>
                       {dayLessons.map(renderLessonItem)}
@@ -186,7 +188,7 @@ const WeekView: React.FC<WeekViewProps> = ({ lessons, currentDate, onLessonClick
           >
             {dayLessons.length === 0 ? (
               <div style={{ textAlign: 'center', padding: '20px 0', color: '#999' }}>
-                <Text type="secondary" style={{ fontSize: 12 }}>Нет уроков</Text>
+                <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.lessons.noLessons')}</Text>
               </div>
             ) : (
               <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>

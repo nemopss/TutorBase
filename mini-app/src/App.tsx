@@ -1,9 +1,20 @@
 import { useEffect } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
 import { ConfigProvider, theme } from 'antd';
+import { useTranslation } from 'react-i18next';
+import ruRU from 'antd/locale/ru_RU';
+import enUS from 'antd/locale/en_US';
+import koKR from 'antd/locale/ko_KR';
 import { useAuth } from './auth/AuthProvider';
 import { useTelegram } from './hooks/useTelegram';
 import { useThemeMode } from './theme/ThemeProvider';
+import type { SupportedLanguage } from './i18n';
+
+const antdLocales = {
+  ru: ruRU,
+  en: enUS,
+  ko: koKR,
+};
 import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
 import Packages from './pages/Packages';
@@ -30,8 +41,10 @@ function App() {
   const { isLoading, isAuthenticated, user } = useAuth();
   const { tg, autoFullscreenEnabled, requestFullscreen } = useTelegram();
   const { resolvedTheme } = useThemeMode();
+  const { i18n } = useTranslation();
   const isAdmin = user?.role === 'admin';
   const hasStaffAccess = user?.role === 'admin' || user?.role === 'teacher';
+  const currentLocale = antdLocales[i18n.language as SupportedLanguage] || ruRU;
 
   useEffect(() => {
     if (!tg) return;
@@ -124,7 +137,7 @@ function App() {
   // If not authenticated, show registration flow
   if (!isAuthenticated) {
     return (
-      <ConfigProvider theme={antdTheme}>
+      <ConfigProvider theme={antdTheme} locale={currentLocale}>
         <Routes>
           <Route path="/" element={<RoleSelectionScreen />} />
           <Route path="/register/tutor" element={<TutorRegistrationForm />} />
@@ -143,7 +156,7 @@ function App() {
   }
 
   return (
-    <ConfigProvider theme={antdTheme}>
+    <ConfigProvider theme={antdTheme} locale={currentLocale}>
       <AppLayout>
         <Routes>
           {isStudent ? (
