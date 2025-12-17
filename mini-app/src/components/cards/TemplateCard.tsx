@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, Button, Space, Typography } from 'antd';
 import { EditOutlined, DeleteOutlined, CopyOutlined, BookOutlined, CalendarOutlined } from '@ant-design/icons';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
 const { Text } = Typography;
@@ -29,8 +29,8 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
   onDelete,
   onClick,
 }) => {
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const colors = resolvedTheme.colors;
 
   return (
     <Card
@@ -38,8 +38,8 @@ const TemplateCard: React.FC<TemplateCardProps> = ({
       style={{
         marginBottom: spacing.sm,
         cursor: onClick ? 'pointer' : 'default',
-        background: isDark ? '#1f1f1f' : '#ffffff',
-        borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
+        background: colors.bgSecondary,
+        borderColor: colors.borderPrimary,
       }}
       onClick={() => onClick?.(template)}
       actions={[

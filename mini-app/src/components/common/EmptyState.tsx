@@ -1,7 +1,7 @@
 import React from 'react';
 import { Empty, Button } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { useResponsive } from '../../hooks/useResponsive';
 import { spacing } from '../../theme/tokens';
 
@@ -20,9 +20,9 @@ const EmptyState: React.FC<EmptyStateProps> = ({
   onAction,
   icon 
 }) => {
-  const { resolvedTheme } = useThemeMode();
+  const { resolvedTheme } = useTheme();
   const { isMobile } = useResponsive();
-  const isDark = resolvedTheme === 'dark';
+  const isDark = resolvedTheme.colorScheme === 'dark';
   const titleColor = isDark ? '#ffffff' : '#37352f';
   const descColor = isDark ? '#a0a0a0' : '#8c8c8c';
 

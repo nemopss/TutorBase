@@ -10,7 +10,7 @@ import PageHeader from '../components/common/PageHeader';
 import PackageCard from '../components/cards/PackageCard';
 import PackageGrid from '../components/common/PackageGrid';
 import FloatingActionButton from '../components/common/FloatingActionButton';
-import { useThemeMode } from '../theme/ThemeProvider';
+import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
 
 // --- Types --- //
@@ -66,8 +66,8 @@ const Packages: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme.colorScheme === 'dark';
   const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'draft' | 'cancelled'>('active');
   const [isModalOpen, setIsModalOpen] = useState(false);
 

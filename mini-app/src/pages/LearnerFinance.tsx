@@ -36,7 +36,7 @@ import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
-import { useThemeMode } from '../theme/ThemeProvider';
+import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
 
 const { Text } = Typography;
@@ -92,8 +92,8 @@ const LearnerFinance: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { cardStyle, textColor } = useResponsiveStyles();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme.colorScheme === 'dark';
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
   const [isRateModalOpen, setIsRateModalOpen] = useState(false);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);

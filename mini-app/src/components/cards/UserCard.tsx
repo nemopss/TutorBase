@@ -1,7 +1,7 @@
 import React from 'react';
 import { Card, Tag, Select, Space, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 import i18n from '../../i18n';
 
@@ -57,8 +57,8 @@ const UserCard: React.FC<UserCardProps> = ({
   onClick,
 }) => {
   const { t } = useTranslation();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const colors = resolvedTheme.colors;
 
   const isCurrentUser = user.id === currentUserId;
   
@@ -80,8 +80,8 @@ const UserCard: React.FC<UserCardProps> = ({
       style={{
         marginBottom: spacing.sm,
         cursor: onClick ? 'pointer' : 'default',
-        background: isDark ? '#1f1f1f' : '#ffffff',
-        borderColor: isDark ? '#3a3a3a' : '#e8e8e8',
+        background: colors.bgSecondary,
+        borderColor: colors.borderPrimary,
       }}
       onClick={() => onClick?.(user)}
     >

@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import type { Lesson } from './calendar-types';
 import { statusColors } from './calendar-types';
 import { spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeProvider';
 
 const { Text } = Typography;
 
@@ -38,6 +39,8 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
   onAddLesson,
 }) => {
   const [isHovered, setIsHovered] = useState(false);
+  const { resolvedTheme } = useTheme();
+  const themeColors = resolvedTheme.colors;
 
   const handleClick = (e: React.MouseEvent) => {
     // If clicking on add button, don't trigger day click
@@ -57,12 +60,12 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
   // Background color
   const getBackground = () => {
     if (isToday) {
-      return isDark ? 'rgba(24, 144, 255, 0.15)' : 'rgba(24, 144, 255, 0.08)';
+      return isDark ? `${themeColors.accentPrimary}26` : `${themeColors.accentPrimary}14`;
     }
     if (!isCurrentMonth) {
-      return isDark ? '#1a1a1a' : '#fafafa';
+      return themeColors.bgTertiary;
     }
-    return isDark ? '#141414' : '#ffffff';
+    return themeColors.bgPrimary;
   };
 
   // Day number styling
@@ -81,7 +84,7 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
     if (isToday) {
       return {
         ...base,
-        background: '#1890ff',
+        background: themeColors.accentPrimary,
         color: '#fff',
       };
     }
@@ -206,8 +209,8 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
         cursor: 'pointer',
         position: 'relative',
         transition: 'background 0.15s ease',
-        borderBottom: `1px solid ${isDark ? '#303030' : '#f0f0f0'}`,
-        borderRight: `1px solid ${isDark ? '#303030' : '#f0f0f0'}`,
+        borderBottom: `1px solid ${themeColors.borderPrimary}`,
+        borderRight: `1px solid ${themeColors.borderPrimary}`,
         overflow: 'hidden',
       }}
     >

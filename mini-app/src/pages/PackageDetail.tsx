@@ -37,7 +37,7 @@ import RescheduleForm from '../components/forms/RescheduleForm';
 import LessonForm from '../components/forms/LessonForm';
 import { formatDate } from '../utils/datetime';
 import { spacing } from '../theme/tokens';
-import { useThemeMode } from '../theme/ThemeProvider';
+import { useTheme } from '../theme/ThemeProvider';
 
 const { Text, Title } = Typography;
 
@@ -131,8 +131,8 @@ const PackageDetail: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { resolvedTheme } = useThemeMode();
-  const isDark = resolvedTheme === 'dark';
+  const { resolvedTheme } = useTheme();
+  const isDark = resolvedTheme.colorScheme === 'dark';
   const [paymentForm] = Form.useForm();
 
   // Modal states

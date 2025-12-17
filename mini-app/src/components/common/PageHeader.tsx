@@ -1,5 +1,5 @@
 import React from 'react';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import { useResponsive } from '../../hooks/useResponsive';
 import { spacing } from '../../theme/tokens';
 
@@ -10,9 +10,9 @@ interface PageHeaderProps {
 }
 
 const PageHeader: React.FC<PageHeaderProps> = ({ title, subtitle, actions }) => {
-  const { resolvedTheme } = useThemeMode();
+  const { resolvedTheme } = useTheme();
   const { isMobile } = useResponsive();
-  const isDark = resolvedTheme === 'dark';
+  const isDark = resolvedTheme.colorScheme === 'dark';
 
   const titleColor = isDark ? '#ffffff' : '#000000';
   const subtitleColor = isDark ? '#a0a0a0' : 'rgba(0,0,0,0.45)';

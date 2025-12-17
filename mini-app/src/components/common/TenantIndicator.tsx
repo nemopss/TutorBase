@@ -13,7 +13,7 @@ import React, { useState, useEffect } from 'react';
 import { Tag, Tooltip } from 'antd';
 import { GlobalOutlined, TeamOutlined, CrownOutlined } from '@ant-design/icons';
 import { useAuth } from '../../auth/AuthProvider';
-import { useThemeMode } from '../../theme/ThemeProvider';
+import { useTheme } from '../../theme/ThemeProvider';
 import api from '../../services/api';
 
 interface Tenant {
@@ -25,8 +25,8 @@ interface Tenant {
 
 const TenantIndicator: React.FC = () => {
     const { tenantId, isSuperAdmin } = useAuth();
-    const { resolvedTheme } = useThemeMode();
-    const isDark = resolvedTheme === 'dark';
+    const { resolvedTheme } = useTheme();
+    const isDark = resolvedTheme.colorScheme === 'dark';
     const [tenantName, setTenantName] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
 

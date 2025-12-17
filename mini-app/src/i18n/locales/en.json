@@ -202,6 +202,15 @@
       "themeAuto": "Auto (follow Telegram)",
       "themeLight": "Light",
       "themeDark": "Dark",
+      "themes": {
+        "auto": "Auto",
+        "light": "Light",
+        "dark": "Dark",
+        "aqua": "Aqua",
+        "tokyonight": "Tokyo Night",
+        "gruvbox": "Gruvbox",
+        "darkplus": "Dark+"
+      },
       "notifications": "Notifications",
       "enableNotifications": "Enable Notifications",
       "lessonReminders": "Lesson Reminders",
