@@ -1,6 +1,9 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, HTTPException
+from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import (
@@ -12,14 +15,71 @@ from api.dependencies import (
 from api.schemas.learners import (
     LearnerListResponse,
     LearnerResponse,
+    LearnerDetailResponse,
     CreateLearnerFromChatIdRequest,
     UpdateLearnerNotificationsRequest,
     UpdateLearnerRequest,
 )
+from api.schemas.schedule import (
+    LearnerScheduleResponse,
+    UpdateScheduleRequest,
+    AddSlotsRequest,
+)
 from api.schemas import PaginatedResponse, PaginationParams
+from database.models import Lesson, LessonPackage
 from services import learner_service
+from services import schedule_service
 
 router = APIRouter()
+
+
+async def _get_next_lesson_dates(
+    session: AsyncSession,
+    learner_ids: list[int],
+    tenant_id: int | None,
+) -> dict[int, datetime | None]:
+    """Get next lesson date for multiple learners in a single query.
+    
+    Args:
+        session: Database session
+        learner_ids: List of learner IDs to fetch
+        tenant_id: Tenant ID for filtering
+        
+    Returns:
+        Dict mapping learner_id to next_lesson_date (or None)
+    """
+    if not learner_ids:
+        return {}
+    
+    now = datetime.now(timezone.utc)
+    
+    # Subquery to get minimum scheduled_at per learner
+    query = (
+        select(
+            LessonPackage.learner_id,
+            func.min(Lesson.scheduled_at).label('next_lesson_date')
+        )
+        .join(Lesson, Lesson.package_id == LessonPackage.id)
+        .where(
+            LessonPackage.learner_id.in_(learner_ids),
+            Lesson.status.in_(['scheduled', 'rescheduled']),
+            Lesson.scheduled_at > now,
+        )
+        .group_by(LessonPackage.learner_id)
+    )
+    
+    if tenant_id is not None:
+        query = query.where(LessonPackage.tenant_id == tenant_id)
+    
+    result = await session.execute(query)
+    rows = result.all()
+    
+    # Build dict with all learner_ids defaulting to None
+    next_dates: dict[int, datetime | None] = {lid: None for lid in learner_ids}
+    for row in rows:
+        next_dates[row.learner_id] = row.next_lesson_date
+    
+    return next_dates
 
 
 @router.get("", response_model=PaginatedResponse[LearnerResponse])
@@ -28,12 +88,18 @@ async def list_all_learners(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
 ) -> PaginatedResponse[LearnerResponse]:
-    """Lists all learners for the current tenant."""
+    """Lists all learners for the current tenant with next lesson dates."""
     learners = await learner_service.get_all_learners(session, current_tenant)
     
     # Apply pagination manually since service doesn't support it yet
     total = len(learners)
     paginated_learners = learners[pagination.offset:pagination.offset + pagination.limit]
+    
+    # Get next lesson dates for all paginated learners in one query
+    learner_ids = [l.id for l in paginated_learners]
+    next_lesson_dates = await _get_next_lesson_dates(
+        session, learner_ids, current_tenant.tenant_id
+    )
     
     items = []
     for learner in paginated_learners:
@@ -45,6 +111,7 @@ async def list_all_learners(
                 notifications_enabled=learner.notifications_enabled,
                 chat_id=chat_id,
                 lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
+                next_lesson_date=next_lesson_dates.get(learner.id),
             )
         )
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
@@ -69,12 +136,14 @@ async def create_learner_from_chat_id(
         lesson_rate=request.lesson_rate,
     )
     
+    # New learner has no lessons yet
     return LearnerResponse(
         id=learner.id,
         display_name=learner.display_name,
         notifications_enabled=learner.notifications_enabled,
         chat_id=learner.bot_user.chat_id if learner.bot_user else None,
         lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
+        next_lesson_date=None,
     )
 
 
@@ -99,6 +168,11 @@ async def update_learner(
     if not learner:
         raise HTTPException(status_code=404, detail="Learner not found")
     
+    # Get next lesson date for this learner
+    next_lesson_dates = await _get_next_lesson_dates(
+        session, [learner_id], current_tenant.tenant_id
+    )
+    
     chat_id = learner.bot_user.chat_id if learner.bot_user else None
     return LearnerResponse(
         id=learner.id,
@@ -106,6 +180,7 @@ async def update_learner(
         notifications_enabled=learner.notifications_enabled,
         chat_id=chat_id,
         lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
+        next_lesson_date=next_lesson_dates.get(learner_id),
     )
 
 
@@ -127,12 +202,18 @@ async def update_learner_notifications(
     if not learner:
         raise HTTPException(status_code=404, detail="Learner not found")
     
+    # Get next lesson date for this learner
+    next_lesson_dates = await _get_next_lesson_dates(
+        session, [learner_id], current_tenant.tenant_id
+    )
+    
     chat_id = learner.bot_user.chat_id if learner.bot_user else None
     return LearnerResponse(
         id=learner.id,
         display_name=learner.display_name,
         notifications_enabled=learner.notifications_enabled,
         chat_id=chat_id,
+        next_lesson_date=next_lesson_dates.get(learner_id),
     )
 
 
@@ -152,6 +233,72 @@ async def delete_learner(
     if not deleted:
         raise HTTPException(status_code=404, detail="Learner not found")
 
+
+async def _get_first_package_date(
+    session: AsyncSession,
+    learner_id: int,
+    tenant_id: int | None,
+) -> datetime | None:
+    """Get the date of the first package created for a learner.
+    
+    Args:
+        session: Database session
+        learner_id: Learner ID
+        tenant_id: Tenant ID for filtering
+        
+    Returns:
+        Date of first package creation or None if no packages
+    """
+    query = (
+        select(func.min(LessonPackage.created_at))
+        .where(LessonPackage.learner_id == learner_id)
+    )
+    
+    if tenant_id is not None:
+        query = query.where(LessonPackage.tenant_id == tenant_id)
+    
+    result = await session.execute(query)
+    return result.scalar()
+
+
+@router.get("/{learner_id}", response_model=LearnerDetailResponse)
+async def get_learner_detail(
+    learner_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> LearnerDetailResponse:
+    """Get detailed learner information for profile page.
+    
+    Returns learner details including next_lesson_date and first_package_date.
+    """
+    learner = await learner_service.get_learner_by_id(
+        session, current_tenant, learner_id
+    )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    
+    # Get next lesson date
+    next_lesson_dates = await _get_next_lesson_dates(
+        session, [learner_id], current_tenant.tenant_id
+    )
+    
+    # Get first package date
+    first_package_date = await _get_first_package_date(
+        session, learner_id, current_tenant.tenant_id
+    )
+    
+    chat_id = learner.bot_user.chat_id if learner.bot_user else None
+    
+    return LearnerDetailResponse(
+        id=learner.id,
+        display_name=learner.display_name,
+        notifications_enabled=learner.notifications_enabled,
+        chat_id=chat_id,
+        notes=learner.notes,
+        lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
+        next_lesson_date=next_lesson_dates.get(learner_id),
+        first_package_date=first_package_date,
+    )
 
 
 @router.get("/{learner_id}/finance")
@@ -232,4 +379,133 @@ async def get_learner_finance(
         outstanding_balance=outstanding_balance,
         total_paid=total_paid,
         payment_history=payment_history,
+    )
+
+
+# --- Schedule Endpoints --- #
+
+@router.get("/{learner_id}/schedule", response_model=LearnerScheduleResponse)
+async def get_learner_schedule(
+    learner_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> LearnerScheduleResponse:
+    """Get learner's weekly schedule.
+    
+    Returns the schedule with all slots and timezone.
+    """
+    # Verify learner exists and belongs to tenant
+    learner = await learner_service.get_learner_by_id(
+        session, current_tenant, learner_id
+    )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    
+    schedule = await schedule_service.get_learner_schedule(
+        session, current_tenant, learner_id
+    )
+    
+    return LearnerScheduleResponse(
+        learner_id=learner_id,
+        slots=schedule["slots"],
+        timezone=schedule["timezone"],
+    )
+
+
+@router.put("/{learner_id}/schedule", response_model=LearnerScheduleResponse)
+async def update_learner_schedule(
+    learner_id: int,
+    request: UpdateScheduleRequest,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> LearnerScheduleResponse:
+    """Replace learner's entire schedule.
+    
+    Replaces all existing slots with the provided slots.
+    """
+    # Verify learner exists and belongs to tenant
+    learner = await learner_service.get_learner_by_id(
+        session, current_tenant, learner_id
+    )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    
+    # Convert Pydantic models to dicts
+    slots = [s.model_dump() for s in request.slots]
+    
+    schedule = await schedule_service.update_learner_schedule(
+        session, current_tenant, learner_id, slots, request.timezone
+    )
+    
+    return LearnerScheduleResponse(
+        learner_id=learner_id,
+        slots=schedule["slots"],
+        timezone=schedule["timezone"],
+    )
+
+
+@router.post("/{learner_id}/schedule/slots", response_model=LearnerScheduleResponse)
+async def add_schedule_slots(
+    learner_id: int,
+    request: AddSlotsRequest,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> LearnerScheduleResponse:
+    """Add slots for multiple days with the same time.
+    
+    Creates separate slots for each selected day.
+    """
+    # Verify learner exists and belongs to tenant
+    learner = await learner_service.get_learner_by_id(
+        session, current_tenant, learner_id
+    )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    
+    schedule = await schedule_service.add_schedule_slots(
+        session, current_tenant, learner_id,
+        days=request.days,
+        time_str=request.time,
+        duration=request.duration,
+    )
+    
+    return LearnerScheduleResponse(
+        learner_id=learner_id,
+        slots=schedule["slots"],
+        timezone=schedule["timezone"],
+    )
+
+
+@router.delete("/{learner_id}/schedule/slots/{slot_index}", response_model=LearnerScheduleResponse)
+async def delete_schedule_slot(
+    learner_id: int,
+    slot_index: int,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> LearnerScheduleResponse:
+    """Delete a single slot by index.
+    
+    The slot_index corresponds to the position in the slots array.
+    """
+    # Verify learner exists and belongs to tenant
+    learner = await learner_service.get_learner_by_id(
+        session, current_tenant, learner_id
+    )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    
+    try:
+        schedule = await schedule_service.delete_schedule_slot(
+            session, current_tenant, learner_id, slot_index
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
+    
+    return LearnerScheduleResponse(
+        learner_id=learner_id,
+        slots=schedule["slots"],
+        timezone=schedule["timezone"],
     )

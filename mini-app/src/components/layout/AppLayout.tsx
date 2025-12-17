@@ -4,7 +4,6 @@ import { Link, useLocation } from 'react-router-dom';
 import {
   HomeOutlined,
   AppstoreOutlined,
-  ReadOutlined,
   BellOutlined,
   BarChartOutlined,
   SettingOutlined,
@@ -89,11 +88,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           label: <Link to="/finance/reports">{t('navigation.analytics')}</Link>,
         },
       ],
-    },
-    {
-      key: '/templates',
-      icon: <ReadOutlined />,
-      label: <Link to="/templates">{t('navigation.templates')}</Link>,
     },
     {
       key: '/reminders',

@@ -28,7 +28,14 @@
     "copy": "Copy",
     "copied": "Copied",
     "required": "Required field",
-    "optional": "Optional"
+    "optional": "Optional",
+    "today": "Today",
+    "tomorrow": "Tomorrow",
+    "noLessons": "No lessons",
+    "copyChatId": "Copy Chat ID",
+    "chatIdCopied": "Chat ID copied",
+    "noLearnersFound": "No learners found",
+    "clearSearch": "Clear search"
   },
   "navigation": {
     "dashboard": "Dashboard",
@@ -613,5 +620,61 @@
     "deleted": "Deleted!",
     "created": "Created!",
     "updated": "Updated!"
+  },
+  "learnerProfile": {
+    "tabs": {
+      "overview": "Overview",
+      "packages": "Packages",
+      "schedule": "Schedule",
+      "finance": "Finance"
+    },
+    "basicInfo": "Basic Information",
+    "studiesSince": "Studies since",
+    "nextLesson": "Next Lesson",
+    "createPackage": "Create Package"
+  },
+  "schedule": {
+    "currentSchedule": "Current Schedule",
+    "addSlot": "Add Slot",
+    "addSlotTitle": "Add Lesson Time",
+    "noSlots": "No schedule set",
+    "noSlotsDescription": "Add days and times for regular lessons",
+    "slotAdded": "Slot added",
+    "slotDeleted": "Slot deleted",
+    "selectDays": "Select Days",
+    "daysRequired": "Select at least one day",
+    "time": "Time",
+    "timeRequired": "Time is required",
+    "timePlaceholder": "14:00",
+    "duration": "Duration",
+    "durationRequired": "Duration is required",
+    "durationInvalid": "15 to 480 minutes",
+    "min": "min",
+    "days": {
+      "mon": "Monday",
+      "tue": "Tuesday",
+      "wed": "Wednesday",
+      "thu": "Thursday",
+      "fri": "Friday",
+      "sat": "Saturday",
+      "sun": "Sunday"
+    },
+    "daysShort": {
+      "mon": "Mon",
+      "tue": "Tue",
+      "wed": "Wed",
+      "thu": "Thu",
+      "fri": "Fri",
+      "sat": "Sat",
+      "sun": "Sun"
+    }
+  },
+  "schedulePreview": {
+    "title": "Lesson Preview",
+    "clickToEdit": "Click on a date to add/remove",
+    "noSchedule": "Learner has no schedule",
+    "noScheduleHint": "First set up a schedule in the learner's profile Schedule tab",
+    "generateDates": "Generate Dates",
+    "lessonsWillBeCreated": "{{count}} lessons will be created"
   }
 }

@@ -45,7 +45,7 @@ async def test_create_package_success(client: AsyncClient, db_session: AsyncSess
         "start_date": "2024-03-01",
     }
 
-    response = await client.post("/api/v1/packages/create", json=payload, headers=headers)
+    response = await client.post("/api/v1/packages", json=payload, headers=headers)
     assert response.status_code == 201
 
     data = response.json()
@@ -73,7 +73,7 @@ async def test_create_package_requires_start_date_for_template(client: AsyncClie
         "template_id": template.id,
     }
 
-    response = await client.post("/api/v1/packages/create", json=payload, headers=headers)
+    response = await client.post("/api/v1/packages", json=payload, headers=headers)
     assert response.status_code == 400
     assert response.json()["detail"] == "start_date required for template"
 
@@ -94,7 +94,7 @@ async def test_create_package_from_template_generates_lessons(client: AsyncClien
         "start_date": "2024-05-10",
     }
 
-    response = await client.post("/api/v1/packages/create", json=payload, headers=headers)
+    response = await client.post("/api/v1/packages", json=payload, headers=headers)
     assert response.status_code == 201
     data = response.json()
     assert data["total_lessons"] == template.lesson_count
@@ -165,7 +165,7 @@ async def test_create_package_invalid_start_date(client: AsyncClient, db_session
     learner = await factories.create_learner(db_session)
     headers, _ = await get_auth_headers(db_session, current_tenant)
     response = await client.post(
-        "/api/v1/packages/create",
+        "/api/v1/packages",
         json={"learner_id": learner.id, "title": "Test", "start_date": "2024-13-01"},
         headers=headers,
     )
@@ -183,7 +183,7 @@ async def test_create_package_validation_error(monkeypatch, client: AsyncClient,
     monkeypatch.setattr(package_service, "create_package", fake_create_package)
 
     response = await client.post(
-        "/api/v1/packages/create",
+        "/api/v1/packages",
         json={"learner_id": learner.id, "title": "Test"},
         headers=headers,
     )

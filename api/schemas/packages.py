@@ -103,6 +103,17 @@ class PackageListResponse(BaseResponse):
     items: list[PackageResponse] = Field(..., description="List of packages")
 
 
+class LessonDateItem(BaseRequest):
+    """Single lesson date for schedule-based package creation.
+    
+    Attributes:
+        datetime: ISO datetime string for the lesson
+        duration: Duration in minutes
+    """
+    datetime: str = Field(..., description="ISO datetime string")
+    duration: int = Field(default=60, gt=0, le=480, description="Duration in minutes")
+
+
 class PackageCreateRequest(BaseRequest):
     """Request schema for creating a new lesson package.
     
@@ -117,6 +128,7 @@ class PackageCreateRequest(BaseRequest):
         start_date: Optional start date
         timezone: Optional timezone (defaults to Europe/Moscow)
         total_lessons: Optional total lesson count (1-1000)
+        lesson_dates: Optional list of lesson dates from schedule preview
     
     Validation:
         - learner_id must be positive
@@ -133,6 +145,7 @@ class PackageCreateRequest(BaseRequest):
     start_date: Optional[datetime | str] = Field(None, description="Package start date")
     timezone: Optional[str] = Field(None, description="Timezone for scheduling")
     total_lessons: Optional[int] = Field(None, gt=0, le=1000, description="Total number of lessons")
+    lesson_dates: Optional[list[LessonDateItem]] = Field(None, description="Lesson dates from schedule preview")
 
     @field_validator('status')
     @classmethod

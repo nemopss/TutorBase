@@ -18,7 +18,7 @@ interface LearnerFormProps {
     notifications_enabled?: boolean;
     lesson_rate?: number;
   };
-  mode?: 'create' | 'edit_notifications';
+  mode?: 'create' | 'edit' | 'edit_notifications';
 }
 
 const LearnerForm: React.FC<LearnerFormProps> = ({
@@ -58,7 +58,14 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
       title={
         <Space>
           {mode === 'create' ? <UserAddOutlined /> : <BellOutlined />}
-          <span>{mode === 'create' ? t('forms.learner.title') : t('forms.learner.notificationsTitle')}</span>
+          <span>
+            {mode === 'create' 
+              ? t('forms.learner.title') 
+              : mode === 'edit' 
+                ? t('forms.learner.editTitle')
+                : t('forms.learner.notificationsTitle')
+            }
+          </span>
         </Space>
       }
       open={visible}
@@ -66,6 +73,7 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
       onCancel={handleCancel}
       confirmLoading={loading}
       okText={mode === 'create' ? t('forms.learner.createButton') : t('common.save')}
+      destroyOnClose
       cancelText={t('common.cancel')}
       width={500}
     >
@@ -74,26 +82,30 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
         layout="vertical"
         initialValues={initialValues || { notifications_enabled: true }}
       >
+        {/* Chat ID - only for create mode */}
         {mode === 'create' && (
-          <>
-            <Form.Item
-              name="chat_id"
-              label={t('forms.learner.chatIdLabel')}
-              rules={[
-                { required: true, message: t('forms.learner.chatIdRequired') },
-                { 
-                  pattern: /^-?\d+$/, 
-                  message: t('forms.learner.chatIdInvalid')
-                },
-              ]}
-              extra={t('forms.learner.chatIdHelp')}
-            >
-              <Input 
-                placeholder={t('forms.learner.chatIdPlaceholder')} 
-                type="text"
-              />
-            </Form.Item>
+          <Form.Item
+            name="chat_id"
+            label={t('forms.learner.chatIdLabel')}
+            rules={[
+              { required: true, message: t('forms.learner.chatIdRequired') },
+              { 
+                pattern: /^-?\d+$/, 
+                message: t('forms.learner.chatIdInvalid')
+              },
+            ]}
+            extra={t('forms.learner.chatIdHelp')}
+          >
+            <Input 
+              placeholder={t('forms.learner.chatIdPlaceholder')} 
+              type="text"
+            />
+          </Form.Item>
+        )}
 
+        {/* Display name, notes, lesson rate - for create and edit modes */}
+        {(mode === 'create' || mode === 'edit') && (
+          <>
             <Form.Item
               name="display_name"
               label={t('forms.learner.displayNameLabel')}
@@ -131,25 +143,28 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
               />
             </Form.Item>
 
-            <Divider />
+            {mode === 'create' && <Divider />}
           </>
         )}
 
-        <Form.Item
-          name="notifications_enabled"
-          label={t('forms.learner.notificationsLabel')}
-          valuePropName="checked"
-          extra={
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {t('forms.learner.notificationsHelp')}
-            </Text>
-          }
-        >
-          <Switch 
-            checkedChildren={t('pages.learners.enabled')} 
-            unCheckedChildren={t('pages.learners.disabled')}
-          />
-        </Form.Item>
+        {/* Notifications - for create and edit_notifications modes */}
+        {(mode === 'create' || mode === 'edit_notifications') && (
+          <Form.Item
+            name="notifications_enabled"
+            label={t('forms.learner.notificationsLabel')}
+            valuePropName="checked"
+            extra={
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {t('forms.learner.notificationsHelp')}
+              </Text>
+            }
+          >
+            <Switch 
+              checkedChildren={t('pages.learners.enabled')} 
+              unCheckedChildren={t('pages.learners.disabled')}
+            />
+          </Form.Item>
+        )}
       </Form>
     </ResponsiveModal>
   );

@@ -28,7 +28,14 @@
     "copy": "복사",
     "copied": "복사됨",
     "required": "필수 항목",
-    "optional": "선택 사항"
+    "optional": "선택 사항",
+    "today": "오늘",
+    "tomorrow": "내일",
+    "noLessons": "수업 없음",
+    "copyChatId": "Chat ID 복사",
+    "chatIdCopied": "Chat ID 복사됨",
+    "noLearnersFound": "학생을 찾을 수 없습니다",
+    "clearSearch": "검색 지우기"
   },
   "navigation": {
     "dashboard": "대시보드",
@@ -612,5 +619,61 @@
     "deleted": "삭제됨!",
     "created": "생성됨!",
     "updated": "업데이트됨!"
+  },
+  "learnerProfile": {
+    "tabs": {
+      "overview": "개요",
+      "packages": "패키지",
+      "schedule": "일정",
+      "finance": "재정"
+    },
+    "basicInfo": "기본 정보",
+    "studiesSince": "수업 시작일",
+    "nextLesson": "다음 수업",
+    "createPackage": "패키지 생성"
+  },
+  "schedule": {
+    "currentSchedule": "현재 일정",
+    "addSlot": "슬롯 추가",
+    "addSlotTitle": "수업 시간 추가",
+    "noSlots": "일정이 설정되지 않음",
+    "noSlotsDescription": "정기 수업 요일과 시간을 추가하세요",
+    "slotAdded": "슬롯이 추가됨",
+    "slotDeleted": "슬롯이 삭제됨",
+    "selectDays": "요일 선택",
+    "daysRequired": "최소 하나의 요일을 선택하세요",
+    "time": "시간",
+    "timeRequired": "시간을 입력하세요",
+    "timePlaceholder": "14:00",
+    "duration": "시간",
+    "durationRequired": "시간을 입력하세요",
+    "durationInvalid": "15분에서 480분 사이",
+    "min": "분",
+    "days": {
+      "mon": "월요일",
+      "tue": "화요일",
+      "wed": "수요일",
+      "thu": "목요일",
+      "fri": "금요일",
+      "sat": "토요일",
+      "sun": "일요일"
+    },
+    "daysShort": {
+      "mon": "월",
+      "tue": "화",
+      "wed": "수",
+      "thu": "목",
+      "fri": "금",
+      "sat": "토",
+      "sun": "일"
+    }
+  },
+  "schedulePreview": {
+    "title": "수업 미리보기",
+    "clickToEdit": "날짜를 클릭하여 추가/제거",
+    "noSchedule": "학습자에게 일정이 없습니다",
+    "noScheduleHint": "먼저 학습자 프로필의 일정 탭에서 일정을 설정하세요",
+    "generateDates": "날짜 생성",
+    "lessonsWillBeCreated": "{{count}}개의 수업이 생성됩니다"
   }
 }

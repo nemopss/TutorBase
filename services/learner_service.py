@@ -46,6 +46,26 @@ async def get_all_learners(session: AsyncSession, current_tenant: CurrentTenant)
     return await crud.fetch_all_learners(session, current_tenant)
 
 
+async def get_learner_by_id(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    learner_id: int,
+) -> Learner | None:
+    """Retrieve a learner by ID.
+
+    Fetches a single learner by ID, respecting multi-tenancy isolation.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        learner_id: ID of the learner to retrieve
+
+    Returns:
+        Learner model if found, None otherwise
+    """
+    return await crud.get_learner(session, current_tenant, learner_id)
+
+
 async def create_learner_from_chat_id(
     session: AsyncSession,
     current_tenant: CurrentTenant,

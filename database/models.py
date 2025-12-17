@@ -262,6 +262,8 @@ class Learner(Base):
     bot_user = relationship('BotUser', back_populates='learner', lazy='joined')
     packages = relationship('LessonPackage', back_populates='learner', cascade='all, delete-orphan')
     payments = relationship('Payment', back_populates='learner', cascade='all, delete-orphan')
+    schedule = relationship('LessonPackageTemplate', back_populates='learner', uselist=False, 
+                           foreign_keys='LessonPackageTemplate.learner_id', cascade='all, delete-orphan')
 
     __table_args__ = (
         Index('ix_learners_tenant_display_name', 'tenant_id', 'display_name'),
@@ -269,30 +271,42 @@ class Learner(Base):
     )
 
 class LessonPackageTemplate(Base):
-    """Template for creating lesson packages.
+    """Template for creating lesson packages and learner schedules.
     
-    Reusable templates that define package structure, lesson count,
-    duration, and default configuration for creating new packages.
+    This table serves dual purpose:
+    1. Reusable templates for lesson packages (legacy, learner_id=NULL)
+    2. Learner schedules - weekly recurring rules (learner_id set)
+    
+    For learner schedules, the default_config stores:
+    {
+        "schedule": {
+            "slots": [{"day": 0, "time": "14:00", "duration": 60}, ...],
+            "timezone": "Europe/Moscow"
+        }
+    }
     
     Attributes:
         id: Primary key
         tenant_id: Associated tenant ID
-        name: Unique template name
+        learner_id: Learner ID for schedules (NULL for templates)
+        name: Template name (not unique, can be empty for schedules)
         description: Template description
         lesson_count: Default number of lessons
         duration_days: Default package duration in days
         default_timezone: Default timezone for lessons
-        default_config: JSON configuration for template settings
+        default_config: JSON configuration (schedule slots for learner schedules)
         created_at: Template creation timestamp
         updated_at: Last template update timestamp
         tenant: Related Tenant object
+        learner: Related Learner object (for schedules)
         packages: Lesson packages created from this template
     """
     __tablename__ = 'lesson_package_templates'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
-    name = Column(String, nullable=False, unique=True)
+    learner_id = Column(Integer, ForeignKey('learners.id', ondelete='CASCADE'), nullable=True, index=True)
+    name = Column(String, nullable=False)
     description = Column(Text)
     lesson_count = Column(Integer)
     duration_days = Column(Integer)
@@ -302,6 +316,7 @@ class LessonPackageTemplate(Base):
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
 
     tenant = relationship('Tenant', back_populates='lesson_package_templates')
+    learner = relationship('Learner', back_populates='schedule', foreign_keys=[learner_id])
     packages = relationship('LessonPackage', back_populates='template')
 
 
