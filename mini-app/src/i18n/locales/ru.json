@@ -28,7 +28,14 @@
     "copy": "Копировать",
     "copied": "Скопировано",
     "required": "Обязательное поле",
-    "optional": "Необязательно"
+    "optional": "Необязательно",
+    "today": "Сегодня",
+    "tomorrow": "Завтра",
+    "noLessons": "Нет уроков",
+    "copyChatId": "Копировать Chat ID",
+    "chatIdCopied": "Chat ID скопирован",
+    "noLearnersFound": "Ученики не найдены",
+    "clearSearch": "Очистить поиск"
   },
   "navigation": {
     "dashboard": "Главная",
@@ -614,5 +621,61 @@
     "deleted": "Удалено!",
     "created": "Создано!",
     "updated": "Обновлено!"
+  },
+  "learnerProfile": {
+    "tabs": {
+      "overview": "Обзор",
+      "packages": "Пакеты",
+      "schedule": "Расписание",
+      "finance": "Финансы"
+    },
+    "basicInfo": "Основная информация",
+    "studiesSince": "Занимается с",
+    "nextLesson": "Следующий урок",
+    "createPackage": "Создать пакет"
+  },
+  "schedule": {
+    "currentSchedule": "Текущее расписание",
+    "addSlot": "Добавить слот",
+    "addSlotTitle": "Добавить время занятий",
+    "noSlots": "Расписание не задано",
+    "noSlotsDescription": "Добавьте дни и время регулярных занятий",
+    "slotAdded": "Слот добавлен",
+    "slotDeleted": "Слот удалён",
+    "selectDays": "Выберите дни",
+    "daysRequired": "Выберите хотя бы один день",
+    "time": "Время",
+    "timeRequired": "Укажите время",
+    "timePlaceholder": "14:00",
+    "duration": "Длительность",
+    "durationRequired": "Укажите длительность",
+    "durationInvalid": "От 15 до 480 минут",
+    "min": "мин",
+    "days": {
+      "mon": "Понедельник",
+      "tue": "Вторник",
+      "wed": "Среда",
+      "thu": "Четверг",
+      "fri": "Пятница",
+      "sat": "Суббота",
+      "sun": "Воскресенье"
+    },
+    "daysShort": {
+      "mon": "Пн",
+      "tue": "Вт",
+      "wed": "Ср",
+      "thu": "Чт",
+      "fri": "Пт",
+      "sat": "Сб",
+      "sun": "Вс"
+    }
+  },
+  "schedulePreview": {
+    "title": "Превью уроков",
+    "clickToEdit": "Нажмите на дату для добавления/удаления",
+    "noSchedule": "У ученика нет расписания",
+    "noScheduleHint": "Сначала настройте расписание во вкладке «Расписание» профиля ученика",
+    "generateDates": "Сгенерировать даты",
+    "lessonsWillBeCreated": "Будет создано {{count}} уроков"
   }
 }

@@ -20,7 +20,6 @@ import AppLayout from './components/layout/AppLayout';
 import Dashboard from './pages/Dashboard';
 import Packages from './pages/Packages';
 import PackageDetail from './pages/PackageDetail';
-import Templates from './pages/Templates';
 import Reminders from './pages/Reminders';
 import Settings from './pages/Settings';
 import Analytics from './pages/Analytics';
@@ -37,6 +36,7 @@ import InviteCodes from './pages/InviteCodes';
 import FinanceDashboard from './pages/FinanceDashboard';
 import IncomeReports from './pages/IncomeReports';
 import LearnerFinance from './pages/LearnerFinance';
+import LearnerProfile from './pages/LearnerProfile';
 
 function App() {
   const { isLoading, isAuthenticated, user } = useAuth();
@@ -120,10 +120,10 @@ function App() {
               <Route path="/packages/:id" element={<PackageDetail />} />
               <Route path="/lessons" element={<Lessons />} />
               <Route path="/learners" element={<Learners />} />
+              <Route path="/learners/:id" element={<LearnerProfile />} />
               <Route path="/learners/:id/finance" element={<LearnerFinance />} />
               <Route path="/finance/dashboard" element={<FinanceDashboard />} />
               <Route path="/finance/reports" element={<IncomeReports />} />
-              <Route path="/templates" element={<Templates />} />
               <Route path="/reminders" element={<Reminders />} />
               <Route path="/analytics" element={<Analytics />} />
               <Route path="/invite-codes" element={<InviteCodes />} />

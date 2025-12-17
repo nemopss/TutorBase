@@ -57,7 +57,7 @@ const fetchPackages = async (status: string): Promise<PackageListResponse> => {
 };
 
 const createPackage = async (values: any) => {
-  const { data } = await api.post('/packages/create', values);
+  const { data } = await api.post('/packages', values);
   return data;
 };
 

@@ -14,7 +14,8 @@ from api.schemas.packages import (
     PackageProgressModel,
 )
 from api.schemas import MessageResponse, PaginatedResponse, PaginationParams
-from services import package_service, template_service
+from services import package_service, template_service, schedule_service
+from services import learner_service
 from services.dto import LessonPackageDTO
 from services.exceptions import NotFoundError, ValidationError
 from utils.timezone import DEFAULT_TIMEZONE, DEFAULT_TZ, parse_date_string, normalize_to_timezone
@@ -118,7 +119,7 @@ async def get_package_endpoint(
     return _to_response(package)
 
 
-@router.post("/create", response_model=PackageResponse, status_code=status.HTTP_201_CREATED)
+@router.post("", response_model=PackageResponse, status_code=status.HTTP_201_CREATED)
 async def create_package_endpoint(
     payload: PackageCreateRequest,
     session: AsyncSession = Depends(get_session),
@@ -127,7 +128,21 @@ async def create_package_endpoint(
 ) -> PackageResponse:
     try:
         start_local = _parse_start_date(payload.start_date)
-        if payload.template_id is not None:
+        
+        # Priority: lesson_dates > template_id > manual
+        if payload.lesson_dates and len(payload.lesson_dates) > 0:
+            # Create package with schedule-based lessons
+            lesson_dates = [{"datetime": d.datetime, "duration": d.duration} for d in payload.lesson_dates]
+            package = await package_service.create_package_with_schedule(
+                session,
+                current_tenant,
+                learner_id=payload.learner_id,
+                title=payload.title,
+                notes=payload.notes,
+                status=payload.status or 'draft',
+                lesson_dates=lesson_dates,
+            )
+        elif payload.template_id is not None:
             await template_service.get_template(session, current_tenant, payload.template_id)
             package = await package_service.create_package_from_template(
                 session,
@@ -267,4 +282,65 @@ async def bulk_sync_metrics_endpoint(
     
     return MessageResponse(
         detail=f"Bulk metrics sync started for {len(package_ids)} packages (task_id: {task.id})"
+    )
+
+
+@router.post("/preview-dates")
+async def preview_lesson_dates(
+    learner_id: int = Query(..., description="Learner ID"),
+    start_date: str = Query(..., description="Start date (YYYY-MM-DD)"),
+    lesson_count: int = Query(..., gt=0, le=100, description="Number of lessons"),
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+):
+    """Generate lesson date preview based on learner's schedule.
+    
+    Returns a list of dates that would be generated for a package
+    based on the learner's weekly schedule.
+    """
+    from api.schemas.schedule import PreviewDatesResponse, PreviewDateItem, LearnerScheduleResponse
+    
+    # Verify learner exists
+    learner = await learner_service.get_learner_by_id(
+        session, current_tenant, learner_id
+    )
+    if not learner:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Learner not found")
+    
+    # Get schedule
+    schedule = await schedule_service.get_learner_schedule(
+        session, current_tenant, learner_id
+    )
+    
+    if not schedule["slots"]:
+        return PreviewDatesResponse(
+            dates=[],
+            schedule=LearnerScheduleResponse(
+                learner_id=learner_id,
+                slots=[],
+                timezone=schedule["timezone"],
+            ),
+        )
+    
+    # Parse start date
+    try:
+        start = date.fromisoformat(start_date)
+    except ValueError:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Invalid start_date format. Use YYYY-MM-DD.",
+        )
+    
+    # Generate dates
+    dates = schedule_service.generate_lesson_dates(
+        schedule["slots"], start, lesson_count
+    )
+    
+    return PreviewDatesResponse(
+        dates=[PreviewDateItem(**d) for d in dates],
+        schedule=LearnerScheduleResponse(
+            learner_id=learner_id,
+            slots=schedule["slots"],
+            timezone=schedule["timezone"],
+        ),
     )

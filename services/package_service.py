@@ -323,6 +323,106 @@ async def create_package(
 
 
 @transactional(max_retries=3, backoff_factor=0.5)
+async def create_package_with_schedule(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    learner_id: int,
+    title: str,
+    notes: Optional[str] = None,
+    status: str = 'draft',
+    lesson_dates: list[dict],  # [{"datetime": "...", "duration": 60}, ...]
+) -> LessonPackageDTO:
+    """Create lesson package with lessons from schedule preview.
+
+    Create package and lessons based on dates generated from learner's schedule.
+    Used when creating packages with schedule-based lesson generation.
+
+    Args:
+        session: Async database session
+        current_tenant: Current tenant context for multi-tenancy
+        learner_id: ID of learner who owns the package
+        title: Package title
+        notes: Additional notes (optional)
+        status: Package status (default 'draft')
+        lesson_dates: List of lesson dates with datetime and duration
+
+    Returns:
+        LessonPackageDTO with created package data
+
+    Raises:
+        NotFoundError: If learner not found
+        ValidationError: If no lesson dates provided
+    """
+    from services.exceptions import ValidationError
+    from database.models import Lesson
+    from dateutil import parser as date_parser
+    
+    if not lesson_dates:
+        raise ValidationError("At least one lesson date is required")
+    
+    learner = await crud.get_learner(session, current_tenant, learner_id)
+    if not learner:
+        raise NotFoundError(f"Learner {learner_id} not found")
+
+    total_lessons = len(lesson_dates)
+    
+    # Calculate price from learner's lesson_rate
+    price = calculate_package_price(learner.lesson_rate, total_lessons)
+    
+    # Parse first date for start_date
+    first_date = date_parser.isoparse(lesson_dates[0]["datetime"])
+    start_utc = first_date.astimezone(timezone.utc) if first_date.tzinfo else first_date.replace(tzinfo=timezone.utc)
+    
+    package = await crud.create_lesson_package(
+        session,
+        current_tenant,
+        learner=learner,
+        template=None,
+        title=title,
+        notes=notes,
+        status=status,
+        start_date=start_utc,
+        timezone_name=DEFAULT_TIMEZONE,
+        total_lessons=total_lessons,
+    )
+    
+    # Set financial fields
+    package.price = price
+    package.payment_status = 'unpaid'
+
+    session.add(package)
+    await session.flush()  # Flush to get package.id
+    
+    # Create lessons from dates
+    for idx, lesson_data in enumerate(lesson_dates):
+        lesson_dt = date_parser.isoparse(lesson_data["datetime"])
+        lesson_utc = lesson_dt.astimezone(timezone.utc) if lesson_dt.tzinfo else lesson_dt.replace(tzinfo=timezone.utc)
+        
+        lesson = Lesson(
+            tenant_id=current_tenant.tenant_id,
+            package_id=package.id,
+            scheduled_at=lesson_utc,
+            duration_minutes=lesson_data.get("duration", 60),
+            status="scheduled",
+            sequence_index=idx + 1,
+        )
+        session.add(lesson)
+    
+    await session.flush()
+    await sync_package_metrics(session, current_tenant, package.id)
+    
+    # Lazy import to avoid circular dependency
+    from services.package_scheduler import regenerate_package_reminders
+    await regenerate_package_reminders(session, current_tenant, package)
+    
+    if packages_created_total:
+        packages_created_total.labels(learner_id=learner_id).inc()
+    
+    return _build_package_dto(package)
+
+
+@transactional(max_retries=3, backoff_factor=0.5)
 async def create_package_from_template(
     session: AsyncSession,
     current_tenant: CurrentTenant,
@@ -526,6 +626,7 @@ __all__ = [
     "regenerate_reminders_for_package",
     "sync_metrics",
     "create_package",
+    "create_package_with_schedule",
     "create_package_from_template",
     "update_package",
     "delete_package",
