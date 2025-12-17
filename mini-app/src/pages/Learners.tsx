@@ -4,6 +4,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { Button, message, Tag, Space, Switch, Typography, Tooltip, Modal } from 'antd';
 import { UserAddOutlined, BellOutlined, BellFilled, IdcardOutlined, DeleteOutlined, DollarOutlined } from '@ant-design/icons';
 import type { TableProps } from 'antd';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import LearnerForm from '../components/forms/LearnerForm';
 import PageHeader from '../components/common/PageHeader';
@@ -54,6 +55,7 @@ const deleteLearner = async (learnerId: number) => {
 
 // --- Component --- //
 const Learners: React.FC = () => {
+  const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -70,11 +72,11 @@ const Learners: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
-      message.success('Learner created successfully!');
+      message.success(t('pages.learners.createSuccess'));
       setIsModalOpen(false);
     },
     onError: (error: Error) => {
-      message.error(`Failed to create learner: ${error.message}`);
+      message.error(t('errors.createFailed', { message: error.message }));
     },
   });
 
@@ -84,12 +86,12 @@ const Learners: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       message.success(
         variables.enabled 
-          ? 'Notifications enabled successfully!' 
-          : 'Notifications disabled successfully!'
+          ? t('pages.learners.notificationsEnabled')
+          : t('pages.learners.notificationsDisabled')
       );
     },
     onError: (error: Error) => {
-      message.error(`Failed to update notifications: ${error.message}`);
+      message.error(t('errors.updateFailed', { message: error.message }));
     },
   });
 
@@ -98,12 +100,12 @@ const Learners: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
-      message.success('Learner deleted successfully!');
+      message.success(t('pages.learners.deleteSuccess'));
       setDeleteModalOpen(false);
       setLearnerToDelete(null);
     },
     onError: (error: Error) => {
-      message.error(`Failed to delete learner: ${error.message}`);
+      message.error(t('errors.deleteFailed', { message: error.message }));
     },
   });
 
@@ -130,7 +132,7 @@ const Learners: React.FC = () => {
 
   const columns: TableProps<Learner>['columns'] = [
     {
-      title: 'Learner',
+      title: t('pages.learners.learner'),
       dataIndex: 'display_name',
       key: 'display_name',
       render: (name: string) => (
@@ -141,7 +143,7 @@ const Learners: React.FC = () => {
       ),
     },
     {
-      title: 'Chat ID',
+      title: t('pages.learners.chatId'),
       dataIndex: 'chat_id',
       key: 'chat_id',
       render: (chat_id: number | null) => (
@@ -151,12 +153,12 @@ const Learners: React.FC = () => {
       ),
     },
     {
-      title: 'Notifications',
+      title: t('pages.learners.notifications'),
       dataIndex: 'notifications_enabled',
       key: 'notifications',
       render: (enabled: boolean, record: Learner) => (
         <Space>
-          <Tooltip title={enabled ? 'Click to disable notifications' : 'Click to enable notifications'}>
+          <Tooltip title={enabled ? t('pages.learners.notificationsOff') : t('pages.learners.notificationsOn')}>
             <Switch
               checked={enabled}
               onChange={() => handleNotificationToggle(record.id, enabled)}
@@ -166,13 +168,13 @@ const Learners: React.FC = () => {
             />
           </Tooltip>
           <Tag color={enabled ? 'green' : 'red'}>
-            {enabled ? 'Enabled' : 'Disabled'}
+            {enabled ? t('pages.learners.enabled') : t('pages.learners.disabled')}
           </Tag>
         </Space>
       ),
     },
     {
-      title: 'Actions',
+      title: t('common.actions'),
       key: 'actions',
       render: (_, record: Learner) => (
         <Space>
@@ -181,7 +183,7 @@ const Learners: React.FC = () => {
             icon={<DollarOutlined />}
             onClick={() => navigate(`/learners/${record.id}/finance`)}
           >
-            Финансы
+            {t('pages.learners.finance')}
           </Button>
           <Button
             type="link"
@@ -189,7 +191,7 @@ const Learners: React.FC = () => {
             icon={<DeleteOutlined />}
             onClick={() => handleDelete(record.id)}
           >
-            Delete
+            {t('common.delete')}
           </Button>
         </Space>
       ),
@@ -201,15 +203,15 @@ const Learners: React.FC = () => {
   return (
     <div>
       <PageHeader
-        title="Learners"
-        subtitle="Manage learners and their notification settings"
+        title={t('pages.learners.title')}
+        subtitle={t('pages.learners.subtitle')}
         actions={
           <Button
             type="primary"
             icon={<UserAddOutlined />}
             onClick={() => setIsModalOpen(true)}
           >
-            Add Learner
+            {t('pages.learners.addLearner')}
           </Button>
         }
       />
@@ -219,9 +221,9 @@ const Learners: React.FC = () => {
         loading={isLoading}
         columns={columns}
         rowKey="id"
-        emptyText="No learners yet"
-        emptyDescription="Create your first learner by clicking the 'Add Learner' button above"
-        emptyActionText="Add Learner"
+        emptyText={t('pages.learners.noLearners')}
+        emptyDescription={t('pages.learners.noLearnersDescription')}
+        emptyActionText={t('pages.learners.addLearner')}
         onEmptyAction={() => setIsModalOpen(true)}
         renderCard={(learner) => (
           <LearnerCard
@@ -236,7 +238,7 @@ const Learners: React.FC = () => {
         pagination={{
           pageSize: 20,
           showSizeChanger: true,
-          showTotal: (total) => `Total ${total} learner${total !== 1 ? 's' : ''}`,
+          showTotal: (total) => t('pages.learners.totalLearners', { count: total }),
         }}
       />
 
@@ -250,16 +252,17 @@ const Learners: React.FC = () => {
 
       <Modal
         open={deleteModalOpen}
-        title="Delete Learner"
+        title={t('pages.learners.deleteTitle')}
         onCancel={() => { setDeleteModalOpen(false); setLearnerToDelete(null); }}
         onOk={confirmDelete}
-        okText="Delete"
+        okText={t('common.delete')}
+        cancelText={t('common.cancel')}
         okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
         cancelButtonProps={{ disabled: deleteMutation.isPending }}
       >
-        <p>Are you sure you want to delete <strong>{learnerToDelete?.display_name}</strong>?</p>
-        <p style={{ color: '#ff4d4f' }}>This will also delete all their packages, lessons, and reminders.</p>
-        <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+        <p>{t('pages.learners.deleteConfirm', { name: learnerToDelete?.display_name })}</p>
+        <p style={{ color: '#ff4d4f' }}>{t('pages.learners.deleteWarning')}</p>
+        <p style={{ color: '#8c8c8c' }}>{t('pages.learners.deleteIrreversible')}</p>
       </Modal>
     </div>
   );

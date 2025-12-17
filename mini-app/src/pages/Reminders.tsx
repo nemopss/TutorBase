@@ -5,6 +5,7 @@ import type { TableProps } from 'antd';
 import type { FormInstance } from 'antd/es/form';
 import { EditOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import { useDebounce } from '../hooks/useDebounce';
 import PageHeader from '../components/common/PageHeader';
@@ -44,23 +45,7 @@ interface PackageListResponse {
   items: Package[];
 }
 
-const STATUS_OPTIONS = [
-  { value: 'scheduled', label: 'Scheduled' },
-  { value: 'sent', label: 'Sent' },
-  { value: 'responded', label: 'Responded' },
-  { value: 'failed', label: 'Failed' },
-  { value: 'cancelled', label: 'Cancelled' },
-];
-
-// Reminder type options based on actual system types
-const REMINDER_TYPE_OPTIONS = [
-  { value: 'lesson_confirm', label: 'Lesson Confirmation' },
-  { value: 'lesson_day_before', label: 'Lesson Day Before' },
-  { value: 'payment_week', label: 'Payment Week' },
-  { value: 'payment_day', label: 'Payment Day' },
-  { value: 'homework', label: 'Homework' },
-  { value: 'package_renewal', label: 'Package Renewal' },
-];
+// Status and type options will be generated with translations in component
 
 // --- API Fetchers --- //
 const fetchReminders = async (page: number, pageSize: number, status: string | null, type: string | null, packageId: number | null, search: string): Promise<ReminderListResponse> => {
@@ -110,7 +95,27 @@ const updateReminder = async ({ id, values }: { id: number; values: any }) => {
 
 // --- Component --- //
 const Reminders: React.FC = () => {
+  const { t } = useTranslation();
   const queryClient = useQueryClient();
+
+  // Status options with translations
+  const STATUS_OPTIONS = [
+    { value: 'scheduled', label: t('pages.reminders.status.scheduled') },
+    { value: 'sent', label: t('pages.reminders.status.sent') },
+    { value: 'responded', label: t('pages.reminders.status.responded') },
+    { value: 'failed', label: t('pages.reminders.status.failed') },
+    { value: 'cancelled', label: t('pages.reminders.status.cancelled') },
+  ];
+
+  // Reminder type options with translations
+  const REMINDER_TYPE_OPTIONS = [
+    { value: 'lesson_confirm', label: t('pages.reminders.types.lesson_confirm') },
+    { value: 'lesson_day_before', label: t('pages.reminders.types.lesson_day_before') },
+    { value: 'payment_week', label: t('pages.reminders.types.payment_week') },
+    { value: 'payment_day', label: t('pages.reminders.types.payment_day') },
+    { value: 'homework', label: t('pages.reminders.types.homework') },
+    { value: 'package_renewal', label: t('pages.reminders.types.package_renewal') },
+  ];
   const [currentPage, setCurrentPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [statusFilter, setStatusFilter] = useState<string | null>(null);
@@ -140,10 +145,10 @@ const Reminders: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['reminders'] });
       setIsModalOpen(false);
       setEditingReminder(null);
-      message.success('Reminder updated successfully!');
+      message.success(t('pages.reminders.reminderUpdated'));
     },
     onError: (error: Error) => {
-      message.error(`An error occurred: ${error.message}`);
+      message.error(t('errors.updateFailed', { message: error.message }));
     }
   });
 
@@ -182,57 +187,57 @@ const Reminders: React.FC = () => {
 
   const columns: TableProps<Reminder>['columns'] = [
     {
-      title: 'Scheduled For',
+      title: t('pages.reminders.scheduledFor'),
       dataIndex: 'scheduled_for',
       key: 'scheduled_for',
       render: (text: string) => dayjs(text).format('YYYY-MM-DD HH:mm'),
       sorter: (a, b) => dayjs(a.scheduled_for).unix() - dayjs(b.scheduled_for).unix(),
     },
     {
-      title: 'Package',
+      title: t('pages.reminders.package'),
       key: 'package',
       render: (_, record) => {
         const packageInfo = packagesData?.items.find(p => p.id === record.package_id);
-        return packageInfo ? `${packageInfo.title} (${packageInfo.learner_name})` : `Package ${record.package_id}`;
+        return packageInfo ? `${packageInfo.title} (${packageInfo.learner_name})` : `${t('pages.reminders.package')} ${record.package_id}`;
       },
     },
     {
-      title: 'Type',
+      title: t('pages.reminders.type'),
       dataIndex: 'reminder_type',
       key: 'reminder_type',
-      render: (type: string) => type ? <Tag>{type.replace('_', ' ').toUpperCase()}</Tag> : '-',
+      render: (type: string) => type ? <Tag>{t(`pages.reminders.types.${type}`)}</Tag> : '-',
     },
     {
-      title: 'Status',
+      title: t('common.status'),
       dataIndex: 'status',
       key: 'status',
       render: (status: string) => (
         <Tag color={getStatusColor(status)} icon={getStatusIcon(status)}>
-          {status.toUpperCase()}
+          {t(`pages.reminders.status.${status}`)}
         </Tag>
       ),
       filters: STATUS_OPTIONS.map(option => ({ text: option.label, value: option.value })),
       onFilter: (value, record) => record.status === value,
     },
     {
-      title: 'Active',
+      title: t('pages.reminders.active'),
       dataIndex: 'active',
       key: 'active',
-      render: (active: boolean) => <Tag color={active ? 'green' : 'red'}>{active ? 'YES' : 'NO'}</Tag>,
+      render: (active: boolean) => <Tag color={active ? 'green' : 'red'}>{active ? t('common.yes') : t('common.no')}</Tag>,
       filters: [
-        { text: 'Active', value: true },
-        { text: 'Inactive', value: false },
+        { text: t('pages.reminders.active'), value: true },
+        { text: t('pages.reminders.inactive'), value: false },
       ],
       onFilter: (value, record) => record.active === value,
     },
     {
-      title: 'Last Response',
+      title: t('pages.reminders.lastResponse'),
       dataIndex: 'last_response',
       key: 'last_response',
       render: (response: string) => response || '-',
     },
     {
-      title: 'Actions',
+      title: t('common.actions'),
       key: 'actions',
       render: (_, record) => (
         <Button 
@@ -244,7 +249,7 @@ const Reminders: React.FC = () => {
             setIsModalOpen(true); 
           }}
         >
-          Edit
+          {t('common.edit')}
         </Button>
       ),
     },
@@ -256,14 +261,14 @@ const Reminders: React.FC = () => {
   };
 
   if (isError) {
-    return <Alert message="Error fetching reminders" description={error.message} type="error" />;
+    return <Alert message={t('errors.loadFailed', { message: '' })} description={error.message} type="error" />;
   }
 
   return (
     <div>
       <PageHeader 
-        title="Reminders"
-        subtitle="Manage automated reminders for lessons and payments"
+        title={t('pages.reminders.title')}
+        subtitle={t('pages.reminders.subtitle')}
       />
       
       <Space style={{ marginBottom: 16 }} wrap>
@@ -280,7 +285,7 @@ const Reminders: React.FC = () => {
           style={{ width: 300 }}
         />
         <Select
-          placeholder="Filter by status"
+          placeholder={t('pages.reminders.filterByStatus')}
           allowClear
           style={{ width: 200 }}
           options={STATUS_OPTIONS}
@@ -290,7 +295,7 @@ const Reminders: React.FC = () => {
           }}
         />
         <Select
-          placeholder="Filter by type"
+          placeholder={t('pages.reminders.filterByType')}
           allowClear
           style={{ width: 200 }}
           options={REMINDER_TYPE_OPTIONS}
@@ -300,7 +305,7 @@ const Reminders: React.FC = () => {
           }}
         />
         <Select
-          placeholder="Filter by package"
+          placeholder={t('pages.reminders.filterByPackage')}
           allowClear
           style={{ width: 250 }}
           showSearch
@@ -322,8 +327,8 @@ const Reminders: React.FC = () => {
         loading={isLoading}
         columns={columns}
         rowKey="id"
-        emptyText="No reminders found"
-        emptyDescription="Reminders will be automatically created when you schedule lessons"
+        emptyText={t('pages.reminders.noReminders')}
+        emptyDescription={t('pages.reminders.noRemindersDescription')}
         renderCard={(reminder) => (
           <ReminderCard
             key={reminder.id}
@@ -346,14 +351,14 @@ const Reminders: React.FC = () => {
           total: data?.total,
           showSizeChanger: true,
           showQuickJumper: true,
-          showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} reminders`,
+          showTotal: (total, range) => t('pages.reminders.showTotal', { start: range[0], end: range[1], total }),
         }}
       />
 
       <Modal
         open={isModalOpen}
-        title="Edit Reminder"
-        cancelText="Cancel"
+        title={t('pages.reminders.editReminder')}
+        cancelText={t('common.cancel')}
         onCancel={handleCancel}
         onOk={() => form.submit()}
         confirmLoading={updateMutation.isPending}
@@ -379,6 +384,17 @@ interface ReminderEditFormProps {
 }
 
 const ReminderEditForm: React.FC<ReminderEditFormProps> = ({ reminder, onFinish, isLoading, form }) => {
+  const { t } = useTranslation();
+  
+  // Status options with translations
+  const STATUS_OPTIONS = [
+    { value: 'scheduled', label: t('pages.reminders.status.scheduled') },
+    { value: 'sent', label: t('pages.reminders.status.sent') },
+    { value: 'responded', label: t('pages.reminders.status.responded') },
+    { value: 'failed', label: t('pages.reminders.status.failed') },
+    { value: 'cancelled', label: t('pages.reminders.status.cancelled') },
+  ];
+
   React.useEffect(() => {
     if (reminder) {
       form.setFieldsValue({
@@ -404,15 +420,15 @@ const ReminderEditForm: React.FC<ReminderEditFormProps> = ({ reminder, onFinish,
       }}    >
       <Form.Item
         name="status"
-        label="Status"
-        rules={[{ required: true, message: 'Please select a status!' }]}
+        label={t('common.status')}
+        rules={[{ required: true, message: t('common.required') }]}
       >
         <Select options={STATUS_OPTIONS} disabled={isLoading} />
       </Form.Item>
       
       <Form.Item
         name="active"
-        label="Active"
+        label={t('pages.reminders.active')}
         valuePropName="checked"
       >
         <Switch disabled={isLoading} />
@@ -420,9 +436,9 @@ const ReminderEditForm: React.FC<ReminderEditFormProps> = ({ reminder, onFinish,
       
       <Form.Item
         name="comment"
-        label="Comment"
+        label={t('pages.reminders.comment')}
       >
-        <Input.TextArea rows={3} placeholder="Add a comment about this reminder..." disabled={isLoading} />
+        <Input.TextArea rows={3} placeholder={t('pages.reminders.addComment')} disabled={isLoading} />
       </Form.Item>
     </Form>
   );

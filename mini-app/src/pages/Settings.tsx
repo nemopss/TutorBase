@@ -1,49 +1,25 @@
-import React, { useState } from 'react';
-import { Card, Form, Input, Select, Switch, Button, message, Divider, Avatar, Space, Typography } from 'antd';
-import { UserOutlined, BellOutlined, GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
+import React from 'react';
+import { Card, Select, Button, Avatar, Space, Typography } from 'antd';
+import { UserOutlined, GlobalOutlined, BgColorsOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
 import PageHeader from '../components/common/PageHeader';
+import LanguageSelector from '../components/common/LanguageSelector';
 import { useThemeMode } from '../theme/ThemeProvider';
 import type { ThemeMode } from '../theme/ThemeProvider';
 
 const { Title, Text } = Typography;
 
-const TIMEZONE_OPTIONS = [
-  { value: 'Europe/Moscow', label: 'Moscow (UTC+3)' },
-  { value: 'Europe/London', label: 'London (UTC+0)' },
-  { value: 'America/New_York', label: 'New York (UTC-5)' },
-  { value: 'America/Los_Angeles', label: 'Los Angeles (UTC-8)' },
-  { value: 'Asia/Tokyo', label: 'Tokyo (UTC+9)' },
-  { value: 'Asia/Dubai', label: 'Dubai (UTC+4)' },
-];
-
 const Settings: React.FC = () => {
+  const { t } = useTranslation();
   const { user, logout } = useAuth();
-  const [loading, setLoading] = useState(false);
-  const [form] = Form.useForm();
   const { mode, setMode } = useThemeMode();
-
-  const handleSave = async (values: any) => {
-    setLoading(true);
-    try {
-      // TODO: Implement API call to save settings
-      await new Promise(resolve => setTimeout(resolve, 1000)); // Simulate API call
-      message.success('Settings saved successfully!');
-      if (import.meta.env.DEV) {
-        console.log('Settings:', values);
-      }
-    } catch (error: any) {
-      message.error(`Failed to save settings: ${error.message}`);
-    } finally {
-      setLoading(false);
-    }
-  };
 
   return (
     <div>
       <PageHeader
-        title="Settings"
-        subtitle="Manage your profile and preferences"
+        title={t('pages.settings.title')}
+        subtitle={t('pages.settings.subtitle')}
       />
 
       {/* Profile Section */}
@@ -51,28 +27,21 @@ const Settings: React.FC = () => {
         title={
           <Space>
             <UserOutlined />
-            <span>Profile</span>
+            <span>{t('pages.settings.profile')}</span>
           </Space>
         }
         style={{ marginBottom: 24 }}
       >
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-            <Avatar size={64} icon={<UserOutlined />} />
-            <div>
-              <Title level={4} style={{ margin: 0 }}>{user?.display_name || 'User'}</Title>
-              <Text type="secondary">Role: {user?.role || 'viewer'}</Text>
-            </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+          <Avatar size={64} icon={<UserOutlined />} />
+          <div>
+            <Title level={4} style={{ margin: 0 }}>{user?.display_name || 'User'}</Title>
+            <Text type="secondary">{t('pages.settings.role')}: {user?.role || 'viewer'}</Text>
           </div>
-          <Form layout="vertical">
-            <Form.Item label="Display Name" initialValue={user?.display_name}>
-              <Input placeholder="Your display name" disabled />
-            </Form.Item>
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              Profile information is synced from your Telegram account
-            </Text>
-          </Form>
-        </Space>
+        </div>
+        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 16 }}>
+          {t('pages.settings.profileSyncNote')}
+        </Text>
       </Card>
 
       {/* Preferences Section */}
@@ -80,77 +49,20 @@ const Settings: React.FC = () => {
         title={
           <Space>
             <GlobalOutlined />
-            <span>Preferences</span>
+            <span>{t('pages.settings.preferences')}</span>
           </Space>
         }
         style={{ marginBottom: 24 }}
       >
-        <Form
-          form={form}
-          layout="vertical"
-          onFinish={handleSave}
-          initialValues={{
-            timezone: 'Europe/Moscow',
-            notifications_enabled: true,
-            email_notifications: false,
-            lesson_reminders: true,
-            package_updates: true,
-          }}
-        >
-          <Form.Item
-            name="timezone"
-            label="Default Timezone"
-            help="Used for displaying dates and scheduling lessons"
-          >
-            <Select options={TIMEZONE_OPTIONS} />
-          </Form.Item>
-
-          <Divider />
-
-          <Title level={5}>
-            <BellOutlined /> Notifications
-          </Title>
-
-          <Form.Item
-            name="notifications_enabled"
-            label="Enable Notifications"
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-
-          <Form.Item
-            name="lesson_reminders"
-            label="Lesson Reminders"
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-
-          <Form.Item
-            name="package_updates"
-            label="Package Updates"
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-
-          <Form.Item
-            name="email_notifications"
-            label="Email Notifications"
-            valuePropName="checked"
-          >
-            <Switch />
-          </Form.Item>
-
-          <Divider />
-
-          <Form.Item>
-            <Button type="primary" htmlType="submit" loading={loading} block>
-              Save Preferences
-            </Button>
-          </Form.Item>
-        </Form>
+        <div style={{ marginBottom: 16 }}>
+          <Text strong style={{ display: 'block', marginBottom: 8 }}>
+            {t('pages.settings.language')}
+          </Text>
+          <LanguageSelector />
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+            {t('pages.settings.languageHelp')}
+          </Text>
+        </div>
       </Card>
 
       {/* Appearance Section */}
@@ -158,45 +70,42 @@ const Settings: React.FC = () => {
         title={
           <Space>
             <BgColorsOutlined />
-            <span>Appearance</span>
+            <span>{t('pages.settings.appearance')}</span>
           </Space>
         }
         style={{ marginBottom: 24 }}
       >
-        <Form layout="vertical">
-          <Form.Item label="Theme" help="Choose how the interface should look in the mini-app">
-            <Select
-              value={mode}
-              onChange={(value: ThemeMode) => setMode(value)}
-              options={[
-                { value: 'auto', label: 'Auto (follow Telegram)' },
-                { value: 'light', label: 'Light' },
-                { value: 'dark', label: 'Dark' },
-              ]}
-            />
-          </Form.Item>
-          <Text type="secondary" style={{ fontSize: 12 }}>
-            Switch to «Auto» to sync with Telegram again. The change applies immediately.
+        <div>
+          <Text strong style={{ display: 'block', marginBottom: 8 }}>
+            {t('pages.settings.theme')}
           </Text>
-        </Form>
+          <Select
+            value={mode}
+            onChange={(value: ThemeMode) => setMode(value)}
+            style={{ width: '100%' }}
+            options={[
+              { value: 'auto', label: t('pages.settings.themeAuto') },
+              { value: 'light', label: t('pages.settings.themeLight') },
+              { value: 'dark', label: t('pages.settings.themeDark') },
+            ]}
+          />
+          <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+            {t('pages.settings.themeHelp')}
+          </Text>
+        </div>
       </Card>
 
       {/* Account Section */}
-      <Card title="Account">
-        <Space direction="vertical" size="large" style={{ width: '100%' }}>
-          <div>
-            <Title level={5} style={{ marginBottom: 8 }}>Sign Out</Title>
-            <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
-              Sign out of your account. You'll need to register again to access the app.
-            </Text>
-            <Button
-              danger
-              onClick={logout}
-            >
-              Sign Out
-            </Button>
-          </div>
-        </Space>
+      <Card title={t('pages.settings.account')}>
+        <div>
+          <Title level={5} style={{ marginBottom: 8 }}>{t('pages.settings.signOut')}</Title>
+          <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+            {t('pages.settings.signOutDescription')}
+          </Text>
+          <Button danger onClick={logout}>
+            {t('pages.settings.signOut')}
+          </Button>
+        </div>
       </Card>
     </div>
   );

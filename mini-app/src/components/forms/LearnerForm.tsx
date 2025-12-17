@@ -1,6 +1,7 @@
 import React from 'react';
 import { Form, Input, InputNumber, Switch, Space, Typography, Divider } from 'antd';
 import { UserAddOutlined, BellOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import ResponsiveModal from '../common/ResponsiveModal';
 
 const { Text } = Typography;
@@ -28,6 +29,7 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
   initialValues,
   mode = 'create',
 }) => {
+  const { t } = useTranslation();
   const [form] = Form.useForm();
 
   const handleSubmit = async () => {
@@ -56,15 +58,15 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
       title={
         <Space>
           {mode === 'create' ? <UserAddOutlined /> : <BellOutlined />}
-          <span>{mode === 'create' ? 'Add New Learner' : 'Manage Notifications'}</span>
+          <span>{mode === 'create' ? t('forms.learner.title') : t('forms.learner.notificationsTitle')}</span>
         </Space>
       }
       open={visible}
       onOk={handleSubmit}
       onCancel={handleCancel}
       confirmLoading={loading}
-      okText={mode === 'create' ? 'Create Learner' : 'Save'}
-      cancelText="Cancel"
+      okText={mode === 'create' ? t('forms.learner.createButton') : t('common.save')}
+      cancelText={t('common.cancel')}
       width={500}
     >
       <Form
@@ -76,53 +78,53 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
           <>
             <Form.Item
               name="chat_id"
-              label="Telegram Chat ID"
+              label={t('forms.learner.chatIdLabel')}
               rules={[
-                { required: true, message: 'Please enter chat ID' },
+                { required: true, message: t('forms.learner.chatIdRequired') },
                 { 
                   pattern: /^-?\d+$/, 
-                  message: 'Chat ID must be a number' 
+                  message: t('forms.learner.chatIdInvalid')
                 },
               ]}
-              extra="Enter the learner's Telegram chat ID (numeric)"
+              extra={t('forms.learner.chatIdHelp')}
             >
               <Input 
-                placeholder="e.g., 123456789" 
+                placeholder={t('forms.learner.chatIdPlaceholder')} 
                 type="text"
               />
             </Form.Item>
 
             <Form.Item
               name="display_name"
-              label="Display Name"
+              label={t('forms.learner.displayNameLabel')}
               rules={[
-                { required: true, message: 'Please enter display name' },
-                { min: 2, message: 'Name must be at least 2 characters' },
+                { required: true, message: t('forms.learner.displayNameRequired') },
+                { min: 2, message: t('forms.learner.displayNameMinLength') },
               ]}
             >
-              <Input placeholder="e.g., John Doe" />
+              <Input placeholder={t('forms.learner.displayNamePlaceholder')} />
             </Form.Item>
 
             <Form.Item
               name="notes"
-              label="Notes (Optional)"
+              label={t('forms.learner.notesLabel')}
             >
               <Input.TextArea 
-                placeholder="Any additional information about this learner..."
+                placeholder={t('forms.learner.notesPlaceholder')}
                 rows={3}
               />
             </Form.Item>
 
             <Form.Item
               name="lesson_rate"
-              label="Стоимость урока (₽)"
+              label={t('forms.learner.lessonRateLabel')}
               rules={[
-                { type: 'number', min: 0, message: 'Стоимость должна быть положительной' },
+                { type: 'number', min: 0, message: t('forms.learner.lessonRateInvalid') },
               ]}
-              extra="Индивидуальный тариф за один урок"
+              extra={t('forms.learner.lessonRateHelp')}
             >
               <InputNumber
-                placeholder="например, 1500"
+                placeholder={t('forms.learner.lessonRatePlaceholder')}
                 style={{ width: '100%' }}
                 min={0}
                 precision={2}
@@ -135,17 +137,17 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
 
         <Form.Item
           name="notifications_enabled"
-          label="Enable Notifications"
+          label={t('forms.learner.notificationsLabel')}
           valuePropName="checked"
           extra={
             <Text type="secondary" style={{ fontSize: 12 }}>
-              When disabled, this learner will not receive any lesson reminders or notifications via Telegram
+              {t('forms.learner.notificationsHelp')}
             </Text>
           }
         >
           <Switch 
-            checkedChildren="Enabled" 
-            unCheckedChildren="Disabled"
+            checkedChildren={t('pages.learners.enabled')} 
+            unCheckedChildren={t('pages.learners.disabled')}
           />
         </Form.Item>
       </Form>

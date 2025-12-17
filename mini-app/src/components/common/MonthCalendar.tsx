@@ -5,8 +5,9 @@ import dayjs, { Dayjs } from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import isoWeek from 'dayjs/plugin/isoWeek';
+import { useTranslation } from 'react-i18next';
 import type { Lesson } from './calendar-types';
-import { DEFAULT_DURATION, DAYS_SHORT } from './calendar-types';
+import { DEFAULT_DURATION } from './calendar-types';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { useResponsive } from '../../hooks/useResponsive';
 import { spacing } from '../../theme/tokens';
@@ -40,9 +41,21 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
   onCancel,
   onDelete,
 }) => {
+  const { t } = useTranslation();
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
   const { isMobile } = useResponsive();
+  
+  // Translated days of week
+  const daysShort = [
+    t('calendar.daysShort.mon'),
+    t('calendar.daysShort.tue'),
+    t('calendar.daysShort.wed'),
+    t('calendar.daysShort.thu'),
+    t('calendar.daysShort.fri'),
+    t('calendar.daysShort.sat'),
+    t('calendar.daysShort.sun'),
+  ];
 
   // Current displayed month
   const [currentMonth, setCurrentMonth] = useState<Dayjs>(() => dayjs().tz(tz).startOf('month'));
@@ -184,13 +197,13 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
               visibility: isCurrentMonthVisible ? 'hidden' : 'visible',
             }}
           >
-            Сегодня
+            {t('calendar.today')}
           </Button>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: spacing.md }}>
           {monthStats.totalLessons > 0 && (
             <Text type="secondary" style={{ fontSize: 12 }}>
-              {monthStats.totalLessons} {monthStats.totalLessons === 1 ? 'урок' : 'уроков'} • {monthStats.totalHours}ч
+              {monthStats.totalLessons} {monthStats.totalLessons === 1 ? t('calendar.lesson') : t('calendar.lessons')} • {monthStats.totalHours}{t('calendar.hours')}
             </Text>
           )}
           <Text strong style={{ fontSize: 14 }}>
@@ -207,7 +220,7 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
         borderRadius: '8px 8px 0 0',
         borderBottom: `1px solid ${isDark ? '#303030' : '#f0f0f0'}`,
       }}>
-        {DAYS_SHORT.map((day, index) => (
+        {daysShort.map((day, index) => (
           <div
             key={index}
             style={{

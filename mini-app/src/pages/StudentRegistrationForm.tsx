@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { Form, Input, Button, Typography, Space, Alert, Card, Collapse, theme } from 'antd';
 import { ArrowLeftOutlined, CopyOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
 import { useThemeMode } from '../theme/ThemeProvider';
 
@@ -14,6 +15,7 @@ interface FormData {
 }
 
 const StudentRegistrationForm: React.FC = () => {
+    const { t } = useTranslation();
     const navigate = useNavigate();
     const [searchParams] = useSearchParams();
     const { registerStudent } = useAuth();
@@ -46,15 +48,15 @@ const StudentRegistrationForm: React.FC = () => {
 
     const getErrorMessage = (err: any): string => {
         if (err.response?.status === 404) {
-            return 'Invalid invite code. Please check the code and try again.';
+            return t('pages.studentRegistration.inviteCodeInvalid');
         }
         if (err.response?.status === 409) {
-            return 'This invite code has already been used.';
+            return t('pages.inviteCodes.status.used');
         }
         if (err.response?.status === 410) {
-            return 'This invite code has expired. Please ask your tutor for a new one.';
+            return t('pages.studentRegistration.expiredCode');
         }
-        return err.response?.data?.detail || 'Registration failed. Please try again.';
+        return err.response?.data?.detail || t('pages.studentRegistration.genericError');
     };
 
     const handleSubmit = async (values: FormData) => {
@@ -99,10 +101,10 @@ const StudentRegistrationForm: React.FC = () => {
                     />
                     <div>
                         <Title level={4} style={{ margin: 0 }}>
-                            Join Your School
+                            {t('pages.studentRegistration.title')}
                         </Title>
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                            Enter your invite code to get started
+                            {t('pages.studentRegistration.subtitle')}
                         </Text>
                     </div>
                 </Space>
@@ -121,15 +123,15 @@ const StudentRegistrationForm: React.FC = () => {
                     autoComplete="off"
                 >
                     <Form.Item
-                        label="Invite Code"
+                        label={t('pages.studentRegistration.inviteCodeLabel')}
                         name="invite_token"
                         rules={[
-                            { required: true, message: 'Please enter your invite code' },
-                            { min: 10, message: 'Please enter a valid invite code' }
+                            { required: true, message: t('pages.studentRegistration.inviteCodeRequired') },
+                            { min: 10, message: t('pages.studentRegistration.inviteCodeInvalid') }
                         ]}
                     >
                         <Input
-                            placeholder="Enter the code from your tutor"
+                            placeholder={t('pages.studentRegistration.inviteCodePlaceholder')}
                             size="large"
                             autoFocus={!searchParams.get('code')}
                             suffix={
@@ -139,18 +141,18 @@ const StudentRegistrationForm: React.FC = () => {
                                     onClick={handlePasteInviteCode}
                                     size="small"
                                 >
-                                    Paste
+                                    {t('common.copy')}
                                 </Button>
                             }
                         />
                     </Form.Item>
 
                     <Form.Item
-                        label="Your Name"
+                        label={t('forms.learner.displayNameLabel')}
                         name="student_name"
                     >
                         <Input
-                            placeholder="Leave empty to use your Telegram name"
+                            placeholder={t('forms.learner.displayNamePlaceholder')}
                             size="large"
                         />
                     </Form.Item>
@@ -158,7 +160,7 @@ const StudentRegistrationForm: React.FC = () => {
                     {error && (
                         <Form.Item>
                             <Alert
-                                message="Registration Failed"
+                                message={t('pages.studentRegistration.registrationFailed')}
                                 description={error}
                                 type="error"
                                 showIcon
@@ -176,7 +178,7 @@ const StudentRegistrationForm: React.FC = () => {
                             loading={loading}
                             block
                         >
-                            {loading ? 'Joining School...' : 'Join School'}
+                            {loading ? t('common.loading') : t('pages.studentRegistration.submit')}
                         </Button>
                     </Form.Item>
                 </Form>
@@ -186,30 +188,30 @@ const StudentRegistrationForm: React.FC = () => {
                     title={
                         <Space>
                             <QuestionCircleOutlined />
-                            <span>Need help?</span>
+                            <span>{t('pages.studentRegistration.needHelp')}</span>
                         </Space>
                     }
                     style={{ marginTop: 24 }}
                 >
                     <Collapse ghost>
-                        <Panel header="Don't have an invite code?" key="1">
+                        <Panel header={t('pages.studentRegistration.noCodeQuestion')} key="1">
                             <Paragraph type="secondary">
-                                Ask your tutor to send you an invite link or code.
+                                {t('pages.studentRegistration.noCodeAnswer')}
                             </Paragraph>
                         </Panel>
-                        <Panel header="Code not working?" key="2">
+                        <Panel header={t('pages.studentRegistration.codeNotWorkingQuestion')} key="2">
                             <Paragraph type="secondary">
-                                Make sure you copied the entire code. Codes are case-sensitive.
+                                {t('pages.studentRegistration.codeNotWorkingAnswer')}
                             </Paragraph>
                         </Panel>
-                        <Panel header="Are you a tutor?" key="3">
+                        <Panel header={t('pages.studentRegistration.areTutorQuestion')} key="3">
                             <Paragraph type="secondary">
                                 <Button
                                     type="link"
                                     onClick={() => navigate('/register/tutor')}
                                     style={{ padding: 0 }}
                                 >
-                                    Create your own school instead →
+                                    {t('pages.studentRegistration.areTutorAnswer')}
                                 </Button>
                             </Paragraph>
                         </Panel>

@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, Typography, Tag, Select, Space, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import { useAuth } from '../auth/AuthProvider';
 import { useResponsive } from '../hooks/useResponsive';
@@ -20,23 +21,11 @@ interface UserRecord {
   lastLoginAt: string | null;
 }
 
-const roleLabels: Record<UserRole, string> = {
-  admin: 'Админ',
-  teacher: 'Преподаватель',
-  viewer: 'Наблюдатель',
-};
-
 const roleColors: Record<UserRole, string> = {
   admin: 'magenta',
   teacher: 'blue',
   viewer: 'default',
 };
-
-const roleOptions = [
-  { value: 'viewer', label: roleLabels.viewer },
-  { value: 'teacher', label: roleLabels.teacher },
-  { value: 'admin', label: roleLabels.admin },
-];
 
 const mapUser = (user: any): UserRecord => ({
   id: user.id,
@@ -67,11 +56,24 @@ const formatDateTime = (value: string | null) => {
 };
 
 const Admin = () => {
+  const { t } = useTranslation();
   const { user } = useAuth();
   const [data, setData] = useState<UserRecord[]>([]);
   const [loading, setLoading] = useState(false);
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
   const { isMobile } = useResponsive();
+  
+  const roleLabels: Record<UserRole, string> = {
+    admin: t('pages.admin.roles.admin'),
+    teacher: t('pages.admin.roles.teacher'),
+    viewer: t('pages.admin.roles.viewer'),
+  };
+
+  const roleOptions = [
+    { value: 'viewer', label: roleLabels.viewer },
+    { value: 'teacher', label: roleLabels.teacher },
+    { value: 'admin', label: roleLabels.admin },
+  ];
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
@@ -80,7 +82,7 @@ const Admin = () => {
       setData(response.data.items.map(mapUser));
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
-      message.error(detail ?? 'Не удалось загрузить список пользователей');
+      message.error(detail ?? t('pages.admin.loadError'));
     } finally {
       setLoading(false);
     }
@@ -97,10 +99,10 @@ const Admin = () => {
         const response = await api.patch(`/users/${userId}/role`, { role });
         const updated = mapUser(response.data);
         setData((prev) => prev.map((item) => (item.id === userId ? updated : item)));
-        message.success(`Роль обновлена: ${updated.displayName} теперь ${roleLabels[updated.role]}`);
+        message.success(t('pages.admin.roleUpdated', { name: updated.displayName, role: roleLabels[updated.role] }));
       } catch (error: any) {
         const detail = error?.response?.data?.detail;
-        message.error(detail ?? 'Не удалось обновить роль пользователя');
+        message.error(detail ?? t('pages.admin.roleUpdateError'));
       } finally {
         setUpdatingUserId(null);
       }
@@ -111,7 +113,7 @@ const Admin = () => {
   const columns: ColumnsType<UserRecord> = useMemo(() => {
     return [
       {
-        title: 'Пользователь',
+        title: t('pages.admin.user'),
         dataIndex: 'displayName',
         key: 'displayName',
         render: (text: string, record) => (
@@ -129,10 +131,10 @@ const Admin = () => {
                   Telegram ID: {record.telegramId ?? '—'}
                 </Typography.Text>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  Последний вход: {formatDateTime(record.lastLoginAt)}
+                  {t('pages.admin.lastLogin')}: {formatDateTime(record.lastLoginAt)}
                 </Typography.Text>
                 <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-                  Создан: {formatDateTime(record.createdAt)}
+                  {t('pages.admin.created')}: {formatDateTime(record.createdAt)}
                 </Typography.Text>
               </>
             )}
@@ -140,7 +142,7 @@ const Admin = () => {
         ),
       },
       {
-        title: 'Telegram',
+        title: t('pages.admin.telegram'),
         dataIndex: 'username',
         key: 'username',
         responsive: ['md'],
@@ -154,7 +156,7 @@ const Admin = () => {
         ),
       },
       {
-        title: 'Роль',
+        title: t('pages.admin.role'),
         dataIndex: 'role',
         key: 'role',
         render: (role: UserRole, record) => (
@@ -174,30 +176,30 @@ const Admin = () => {
         ),
       },
       {
-        title: 'Последний вход',
+        title: t('pages.admin.lastLogin'),
         dataIndex: 'lastLoginAt',
         key: 'lastLoginAt',
         responsive: ['md'],
         render: (value: string | null) => formatDateTime(value),
       },
       {
-        title: 'Создан',
+        title: t('pages.admin.created'),
         dataIndex: 'createdAt',
         key: 'createdAt',
         responsive: ['lg'],
         render: (value: string) => formatDateTime(value),
       },
     ];
-  }, [handleRoleChange, isMobile, updatingUserId, user?.id]);
+  }, [handleRoleChange, isMobile, updatingUserId, user?.id, t, roleLabels, roleOptions]);
 
   return (
     <Space direction="vertical" size={24} style={{ width: '100%' }}>
       <div>
         <Typography.Title level={3} style={{ marginBottom: 8 }}>
-          Панель администратора
+          {t('pages.admin.title')}
         </Typography.Title>
         <Typography.Paragraph type="secondary" style={{ margin: 0 }}>
-          Управляйте доступом к мини-приложению и назначайте роли преподавателей.
+          {t('pages.admin.subtitle')}
         </Typography.Paragraph>
       </div>
 
@@ -207,7 +209,7 @@ const Admin = () => {
           loading={loading}
           columns={columns}
           rowKey="id"
-          emptyText="Нет пользователей"
+          emptyText={t('pages.admin.noUsers')}
           renderCard={(userRecord) => (
             <UserCard
               key={userRecord.id}

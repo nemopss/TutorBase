@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { Card, Button, Tag, message, Space, Typography, Tooltip, Empty, Modal } from 'antd';
 import { PlusOutlined, CopyOutlined, CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import InviteCodeCard from '../components/cards/InviteCodeCard';
@@ -22,6 +23,7 @@ interface InviteToken {
 }
 
 const InviteCodes: React.FC = () => {
+    const { t } = useTranslation();
     const { user, tenantId } = useAuth();
     const [tokens, setTokens] = useState<InviteToken[]>([]);
     const [loading, setLoading] = useState(false);
@@ -41,12 +43,12 @@ const InviteCodes: React.FC = () => {
             const response = await api.get(`/tenants/${tenantId}/invitations`);
             setTokens(response.data.items || []);
         } catch (error: any) {
-            message.error('Failed to load invite codes');
+            message.error(t('errors.loadFailed', { message: '' }));
             console.error('Failed to fetch tokens:', error);
         } finally {
             setLoading(false);
         }
-    }, [tenantId]);
+    }, [tenantId, t]);
 
     useEffect(() => {
         fetchTokens();
@@ -54,17 +56,17 @@ const InviteCodes: React.FC = () => {
 
     const handleCreateToken = async () => {
         if (!tenantId) {
-            message.error('No tenant context available');
+            message.error(t('errors.serverError'));
             return;
         }
 
         setCreating(true);
         try {
             const response = await api.post(`/tenants/${tenantId}/invitations`, {});
-            message.success('Invite code created successfully!');
+            message.success(t('pages.inviteCodes.inviteCodeCreated'));
             setTokens([response.data, ...tokens]);
         } catch (error: any) {
-            message.error(error.response?.data?.detail || 'Failed to create invite code');
+            message.error(error.response?.data?.detail || t('errors.createFailed', { message: '' }));
         } finally {
             setCreating(false);
         }
@@ -72,13 +74,13 @@ const InviteCodes: React.FC = () => {
 
     const handleCopyToken = (token: string) => {
         navigator.clipboard.writeText(token);
-        message.success('Invite code copied to clipboard!');
+        message.success(t('pages.inviteCodes.inviteCodeCopied'));
     };
 
     const handleCopyLink = (token: string) => {
         const link = `${window.location.origin}/register/student?code=${token}`;
         navigator.clipboard.writeText(link);
-        message.success('Invite link copied to clipboard!');
+        message.success(t('pages.inviteCodes.inviteLinkCopied'));
     };
 
     const handleDelete = (tokenId: number) => {
@@ -95,12 +97,12 @@ const InviteCodes: React.FC = () => {
         setDeleting(true);
         try {
             await api.delete(`/tenants/${tenantId}/invitations/${tokenToDelete.id}`);
-            message.success('Invite code deleted successfully!');
+            message.success(t('pages.inviteCodes.inviteCodeDeleted'));
             setTokens(tokens.filter(t => t.id !== tokenToDelete.id));
             setDeleteModalOpen(false);
             setTokenToDelete(null);
         } catch (error: any) {
-            message.error(error.response?.data?.detail || 'Failed to delete invite code');
+            message.error(error.response?.data?.detail || t('errors.deleteFailed', { message: '' }));
         } finally {
             setDeleting(false);
         }
@@ -108,7 +110,7 @@ const InviteCodes: React.FC = () => {
 
     const columns = [
         {
-            title: 'Invite Code',
+            title: t('pages.inviteCodes.inviteCode'),
             dataIndex: 'token',
             key: 'token',
             render: (token: string) => (
@@ -118,13 +120,13 @@ const InviteCodes: React.FC = () => {
             ),
         },
         {
-            title: 'Status',
+            title: t('common.status'),
             key: 'status',
             render: (_: any, record: InviteToken) => {
                 if (record.used_at) {
                     return (
                         <Tag icon={<CheckCircleOutlined />} color="success">
-                            Used {dayjs(record.used_at).fromNow()}
+                            {t('pages.inviteCodes.status.used')} {dayjs(record.used_at).fromNow()}
                         </Tag>
                     );
                 }
@@ -133,20 +135,20 @@ const InviteCodes: React.FC = () => {
                 if (isExpired) {
                     return (
                         <Tag icon={<ClockCircleOutlined />} color="default">
-                            Expired
+                            {t('pages.inviteCodes.status.expired')}
                         </Tag>
                     );
                 }
 
                 return (
                     <Tag icon={<ClockCircleOutlined />} color="processing">
-                        Active
+                        {t('pages.inviteCodes.status.active')}
                     </Tag>
                 );
             },
         },
         {
-            title: 'Expires',
+            title: t('pages.inviteCodes.expires'),
             dataIndex: 'expires_at',
             key: 'expires_at',
             render: (expires_at: string) => (
@@ -156,7 +158,7 @@ const InviteCodes: React.FC = () => {
             ),
         },
         {
-            title: 'Created',
+            title: t('pages.inviteCodes.created'),
             dataIndex: 'created_at',
             key: 'created_at',
             render: (created_at: string) => (
@@ -164,7 +166,7 @@ const InviteCodes: React.FC = () => {
             ),
         },
         {
-            title: 'Actions',
+            title: t('common.actions'),
             key: 'actions',
             render: (_: any, record: InviteToken) => {
                 const isUsed = !!record.used_at;
@@ -174,7 +176,7 @@ const InviteCodes: React.FC = () => {
                     <Space>
                         {!isUsed && !isExpired && (
                             <>
-                                <Tooltip title="Copy code">
+                                <Tooltip title={t('pages.inviteCodes.copyCode')}>
                                     <Button
                                         type="text"
                                         size="small"
@@ -182,19 +184,19 @@ const InviteCodes: React.FC = () => {
                                         onClick={() => handleCopyToken(record.token)}
                                     />
                                 </Tooltip>
-                                <Tooltip title="Copy invite link">
+                                <Tooltip title={t('pages.inviteCodes.copyLink')}>
                                     <Button
                                         type="text"
                                         size="small"
                                         onClick={() => handleCopyLink(record.token)}
                                     >
-                                        Copy Link
+                                        {t('pages.inviteCodes.copyLink')}
                                     </Button>
                                 </Tooltip>
                             </>
                         )}
                         {!isUsed && (
-                            <Tooltip title="Delete invite code">
+                            <Tooltip title={t('common.delete')}>
                                 <Button
                                     type="text"
                                     size="small"
@@ -218,12 +220,12 @@ const InviteCodes: React.FC = () => {
         return (
             <div>
                 <PageHeader
-                    title="Invite Codes"
-                    subtitle="Manage student invitations"
+                    title={t('pages.inviteCodes.title')}
+                    subtitle={t('pages.inviteCodes.subtitle')}
                 />
                 <Card>
                     <Empty
-                        description="You don't have permission to manage invite codes"
+                        description={t('pages.inviteCodes.noPermission')}
                     />
                 </Card>
             </div>
@@ -233,8 +235,8 @@ const InviteCodes: React.FC = () => {
     return (
         <div>
             <PageHeader
-                title="Invite Codes"
-                subtitle="Create and manage student invitation codes"
+                title={t('pages.inviteCodes.title')}
+                subtitle={t('pages.inviteCodes.subtitle')}
                 actions={
                     <Button
                         type="primary"
@@ -242,7 +244,7 @@ const InviteCodes: React.FC = () => {
                         onClick={handleCreateToken}
                         loading={creating}
                     >
-                        Create Invite Code
+                        {t('pages.inviteCodes.createInviteCode')}
                     </Button>
                 }
             />
@@ -253,8 +255,8 @@ const InviteCodes: React.FC = () => {
                     loading={loading}
                     columns={columns}
                     rowKey="id"
-                    emptyText="No invite codes yet"
-                    emptyActionText="Create Your First Invite Code"
+                    emptyText={t('pages.inviteCodes.noInviteCodes')}
+                    emptyActionText={t('pages.inviteCodes.createFirstInviteCode')}
                     onEmptyAction={handleCreateToken}
                     renderCard={(inviteCode) => (
                         <InviteCodeCard
@@ -268,39 +270,39 @@ const InviteCodes: React.FC = () => {
                     pagination={{
                         pageSize: 10,
                         showSizeChanger: false,
-                        showTotal: (total) => `Total ${total} invite codes`,
+                        showTotal: (total) => t('pages.inviteCodes.totalInviteCodes', { count: total }),
                     }}
                 />
             </Card>
 
-            <Card style={{ marginTop: 16 }} title="How to use invite codes">
+            <Card style={{ marginTop: 16 }} title={t('pages.inviteCodes.howToUse.title')}>
                 <Space direction="vertical" size="middle" style={{ width: '100%' }}>
                     <div>
-                        <Text strong>1. Create an invite code</Text>
+                        <Text strong>{t('pages.inviteCodes.howToUse.step1Title')}</Text>
                         <br />
                         <Text type="secondary">
-                            Click "Create Invite Code" to generate a new invitation for a student.
+                            {t('pages.inviteCodes.howToUse.step1Description')}
                         </Text>
                     </div>
                     <div>
-                        <Text strong>2. Share with your student</Text>
+                        <Text strong>{t('pages.inviteCodes.howToUse.step2Title')}</Text>
                         <br />
                         <Text type="secondary">
-                            Copy the code or the full invite link and send it to your student via Telegram or any other messenger.
+                            {t('pages.inviteCodes.howToUse.step2Description')}
                         </Text>
                     </div>
                     <div>
-                        <Text strong>3. Student registers</Text>
+                        <Text strong>{t('pages.inviteCodes.howToUse.step3Title')}</Text>
                         <br />
                         <Text type="secondary">
-                            The student opens the link or enters the code during registration. The code can only be used once.
+                            {t('pages.inviteCodes.howToUse.step3Description')}
                         </Text>
                     </div>
                     <div>
-                        <Text strong>4. Code expires in 7 days</Text>
+                        <Text strong>{t('pages.inviteCodes.howToUse.step4Title')}</Text>
                         <br />
                         <Text type="secondary">
-                            Unused codes automatically expire after 7 days. You can create new codes anytime.
+                            {t('pages.inviteCodes.howToUse.step4Description')}
                         </Text>
                     </div>
                 </Space>
@@ -308,15 +310,16 @@ const InviteCodes: React.FC = () => {
 
             <Modal
                 open={deleteModalOpen}
-                title="Delete Invite Code"
+                title={t('pages.inviteCodes.deleteTitle')}
                 onCancel={() => { setDeleteModalOpen(false); setTokenToDelete(null); }}
                 onOk={confirmDelete}
-                okText="Delete"
+                okText={t('common.delete')}
+                cancelText={t('common.cancel')}
                 okButtonProps={{ danger: true, loading: deleting }}
                 cancelButtonProps={{ disabled: deleting }}
             >
-                <p>Are you sure you want to delete this invite code?</p>
-                <p style={{ color: '#8c8c8c' }}>This action cannot be undone.</p>
+                <p>{t('pages.inviteCodes.deleteConfirm')}</p>
+                <p style={{ color: '#8c8c8c' }}>{t('pages.inviteCodes.deleteIrreversible')}</p>
             </Modal>
         </div>
     );

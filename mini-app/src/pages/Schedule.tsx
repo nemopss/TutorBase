@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Segmented, Spin, Alert, Typography } from 'antd';
 import { CalendarOutlined, UnorderedListOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
+import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import MonthCalendar from '../components/common/MonthCalendar';
 import WeekCalendar from '../components/common/WeekCalendar';
@@ -14,6 +15,7 @@ import { DEFAULT_TIMEZONE } from '../utils/datetime';
 const { Title } = Typography;
 
 const Schedule: React.FC = () => {
+  const { t } = useTranslation();
   const [viewMode, setViewMode] = useState<ViewMode>('month');
   const [selectedLesson, setSelectedLesson] = useState<ScheduleLesson | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -73,8 +75,8 @@ const Schedule: React.FC = () => {
     return (
       <div style={{ padding: '24px' }}>
         <Alert
-          message="Ошибка загрузки"
-          description="Не удалось загрузить расписание. Попробуйте обновить страницу."
+          message={t('errors.loadFailed', { message: '' })}
+          description={t('errors.networkError')}
           type="error"
           showIcon
         />
@@ -93,7 +95,7 @@ const Schedule: React.FC = () => {
         flexWrap: 'wrap'
       }}>
         <Title level={2} style={{ margin: 0 }}>
-          Расписание
+          {t('pages.schedule.title')}
         </Title>
         
         <Segmented
@@ -101,17 +103,17 @@ const Schedule: React.FC = () => {
           onChange={(value) => setViewMode(value as ViewMode)}
           options={[
             {
-              label: 'Месяц',
+              label: t('pages.schedule.month'),
               value: 'month',
               icon: <CalendarOutlined />,
             },
             {
-              label: 'Неделя',
+              label: t('pages.schedule.week'),
               value: 'week',
               icon: <AppstoreOutlined />,
             },
             {
-              label: 'Список',
+              label: t('pages.schedule.list'),
               value: 'list',
               icon: <UnorderedListOutlined />,
             },

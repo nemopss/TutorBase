@@ -17,6 +17,7 @@ import {
   MailOutlined,
   DollarOutlined,
 } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
 import { useThemeMode } from '../../theme/ThemeProvider';
 import { useAuth } from '../../auth/AuthProvider';
 import TenantSwitcher from '../common/TenantSwitcher';
@@ -24,101 +25,14 @@ import TenantIndicator from '../common/TenantIndicator';
 
 const { Sider, Content } = Layout;
 
-const baseMenuItems: NonNullable<MenuProps['items']> = [
-  {
-    key: '/',
-    icon: <HomeOutlined />,
-    label: <Link to="/">Dashboard</Link>,
-  },
-  {
-    key: '/packages',
-    icon: <AppstoreOutlined />,
-    label: <Link to="/packages">Packages</Link>,
-  },
-  {
-    key: '/lessons',
-    icon: <CalendarOutlined />,
-    label: <Link to="/lessons">Lessons</Link>,
-  },
-  {
-    key: '/learners',
-    icon: <TeamOutlined />,
-    label: <Link to="/learners">Learners</Link>,
-  },
-  {
-    key: 'finance',
-    icon: <DollarOutlined />,
-    label: 'Finance',
-    children: [
-      {
-        key: '/finance/dashboard',
-        label: <Link to="/finance/dashboard">Dashboard</Link>,
-      },
-      {
-        key: '/finance/reports',
-        label: <Link to="/finance/reports">Reports</Link>,
-      },
-    ],
-  },
-  {
-    key: '/templates',
-    icon: <ReadOutlined />,
-    label: <Link to="/templates">Templates</Link>,
-  },
-  {
-    key: '/reminders',
-    icon: <BellOutlined />,
-    label: <Link to="/reminders">Reminders</Link>,
-  },
-  {
-    key: '/analytics',
-    icon: <BarChartOutlined />,
-    label: <Link to="/analytics">Analytics</Link>,
-  },
-  {
-    key: '/settings',
-    icon: <SettingOutlined />,
-    label: <Link to="/settings">Settings</Link>,
-  },
-];
-
-const inviteCodesMenuItem: NonNullable<MenuProps['items']>[number] = {
-  key: '/invite-codes',
-  icon: <MailOutlined />,
-  label: <Link to="/invite-codes">Invite Codes</Link>,
-};
-
-const adminMenuItem: NonNullable<MenuProps['items']>[number] = {
-  key: '/admin',
-  icon: <CrownOutlined />,
-  label: <Link to="/admin">Admin</Link>,
-};
-
 interface AppLayoutProps {
   children: React.ReactNode;
 }
 
-const studentMenuItems: NonNullable<MenuProps['items']> = [
-  {
-    key: '/',
-    icon: <HomeOutlined />,
-    label: <Link to="/">Dashboard</Link>,
-  },
-  {
-    key: '/schedule',
-    icon: <CalendarOutlined />,
-    label: <Link to="/schedule">Schedule</Link>,
-  },
-  {
-    key: '/settings',
-    icon: <SettingOutlined />,
-    label: <Link to="/settings">Settings</Link>,
-  },
-];
-
 const SIDEBAR_COLLAPSED_KEY = 'tutorbase_sidebar_collapsed';
 
 const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
+  const { t } = useTranslation();
   const location = useLocation();
   const { resolvedTheme } = useThemeMode();
   const isDark = resolvedTheme === 'dark';
@@ -138,6 +52,95 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   };
 
+  // Build menu items with translations
+  const baseMenuItems: NonNullable<MenuProps['items']> = useMemo(() => [
+    {
+      key: '/',
+      icon: <HomeOutlined />,
+      label: <Link to="/">{t('navigation.dashboard')}</Link>,
+    },
+    {
+      key: '/packages',
+      icon: <AppstoreOutlined />,
+      label: <Link to="/packages">{t('navigation.packages')}</Link>,
+    },
+    {
+      key: '/lessons',
+      icon: <CalendarOutlined />,
+      label: <Link to="/lessons">{t('navigation.lessons')}</Link>,
+    },
+    {
+      key: '/learners',
+      icon: <TeamOutlined />,
+      label: <Link to="/learners">{t('navigation.learners')}</Link>,
+    },
+    {
+      key: 'finance',
+      icon: <DollarOutlined />,
+      label: t('navigation.finance'),
+      children: [
+        {
+          key: '/finance/dashboard',
+          label: <Link to="/finance/dashboard">{t('navigation.dashboard')}</Link>,
+        },
+        {
+          key: '/finance/reports',
+          label: <Link to="/finance/reports">{t('navigation.analytics')}</Link>,
+        },
+      ],
+    },
+    {
+      key: '/templates',
+      icon: <ReadOutlined />,
+      label: <Link to="/templates">{t('navigation.templates')}</Link>,
+    },
+    {
+      key: '/reminders',
+      icon: <BellOutlined />,
+      label: <Link to="/reminders">{t('navigation.reminders')}</Link>,
+    },
+    {
+      key: '/analytics',
+      icon: <BarChartOutlined />,
+      label: <Link to="/analytics">{t('navigation.analytics')}</Link>,
+    },
+    {
+      key: '/settings',
+      icon: <SettingOutlined />,
+      label: <Link to="/settings">{t('navigation.settings')}</Link>,
+    },
+  ], [t]);
+
+  const studentMenuItems: NonNullable<MenuProps['items']> = useMemo(() => [
+    {
+      key: '/',
+      icon: <HomeOutlined />,
+      label: <Link to="/">{t('navigation.dashboard')}</Link>,
+    },
+    {
+      key: '/schedule',
+      icon: <CalendarOutlined />,
+      label: <Link to="/schedule">{t('navigation.schedule')}</Link>,
+    },
+    {
+      key: '/settings',
+      icon: <SettingOutlined />,
+      label: <Link to="/settings">{t('navigation.settings')}</Link>,
+    },
+  ], [t]);
+
+  const inviteCodesMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
+    key: '/invite-codes',
+    icon: <MailOutlined />,
+    label: <Link to="/invite-codes">{t('navigation.inviteCodes')}</Link>,
+  }), [t]);
+
+  const adminMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
+    key: '/admin',
+    icon: <CrownOutlined />,
+    label: <Link to="/admin">{t('navigation.admin')}</Link>,
+  }), [t]);
+
   const menuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
     if (isStudent) {
       return studentMenuItems;
@@ -147,7 +150,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
     // Add Invite Codes for teachers and admins
     if (hasStaffAccess) {
-      // Insert before Settings
       const settingsIndex = items.findIndex(item => item?.key === '/settings');
       if (settingsIndex !== -1) {
         items.splice(settingsIndex, 0, inviteCodesMenuItem);
@@ -162,7 +164,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
 
     return items;
-  }, [isAdmin, hasStaffAccess, isStudent]);
+  }, [isAdmin, hasStaffAccess, isStudent, baseMenuItems, studentMenuItems, inviteCodesMenuItem, adminMenuItem]);
 
   useEffect(() => {
     const handleResize = () => {
