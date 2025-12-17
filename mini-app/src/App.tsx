@@ -1,6 +1,6 @@
-import { useEffect } from 'react';
+import { useEffect, lazy, Suspense } from 'react';
 import { Routes, Route, Navigate } from 'react-router-dom';
-import { ConfigProvider } from 'antd';
+import { ConfigProvider, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import ruRU from 'antd/locale/ru_RU';
 import enUS from 'antd/locale/en_US';
@@ -16,27 +16,38 @@ const antdLocales = {
   en: enUS,
   ko: koKR,
 };
+
+// Layout - loaded immediately
 import AppLayout from './components/layout/AppLayout';
-import Dashboard from './pages/Dashboard';
-import Packages from './pages/Packages';
-import PackageDetail from './pages/PackageDetail';
-import Reminders from './pages/Reminders';
-import Settings from './pages/Settings';
-import Analytics from './pages/Analytics';
-import Lessons from './pages/Lessons';
-import Learners from './pages/Learners';
-import Admin from './pages/Admin';
-import AccessDenied from './pages/AccessDenied';
-import RoleSelectionScreen from './pages/RoleSelectionScreen';
-import TutorRegistrationForm from './pages/TutorRegistrationForm';
-import StudentRegistrationForm from './pages/StudentRegistrationForm';
-import StudentDashboard from './pages/StudentDashboard';
-import Schedule from './pages/Schedule';
-import InviteCodes from './pages/InviteCodes';
-import FinanceDashboard from './pages/FinanceDashboard';
-import IncomeReports from './pages/IncomeReports';
-import LearnerFinance from './pages/LearnerFinance';
-import LearnerProfile from './pages/LearnerProfile';
+
+// Lazy-loaded pages for code-splitting
+const Dashboard = lazy(() => import('./pages/Dashboard'));
+const Packages = lazy(() => import('./pages/Packages'));
+const PackageDetail = lazy(() => import('./pages/PackageDetail'));
+const Reminders = lazy(() => import('./pages/Reminders'));
+const Settings = lazy(() => import('./pages/Settings'));
+const Analytics = lazy(() => import('./pages/Analytics'));
+const Lessons = lazy(() => import('./pages/Lessons'));
+const Learners = lazy(() => import('./pages/Learners'));
+const Admin = lazy(() => import('./pages/Admin'));
+const AccessDenied = lazy(() => import('./pages/AccessDenied'));
+const RoleSelectionScreen = lazy(() => import('./pages/RoleSelectionScreen'));
+const TutorRegistrationForm = lazy(() => import('./pages/TutorRegistrationForm'));
+const StudentRegistrationForm = lazy(() => import('./pages/StudentRegistrationForm'));
+const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
+const Schedule = lazy(() => import('./pages/Schedule'));
+const InviteCodes = lazy(() => import('./pages/InviteCodes'));
+const FinanceDashboard = lazy(() => import('./pages/FinanceDashboard'));
+const IncomeReports = lazy(() => import('./pages/IncomeReports'));
+const LearnerFinance = lazy(() => import('./pages/LearnerFinance'));
+const LearnerProfile = lazy(() => import('./pages/LearnerProfile'));
+
+// Loading fallback component
+const PageLoader = () => (
+  <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '50vh' }}>
+    <Spin size="large" />
+  </div>
+);
 
 function App() {
   const { isLoading, isAuthenticated, user } = useAuth();
@@ -85,12 +96,14 @@ function App() {
   if (!isAuthenticated) {
     return (
       <ConfigProvider theme={antdTheme} locale={currentLocale}>
-        <Routes>
-          <Route path="/" element={<RoleSelectionScreen />} />
-          <Route path="/register/tutor" element={<TutorRegistrationForm />} />
-          <Route path="/register/student" element={<StudentRegistrationForm />} />
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            <Route path="/" element={<RoleSelectionScreen />} />
+            <Route path="/register/tutor" element={<TutorRegistrationForm />} />
+            <Route path="/register/student" element={<StudentRegistrationForm />} />
+            <Route path="*" element={<Navigate to="/" replace />} />
+          </Routes>
+        </Suspense>
       </ConfigProvider>
     );
   }
@@ -105,34 +118,36 @@ function App() {
   return (
     <ConfigProvider theme={antdTheme} locale={currentLocale}>
       <AppLayout>
-        <Routes>
-          {isStudent ? (
-            <>
-              <Route path="/" element={<StudentDashboard />} />
-              <Route path="/schedule" element={<Schedule />} />
-              <Route path="/settings" element={<Settings />} />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </>
-          ) : (
-            <>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/packages" element={<Packages />} />
-              <Route path="/packages/:id" element={<PackageDetail />} />
-              <Route path="/lessons" element={<Lessons />} />
-              <Route path="/learners" element={<Learners />} />
-              <Route path="/learners/:id" element={<LearnerProfile />} />
-              <Route path="/learners/:id/finance" element={<LearnerFinance />} />
-              <Route path="/finance/dashboard" element={<FinanceDashboard />} />
-              <Route path="/finance/reports" element={<IncomeReports />} />
-              <Route path="/reminders" element={<Reminders />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/invite-codes" element={<InviteCodes />} />
-              <Route path="/settings" element={<Settings />} />
-              {isAdmin && <Route path="/admin" element={<Admin />} />}
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </>
-          )}
-        </Routes>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {isStudent ? (
+              <>
+                <Route path="/" element={<StudentDashboard />} />
+                <Route path="/schedule" element={<Schedule />} />
+                <Route path="/settings" element={<Settings />} />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </>
+            ) : (
+              <>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/packages" element={<Packages />} />
+                <Route path="/packages/:id" element={<PackageDetail />} />
+                <Route path="/lessons" element={<Lessons />} />
+                <Route path="/learners" element={<Learners />} />
+                <Route path="/learners/:id" element={<LearnerProfile />} />
+                <Route path="/learners/:id/finance" element={<LearnerFinance />} />
+                <Route path="/finance/dashboard" element={<FinanceDashboard />} />
+                <Route path="/finance/reports" element={<IncomeReports />} />
+                <Route path="/reminders" element={<Reminders />} />
+                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/invite-codes" element={<InviteCodes />} />
+                <Route path="/settings" element={<Settings />} />
+                {isAdmin && <Route path="/admin" element={<Admin />} />}
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </>
+            )}
+          </Routes>
+        </Suspense>
       </AppLayout>
     </ConfigProvider>
   );
