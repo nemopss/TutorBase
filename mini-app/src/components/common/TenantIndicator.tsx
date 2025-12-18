@@ -62,17 +62,17 @@ const TenantIndicator: React.FC = () => {
         if (tenantId === null) {
             return {
                 icon: <GlobalOutlined />,
-                text: 'Global View',
+                text: 'Global',
                 color: 'blue',
-                tooltip: 'Viewing all tenants (Super Admin)',
+                tooltip: 'Super Admin',
             };
         }
 
         return {
             icon: <TeamOutlined />,
-            text: loading ? 'Loading...' : (tenantName || `Tenant ${tenantId}`),
+            text: loading ? '...' : (tenantName || `#${tenantId}`),
             color: 'green',
-            tooltip: `Current tenant context: ${tenantName || tenantId}`,
+            tooltip: tenantName || `Tenant ${tenantId}`,
         };
     };
 

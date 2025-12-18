@@ -89,7 +89,7 @@ function App() {
   const antdTheme = generateAntdTheme(resolvedTheme);
 
   if (isLoading) {
-    return <div>Loading...</div>;
+    return <PageLoader />;
   }
 
   // If not authenticated, show registration flow
