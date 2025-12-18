@@ -59,6 +59,6 @@ export const statusColors: Record<
 /** Default lesson duration in minutes */
 export const DEFAULT_DURATION = 60;
 
-/** Days of week labels */
-export const DAYS_FULL = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
-export const DAYS_SHORT = ["Пн", "Вт", "Ср", "Чт", "Пт", "Сб", "Вс"];
+/** Days of week labels - use i18n keys instead: t('calendar.days.mon') etc. */
+export const DAYS_FULL = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];
+export const DAYS_SHORT = ["mon", "tue", "wed", "thu", "fri", "sat", "sun"];

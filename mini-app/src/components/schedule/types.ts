@@ -31,8 +31,10 @@ export const STATUS_COLORS = {
   cancelled: "#ff4d4f", // red
 } as const;
 
+// Status labels are now handled via i18n - use t('calendar.status.scheduled') etc.
+// This constant is kept for backward compatibility but should not be used directly
 export const STATUS_LABELS = {
-  scheduled: "Запланировано",
-  completed: "Завершено",
-  cancelled: "Отменено",
+  scheduled: "scheduled",
+  completed: "completed",
+  cancelled: "cancelled",
 } as const;
