@@ -204,7 +204,7 @@ async def delete_package_endpoint(
     package_id: int,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
-    _=Depends(admin_required),
+    _=Depends(admin_or_teacher_required),
 ) -> Response:
     try:
         await package_service.delete_package(session, current_tenant, package_id)
