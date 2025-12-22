@@ -19,12 +19,16 @@ from __future__ import annotations
 
 from datetime import date, datetime, time, timedelta
 from typing import Optional
+from zoneinfo import ZoneInfo
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import CurrentTenant
 from database.models import LessonPackageTemplate, Learner
+
+# Default timezone for lesson scheduling
+MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
 # Type definitions
@@ -229,7 +233,8 @@ def generate_lesson_dates(
             hour, minute = map(int, slot["time"].split(":"))
             lesson_time = datetime.combine(
                 current_date,
-                time(hour=hour, minute=minute)
+                time(hour=hour, minute=minute),
+                tzinfo=MOSCOW_TZ
             )
             
             # Only add if on or after start_date
