@@ -33,6 +33,8 @@ Configuration:
     - Rate limits configured per endpoint
     - Lifespan events for metrics updates
 """
+import logging
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from prometheus_fastapi_instrumentator import Instrumentator
@@ -44,6 +46,10 @@ from config import config
 from api.routes import auth, packages, lessons, templates, reminders, metrics, learners, users, health, tenants, invitations, payments, finance
 from api.metrics_updater import lifespan_with_metrics
 from api.errors import register_exception_handlers
+
+# Clean Architecture imports
+from src.application.container import initialize_container, ContainerInitializationError
+from src.infrastructure.logging import setup_color_logging
 
 APP_TITLE = "App API"
 APP_VERSION = "0.1.2"
@@ -76,6 +82,20 @@ def create_app() -> FastAPI:
         >>> import uvicorn
         >>> uvicorn.run(app, host="0.0.0.0", port=8000)
     """
+    # Initialize color logging (with fallback to standard logging)
+    try:
+        setup_color_logging(level=logging.INFO)
+    except Exception as e:
+        logging.basicConfig(level=logging.INFO)
+        logging.warning(f"Color logging setup failed, using standard logging: {e}")
+
+    # Initialize DI container (with fallback to existing behavior)
+    try:
+        container = initialize_container()
+        logging.info("DI container initialized for API")
+    except ContainerInitializationError as e:
+        logging.warning(f"DI container initialization failed, continuing with existing behavior: {e}")
+
     app = FastAPI(
         title=APP_TITLE, 
         version=APP_VERSION,

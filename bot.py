@@ -25,6 +25,10 @@ from middlewares.rate_limit import RateLimitMiddleware
 from services.reminders import ReminderScheduler
 from utils import texts
 
+# Clean Architecture imports
+from src.application.container import initialize_container, ContainerInitializationError
+from src.infrastructure.logging import setup_color_logging
+
 
 async def main():
     bot = Bot(token=config.BOT_TOKEN, parse_mode="HTML")
@@ -72,14 +76,26 @@ async def main():
 
 
 if __name__ == "__main__":
-    formatter = logging.Formatter("[%(asctime)s] [%(update_id)s] %(levelname)s - %(name)s - (%(filename)s).%(funcName)s(%(lineno)d) - %(message)s")
-    handler = logging.StreamHandler(sys.stdout)
-    handler.setFormatter(formatter)
-    handler.addFilter(LoggingFilter())
+    # Initialize color logging (with fallback to standard logging)
+    try:
+        setup_color_logging(level=logging.INFO)
+    except Exception as e:
+        # Fallback to standard logging
+        formatter = logging.Formatter("[%(asctime)s] [%(update_id)s] %(levelname)s - %(name)s - (%(filename)s).%(funcName)s(%(lineno)d) - %(message)s")
+        handler = logging.StreamHandler(sys.stdout)
+        handler.setFormatter(formatter)
+        handler.addFilter(LoggingFilter())
+        logger = logging.getLogger()
+        logger.setLevel(logging.INFO)
+        logger.addHandler(handler)
+        logging.warning(f"Color logging setup failed, using standard logging: {e}")
 
-    logger = logging.getLogger()
-    logger.setLevel(logging.INFO)
-    logger.addHandler(handler)
+    # Initialize DI container (with fallback to existing behavior)
+    try:
+        container = initialize_container()
+        logging.info("DI container initialized")
+    except ContainerInitializationError as e:
+        logging.warning(f"DI container initialization failed, continuing with existing behavior: {e}")
 
     try:
         asyncio.run(main())
