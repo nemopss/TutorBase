@@ -571,12 +571,23 @@ def _build_test_reminder_message(instance, bot) -> tuple[Optional[str], Optional
         return prefix + message, None
     
     if reminder_type == REMINDER_TYPE_PACKAGE_RENEWAL:
+        keyboard = InlineKeyboardBuilder()
+        keyboard.button(
+            text=texts.PAYMENT_CONFIRM_BUTTON,
+            callback_data=f"test_payment_confirm_{instance.id}"
+        )
+        keyboard.button(
+            text=texts.PAYMENT_DECLINE_BUTTON,
+            callback_data=f"test_payment_decline_{instance.id}"
+        )
+        keyboard.adjust(1)
+        
         end_label = payload.get('package_end') or schedule_label
         message = texts.PACKAGE_RENEWAL_REMINDER_MESSAGE.format(
             name=name,
             end_date=escape_html_text(end_label),
         )
-        return prefix + message, None
+        return prefix + message, keyboard.as_markup()
     
     # Fallback to generic message
     message = texts.REMINDER_TRIGGER_MESSAGE.format(
