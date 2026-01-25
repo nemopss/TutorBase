@@ -552,13 +552,24 @@ class ReminderScheduler:
             )
 
         if reminder_type == REMINDER_TYPE_PACKAGE_RENEWAL:
+            keyboard = InlineKeyboardBuilder()
+            keyboard.button(
+                text=texts.PAYMENT_CONFIRM_BUTTON,
+                callback_data=f"payment_confirm_{instance.id}"
+            )
+            keyboard.button(
+                text=texts.PAYMENT_DECLINE_BUTTON,
+                callback_data=f"payment_decline_{instance.id}"
+            )
+            keyboard.adjust(1)
+            
             end_label = payload.get('package_end') or schedule_label
             return (
                 texts.PACKAGE_RENEWAL_REMINDER_MESSAGE.format(
                     name=name,
                     end_date=escape_html_text(end_label),
                 ),
-                None,
+                keyboard.as_markup(),
             )
 
         # Fallback to generic behaviour
