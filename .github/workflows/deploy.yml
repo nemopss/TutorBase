@@ -22,6 +22,7 @@ jobs:
         with:
           filters: |
             bot:
+              - '.github/workflows/deploy.yml'
               - 'Dockerfile'
               - 'bot.py'
               - 'handlers/**'
@@ -36,6 +37,7 @@ jobs:
               - 'push.py'
               - 'keyboards/**'
             api:
+              - '.github/workflows/deploy.yml'
               - 'Dockerfile.api'
               - 'api/**'
               - 'alembic/**'
