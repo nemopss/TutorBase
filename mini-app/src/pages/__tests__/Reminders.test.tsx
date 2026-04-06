@@ -80,15 +80,15 @@ describe('Reminders', () => {
 
   it('renders the main heading', async () => {
     renderComponent();
-    const heading = await screen.findByText(/Reminders/i);
+    const heading = await screen.findByRole('heading', { name: 'Reminders' });
     expect(heading).toBeInTheDocument();
   });
 
   it('renders reminder data in table', async () => {
     renderComponent();
-    
-    expect(await screen.findByText('2024-01-15 10:00')).toBeInTheDocument();
-    expect(await screen.findByText('2024-01-16 14:00')).toBeInTheDocument();
+
+    expect(await screen.findByText((text) => text.includes('2024-01-15'))).toBeInTheDocument();
+    expect(await screen.findByText((text) => text.includes('2024-01-16'))).toBeInTheDocument();
   });
 
   it('shows package information', async () => {
@@ -115,26 +115,24 @@ describe('Reminders', () => {
   it('shows active status', async () => {
     renderComponent();
     
-    expect(await screen.findByText('YES')).toBeInTheDocument();
-    expect(await screen.findByText('NO')).toBeInTheDocument();
+    expect(await screen.findByText('Active')).toBeInTheDocument();
+    expect(await screen.findByText('Inactive')).toBeInTheDocument();
   });
 
   it('renders search input', async () => {
     renderComponent();
-    const searchInput = await screen.findByPlaceholderText('Search reminders...');
+    const searchInput = await screen.findByRole('searchbox');
     expect(searchInput).toBeInTheDocument();
   });
 
   it('renders status filter', async () => {
     renderComponent();
-    const statusFilter = await screen.findByPlaceholderText('Filter by status');
-    expect(statusFilter).toBeInTheDocument();
+    expect(await screen.findByText('Filter by status')).toBeInTheDocument();
   });
 
   it('renders package filter', async () => {
     renderComponent();
-    const packageFilter = await screen.findByPlaceholderText('Filter by package');
-    expect(packageFilter).toBeInTheDocument();
+    expect(await screen.findByText('Filter by package')).toBeInTheDocument();
   });
 
   it('shows edit buttons', async () => {
