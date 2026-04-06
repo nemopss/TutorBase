@@ -103,6 +103,7 @@ describe('AuthProvider', () => {
     postMock.mockImplementation(() => Promise.resolve(defaultAuthResponse));
     setBrowserRefreshHandler.mockImplementation(() => undefined);
     localStorageMock.getItem.mockReturnValue(null);
+    window.Telegram = { WebApp: mockTelegramWebApp } as any;
     Object.keys(api.defaults.headers.common).forEach((key) => delete api.defaults.headers.common[key]);
   });
 
@@ -136,6 +137,22 @@ describe('AuthProvider', () => {
     await waitFor(() => {
       expect(api.defaults.headers.common['Authorization']).toBe(`Bearer ${validAccessToken}`);
     });
+  });
+
+  it('restores browser sessions without writing tokens to localStorage', async () => {
+    (window as any).Telegram = undefined;
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText('Welcome, Test User!')).toBeInTheDocument();
+    });
+
+    expect(postMock).toHaveBeenCalledWith('/auth/browser/refresh', undefined, {
+      withCredentials: true,
+    });
+    expect(localStorageMock.setItem).not.toHaveBeenCalled();
+    expect(api.defaults.headers.common['Authorization']).toBe(`Bearer ${validAccessToken}`);
   });
 });
 
