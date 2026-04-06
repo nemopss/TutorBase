@@ -95,6 +95,8 @@ jobs:
           file: ./mini-app/Dockerfile
           push: true
           tags: ghcr.io/${{ github.repository_owner }}/tutorbase-app:latest
+          build-args: |
+            VITE_TELEGRAM_BOT_USERNAME=xpyrkova23_bot
 
   deploy:
     needs: [changes, build]

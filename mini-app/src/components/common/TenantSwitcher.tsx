@@ -30,19 +30,19 @@ interface TenantListResponse {
 }
 
 const TenantSwitcher: React.FC = () => {
-    const { isSuperAdmin, tenantId, switchTenant } = useAuth();
+    const { canSwitchTenant, tenantId, switchTenant } = useAuth();
     const [tenants, setTenants] = useState<Tenant[]>([]);
     const [loading, setLoading] = useState(false);
     const [switching, setSwitching] = useState(false);
 
     useEffect(() => {
-        if (isSuperAdmin) {
+        if (canSwitchTenant) {
             fetchTenants();
         }
-    }, [isSuperAdmin]);
+    }, [canSwitchTenant]);
 
-    // Only render for super-admins (moved after all hooks)
-    if (!isSuperAdmin) {
+    // Tenant switching is disabled for browser auth until it has a cookie-safe endpoint.
+    if (!canSwitchTenant) {
         return null;
     }
 

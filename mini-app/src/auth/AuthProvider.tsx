@@ -2,26 +2,21 @@
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
 import type { PropsWithChildren } from 'react';
 import api from '../services/api';
+import { setBrowserRefreshHandler } from '../services/api';
+import { BrowserLoginScreen } from './BrowserLoginScreen';
+import {
+  loginWithTelegramWidget,
+  logoutBrowserSession,
+  refreshBrowserSession,
+} from './browserSession';
+import type { TelegramLoginWidgetPayload } from './browserSession';
+import { detectAuthMode, prepareTelegramWebApp } from './modes';
+import type { AuthMode } from './modes';
+import { parseJwt } from './token';
+import { appEnv } from '../env';
 
-const DEV_MODE = import.meta.env.VITE_DEV_MODE === 'true';
-const DEV_INIT_DATA = import.meta.env.VITE_DEV_INIT_DATA ?? 'dev';
-
-// Decode JWT token to get expiration time and tenant_id
-const parseJwt = (token: string): { exp?: number; tenant_id?: number | null; role?: string } | null => {
-  try {
-    const base64Url = token.split('.')[1];
-    const base64 = base64Url.replace(/-/g, '+').replace(/_/g, '/');
-    const jsonPayload = decodeURIComponent(
-      window.atob(base64).split('').map(c =>
-        '%' + ('00' + c.charCodeAt(0).toString(16)).slice(-2)
-      ).join('')
-    );
-    return JSON.parse(jsonPayload);
-  } catch (e) {
-    console.error('Failed to parse JWT:', e);
-    return null;
-  }
-};
+const DEV_MODE = appEnv.devMode;
+const DEV_INIT_DATA = appEnv.devInitData;
 
 // Предполагаемые типы для данных пользователя и ответа от API
 interface User {
@@ -35,7 +30,7 @@ interface User {
 
 interface AuthResponse {
   access_token: string;
-  refresh_token: string;
+  refresh_token?: string;
   user: User;
   expires_in?: number;
 }
@@ -57,6 +52,7 @@ interface AuthContextType {
   user: User | null;
   tenantId: number | null;
   isSuperAdmin: boolean;
+  canSwitchTenant: boolean;
   switchTenant: (tenantId: number | null) => Promise<void>;
   registerTutor: (data: TutorRegistrationData) => Promise<void>;
   registerStudent: (data: StudentRegistrationData) => Promise<void>;
@@ -79,11 +75,74 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   const [tenantId, setTenantId] = useState<number | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [browserLoginError, setBrowserLoginError] = useState<string | null>(null);
+  const [isBrowserLoginLoading, setIsBrowserLoginLoading] = useState(false);
+  const [authMode, setAuthMode] = useState<AuthMode>(() => detectAuthMode());
   const refreshTimerRef = useRef<number | null>(null);
+
+  const clearAuthState = () => {
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
+    delete api.defaults.headers.common['Authorization'];
+    setUser(null);
+    setTenantId(null);
+  };
+
+  const applyAuthenticatedSession = (
+    authResponse: AuthResponse,
+    mode: AuthMode,
+    options: { persistLegacyTokens: boolean }
+  ) => {
+    const { access_token, refresh_token, user: nextUser } = authResponse;
+
+    if (options.persistLegacyTokens && refresh_token) {
+      localStorage.setItem('accessToken', access_token);
+      localStorage.setItem('refreshToken', refresh_token);
+    }
+
+    api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
+
+    const payload = parseJwt(access_token);
+    const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
+
+    console.log('[AuthProvider] Session applied:', {
+      user: nextUser.display_name,
+      role: nextUser.role,
+      tenant_id: extractedTenantId,
+      mode,
+    });
+
+    setUser(nextUser);
+    setTenantId(extractedTenantId);
+    setIsLoading(false);
+    setupTokenRefresh(access_token, mode);
+  };
 
   useEffect(() => {
     const login = async () => {
+      const currentAuthMode = detectAuthMode();
+      setAuthMode(currentAuthMode);
+
       try {
+        if (currentAuthMode === 'browser') {
+          setBrowserRefreshHandler(async () => {
+            const refreshed = await refreshBrowserSession();
+            applyAuthenticatedSession(refreshed, 'browser', { persistLegacyTokens: false });
+            return refreshed.access_token;
+          });
+
+          try {
+            const browserSession = await refreshBrowserSession();
+            applyAuthenticatedSession(browserSession, 'browser', { persistLegacyTokens: false });
+          } catch {
+            clearAuthState();
+            setIsLoading(false);
+          }
+          return;
+        }
+
+        setBrowserRefreshHandler(null);
+
         // Check if we already have a valid token in localStorage
         const existingToken = localStorage.getItem('accessToken');
         const existingRefreshToken = localStorage.getItem('refreshToken');
@@ -125,7 +184,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
               setIsLoading(false);
 
               // Setup auto-refresh
-              setupTokenRefresh(existingToken);
+              setupTokenRefresh(existingToken, currentAuthMode);
               return;
             } catch (err) {
               console.log('[AuthProvider] Failed to restore session, will re-login:', err);
@@ -143,14 +202,10 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         // No valid token, proceed with normal login
         let initData: string | undefined = undefined;
 
-        if (DEV_MODE) {
+        if (currentAuthMode === 'dev') {
           initData = DEV_INIT_DATA;
         } else {
-          // Initialize Telegram WebApp
-          if (window.Telegram?.WebApp) {
-            window.Telegram.WebApp.ready();
-            window.Telegram.WebApp.expand();
-          }
+          prepareTelegramWebApp();
 
           initData = window.Telegram?.WebApp?.initData;
 
@@ -177,7 +232,9 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
         // Сохраняем токены (например, в localStorage)
         localStorage.setItem('accessToken', access_token);
-        localStorage.setItem('refreshToken', refresh_token);
+        if (refresh_token) {
+          localStorage.setItem('refreshToken', refresh_token);
+        }
 
         // Настраиваем заголовок по умолчанию для всех запросов
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
@@ -198,7 +255,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         setIsLoading(false);
 
         // Setup auto-refresh 5 minutes before expiration
-        setupTokenRefresh(access_token);
+        setupTokenRefresh(access_token, currentAuthMode);
       } catch (err: any) {
         console.error('Authentication failed:', err);
 
@@ -230,11 +287,12 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       if (refreshTimerRef.current) {
         window.clearTimeout(refreshTimerRef.current);
       }
+      setBrowserRefreshHandler(null);
     };
   }, []);
 
   // Auto-refresh token before expiration
-  const setupTokenRefresh = (accessToken: string) => {
+  const setupTokenRefresh = (accessToken: string, mode: AuthMode = authMode) => {
     const payload = parseJwt(accessToken);
     if (!payload?.exp) return;
 
@@ -250,6 +308,12 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
     refreshTimerRef.current = window.setTimeout(async () => {
       try {
+        if (mode === 'browser') {
+          const refreshed = await refreshBrowserSession();
+          applyAuthenticatedSession(refreshed, 'browser', { persistLegacyTokens: false });
+          return;
+        }
+
         const refreshToken = localStorage.getItem('refreshToken');
         if (!refreshToken) return;
 
@@ -260,7 +324,9 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         const { access_token, refresh_token: newRefreshToken, user: updatedUser } = response.data;
 
         localStorage.setItem('accessToken', access_token);
-        localStorage.setItem('refreshToken', newRefreshToken);
+        if (newRefreshToken) {
+          localStorage.setItem('refreshToken', newRefreshToken);
+        }
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
         // Extract tenant_id from new JWT
@@ -277,7 +343,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         setTenantId(extractedTenantId);
 
         // Schedule next refresh
-        setupTokenRefresh(access_token);
+        setupTokenRefresh(access_token, mode);
       } catch (err) {
         console.error('Auto-refresh failed:', err);
         // On failure, user will be logged out on next 401
@@ -288,6 +354,10 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   // Switch tenant context (super-admin only)
   const switchTenant = async (targetTenantId: number | null) => {
     console.log('[AuthProvider] Switching tenant:', { from: tenantId, to: targetTenantId });
+
+    if (authMode === 'browser') {
+      throw new Error('Tenant switching is not available in browser mode yet');
+    }
 
     try {
       const response = await api.post<AuthResponse>('/auth/switch-tenant', {
@@ -309,14 +379,16 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
       // Update tokens
       localStorage.setItem('accessToken', access_token);
-      localStorage.setItem('refreshToken', newRefreshToken);
+      if (newRefreshToken) {
+        localStorage.setItem('refreshToken', newRefreshToken);
+      }
       api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
       setUser(updatedUser);
       setTenantId(extractedTenantId);
 
       // Setup new refresh timer
-      setupTokenRefresh(access_token);
+      setupTokenRefresh(access_token, authMode);
 
       // Reload the page to refresh all data
       console.log('[AuthProvider] Reloading page to apply new tenant context...');
@@ -354,7 +426,9 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
       // Save tokens
       localStorage.setItem('accessToken', access_token);
-      localStorage.setItem('refreshToken', refresh_token);
+      if (refresh_token) {
+        localStorage.setItem('refreshToken', refresh_token);
+      }
       api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
       // Extract tenant_id from JWT
@@ -371,7 +445,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       setTenantId(extractedTenantId);
 
       // Setup auto-refresh
-      setupTokenRefresh(access_token);
+      setupTokenRefresh(access_token, authMode);
 
       // Reload to apply new context
       window.location.href = '/';
@@ -408,7 +482,9 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
       // Save tokens
       localStorage.setItem('accessToken', access_token);
-      localStorage.setItem('refreshToken', refresh_token);
+      if (refresh_token) {
+        localStorage.setItem('refreshToken', refresh_token);
+      }
       api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
       // Extract tenant_id from JWT
@@ -425,7 +501,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       setTenantId(extractedTenantId);
 
       // Setup auto-refresh
-      setupTokenRefresh(access_token);
+      setupTokenRefresh(access_token, authMode);
 
       // Reload to apply new context
       window.location.href = '/';
@@ -435,18 +511,39 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     }
   };
 
+  const getBrowserErrorMessage = (err: any): string => {
+    const detail = err?.response?.data?.detail;
+    if (detail?.code === 'USER_NOT_REGISTERED') {
+      return 'Пользователь не зарегистрирован. Сначала откройте Mini App в Telegram и завершите регистрацию.';
+    }
+    if (detail?.code === 'BROWSER_ACCESS_NOT_ALLOWED') {
+      return 'Браузерный кабинет пока доступен только преподавателям и администраторам.';
+    }
+    if (typeof detail === 'string') {
+      return detail;
+    }
+    return err?.message || 'Не удалось войти через Telegram';
+  };
+
+  const handleBrowserTelegramAuth = async (payload: TelegramLoginWidgetPayload) => {
+    setBrowserLoginError(null);
+    setIsBrowserLoginLoading(true);
+
+    try {
+      const authResponse = await loginWithTelegramWidget(payload);
+      applyAuthenticatedSession(authResponse, 'browser', { persistLegacyTokens: false });
+    } catch (err: any) {
+      console.error('[AuthProvider] Browser Telegram login failed:', err);
+      setBrowserLoginError(getBrowserErrorMessage(err));
+      clearAuthState();
+    } finally {
+      setIsBrowserLoginLoading(false);
+    }
+  };
+
   // Logout function
   const logout = () => {
     console.log('[AuthProvider] Logging out');
-
-    // Clear tokens
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
-    delete api.defaults.headers.common['Authorization'];
-
-    // Clear state
-    setUser(null);
-    setTenantId(null);
 
     // Clear refresh timer
     if (refreshTimerRef.current) {
@@ -454,11 +551,22 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       refreshTimerRef.current = null;
     }
 
-    // Reload page to show registration flow
-    window.location.href = '/';
+    const finishLogout = () => {
+      clearAuthState();
+      setBrowserRefreshHandler(null);
+      window.location.href = '/';
+    };
+
+    if (authMode === 'browser') {
+      logoutBrowserSession().finally(finishLogout);
+      return;
+    }
+
+    finishLogout();
   };
 
   const isSuperAdmin = user?.role === 'admin';
+  const canSwitchTenant = isSuperAdmin && authMode !== 'browser';
 
   const value = {
     isAuthenticated: !!user,
@@ -466,6 +574,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     user,
     tenantId,
     isSuperAdmin,
+    canSwitchTenant,
     switchTenant,
     registerTutor,
     registerStudent,
@@ -517,6 +626,16 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
           </button>
         </div>
       </div>
+    );
+  }
+
+  if (authMode === 'browser' && !user && !isLoading) {
+    return (
+      <BrowserLoginScreen
+        error={browserLoginError}
+        isSubmitting={isBrowserLoginLoading}
+        onTelegramAuth={handleBrowserTelegramAuth}
+      />
     );
   }
 

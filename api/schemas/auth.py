@@ -18,6 +18,16 @@ class SwitchTenantRequest(BaseModel):
     tenant_id: Optional[int] = Field(None, description="Tenant ID to switch to, or null for global context")
 
 
+class TelegramLoginWidgetRequest(BaseModel):
+    id: int = Field(..., description="Telegram user ID")
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    username: Optional[str] = None
+    photo_url: Optional[str] = None
+    auth_date: int = Field(..., description="Telegram Login Widget auth timestamp")
+    hash: str = Field(..., description="Telegram Login Widget verification hash")
+
+
 class UserPayload(BaseModel):
     id: int
     role: str
@@ -34,3 +44,9 @@ class TokenPairResponse(BaseModel):
     expires_in: int
     user: UserPayload
 
+
+class BrowserTokenResponse(BaseModel):
+    access_token: str
+    token_type: str = "bearer"
+    expires_in: int
+    user: UserPayload

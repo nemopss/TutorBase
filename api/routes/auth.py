@@ -2,7 +2,7 @@ from datetime import datetime, timezone
 import logging
 from typing import Dict
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from slowapi import Limiter
 from slowapi.util import get_remote_address
@@ -10,10 +10,12 @@ from slowapi.util import get_remote_address
 from api.dependencies import get_session, get_current_tenant, CurrentTenant, get_current_user
 from database.models import Tenant, User
 from api.schemas import (
+    BrowserTokenResponse,
     RefreshRequest,
     RegistrationResponse,
     StudentRegistrationRequest,
     SwitchTenantRequest,
+    TelegramLoginWidgetRequest,
     TokenPairResponse,
     TutorRegistrationRequest,
     UserPayload,
@@ -21,18 +23,21 @@ from api.schemas import (
 )
 from api.security import (
     InitDataVerificationError,
+    TelegramLoginVerificationError,
     TokenType,
     TokenVerificationError,
     create_access_token,
     create_refresh_token,
     decode_token,
     verify_telegram_init_data,
+    verify_telegram_login_widget,
 )
 from config import config
 from database import crud
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
+BROWSER_REFRESH_COOKIE_PATH = "/api/v1/auth/browser"
 
 # Helper function to apply rate limiting conditionally
 def rate_limit(limit_string: str):
@@ -58,6 +63,54 @@ def _build_display_name(user_payload: Dict[str, object]) -> str:
         return str(username)
     telegram_id = user_payload.get("id")
     return f"tg:{telegram_id}" if telegram_id is not None else "Telegram User"
+
+
+def _build_user_payload(user: User) -> UserPayload:
+    return UserPayload(
+        id=user.id,
+        role=user.role,
+        display_name=user.display_name,
+        username=user.username,
+        telegram_id=user.telegram_id,
+        last_login_at=user.last_login_at,
+    )
+
+
+def _build_token_payload(user: User, *, tenant_id: int | None = None) -> dict[str, object]:
+    return {
+        "sub": str(user.id),
+        "role": user.role,
+        "telegram_id": user.telegram_id,
+        "tenant_id": tenant_id if tenant_id is not None else user.tenant_id,
+    }
+
+
+def _set_browser_refresh_cookie(response: Response, refresh_token: str) -> None:
+    response.set_cookie(
+        key=config.BROWSER_REFRESH_COOKIE_NAME,
+        value=refresh_token,
+        max_age=config.JWT_REFRESH_EXPIRES_SECONDS,
+        httponly=True,
+        secure=config.BROWSER_REFRESH_COOKIE_SECURE,
+        samesite=config.BROWSER_REFRESH_COOKIE_SAMESITE,
+        path=BROWSER_REFRESH_COOKIE_PATH,
+    )
+
+
+def _clear_browser_refresh_cookie(response: Response) -> None:
+    response.delete_cookie(
+        key=config.BROWSER_REFRESH_COOKIE_NAME,
+        secure=config.BROWSER_REFRESH_COOKIE_SECURE,
+        samesite=config.BROWSER_REFRESH_COOKIE_SAMESITE,
+        path=BROWSER_REFRESH_COOKIE_PATH,
+    )
+
+
+def _browser_access_denied(code: str, message: str) -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={"code": code, "message": message},
+    )
 
 
 async def _persist_user(session: AsyncSession, current_tenant: CurrentTenant, user_data: Dict[str, object]):
@@ -206,6 +259,111 @@ async def refresh(
         expires_in=config.JWT_ACCESS_EXPIRES_SECONDS,
         user=user_response,
     )
+
+
+@router.post("/browser/telegram", response_model=BrowserTokenResponse)
+@rate_limit("5/minute")
+async def browser_telegram_login(
+    request: Request,
+    payload: TelegramLoginWidgetRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+) -> BrowserTokenResponse:
+    try:
+        telegram_user = verify_telegram_login_widget(
+            payload.model_dump(),
+            config.BOT_TOKEN,
+            config.TELEGRAM_AUTH_MAX_AGE_SECONDS,
+        )
+    except TelegramLoginVerificationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    telegram_id = int(telegram_user["id"])
+    user = await crud.get_user_by_telegram_id(session, telegram_id)
+    if user is None:
+        raise _browser_access_denied(
+            "USER_NOT_REGISTERED",
+            "User is not registered. Open the Telegram Mini App to complete registration first.",
+        )
+
+    if user.role not in {"admin", "teacher"}:
+        raise _browser_access_denied(
+            "BROWSER_ACCESS_NOT_ALLOWED",
+            "Browser access is currently available only for teachers and admins.",
+        )
+
+    role_update = "admin" if telegram_id in config.ADMINS and user.role != "admin" else None
+    user = await crud.update_user_login_metadata(
+        session,
+        user,
+        username=telegram_user.get("username"),
+        display_name=_build_display_name(telegram_user),
+        role=role_update,
+        last_login_at=datetime.now(timezone.utc),
+    )
+    await session.flush()
+
+    token_payload = _build_token_payload(user)
+    access_token = create_access_token(token_payload)
+    refresh_token = create_refresh_token(token_payload)
+    _set_browser_refresh_cookie(response, refresh_token)
+
+    return BrowserTokenResponse(
+        access_token=access_token,
+        expires_in=config.JWT_ACCESS_EXPIRES_SECONDS,
+        user=_build_user_payload(user),
+    )
+
+
+@router.post("/browser/refresh", response_model=BrowserTokenResponse)
+@rate_limit("10/minute")
+async def browser_refresh(
+    request: Request,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+) -> BrowserTokenResponse:
+    refresh_token = request.cookies.get(config.BROWSER_REFRESH_COOKIE_NAME)
+    if not refresh_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing refresh token")
+
+    try:
+        token_data = decode_token(refresh_token, TokenType.REFRESH)
+    except TokenVerificationError as exc:
+        _clear_browser_refresh_cookie(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from exc
+
+    user_id = token_data.get("sub")
+    if user_id is None:
+        _clear_browser_refresh_cookie(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    user = await crud.get_user(session, int(user_id))
+    if not user:
+        _clear_browser_refresh_cookie(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    if user.role not in {"admin", "teacher"}:
+        _clear_browser_refresh_cookie(response)
+        raise _browser_access_denied(
+            "BROWSER_ACCESS_NOT_ALLOWED",
+            "Browser access is currently available only for teachers and admins.",
+        )
+
+    token_payload = _build_token_payload(user)
+    access_token = create_access_token(token_payload)
+    next_refresh_token = create_refresh_token(token_payload)
+    _set_browser_refresh_cookie(response, next_refresh_token)
+
+    return BrowserTokenResponse(
+        access_token=access_token,
+        expires_in=config.JWT_ACCESS_EXPIRES_SECONDS,
+        user=_build_user_payload(user),
+    )
+
+
+@router.post("/browser/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def browser_logout(response: Response) -> None:
+    _clear_browser_refresh_cookie(response)
 
 
 @router.post("/switch-tenant", response_model=TokenPairResponse)

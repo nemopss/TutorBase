@@ -29,6 +29,10 @@ class Settings(BaseSettings):
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_EXPIRES_SECONDS: int = 900
     JWT_REFRESH_EXPIRES_SECONDS: int = 1209600  # 14 days
+    TELEGRAM_AUTH_MAX_AGE_SECONDS: int = 86400
+    BROWSER_REFRESH_COOKIE_NAME: str = "tutorbase_refresh_token"
+    BROWSER_REFRESH_COOKIE_SECURE: bool = True
+    BROWSER_REFRESH_COOKIE_SAMESITE: str = "lax"
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     MINI_APP_URL: str = "https://app.xpyrkova23.ru/mini-app"
 

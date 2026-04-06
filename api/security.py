@@ -66,6 +66,10 @@ class InitDataVerificationError(Exception):
     """
 
 
+class TelegramLoginVerificationError(Exception):
+    """Raised when Telegram Login Widget verification fails."""
+
+
 def _parse_init_data(init_data: str) -> Dict[str, str]:
     """Parse Telegram initData query string into dictionary.
 
@@ -85,7 +89,37 @@ def _parse_init_data(init_data: str) -> Dict[str, str]:
     return {key: value for key, value in pairs}
 
 
-def verify_telegram_init_data(init_data: str, bot_token: str) -> Dict[str, Any]:
+def _validate_auth_date(
+    auth_date: Any,
+    *,
+    max_age_seconds: int | None,
+    error_cls: type[Exception],
+) -> None:
+    """Validate Telegram auth_date freshness."""
+    if auth_date in (None, ""):
+        raise error_cls("Missing auth_date")
+
+    try:
+        auth_timestamp = int(auth_date)
+    except (TypeError, ValueError) as exc:
+        raise error_cls("Invalid auth_date") from exc
+
+    now_timestamp = int(datetime.now(timezone.utc).timestamp())
+    if auth_timestamp > now_timestamp + 60:
+        raise error_cls("auth_date is in the future")
+
+    if max_age_seconds is None:
+        max_age_seconds = config.TELEGRAM_AUTH_MAX_AGE_SECONDS
+
+    if now_timestamp - auth_timestamp > max_age_seconds:
+        raise error_cls("Telegram authentication data is outdated")
+
+
+def verify_telegram_init_data(
+    init_data: str,
+    bot_token: str,
+    max_age_seconds: int | None = None,
+) -> Dict[str, Any]:
     """Verify Telegram WebApp initData signature and extract payload.
 
     Implements Telegram's initData validation protocol using HMAC-SHA256.
@@ -98,11 +132,13 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> Dict[str, Any]:
         4. Derive secret key: HMAC-SHA256("WebAppData", bot_token)
         5. Calculate expected hash: HMAC-SHA256(secret_key, data_check_string)
         6. Compare hashes using timing-safe comparison
-        7. Parse user JSON if present
+        7. Check auth_date freshness
+        8. Parse user JSON if present
 
     Args:
         init_data: URL-encoded initData string from Telegram WebApp
         bot_token: Telegram bot token for signature verification
+        max_age_seconds: Maximum accepted auth_date age in seconds
 
     Returns:
         Dictionary with verified data including parsed user object
@@ -133,6 +169,12 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> Dict[str, Any]:
     if not hmac.compare_digest(calculated_hash, hash_value):
         raise InitDataVerificationError("Invalid init data signature")
 
+    _validate_auth_date(
+        payload.get("auth_date"),
+        max_age_seconds=max_age_seconds,
+        error_cls=InitDataVerificationError,
+    )
+
     result: Dict[str, Any] = {}
     for key, value in payload.items():
         if key == "user":
@@ -143,6 +185,59 @@ def verify_telegram_init_data(init_data: str, bot_token: str) -> Dict[str, Any]:
         else:
             result[key] = value
     return result
+
+
+def verify_telegram_login_widget(
+    data: Dict[str, Any],
+    bot_token: str,
+    max_age_seconds: int | None = None,
+) -> Dict[str, Any]:
+    """Verify Telegram Login Widget data and extract user payload.
+
+    Login Widget data uses a different signature scheme than Mini App initData:
+    secret_key = SHA256(bot_token), not HMAC("WebAppData", bot_token).
+
+    Args:
+        data: Data returned by Telegram Login Widget.
+        bot_token: Telegram bot token for signature verification.
+        max_age_seconds: Maximum accepted auth_date age in seconds.
+
+    Returns:
+        Verified payload with Telegram user fields.
+
+    Raises:
+        TelegramLoginVerificationError: If data is missing, stale, or tampered.
+    """
+    payload = {key: value for key, value in data.items() if value is not None}
+    hash_value = payload.pop("hash", None)
+    if not hash_value:
+        raise TelegramLoginVerificationError("Missing hash in Telegram login data")
+
+    if not payload.get("id"):
+        raise TelegramLoginVerificationError("Missing user id")
+
+    if not payload.get("auth_date"):
+        raise TelegramLoginVerificationError("Missing auth_date")
+
+    data_check_string = "\n".join(f"{k}={v}" for k, v in sorted(payload.items()))
+    secret_key = hashlib.sha256(bot_token.encode()).digest()
+    calculated_hash = hmac.new(secret_key, data_check_string.encode(), hashlib.sha256).hexdigest()
+
+    if not hmac.compare_digest(calculated_hash, str(hash_value)):
+        raise TelegramLoginVerificationError("Invalid Telegram login signature")
+
+    _validate_auth_date(
+        payload.get("auth_date"),
+        max_age_seconds=max_age_seconds,
+        error_cls=TelegramLoginVerificationError,
+    )
+
+    try:
+        payload["id"] = int(payload["id"])
+    except (TypeError, ValueError) as exc:
+        raise TelegramLoginVerificationError("Invalid user id") from exc
+
+    return payload
 
 
 def _create_token(data: Dict[str, Any], token_type: TokenType, expires_seconds: int) -> str:
@@ -225,5 +320,3 @@ def decode_token(token: str, expected_type: TokenType) -> Dict[str, Any]:
     if token_type != expected_type.value:
         raise TokenVerificationError("Unexpected token type")
     return payload
-
-

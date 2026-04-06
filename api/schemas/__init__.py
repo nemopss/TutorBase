@@ -35,7 +35,9 @@ from api.schemas.auth import (
     WebAppLoginRequest,
     RefreshRequest,
     SwitchTenantRequest,
+    TelegramLoginWidgetRequest,
     UserPayload,
+    BrowserTokenResponse,
     TokenPairResponse,
 )
 from api.schemas.registration import (
@@ -115,7 +117,9 @@ __all__ = [
     'WebAppLoginRequest',
     'RefreshRequest',
     'SwitchTenantRequest',
+    'TelegramLoginWidgetRequest',
     'UserPayload',
+    'BrowserTokenResponse',
     'TokenPairResponse',
     # Registration
     'TutorRegistrationRequest',

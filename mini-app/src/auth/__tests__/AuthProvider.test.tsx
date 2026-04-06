@@ -5,6 +5,7 @@ import { AuthProvider, useAuth } from '../AuthProvider';
 // Mock the api module
 jest.mock('../../services/api', () => ({
   __esModule: true,
+  setBrowserRefreshHandler: jest.fn(),
   default: {
     post: jest.fn(),
     defaults: {
@@ -19,12 +20,14 @@ const api = require('../../services/api').default as {
   post: jest.Mock;
   defaults: { headers: { common: Record<string, string> } };
 };
+const setBrowserRefreshHandler = require('../../services/api').setBrowserRefreshHandler as jest.Mock;
 
 const postMock = api.post;
+const validAccessToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjQxMDI0NDQ4MDAsInRlbmFudF9pZCI6MSwicm9sZSI6InRlYWNoZXIifQ.sig';
 
 const defaultAuthResponse = {
   data: {
-    access_token: 'test-access-token',
+    access_token: validAccessToken,
     refresh_token: 'test-refresh-token',
     user: { id: 1, display_name: 'Test User', role: 'teacher' },
   },
@@ -98,11 +101,13 @@ describe('AuthProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
     postMock.mockImplementation(() => Promise.resolve(defaultAuthResponse));
+    setBrowserRefreshHandler.mockImplementation(() => undefined);
     localStorageMock.getItem.mockReturnValue(null);
     Object.keys(api.defaults.headers.common).forEach((key) => delete api.defaults.headers.common[key]);
   });
 
   it('shows loading state initially', () => {
+    postMock.mockImplementation(() => new Promise(() => undefined));
     renderComponent();
     expect(screen.getByText('Loading...')).toBeInTheDocument();
   });
@@ -119,7 +124,7 @@ describe('AuthProvider', () => {
     renderComponent();
     
     await waitFor(() => {
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('accessToken', 'test-access-token');
+      expect(localStorageMock.setItem).toHaveBeenCalledWith('accessToken', validAccessToken);
       expect(localStorageMock.setItem).toHaveBeenCalledWith('refreshToken', 'test-refresh-token');
     });
   });
@@ -129,7 +134,7 @@ describe('AuthProvider', () => {
     renderComponent();
     
     await waitFor(() => {
-      expect(api.defaults.headers.common['Authorization']).toBe('Bearer test-access-token');
+      expect(api.defaults.headers.common['Authorization']).toBe(`Bearer ${validAccessToken}`);
     });
   });
 });

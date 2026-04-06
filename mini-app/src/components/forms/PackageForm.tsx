@@ -6,6 +6,7 @@ import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import api from '../../services/api';
+import { appEnv } from '../../env';
 import ResponsiveModal from '../common/ResponsiveModal';
 import LessonPreviewCalendar from '../learner/LessonPreviewCalendar';
 
@@ -240,7 +241,7 @@ const PackageForm: React.FC<PackageFormProps> = ({
             handleFinish(formattedValues);
           })
           .catch((info) => {
-            if (import.meta.env.DEV) {
+            if (appEnv.isDev) {
               console.log('Validate Failed:', info);
             }
           });
