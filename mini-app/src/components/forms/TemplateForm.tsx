@@ -3,6 +3,7 @@ import { Form, Input, InputNumber, Select, Button, Space, TimePicker } from 'ant
 import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
+import { appEnv } from '../../env';
 import ResponsiveModal from '../common/ResponsiveModal';
 
 interface TemplateFormProps {
@@ -65,7 +66,7 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
       cancelText={t('common.cancel')}
       onCancel={onCancel}
       onOk={() => form.validateFields().then(handleFinish).catch(info => {
-        if (import.meta.env.DEV) {
+        if (appEnv.isDev) {
           console.log('Validate Failed:', info);
         }
       })}

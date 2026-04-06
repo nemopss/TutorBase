@@ -4,6 +4,7 @@ import { Button, Space, Modal, message, Alert } from 'antd';
 import type { TableProps } from 'antd';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
+import { appEnv } from '../env';
 import TemplateForm from '../components/forms/TemplateForm';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
@@ -64,7 +65,7 @@ const Templates: React.FC = () => {
 
   // Debug logging for Android
   React.useEffect(() => {
-    if (import.meta.env.DEV) {
+    if (appEnv.isDev) {
       console.log('Templates Debug:', { 
         isLoading, 
         isError, 

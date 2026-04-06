@@ -7,6 +7,7 @@ import { EditOutlined, ClockCircleOutlined, CheckCircleOutlined, CloseCircleOutl
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
+import { appEnv } from '../env';
 import { useDebounce } from '../hooks/useDebounce';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
@@ -414,7 +415,7 @@ const ReminderEditForm: React.FC<ReminderEditFormProps> = ({ reminder, onFinish,
       name="reminder_edit_form"
       onFinish={onFinish}
       onFinishFailed={(info) => {
-        if (import.meta.env.DEV) {
+        if (appEnv.isDev) {
           console.log('Validate Failed:', info);
         }
       }}    >

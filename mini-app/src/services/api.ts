@@ -1,18 +1,25 @@
 import axios, { type AxiosRequestConfig } from "axios";
+import { appEnv } from "../env";
 
 type RetryableRequestConfig = AxiosRequestConfig & {
   _retry?: boolean;
 };
 
 type RefreshSubscriber = (token: string | null) => void;
+type BrowserRefreshHandler = () => Promise<string | null>;
 
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_BASE_URL || "/api/v1",
-  timeout: Number(import.meta.env.VITE_API_TIMEOUT) || 15000, // Configurable timeout, default 15s
+  baseURL: appEnv.apiBaseUrl,
+  timeout: appEnv.apiTimeoutMs,
 });
 
 let refreshTokenRequest: Promise<string | null> | null = null;
+let browserRefreshHandler: BrowserRefreshHandler | null = null;
 const refreshSubscribers: RefreshSubscriber[] = [];
+
+export const setBrowserRefreshHandler = (handler: BrowserRefreshHandler | null) => {
+  browserRefreshHandler = handler;
+};
 
 const subscribeTokenRefresh = (callback: RefreshSubscriber) => {
   refreshSubscribers.push(callback);
@@ -30,6 +37,10 @@ const clearStoredTokens = () => {
 };
 
 const refreshAccessToken = async (): Promise<string | null> => {
+  if (browserRefreshHandler) {
+    return browserRefreshHandler();
+  }
+
   const refreshToken = localStorage.getItem("refreshToken");
   if (!refreshToken) {
     return null;
@@ -49,7 +60,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
 // Request interceptor for debugging
 api.interceptors.request.use(
   (config) => {
-    if (import.meta.env.DEV) {
+    if (appEnv.isDev) {
       console.log(
         `API Request: ${config.method?.toUpperCase()} ${config.url}`,
         {
@@ -76,7 +87,8 @@ api.interceptors.response.use(
       error.response &&
       error.response.status === 401 &&
       !originalRequest._retry &&
-      originalRequest.url !== "/auth/refresh"
+      originalRequest.url !== "/auth/refresh" &&
+      originalRequest.url !== "/auth/browser/refresh"
     ) {
       originalRequest._retry = true;
 

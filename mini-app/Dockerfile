@@ -3,6 +3,9 @@ FROM node:20-alpine as builder
 
 WORKDIR /app
 
+ARG VITE_TELEGRAM_BOT_USERNAME
+ENV VITE_TELEGRAM_BOT_USERNAME=$VITE_TELEGRAM_BOT_USERNAME
+
 # Copy package files
 COPY package*.json ./
 
