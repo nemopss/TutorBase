@@ -44,7 +44,7 @@ describe('Templates', () => {
 
   it('renders the main heading', async () => {
     renderComponent();
-    const heading = await screen.findByText(/Templates/i);
+    const heading = await screen.findByRole('heading', { name: 'Templates' });
     expect(heading).toBeInTheDocument();
   });
 
@@ -77,17 +77,17 @@ describe('Templates', () => {
   it('shows lesson count and duration', async () => {
     renderComponent();
     
-    expect(await screen.findByText('10')).toBeInTheDocument();
-    expect(await screen.findByText('20')).toBeInTheDocument();
-    expect(await screen.findByText('30')).toBeInTheDocument();
-    expect(await screen.findByText('60')).toBeInTheDocument();
+    expect(await screen.findByText('10 lessons')).toBeInTheDocument();
+    expect(await screen.findByText('20 lessons')).toBeInTheDocument();
+    expect(await screen.findByText('30 days')).toBeInTheDocument();
+    expect(await screen.findByText('60 days')).toBeInTheDocument();
   });
 
   it('shows action buttons for each template', async () => {
     renderComponent();
     
     const editButtons = await screen.findAllByText('Edit');
-    const duplicateButtons = await screen.findAllByText('Duplicate');
+    const duplicateButtons = await screen.findAllByText('Copy');
     const deleteButtons = await screen.findAllByText('Delete');
     
     expect(editButtons).toHaveLength(2);
