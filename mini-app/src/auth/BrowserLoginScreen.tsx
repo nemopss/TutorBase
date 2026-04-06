@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { TelegramLoginWidgetPayload } from './browserSession';
 import { getTelegramBotUsername } from './browserSession';
 
@@ -14,10 +14,19 @@ export const BrowserLoginScreen = ({
   onTelegramAuth,
 }: BrowserLoginScreenProps) => {
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const [widgetError, setWidgetError] = useState<string | null>(null);
   const botUsername = getTelegramBotUsername();
 
   useEffect(() => {
-    window.__tutorbaseTelegramLogin = onTelegramAuth;
+    window.__tutorbaseTelegramLogin = (payload) => {
+      if (!payload?.id || !payload?.auth_date || !payload?.hash) {
+        setWidgetError('Telegram вернул неполные данные входа. Обновите страницу и попробуйте ещё раз.');
+        return;
+      }
+
+      setWidgetError(null);
+      onTelegramAuth(payload);
+    };
 
     if (!containerRef.current || !botUsername) {
       return () => {
@@ -35,6 +44,9 @@ export const BrowserLoginScreen = ({
     script.setAttribute('data-userpic', 'false');
     script.setAttribute('data-request-access', 'write');
     script.setAttribute('data-onauth', 'window.__tutorbaseTelegramLogin(user)');
+    script.onerror = () => {
+      setWidgetError('Не удалось загрузить Telegram Login Widget. Проверьте соединение и обновите страницу.');
+    };
 
     containerRef.current.appendChild(script);
 
@@ -97,6 +109,18 @@ export const BrowserLoginScreen = ({
             marginBottom: 0,
           }}>
             {error}
+          </pre>
+        )}
+
+        {widgetError && (
+          <pre style={{
+            whiteSpace: 'pre-wrap',
+            color: '#cf1322',
+            fontFamily: 'inherit',
+            marginTop: '16px',
+            marginBottom: 0,
+          }}>
+            {widgetError}
           </pre>
         )}
       </div>
