@@ -67,12 +67,8 @@ async def create_tenant(
 async def list_tenants(
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
-    current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_required),
 ) -> PaginatedResponse[TenantResponse]:
-    if not current_tenant.is_super_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only super-admins can list tenants")
-
     tenants, total = await tenant_service.list_tenants(
         session,
         limit=pagination.limit,
@@ -86,12 +82,8 @@ async def list_tenants(
 async def get_tenant(
     tenant_id: int,
     session: AsyncSession = Depends(get_session),
-    current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_required),
 ) -> TenantResponse:
-    if not current_tenant.is_super_admin:
-        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Only super-admins can view tenants")
-
     try:
         tenant = await tenant_service.get_tenant(session, tenant_id)
     except NotFoundError as exc:

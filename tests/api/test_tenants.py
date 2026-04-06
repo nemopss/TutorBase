@@ -75,6 +75,28 @@ async def test_list_tenants_super_admin_success(
 
 
 @pytest.mark.asyncio
+async def test_list_tenants_super_admin_in_switched_context_success(
+    client: AsyncClient, db_session: AsyncSession, super_admin_user: User, tenant_1: Tenant, tenant_2: Tenant
+):
+    """Super-admin can list tenants after switching into a tenant context."""
+    headers = await get_auth_headers(super_admin_user)
+    switch_response = await client.post(
+        "/api/v1/auth/switch-tenant",
+        json={"tenant_id": tenant_1.id},
+        headers=headers,
+    )
+    assert switch_response.status_code == 200
+
+    switched_headers = {"Authorization": f"Bearer {switch_response.json()['access_token']}"}
+    response = await client.get("/api/v1/tenants", headers=switched_headers)
+
+    assert response.status_code == 200
+    slugs = {t["slug"] for t in response.json()["items"]}
+    assert tenant_1.slug in slugs
+    assert tenant_2.slug in slugs
+
+
+@pytest.mark.asyncio
 async def test_list_tenants_non_super_admin_forbidden(
     client: AsyncClient, db_session: AsyncSession, user_tenant_1: User
 ):
@@ -91,6 +113,28 @@ async def test_get_tenant_super_admin_success(
     """Super-admin can get a specific tenant."""
     headers = await get_auth_headers(super_admin_user)
     response = await client.get(f"/api/v1/tenants/{tenant_2.id}", headers=headers)
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == tenant_2.id
+    assert data["slug"] == tenant_2.slug
+
+
+@pytest.mark.asyncio
+async def test_get_tenant_super_admin_in_switched_context_success(
+    client: AsyncClient, db_session: AsyncSession, super_admin_user: User, tenant_1: Tenant, tenant_2: Tenant
+):
+    """Super-admin can read tenant details after switching into a tenant context."""
+    headers = await get_auth_headers(super_admin_user)
+    switch_response = await client.post(
+        "/api/v1/auth/switch-tenant",
+        json={"tenant_id": tenant_1.id},
+        headers=headers,
+    )
+    assert switch_response.status_code == 200
+
+    switched_headers = {"Authorization": f"Bearer {switch_response.json()['access_token']}"}
+    response = await client.get(f"/api/v1/tenants/{tenant_2.id}", headers=switched_headers)
+
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == tenant_2.id
