@@ -422,6 +422,8 @@ class Lesson(Base):
     sequence_index = Column(Integer)
     price = Column(Numeric(10, 2), nullable=True)
     teacher_notes = Column(Text)
+    has_homework = Column(Boolean)
+    homework_text = Column(Text)
     homework_due_at = Column(DateTime(timezone=True))
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
@@ -646,3 +648,6 @@ class Tenant(Base):
     payments = relationship('Payment', back_populates='tenant')
 
 
+# Import models from the new notification bounded context so they share the same
+# SQLAlchemy metadata for create_all and Alembic autogenerate.
+import notifications.infrastructure.models  # noqa: E402,F401

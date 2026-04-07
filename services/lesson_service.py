@@ -39,7 +39,9 @@ from database.models import Lesson
 from database.transaction import transactional
 from services.dto import LessonDTO
 from services.exceptions import NotFoundError
+from services.notification_reconciliation import enqueue_notification_event_reconciliation
 from services.utils import sync_package_metrics
+from notifications.domain.enums import EventType
 from utils.timezone import DEFAULT_TIMEZONE, normalize_to_timezone
 
 
@@ -179,6 +181,17 @@ async def update_lesson(
             logging.info(f"Triggered reminder regeneration for uncancelled lesson {lesson_id}")
     
     await sync_package_metrics(session, current_tenant, lesson.package_id)
+    if any(
+        value is not None
+        for value in (scheduled_at, duration_minutes, status, homework_due_at)
+    ):
+        await enqueue_notification_event_reconciliation(
+            session,
+            current_tenant,
+            event_type=EventType.LESSON,
+            event_id=lesson.id,
+            reason="lesson_updated",
+        )
     # Transaction will be committed by @transactional decorator
     return _build_lesson_dto(lesson)
 
@@ -215,6 +228,13 @@ async def delete_lesson(session: AsyncSession, current_tenant: CurrentTenant, le
     delete_stmt = delete(Lesson).where(Lesson.id == lesson_id)
     await session.execute(delete_stmt)
     await sync_package_metrics(session, current_tenant, package_id)
+    await enqueue_notification_event_reconciliation(
+        session,
+        current_tenant,
+        event_type=EventType.LESSON,
+        event_id=lesson_id,
+        reason="lesson_deleted",
+    )
     # Transaction will be committed by @transactional decorator
     return package_id
 
@@ -299,6 +319,13 @@ async def create_lesson(
         await session.flush()
     
     await sync_package_metrics(session, current_tenant, package_id)
+    await enqueue_notification_event_reconciliation(
+        session,
+        current_tenant,
+        event_type=EventType.LESSON,
+        event_id=lesson.id,
+        reason="lesson_created",
+    )
     # Transaction will be committed by @transactional decorator
     return _build_lesson_dto(lesson)
 

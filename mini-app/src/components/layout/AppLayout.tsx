@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Layout, Menu, Drawer, Button, Space, type MenuProps } from 'antd';
+import { Layout, Menu, Drawer, Button, Space, Tag, type MenuProps } from 'antd';
 import { Link, useLocation } from 'react-router-dom';
 import {
   HomeOutlined,
@@ -92,7 +92,27 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     {
       key: '/reminders',
       icon: <BellOutlined />,
-      label: <Link to="/reminders">{t('navigation.reminders')}</Link>,
+      label: (
+        <Space size={6}>
+          <Link to="/reminders">{t('navigation.reminders')}</Link>
+          <Tag color="warning" style={{ marginInlineEnd: 0 }}>{t('navigation.legacyBadge')}</Tag>
+        </Space>
+      ),
+    },
+    {
+      key: '/notifications',
+      icon: <BellOutlined />,
+      label: (
+        <Space size={6}>
+          <Link to="/notifications">{t('navigation.notifications')}</Link>
+          <Tag color="green" style={{ marginInlineEnd: 0 }}>{t('navigation.newBadge')}</Tag>
+        </Space>
+      ),
+    },
+    {
+      key: '/groups',
+      icon: <TeamOutlined />,
+      label: <Link to="/groups">{t('navigation.groups')}</Link>,
     },
     {
       key: '/analytics',

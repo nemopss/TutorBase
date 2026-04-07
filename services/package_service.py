@@ -39,8 +39,10 @@ from api.dependencies import CurrentTenant
 from database import crud
 from database.transaction import transactional
 from database.models import LessonPackage, LessonPackageTemplate
+from notifications.domain.enums import EventType
 from services.dto import LessonPackageDTO, PackageProgress
 from services.exceptions import NotFoundError
+from services.notification_reconciliation import enqueue_notification_event_reconciliation
 # Removed: from services.package_scheduler import regenerate_package_reminders (circular import)
 # Using lazy import inside functions instead
 from services.utils import generate_lessons_from_template, lesson_stats, sync_package_metrics
@@ -589,6 +591,14 @@ async def update_package(
     session.add(package)
     await session.flush()
     await sync_package_metrics(session, current_tenant, package_id)
+    if any(value is not None for value in (title, status, end_date)):
+        await enqueue_notification_event_reconciliation(
+            session,
+            current_tenant,
+            event_type=EventType.PACKAGE,
+            event_id=package.id,
+            reason="package_updated",
+        )
     
     # Transaction will be committed by @transactional decorator
     return _build_package_dto(package)

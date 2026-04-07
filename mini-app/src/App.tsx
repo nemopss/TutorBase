@@ -25,6 +25,8 @@ const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Packages = lazy(() => import('./pages/Packages'));
 const PackageDetail = lazy(() => import('./pages/PackageDetail'));
 const Reminders = lazy(() => import('./pages/Reminders'));
+const Notifications = lazy(() => import('./pages/Notifications'));
+const Groups = lazy(() => import('./pages/Groups'));
 const Settings = lazy(() => import('./pages/Settings'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Lessons = lazy(() => import('./pages/Lessons'));
@@ -138,7 +140,9 @@ function App() {
                 <Route path="/learners/:id/finance" element={<LearnerFinance />} />
                 <Route path="/finance/dashboard" element={<FinanceDashboard />} />
                 <Route path="/finance/reports" element={<IncomeReports />} />
+                <Route path="/notifications" element={<Notifications />} />
                 <Route path="/reminders" element={<Reminders />} />
+                <Route path="/groups" element={<Groups />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/invite-codes" element={<InviteCodes />} />
                 <Route path="/settings" element={<Settings />} />
