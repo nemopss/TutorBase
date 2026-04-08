@@ -14,19 +14,17 @@
 
 ## Важное ограничение
 
-Текущий workflow [`deploy.yml`](../.github/workflows/deploy.yml) **не выполняет `alembic upgrade head` явно**.
+На production миграции действительно применяются автоматически, но **только через сервис `bot`**:
 
-Из кода репозитория следует только это:
-
-- образы собираются и публикуются;
-- сервер делает `git pull`;
-- `docker compose pull` и `docker compose up -d` перезапускают нужные сервисы.
+- основной [`Dockerfile`](../Dockerfile) использует [`entrypoint.sh`](../entrypoint.sh);
+- в [`entrypoint.sh`](../entrypoint.sh) первой командой выполняется `alembic upgrade head`;
+- отдельный [`Dockerfile.api`](../Dockerfile.api) запускает только `uvicorn` и **не применяет миграции сам**.
 
 Вывод:
 
-- если на production миграции действительно применяются автоматически, это происходит **вне кода этого репозитория**;
-- перед первым rollout новой notification-системы нужно **проверить этот факт отдельно**;
-- если такой автоматизации нет, миграция `20260407_notifications` должна быть применена вручную.
+- для новой notification-системы критично, чтобы при deploy сначала стартовал или был перезапущен `bot`;
+- если новый `api` поднимется раньше, чем `bot` успеет накатить migration head, API-код может упереться в отсутствующие таблицы/поля;
+- безопасный rollout должен исходить из правила: **сначала миграции через `bot`, потом проверка `api` и mini-app**.
 
 ## Что должно быть уже готово до rollout
 
@@ -60,11 +58,14 @@
 
 ## Миграционная проверка на production
 
-### Вариант A. Миграции реально применяются автоматически
+После deploy нужно подтвердить, что `bot` действительно накатил migration head:
 
-Если у вас вне репозитория уже настроен автоматический `alembic upgrade head`, после deploy нужно только подтвердить факт:
-
-1. Проверить текущую head revision.
+1. Проверить текущую revision:
+   ```bash
+   ssh <server>
+   cd /srv/tutorbase/current
+   docker compose exec bot alembic current
+   ```
 2. Проверить наличие новых таблиц:
    - `notification_categories`
    - `notification_templates`
@@ -79,29 +80,38 @@
    - `has_homework`
    - `homework_text`
 
-### Вариант B. Автомата нет
-
-Если автомата нет, после deploy выполнить вручную:
+Если есть сомнение, что `bot` не перезапустился или миграция не отработала, безопасный ручной fallback такой:
 
 ```bash
 ssh <server>
 cd /srv/tutorbase/current
-docker compose exec api alembic upgrade head
-```
-
-После этого проверить:
-
-```bash
-docker compose exec api alembic current
+docker compose exec bot alembic upgrade head
+docker compose exec bot alembic current
 ```
 
 Ожидаемо: текущая revision должна совпадать с head, включающей notification migration.
+
+## Порядок запуска сервисов
+
+Для этого rollout важно не только наличие migration, но и порядок применения:
+
+1. Сначала должен обновиться и стартовать `bot`.
+2. `bot` применяет `alembic upgrade head`.
+3. Только после этого безопасно проверять отдельный `api`-сервис и mini-app.
+
+Практический риск:
+
+- если был обновлён только `api`, а `bot` ещё не стартовал на новом коде, `/api/v1/notifications/*` может работать на коде, который ожидает новые таблицы, которых ещё нет.
+
+Поэтому после deploy первым делом нужно смотреть именно на успешный старт `bot`.
 
 ## Постдеплойная smoke-проверка
 
 Сразу после production deploy:
 
-1. Открыть mini-app.
+1. Проверить, что `bot` стартовал без migration error.
+2. Проверить `alembic current` внутри `bot`.
+3. Открыть mini-app.
 2. Перейти на страницу `Уведомления NEW`.
 3. Проверить, что страница открывается без 500/422.
 4. Открыть `Настройки` и убедиться, что:
