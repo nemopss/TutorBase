@@ -580,6 +580,8 @@
         "back": "Back",
         "preview": "Show preview",
         "saveDraft": "Save draft",
+        "presetTitle": "Start with a ready scenario",
+        "presetDescription": "Pick the closest scenario first, then adjust the text, timing, and audience. This is faster and safer than building a rule from scratch.",
         "namePlaceholder": "Example: Vocabulary reminder for Vika",
         "messageSource": "Message source",
         "useTemplate": "Choose template",
@@ -588,7 +590,10 @@
         "templatePlaceholder": "Choose a template for this category",
         "insertVariable": "Insert variable:",
         "eventType": "Event",
+        "eventTypeTeacher": "What should this notification be tied to",
         "priority": "Priority",
+        "whenToSend": "When to send",
+        "howImportant": "How important is it",
         "dayOffset": "Day offset",
         "localTime": "Local time",
         "minutesOffset": "Minutes offset",
@@ -597,14 +602,51 @@
         "combineLessonHomework": "Combine lesson confirmation with homework",
         "customDateNeedsAbsoluteTrigger": "For custom dates, prefer the “Exact datetime” trigger.",
         "audienceScope": "Audience type",
+        "whoGetsIt": "Who should receive this notification",
         "audienceItems": "Who to select",
         "excludedLearners": "Exclude learners",
         "excludedLearnersPlaceholder": "Optional",
         "previewEmpty": "Click “Show preview” to see future deliveries.",
-        "previewWarnings": "Preview warnings",
-        "previewSummary": "What will be created",
+        "previewWarnings": "Things to review before saving",
+        "previewSummary": "What this rule will produce",
         "previewCount": "Future deliveries found: {{count}}",
+        "previewLine": "Learner #{{learnerId}} · send at {{scheduledFor}}",
+        "combinedSummary": "Will be combined: {{components}}",
+        "previewKinds": {
+          "single": "Regular notification",
+          "combined": "Combined notification"
+        },
         "components": "Components",
+        "stepHelp": {
+          "messageTitle": "First decide what the learner should see",
+          "messageDescription": "Use a ready-made template or write your own message. The rule name is only for your own management.",
+          "triggerTitle": "Now decide when this message should be sent",
+          "triggerDescription": "Choose the event first, then set the send timing relative to that event. For the first pilot, use simple scenarios.",
+          "audienceTitle": "Last step before preview: who should get it",
+          "audienceDescription": "You can target all learners, selected learners, groups, or packages, and then exclude specific learners if needed."
+        },
+        "presets": {
+          "lesson_confirmation": {
+            "title": "Lesson confirmation",
+            "description": "Remind the learner about the next lesson and ask them to confirm it.",
+            "name": "Lesson confirmation"
+          },
+          "homework": {
+            "title": "Homework reminder",
+            "description": "Remind the learner about homework before the next lesson.",
+            "name": "Homework reminder"
+          },
+          "package_renewal": {
+            "title": "Package renewal",
+            "description": "Warn in advance that the package is ending and should be renewed.",
+            "name": "Package renewal"
+          },
+          "custom_message": {
+            "title": "Custom message",
+            "description": "Create a one-off or fully custom notification with your own text.",
+            "name": "Custom message"
+          }
+        },
         "validation": {
           "nameRequired": "Enter a rule name.",
           "categoryRequired": "Choose a category.",

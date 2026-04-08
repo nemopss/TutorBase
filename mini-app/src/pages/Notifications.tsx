@@ -208,6 +208,7 @@ interface PackageListResponse {
 }
 
 interface RuleWizardValues {
+  preset_key?: 'lesson_confirmation' | 'homework' | 'package_renewal' | 'custom_message';
   name: string;
   category: string;
   message_mode: 'template' | 'inline';
@@ -714,6 +715,54 @@ const getTemplateSectionKey = (template: NotificationTemplate): 'system' | 'cust
 
 const getTemplateSectionOrder: Array<'system' | 'custom' | 'archived'> = ['system', 'custom', 'archived'];
 
+const RULE_WIZARD_PRESETS: Record<NonNullable<RuleWizardValues['preset_key']>, Partial<RuleWizardValues>> = {
+  lesson_confirmation: {
+    category: 'lesson_confirmation',
+    event_type: 'lesson',
+    trigger_type: 'day_offset_at_time',
+    trigger_days: -1,
+    trigger_local_time: '10:00',
+    priority: 'normal',
+    message_mode: 'template',
+    audience_scope_type: 'all_learners',
+  },
+  homework: {
+    category: 'homework',
+    event_type: 'lesson',
+    trigger_type: 'day_offset_at_time',
+    trigger_days: -1,
+    trigger_local_time: '10:00',
+    priority: 'normal',
+    message_mode: 'template',
+    audience_scope_type: 'all_learners',
+  },
+  package_renewal: {
+    category: 'package_renewal',
+    event_type: 'package',
+    trigger_type: 'day_offset_at_time',
+    trigger_days: -7,
+    trigger_local_time: '10:00',
+    priority: 'normal',
+    message_mode: 'template',
+    audience_scope_type: 'all_learners',
+  },
+  custom_message: {
+    category: 'custom',
+    event_type: 'custom_date',
+    trigger_type: 'absolute_datetime',
+    priority: 'normal',
+    message_mode: 'inline',
+    audience_scope_type: 'learner',
+  },
+};
+
+const getDefaultTemplateIdForCategory = (
+  category: string,
+  templates: NotificationTemplate[],
+): number | undefined => templates
+  .filter((template) => !template.archived_at && template.category === category)
+  .sort((left, right) => Number(right.system) - Number(left.system) || left.id - right.id)[0]?.id;
+
 const buildTriggerConfig = (values: RuleWizardValues): Record<string, unknown> => {
   switch (values.trigger_type) {
     case 'day_offset_at_time':
@@ -1055,18 +1104,27 @@ const Notifications: React.FC = () => {
   );
 
   const openRuleWizard = () => {
+    const preset = RULE_WIZARD_PRESETS.lesson_confirmation;
+    const presetCategory = preset.category ?? 'lesson_confirmation';
     setRulePreview(null);
     setRuleWizardStep(0);
     ruleForm.setFieldsValue({
-      category: 'lesson_confirmation',
-      event_type: 'lesson',
-      trigger_type: 'day_offset_at_time',
-      trigger_days: -1,
-      trigger_local_time: '10:00',
+      preset_key: 'lesson_confirmation',
+      name: '',
+      category: presetCategory,
+      event_type: preset.event_type,
+      trigger_type: preset.trigger_type,
+      trigger_days: preset.trigger_days,
+      trigger_local_time: preset.trigger_local_time,
       trigger_minutes: -60,
-      audience_scope_type: 'all_learners',
-      priority: 'normal',
-      message_mode: 'template',
+      audience_scope_type: preset.audience_scope_type,
+      audience_scope_ids: [],
+      excluded_learner_ids: [],
+      priority: preset.priority,
+      message_mode: preset.message_mode,
+      template_id: getDefaultTemplateIdForCategory(presetCategory, templatesQuery.data ?? []),
+      inline_template_body: undefined,
+      trigger_absolute_datetime: undefined,
     });
     setRuleWizardOpen(true);
   };
@@ -1303,6 +1361,7 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
   onSave,
 }) => {
   const { t } = useTranslation();
+  const presetKey = Form.useWatch('preset_key', form) ?? 'lesson_confirmation';
   const category = Form.useWatch('category', form) ?? 'lesson_confirmation';
   const messageMode = Form.useWatch('message_mode', form) ?? 'template';
   const triggerType = Form.useWatch('trigger_type', form) ?? 'day_offset_at_time';
@@ -1327,6 +1386,35 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
   const insertVariable = (variable: string) => {
     const current = form.getFieldValue('inline_template_body') || '';
     form.setFieldValue('inline_template_body', `${current}${current.endsWith(' ') || current.length === 0 ? '' : ' '}{${variable}}`);
+  };
+
+  const applyPreset = (nextPresetKey: NonNullable<RuleWizardValues['preset_key']>) => {
+    const preset = RULE_WIZARD_PRESETS[nextPresetKey];
+    const nextCategory = preset.category ?? 'custom';
+    const nextMessageMode = preset.message_mode ?? 'template';
+    const templateId = nextMessageMode === 'template'
+      ? getDefaultTemplateIdForCategory(nextCategory, templates)
+      : undefined;
+
+    form.setFieldsValue({
+      preset_key: nextPresetKey,
+      name: t(`pages.notifications.ruleWizard.presets.${nextPresetKey}.name`),
+      category: nextCategory,
+      message_mode: nextMessageMode,
+      template_id: templateId,
+      inline_template_body: nextMessageMode === 'inline' ? '' : undefined,
+      event_type: preset.event_type,
+      trigger_type: preset.trigger_type,
+      trigger_days: preset.trigger_days,
+      trigger_local_time: preset.trigger_local_time,
+      trigger_minutes: preset.trigger_minutes,
+      trigger_absolute_datetime: undefined,
+      audience_scope_type: preset.audience_scope_type,
+      audience_scope_ids: [],
+      excluded_learner_ids: [],
+      priority: preset.priority,
+      combine_policy_key: nextPresetKey === 'lesson_confirmation' ? 'lesson_confirmation_homework' : undefined,
+    });
   };
 
   const validateCurrentStep = async () => {
@@ -1414,6 +1502,38 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
       >
         {step === 0 && (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Card size="small" title={t('pages.notifications.ruleWizard.presetTitle')}>
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
+                {t('pages.notifications.ruleWizard.presetDescription')}
+              </Typography.Paragraph>
+              <Row gutter={[12, 12]}>
+                {(Object.keys(RULE_WIZARD_PRESETS) as Array<NonNullable<RuleWizardValues['preset_key']>>).map((key) => (
+                  <Col xs={24} md={12} key={key}>
+                    <Card
+                      hoverable
+                      size="small"
+                      onClick={() => applyPreset(key)}
+                      style={presetKey === key ? { borderColor: '#1677ff', background: '#f0f7ff' } : undefined}
+                    >
+                      <Space direction="vertical" size={4}>
+                        <Typography.Text strong>
+                          {t(`pages.notifications.ruleWizard.presets.${key}.title`)}
+                        </Typography.Text>
+                        <Typography.Text type="secondary">
+                          {t(`pages.notifications.ruleWizard.presets.${key}.description`)}
+                        </Typography.Text>
+                      </Space>
+                    </Card>
+                  </Col>
+                ))}
+              </Row>
+            </Card>
+            <Alert
+              type="info"
+              showIcon
+              message={t('pages.notifications.ruleWizard.stepHelp.messageTitle')}
+              description={t('pages.notifications.ruleWizard.stepHelp.messageDescription')}
+            />
             <Row gutter={16}>
               <Col xs={24} md={12}>
                 <Form.Item name="name" label={t('pages.notifications.name')} rules={[{ required: true }]}>
@@ -1459,9 +1579,15 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
 
         {step === 1 && (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Alert
+              type="info"
+              showIcon
+              message={t('pages.notifications.ruleWizard.stepHelp.triggerTitle')}
+              description={t('pages.notifications.ruleWizard.stepHelp.triggerDescription')}
+            />
             <Row gutter={16}>
               <Col xs={24} md={8}>
-                <Form.Item name="event_type" label={t('pages.notifications.ruleWizard.eventType')} rules={[{ required: true }]}>
+                <Form.Item name="event_type" label={t('pages.notifications.ruleWizard.eventTypeTeacher')} rules={[{ required: true }]}>
                   <Select
                     options={[
                       { value: 'lesson', label: t('pages.notifications.eventTypes.lesson') },
@@ -1472,7 +1598,7 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item name="trigger_type" label={t('pages.notifications.trigger')} rules={[{ required: true }]}>
+                <Form.Item name="trigger_type" label={t('pages.notifications.ruleWizard.whenToSend')} rules={[{ required: true }]}>
                   <Select
                     options={[
                       { value: 'day_offset_at_time', label: t('pages.notifications.triggerTypes.day_offset_at_time') },
@@ -1484,7 +1610,7 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
                 </Form.Item>
               </Col>
               <Col xs={24} md={8}>
-                <Form.Item name="priority" label={t('pages.notifications.ruleWizard.priority')} rules={[{ required: true }]}>
+                <Form.Item name="priority" label={t('pages.notifications.ruleWizard.howImportant')} rules={[{ required: true }]}>
                   <Select
                     options={[
                       { value: 'low', label: t('pages.notifications.priorities.low') },
@@ -1542,7 +1668,13 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
 
         {step === 2 && (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
-            <Form.Item name="audience_scope_type" label={t('pages.notifications.ruleWizard.audienceScope')} rules={[{ required: true }]}>
+            <Alert
+              type="info"
+              showIcon
+              message={t('pages.notifications.ruleWizard.stepHelp.audienceTitle')}
+              description={t('pages.notifications.ruleWizard.stepHelp.audienceDescription')}
+            />
+            <Form.Item name="audience_scope_type" label={t('pages.notifications.ruleWizard.whoGetsIt')} rules={[{ required: true }]}>
               <Select
                 options={[
                   { value: 'all_learners', label: t('pages.notifications.audienceScopes.all_learners') },
@@ -1642,12 +1774,15 @@ const PreviewStep: React.FC<{ preview: NotificationPreviewResponse | null; loadi
             <Card key={`${instance.kind}-${instance.rule_id ?? index}-${instance.learner_id}-${instance.event_id ?? index}`} size="small">
               <Space direction="vertical" size={4}>
                 <Space wrap>
-                  <Tag>{instance.kind}</Tag>
+                  <Tag>{instance.kind === 'combined' ? t('pages.notifications.ruleWizard.previewKinds.combined') : t('pages.notifications.ruleWizard.previewKinds.single')}</Tag>
                   <Tag color={getInstanceStatusColor(instance.status)}>{t(`pages.notifications.instanceStatus.${instance.status}`)}</Tag>
                   {instance.category && <Tag>{t(`pages.notifications.categories.${instance.category}`)}</Tag>}
                 </Space>
                 <span>
-                  {t('pages.notifications.learner')} #{instance.learner_id} · {dayjs(instance.effective_scheduled_for).format('YYYY-MM-DD HH:mm')}
+                  {t('pages.notifications.ruleWizard.previewLine', {
+                    learnerId: instance.learner_id,
+                    scheduledFor: dayjs(instance.effective_scheduled_for).format('YYYY-MM-DD HH:mm'),
+                  })}
                 </span>
                 {instance.warnings.length > 0 && (
                   <Typography.Text type="warning">
@@ -1656,7 +1791,9 @@ const PreviewStep: React.FC<{ preview: NotificationPreviewResponse | null; loadi
                 )}
                 {instance.components.length > 0 && (
                   <Typography.Text type="secondary">
-                    {t('pages.notifications.ruleWizard.components')}: {instance.components.map((component) => t(`pages.notifications.categories.${component.category}`)).join(', ')}
+                    {t('pages.notifications.ruleWizard.combinedSummary', {
+                      components: instance.components.map((component) => t(`pages.notifications.categories.${component.category}`)).join(', '),
+                    })}
                   </Typography.Text>
                 )}
               </Space>
