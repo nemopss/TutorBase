@@ -114,6 +114,14 @@ interface NotificationSettings {
   cap_mode?: string | null;
 }
 
+interface LearnerNotificationMode {
+  learner_id: number;
+  display_name: string;
+  mode_override: string;
+  effective_mode: string;
+  updated_at?: string | null;
+}
+
 interface NotificationTemplateFormValues {
   category: string;
   key: string;
@@ -245,6 +253,11 @@ const fetchNotificationSettings = async (): Promise<NotificationSettings> => {
   return data;
 };
 
+const fetchLearnerNotificationModes = async (): Promise<LearnerNotificationMode[]> => {
+  const { data } = await api.get('/notifications/learner-modes');
+  return data;
+};
+
 const fetchLearners = async (): Promise<Learner[]> => {
   const { data } = await api.get<LearnerListResponse>('/learners');
   return data.items;
@@ -305,6 +318,19 @@ const sendInstanceNow = async (instanceId: number): Promise<NotificationInstance
 
 const updateSettings = async (values: NotificationSettingsFormValues): Promise<NotificationSettings> => {
   const { data } = await api.patch('/notifications/settings', values);
+  return data;
+};
+
+const updateLearnerNotificationMode = async ({
+  learnerId,
+  modeOverride,
+}: {
+  learnerId: number;
+  modeOverride: string;
+}): Promise<LearnerNotificationMode> => {
+  const { data } = await api.patch(`/notifications/learner-modes/${learnerId}`, {
+    mode_override: modeOverride,
+  });
   return data;
 };
 
@@ -494,6 +520,12 @@ const Notifications: React.FC = () => {
     enabled: activeTab === 'settings',
   });
 
+  const learnerModesQuery = useQuery<LearnerNotificationMode[], Error>({
+    queryKey: ['learnerNotificationModes'],
+    queryFn: fetchLearnerNotificationModes,
+    enabled: activeTab === 'settings',
+  });
+
   const learnersQuery = useQuery<Learner[], Error>({
     queryKey: ['learnersForNotificationWizard'],
     queryFn: fetchLearners,
@@ -608,7 +640,17 @@ const Notifications: React.FC = () => {
     mutationFn: updateSettings,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notificationSettings'] });
+      queryClient.invalidateQueries({ queryKey: ['learnerNotificationModes'] });
       message.success(t('pages.notifications.settingsSaved'));
+    },
+    onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
+  });
+
+  const learnerModeMutation = useMutation({
+    mutationFn: updateLearnerNotificationMode,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learnerNotificationModes'] });
+      message.success(t('pages.notifications.learnerModeSaved'));
     },
     onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
   });
@@ -730,6 +772,11 @@ const Notifications: React.FC = () => {
           error={settingsQuery.error}
           saving={settingsMutation.isPending}
           onSubmit={(values) => settingsMutation.mutate(values)}
+          learnerModes={learnerModesQuery.data ?? []}
+          learnerModesLoading={learnerModesQuery.isLoading}
+          learnerModesError={learnerModesQuery.error}
+          learnerModeUpdating={learnerModeMutation.isPending}
+          onLearnerModeChange={(learnerId, modeOverride) => learnerModeMutation.mutate({ learnerId, modeOverride })}
         />
       ),
     },
@@ -1602,9 +1649,25 @@ interface SettingsTabProps {
   error: Error | null;
   saving: boolean;
   onSubmit: (values: NotificationSettingsFormValues) => void;
+  learnerModes: LearnerNotificationMode[];
+  learnerModesLoading: boolean;
+  learnerModesError: Error | null;
+  learnerModeUpdating: boolean;
+  onLearnerModeChange: (learnerId: number, modeOverride: string) => void;
 }
 
-const SettingsTab: React.FC<SettingsTabProps> = ({ form, loading, error, saving, onSubmit }) => {
+const SettingsTab: React.FC<SettingsTabProps> = ({
+  form,
+  loading,
+  error,
+  saving,
+  onSubmit,
+  learnerModes,
+  learnerModesLoading,
+  learnerModesError,
+  learnerModeUpdating,
+  onLearnerModeChange,
+}) => {
   const { t } = useTranslation();
 
   return (
@@ -1665,7 +1728,148 @@ const SettingsTab: React.FC<SettingsTabProps> = ({ form, loading, error, saving,
           </Button>
         </Form>
       </Card>
+
+      <LearnerRolloutSettings
+        learnerModes={learnerModes}
+        loading={learnerModesLoading}
+        error={learnerModesError}
+        updating={learnerModeUpdating}
+        onModeChange={onLearnerModeChange}
+      />
     </Space>
+  );
+};
+
+interface LearnerRolloutSettingsProps {
+  learnerModes: LearnerNotificationMode[];
+  loading: boolean;
+  error: Error | null;
+  updating: boolean;
+  onModeChange: (learnerId: number, modeOverride: string) => void;
+}
+
+const LearnerRolloutSettings: React.FC<LearnerRolloutSettingsProps> = ({
+  learnerModes,
+  loading,
+  error,
+  updating,
+  onModeChange,
+}) => {
+  const { t } = useTranslation();
+  const [pendingNewModeLearner, setPendingNewModeLearner] = useState<LearnerNotificationMode | null>(null);
+
+  const handleModeChange = (learner: LearnerNotificationMode, modeOverride: string) => {
+    if (modeOverride !== 'new') {
+      onModeChange(learner.learner_id, modeOverride);
+      return;
+    }
+
+    setPendingNewModeLearner(learner);
+  };
+
+  const columns: TableProps<LearnerNotificationMode>['columns'] = [
+    {
+      title: t('pages.notifications.learner'),
+      dataIndex: 'display_name',
+      key: 'display_name',
+    },
+    {
+      title: t('pages.notifications.rollout.overrideMode'),
+      dataIndex: 'mode_override',
+      key: 'mode_override',
+      render: (value: string, record) => (
+        <Select
+          value={value}
+          style={{ minWidth: 180 }}
+          disabled={updating}
+          onChange={(nextMode) => handleModeChange(record, nextMode)}
+          options={[
+            { value: 'inherit', label: t('pages.notifications.modes.inherit') },
+            { value: 'legacy', label: t('pages.notifications.modes.legacy') },
+            { value: 'shadow', label: t('pages.notifications.modes.shadow') },
+            { value: 'new', label: t('pages.notifications.modes.new') },
+          ]}
+        />
+      ),
+    },
+    {
+      title: t('pages.notifications.rollout.effectiveMode'),
+      dataIndex: 'effective_mode',
+      key: 'effective_mode',
+      render: (value: string) => <Tag color={getModeColor(value)}>{t(`pages.notifications.modes.${value}`)}</Tag>,
+    },
+    {
+      title: t('pages.notifications.rollout.updatedAt'),
+      dataIndex: 'updated_at',
+      key: 'updated_at',
+      render: (value: string | null) => value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '-',
+    },
+  ];
+
+  return (
+    <>
+      <Card title={t('pages.notifications.rollout.title')}>
+        <Alert
+          type="warning"
+          showIcon
+          message={t('pages.notifications.rollout.noticeTitle')}
+          description={t('pages.notifications.rollout.noticeDescription')}
+          style={{ marginBottom: 16 }}
+        />
+        <NoticeError error={error} />
+        <ResponsiveDataView<LearnerNotificationMode>
+          data={learnerModes}
+          loading={loading}
+          columns={columns}
+          rowKey="learner_id"
+          emptyText={t('pages.notifications.rollout.noLearners')}
+          emptyDescription={t('pages.notifications.rollout.noLearnersDescription')}
+          renderCard={(learner) => (
+            <Card key={learner.learner_id} title={learner.display_name} size="small" style={{ marginBottom: 12 }}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                <Tag color={getModeColor(learner.effective_mode)}>
+                  {t('pages.notifications.rollout.effectiveMode')}: {t(`pages.notifications.modes.${learner.effective_mode}`)}
+                </Tag>
+                <Select
+                  value={learner.mode_override}
+                  disabled={updating}
+                  onChange={(nextMode) => handleModeChange(learner, nextMode)}
+                  options={[
+                    { value: 'inherit', label: t('pages.notifications.modes.inherit') },
+                    { value: 'legacy', label: t('pages.notifications.modes.legacy') },
+                    { value: 'shadow', label: t('pages.notifications.modes.shadow') },
+                    { value: 'new', label: t('pages.notifications.modes.new') },
+                  ]}
+                />
+              </Space>
+            </Card>
+          )}
+          pagination={false}
+        />
+      </Card>
+
+      <Modal
+        open={Boolean(pendingNewModeLearner)}
+        title={t('pages.notifications.rollout.newConfirmTitle')}
+        okText={t('pages.notifications.rollout.enableNewForLearner')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ danger: true, loading: updating }}
+        onCancel={() => setPendingNewModeLearner(null)}
+        onOk={() => {
+          if (!pendingNewModeLearner) return;
+          onModeChange(pendingNewModeLearner.learner_id, 'new');
+          setPendingNewModeLearner(null);
+        }}
+      >
+        <Alert
+          type="warning"
+          showIcon
+          message={t('pages.notifications.rollout.newConfirmDescription', {
+            name: pendingNewModeLearner?.display_name ?? '',
+          })}
+        />
+      </Modal>
+    </>
   );
 };
 
@@ -1707,6 +1911,16 @@ const getInstanceStatusColor = (status: string) => {
     case 'skipped': return 'default';
     case 'suppressed': return 'default';
     case 'expired': return 'default';
+    default: return 'default';
+  }
+};
+
+const getModeColor = (mode: string) => {
+  switch (mode) {
+    case 'new': return 'green';
+    case 'shadow': return 'purple';
+    case 'legacy': return 'default';
+    case 'inherit': return 'blue';
     default: return 'default';
   }
 };

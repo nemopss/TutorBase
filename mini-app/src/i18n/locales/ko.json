@@ -390,6 +390,7 @@
       "templateArchived": "템플릿이 보관되었습니다",
       "ruleCreated": "규칙이 초안으로 생성되었습니다",
       "ruleUpdated": "규칙이 업데이트되었습니다",
+      "learnerModeSaved": "학생 모드가 저장되었습니다",
       "instanceCancelled": "전송이 취소되었습니다",
       "instanceScheduledNow": "전송이 다음 틱에 예약되었습니다",
       "settingsSaved": "설정이 저장되었습니다",
@@ -411,6 +412,7 @@
       "timezone": "시간대",
       "notificationsEnabled": "알림 사용",
       "modes": {
+        "inherit": "상속",
         "legacy": "기존 시스템",
         "shadow": "Shadow 모드",
         "new": "새 시스템"
@@ -523,6 +525,19 @@
           "absoluteDatetimeRequired": "날짜와 시간을 입력하세요.",
           "audienceRequired": "수신자를 하나 이상 선택하세요."
         }
+      },
+      "rollout": {
+        "title": "학생별 파일럿",
+        "noticeTitle": "안전한 롤아웃",
+        "noticeDescription": "프로덕션에서는 먼저 전체 모드를 legacy 또는 shadow로 유지하고, 새 시스템은 학생 한 명씩 켜세요. new 모드는 선택한 학생의 legacy 알림을 억제합니다.",
+        "overrideMode": "오버라이드",
+        "effectiveMode": "적용 모드",
+        "updatedAt": "업데이트됨",
+        "newConfirmTitle": "이 학생에게 새 시스템을 켤까요?",
+        "newConfirmDescription": "{{name}}의 legacy 알림은 억제되고 새 notification 시스템으로 전환됩니다.",
+        "enableNewForLearner": "new 켜기",
+        "noLearners": "학생이 없습니다",
+        "noLearnersDescription": "새 시스템 롤아웃을 관리하려면 학생을 추가하세요."
       }
     },
     "groups": {

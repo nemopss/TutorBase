@@ -391,6 +391,7 @@
       "templateArchived": "Template archived",
       "ruleCreated": "Rule created as draft",
       "ruleUpdated": "Rule updated",
+      "learnerModeSaved": "Learner mode saved",
       "instanceCancelled": "Delivery cancelled",
       "instanceScheduledNow": "Delivery scheduled for the next tick",
       "settingsSaved": "Settings saved",
@@ -412,6 +413,7 @@
       "timezone": "Timezone",
       "notificationsEnabled": "Notifications enabled",
       "modes": {
+        "inherit": "Inherit",
         "legacy": "Legacy system",
         "shadow": "Shadow mode",
         "new": "New system"
@@ -524,6 +526,19 @@
           "absoluteDatetimeRequired": "Enter date and time.",
           "audienceRequired": "Choose at least one recipient."
         }
+      },
+      "rollout": {
+        "title": "Learner pilot",
+        "noticeTitle": "Safe rollout",
+        "noticeDescription": "For production, keep the global mode as legacy or shadow first, then enable the new system for one learner at a time. New mode suppresses legacy reminders for the selected learner.",
+        "overrideMode": "Override",
+        "effectiveMode": "Effective mode",
+        "updatedAt": "Updated",
+        "newConfirmTitle": "Enable the new system for this learner?",
+        "newConfirmDescription": "For {{name}}, legacy reminders will be suppressed and delivery will move to the new notification system.",
+        "enableNewForLearner": "Enable new",
+        "noLearners": "No learners found",
+        "noLearnersDescription": "Add learners to manage the new system rollout."
       }
     },
     "groups": {

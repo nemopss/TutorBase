@@ -17,6 +17,12 @@ const translations: Record<string, string> = {
   'pages.notifications.categories.custom': 'Custom',
   'pages.notifications.createRuleWizard': 'Create rule',
   'pages.notifications.ruleWizard.title': 'Create notification rule',
+  'pages.notifications.rollout.title': 'Learner pilot',
+  'pages.notifications.rollout.noticeTitle': 'Safe rollout',
+  'pages.notifications.rollout.noticeDescription': 'Roll out safely',
+  'pages.notifications.rollout.effectiveMode': 'Effective mode',
+  'pages.notifications.modes.inherit': 'Inherit',
+  'pages.notifications.modes.shadow': 'Shadow',
   'navigation.newBadge': 'NEW',
 };
 
@@ -59,6 +65,33 @@ jest.mock('../../services/api', () => ({
             version: 1,
             system: false,
             archived_at: null,
+          },
+        ],
+      });
+    }
+
+    if (url === '/notifications/settings') {
+      return Promise.resolve({
+        data: {
+          tenant_id: 1,
+          mode: 'shadow',
+          notifications_enabled: true,
+          daily_cap: 3,
+          cap_mode: 'warn_only',
+          category_preferences: {},
+        },
+      });
+    }
+
+    if (url === '/notifications/learner-modes') {
+      return Promise.resolve({
+        data: [
+          {
+            learner_id: 10,
+            display_name: 'Vika',
+            mode_override: 'inherit',
+            effective_mode: 'shadow',
+            updated_at: null,
           },
         ],
       });
@@ -124,5 +157,14 @@ describe('Notifications', () => {
     fireEvent.click(await screen.findByText('Create rule'));
 
     expect(await screen.findByText('Create notification rule')).toBeInTheDocument();
+  });
+
+  it('loads learner rollout settings', async () => {
+    renderComponent();
+
+    fireEvent.click(await screen.findByText('Settings'));
+
+    expect(await screen.findByText('Learner pilot')).toBeInTheDocument();
+    expect(await screen.findByText('Vika')).toBeInTheDocument();
   });
 });

@@ -1698,17 +1698,26 @@ class SqlAlchemyNotificationSettingsRepository:
     async def list_learner_modes(self) -> tuple[LearnerNotificationModeRecord, ...]:
         tenant_mode = await self._tenant_mode()
         result = await self._session.execute(
-            select(LearnerNotificationMode, Learner.display_name)
-            .join(Learner, Learner.id == LearnerNotificationMode.learner_id)
+            select(Learner, LearnerNotificationMode)
+            .outerjoin(
+                LearnerNotificationMode,
+                (LearnerNotificationMode.learner_id == Learner.id)
+                & (LearnerNotificationMode.tenant_id == self._tenant_id),
+            )
             .where(
-                LearnerNotificationMode.tenant_id == self._tenant_id,
                 Learner.tenant_id == self._tenant_id,
             )
-            .order_by(Learner.display_name, LearnerNotificationMode.learner_id)
+            .order_by(Learner.display_name, Learner.id)
         )
         return tuple(
-            _learner_mode_record_from_row(row, tenant_mode=tenant_mode)
-            for row in result
+            _learner_mode_record(
+                learner_id=learner.id,
+                display_name=learner.display_name,
+                mode_override=NotificationSystemMode(mode.mode_override) if mode is not None else NotificationSystemMode.INHERIT,
+                tenant_mode=tenant_mode,
+                updated_at=mode.updated_at if mode is not None else None,
+            )
+            for learner, mode in result
         )
 
     async def get_learner_mode(self, learner_id: int) -> LearnerNotificationModeRecord | None:

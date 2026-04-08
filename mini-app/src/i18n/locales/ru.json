@@ -392,6 +392,7 @@
       "templateArchived": "Шаблон архивирован",
       "ruleCreated": "Правило создано как черновик",
       "ruleUpdated": "Правило обновлено",
+      "learnerModeSaved": "Режим ученика сохранён",
       "instanceCancelled": "Отправка отменена",
       "instanceScheduledNow": "Отправка поставлена в ближайшую очередь",
       "settingsSaved": "Настройки сохранены",
@@ -413,6 +414,7 @@
       "timezone": "Часовой пояс",
       "notificationsEnabled": "Уведомления включены",
       "modes": {
+        "inherit": "Наследовать",
         "legacy": "Старая система",
         "shadow": "Тестовый режим",
         "new": "Новая система"
@@ -525,6 +527,19 @@
           "absoluteDatetimeRequired": "Укажите дату и время.",
           "audienceRequired": "Выберите хотя бы одного получателя."
         }
+      },
+      "rollout": {
+        "title": "Пилот по ученикам",
+        "noticeTitle": "Безопасное включение",
+        "noticeDescription": "Для прода сначала оставьте общий режим legacy или shadow, а новую систему включайте точечно одному ученику. Режим new отключает legacy-напоминания для выбранного ученика.",
+        "overrideMode": "Override",
+        "effectiveMode": "Итоговый режим",
+        "updatedAt": "Обновлено",
+        "newConfirmTitle": "Включить новую систему ученику?",
+        "newConfirmDescription": "Для {{name}} legacy-напоминания будут подавлены, а отправка перейдёт на новую notification-систему.",
+        "enableNewForLearner": "Включить new",
+        "noLearners": "Ученики не найдены",
+        "noLearnersDescription": "Добавьте учеников, чтобы управлять rollout новой системы."
       }
     },
     "groups": {
