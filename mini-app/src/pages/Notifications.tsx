@@ -1361,7 +1361,7 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
   onSave,
 }) => {
   const { t } = useTranslation();
-  const presetKey = Form.useWatch('preset_key', form) ?? 'lesson_confirmation';
+  const [selectedPresetKey, setSelectedPresetKey] = useState<NonNullable<RuleWizardValues['preset_key']>>('lesson_confirmation');
   const category = Form.useWatch('category', form) ?? 'lesson_confirmation';
   const messageMode = Form.useWatch('message_mode', form) ?? 'template';
   const triggerType = Form.useWatch('trigger_type', form) ?? 'day_offset_at_time';
@@ -1388,6 +1388,14 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
     form.setFieldValue('inline_template_body', `${current}${current.endsWith(' ') || current.length === 0 ? '' : ' '}{${variable}}`);
   };
 
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    const currentPreset = form.getFieldValue('preset_key') as NonNullable<RuleWizardValues['preset_key']> | undefined;
+    setSelectedPresetKey(currentPreset ?? 'lesson_confirmation');
+  }, [form, open]);
+
   const applyPreset = (nextPresetKey: NonNullable<RuleWizardValues['preset_key']>) => {
     const preset = RULE_WIZARD_PRESETS[nextPresetKey];
     const nextCategory = preset.category ?? 'custom';
@@ -1396,6 +1404,7 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
       ? getDefaultTemplateIdForCategory(nextCategory, templates)
       : undefined;
 
+    setSelectedPresetKey(nextPresetKey);
     form.setFieldsValue({
       preset_key: nextPresetKey,
       name: t(`pages.notifications.ruleWizard.presets.${nextPresetKey}.name`),
@@ -1489,6 +1498,7 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
         form={form}
         layout="vertical"
         initialValues={{
+          preset_key: 'lesson_confirmation',
           category: 'lesson_confirmation',
           event_type: 'lesson',
           trigger_type: 'day_offset_at_time',
@@ -1502,6 +1512,9 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
       >
         {step === 0 && (
           <Space direction="vertical" style={{ width: '100%' }} size="middle">
+            <Form.Item name="preset_key" hidden>
+              <Input />
+            </Form.Item>
             <Card size="small" title={t('pages.notifications.ruleWizard.presetTitle')}>
               <Typography.Paragraph type="secondary" style={{ marginBottom: 16 }}>
                 {t('pages.notifications.ruleWizard.presetDescription')}
@@ -1510,10 +1523,12 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
                 {(Object.keys(RULE_WIZARD_PRESETS) as Array<NonNullable<RuleWizardValues['preset_key']>>).map((key) => (
                   <Col xs={24} md={12} key={key}>
                     <Card
+                      data-testid={`rule-wizard-preset-${key}`}
+                      data-active={selectedPresetKey === key ? 'true' : 'false'}
                       hoverable
                       size="small"
                       onClick={() => applyPreset(key)}
-                      style={presetKey === key ? { borderColor: '#1677ff', background: '#f0f7ff' } : undefined}
+                      style={selectedPresetKey === key ? { borderColor: '#1677ff', background: '#f0f7ff' } : undefined}
                     >
                       <Space direction="vertical" size={4}>
                         <Typography.Text strong>

@@ -17,6 +17,18 @@ const translations: Record<string, string> = {
   'pages.notifications.categories.custom': 'Custom',
   'pages.notifications.createRuleWizard': 'Create rule',
   'pages.notifications.ruleWizard.title': 'Create notification rule',
+  'pages.notifications.ruleWizard.presets.lesson_confirmation.title': 'Lesson confirmation preset',
+  'pages.notifications.ruleWizard.presets.lesson_confirmation.description': 'Lesson confirmation description',
+  'pages.notifications.ruleWizard.presets.lesson_confirmation.name': 'Lesson confirmation rule',
+  'pages.notifications.ruleWizard.presets.homework.title': 'Homework preset',
+  'pages.notifications.ruleWizard.presets.homework.description': 'Homework description',
+  'pages.notifications.ruleWizard.presets.homework.name': 'Homework rule',
+  'pages.notifications.ruleWizard.presets.package_renewal.title': 'Package renewal preset',
+  'pages.notifications.ruleWizard.presets.package_renewal.description': 'Package renewal description',
+  'pages.notifications.ruleWizard.presets.package_renewal.name': 'Package renewal rule',
+  'pages.notifications.ruleWizard.presets.custom_message.title': 'Custom preset',
+  'pages.notifications.ruleWizard.presets.custom_message.description': 'Custom description',
+  'pages.notifications.ruleWizard.presets.custom_message.name': 'Custom rule',
   'pages.notifications.rollout.title': 'Learner pilot',
   'pages.notifications.rollout.noticeTitle': 'Safe rollout',
   'pages.notifications.rollout.noticeDescription': 'Roll out safely',
@@ -312,6 +324,23 @@ describe('Notifications', () => {
     fireEvent.click(await screen.findByText('Create rule'));
 
     expect(await screen.findByText('Create notification rule')).toBeInTheDocument();
+  });
+
+  it('switches active rule preset card', async () => {
+    renderComponent();
+
+    fireEvent.click(await screen.findByText('Create rule'));
+
+    const lessonPreset = await screen.findByTestId('rule-wizard-preset-lesson_confirmation');
+    const homeworkPreset = await screen.findByTestId('rule-wizard-preset-homework');
+
+    expect(lessonPreset).toHaveAttribute('data-active', 'true');
+    expect(homeworkPreset).toHaveAttribute('data-active', 'false');
+
+    fireEvent.click(homeworkPreset);
+
+    expect(homeworkPreset).toHaveAttribute('data-active', 'true');
+    expect(lessonPreset).toHaveAttribute('data-active', 'false');
   });
 
   it('loads learner rollout settings', async () => {
