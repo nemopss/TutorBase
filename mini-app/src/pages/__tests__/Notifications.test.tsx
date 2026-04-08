@@ -54,10 +54,21 @@ const translations: Record<string, string> = {
   'pages.notifications.pilotControls.deliveryBlockedHint': 'There are no due notifications with delivery enabled right now.',
   'pages.notifications.pilotControls.deliverNowConfirmTitle': 'Run real delivery for due notifications?',
   'pages.notifications.pilotControls.deliverNowConfirmDescription': 'This action can send real messages',
+  'pages.notifications.technicalList': 'Technical list',
+  'pages.notifications.queueSections.past_due': 'Needs attention now',
+  'pages.notifications.queueSections.today': 'Today',
+  'pages.notifications.queueSections.tomorrow': 'Tomorrow',
+  'pages.notifications.queueSections.later': 'Later',
+  'pages.notifications.queueTimeline.deliveryLine': '{{event}} · event at {{eventTime}}',
+  'pages.notifications.activitySections.attention': 'Needs attention',
+  'pages.notifications.activitySections.recent': 'Recent activity',
   'pages.notifications.modes.inherit': 'Inherit',
   'pages.notifications.modes.shadow': 'Shadow',
   'pages.notifications.modes.legacy': 'Legacy',
   'pages.notifications.modes.new': 'New',
+  'pages.notifications.modeDescriptions.shadow': 'Shadow mode description',
+  'pages.notifications.modeDescriptions.legacy': 'Legacy mode description',
+  'pages.notifications.modeDescriptions.new': 'New mode description',
   'pages.notifications.viewDetails': 'View details',
   'pages.notifications.sendNow': 'Send now',
   'pages.notifications.sendNowConfirmTitle': 'Send this notification outside the normal queue?',
@@ -322,7 +333,7 @@ describe('Notifications', () => {
     fireEvent.click(await screen.findByText('View details'));
 
     expect(await screen.findByText('Summary')).toBeInTheDocument();
-    expect(await screen.findByText('Another active lesson exists in the same slot')).toBeInTheDocument();
+    expect((await screen.findAllByText('Another active lesson exists in the same slot')).length).toBeGreaterThan(0);
   });
 
   it('opens send now confirmation', async () => {

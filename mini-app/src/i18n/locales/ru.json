@@ -403,6 +403,7 @@
       "sendNow": "Отправить сейчас",
       "sendNowConfirmTitle": "Отправить уведомление вне очереди?",
       "sendNowConfirmDescription": "Для ученика {{learner}} уведомление категории «{{category}}» будет поставлено в ближайшую очередь отправки.",
+      "technicalList": "Технический список",
       "materializeShadow": "Обновить план уведомлений",
       "materializeQueued": "План уведомлений обновлён",
       "materializeHelpTitle": "Пересчитать будущие уведомления",
@@ -425,6 +426,19 @@
       "noInstancesDescription": "Активируйте правило и обновите план уведомлений, чтобы увидеть будущие отправки.",
       "noActivity": "Событий пока нет",
       "noActivityDescription": "Доставка и ответы учеников появятся здесь.",
+      "queueSections": {
+        "past_due": "Нужно проверить сейчас",
+        "today": "Сегодня",
+        "tomorrow": "Завтра",
+        "later": "Позже"
+      },
+      "queueTimeline": {
+        "deliveryLine": "{{event}} · событие {{eventTime}}"
+      },
+      "activitySections": {
+        "attention": "Требует внимания",
+        "recent": "Недавние события"
+      },
       "systemMode": "Режим системы",
       "globalNewConfirmTitle": "Включить новую систему глобально?",
       "globalNewConfirmDescription": "Это переключит весь tenant на новую систему уведомлений. Делайте это только после shadow-проверки и пилота на отдельных учениках.",

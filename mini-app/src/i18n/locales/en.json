@@ -402,6 +402,7 @@
       "sendNow": "Send now",
       "sendNowConfirmTitle": "Send this notification outside the normal queue?",
       "sendNowConfirmDescription": "For {{learner}}, the “{{category}}” notification will be scheduled for the next delivery tick.",
+      "technicalList": "Technical list",
       "materializeShadow": "Refresh notification plan",
       "materializeQueued": "Notification plan refreshed",
       "materializeHelpTitle": "Recalculate future notifications",
@@ -424,6 +425,19 @@
       "noInstancesDescription": "Activate a rule and refresh the notification plan to see future deliveries.",
       "noActivity": "No activity yet",
       "noActivityDescription": "Deliveries and learner responses will appear here.",
+      "queueSections": {
+        "past_due": "Needs attention now",
+        "today": "Today",
+        "tomorrow": "Tomorrow",
+        "later": "Later"
+      },
+      "queueTimeline": {
+        "deliveryLine": "{{event}} · event at {{eventTime}}"
+      },
+      "activitySections": {
+        "attention": "Needs attention",
+        "recent": "Recent activity"
+      },
       "systemMode": "System mode",
       "globalNewConfirmTitle": "Enable the new system globally?",
       "globalNewConfirmDescription": "This will switch the whole tenant to the new notification system. Do this only after shadow verification and a learner-by-learner pilot.",

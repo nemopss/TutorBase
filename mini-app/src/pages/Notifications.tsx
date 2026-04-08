@@ -676,6 +676,33 @@ const getPilotChecklistStatus = (
   },
 ];
 
+const getQueueSectionKey = (scheduledFor: string): 'past_due' | 'today' | 'tomorrow' | 'later' => {
+  const scheduled = dayjs(scheduledFor);
+  const now = dayjs();
+
+  if (scheduled.isBefore(now) && !scheduled.isSame(now, 'day')) {
+    return 'past_due';
+  }
+  if (scheduled.isSame(now, 'day')) {
+    if (scheduled.isBefore(now)) {
+      return 'past_due';
+    }
+    return 'today';
+  }
+  if (scheduled.isSame(now.add(1, 'day'), 'day')) {
+    return 'tomorrow';
+  }
+  return 'later';
+};
+
+const getQueueSectionOrder: Array<'past_due' | 'today' | 'tomorrow' | 'later'> = ['past_due', 'today', 'tomorrow', 'later'];
+
+const getActivitySectionKey = (item: NotificationActivity): 'attention' | 'recent' => (
+  item.activity_type === 'teacher_alert' || item.status === 'requires_attention'
+    ? 'attention'
+    : 'recent'
+);
+
 const buildTriggerConfig = (values: RuleWizardValues): Record<string, unknown> => {
   switch (values.trigger_type) {
     case 'day_offset_at_time':
@@ -1873,6 +1900,20 @@ const QueueTab: React.FC<QueueTabProps> = ({
 }) => {
   const { t } = useTranslation();
   const [pendingSendNowInstance, setPendingSendNowInstance] = useState<NotificationInstance | null>(null);
+  const groupedInstances = useMemo(() => {
+    const groups: Record<string, NotificationInstance[]> = {
+      past_due: [],
+      today: [],
+      tomorrow: [],
+      later: [],
+    };
+
+    instances.forEach((instance) => {
+      groups[getQueueSectionKey(instance.effective_scheduled_for)].push(instance);
+    });
+
+    return groups;
+  }, [instances]);
 
   const handleSendNowClick = (instance: NotificationInstance) => {
     setPendingSendNowInstance(instance);
@@ -1946,34 +1987,129 @@ const QueueTab: React.FC<QueueTabProps> = ({
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <NoticeError error={error} />
-      <ResponsiveDataView<NotificationInstance>
-        data={instances}
-        loading={loading}
-        columns={columns}
-        rowKey="id"
-        emptyText={t('pages.notifications.noInstances')}
-        emptyDescription={t('pages.notifications.noInstancesDescription')}
-        renderCard={(instance) => (
-          <Card key={instance.id} title={instance.learner_display_name || `#${instance.id}`} size="small" style={{ marginBottom: 12 }}>
-            <Space direction="vertical">
-              <span>{dayjs(instance.effective_scheduled_for).format('YYYY-MM-DD HH:mm')}</span>
-              <Tag color={getInstanceStatusColor(instance.status)}>{t(`pages.notifications.instanceStatus.${instance.status}`)}</Tag>
-              <Space wrap>
-                <Button size="small" onClick={() => onOpenDetails(instance.id)}>
-                  {t('pages.notifications.viewDetails')}
-                </Button>
-                <Button size="small" disabled={['sent', 'processing', 'shadow'].includes(instance.status)} onClick={() => handleSendNowClick(instance)}>
-                  {t('pages.notifications.sendNow')}
-                </Button>
-                <Button size="small" danger disabled={['sent', 'processing'].includes(instance.status)} onClick={() => onCancel(instance.id)}>
-                  {t('common.cancel')}
-                </Button>
-              </Space>
+      {loading ? (
+        <Card loading />
+      ) : instances.length === 0 ? (
+        <Empty
+          description={(
+            <Space direction="vertical" size={4}>
+              <Typography.Text>{t('pages.notifications.noInstances')}</Typography.Text>
+              <Typography.Text type="secondary">{t('pages.notifications.noInstancesDescription')}</Typography.Text>
             </Space>
-          </Card>
-        )}
-        pagination={false}
-      />
+          )}
+        />
+      ) : (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          {getQueueSectionOrder.map((sectionKey) => {
+            const sectionItems = groupedInstances[sectionKey];
+            if (sectionItems.length === 0) {
+              return null;
+            }
+
+            return (
+              <Card
+                key={sectionKey}
+                title={t(`pages.notifications.queueSections.${sectionKey}`)}
+                extra={<Tag>{sectionItems.length}</Tag>}
+              >
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  {sectionItems.map((instance) => {
+                    const warnings = extractInstanceWarnings(instance);
+                    const eventTime = (instance.explanation?.event_starts_at as string | undefined) ?? null;
+                    return (
+                      <Card key={instance.id} size="small" type="inner">
+                        <Space direction="vertical" style={{ width: '100%' }} size="small">
+                          <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
+                            <Space wrap>
+                              <Typography.Text strong>
+                                {instance.learner_display_name || `#${instance.recipient_id}`}
+                              </Typography.Text>
+                              <Tag>{t(`pages.notifications.categories.${instance.category}`)}</Tag>
+                              <Tag color={getInstanceStatusColor(instance.status)}>
+                                {t(`pages.notifications.instanceStatus.${instance.status}`)}
+                              </Tag>
+                            </Space>
+                            <Typography.Text>
+                              {dayjs(instance.effective_scheduled_for).format('YYYY-MM-DD HH:mm')}
+                            </Typography.Text>
+                          </Space>
+
+                          <Typography.Text type="secondary">
+                            {t('pages.notifications.queueTimeline.deliveryLine', {
+                              event: t(`pages.notifications.eventTypes.${instance.event_type}`),
+                              eventTime: formatDateTime(eventTime),
+                            })}
+                          </Typography.Text>
+
+                          {warnings.length > 0 && (
+                            <Space wrap>
+                              {warnings.map((warning) => (
+                                <Tag color="orange" key={`${instance.id}-${warning}`}>
+                                  {getWarningLabel(warning, t)}
+                                </Tag>
+                              ))}
+                            </Space>
+                          )}
+
+                          <Space wrap>
+                            <Button size="small" onClick={() => onOpenDetails(instance.id)}>
+                              {t('pages.notifications.viewDetails')}
+                            </Button>
+                            <Button
+                              size="small"
+                              disabled={['sent', 'processing', 'shadow'].includes(instance.status)}
+                              onClick={() => handleSendNowClick(instance)}
+                            >
+                              {t('pages.notifications.sendNow')}
+                            </Button>
+                            <Button
+                              size="small"
+                              danger
+                              disabled={['sent', 'processing'].includes(instance.status)}
+                              onClick={() => onCancel(instance.id)}
+                            >
+                              {t('common.cancel')}
+                            </Button>
+                          </Space>
+                        </Space>
+                      </Card>
+                    );
+                  })}
+                </Space>
+              </Card>
+            );
+          })}
+
+          <Collapse
+            size="small"
+            items={[
+              {
+                key: 'technical-queue',
+                label: t('pages.notifications.technicalList'),
+                children: (
+                  <ResponsiveDataView<NotificationInstance>
+                    data={instances}
+                    loading={false}
+                    columns={columns}
+                    rowKey="id"
+                    emptyText={t('pages.notifications.noInstances')}
+                    emptyDescription={t('pages.notifications.noInstancesDescription')}
+                    renderCard={(instance) => (
+                      <Card key={instance.id} title={instance.learner_display_name || `#${instance.id}`} size="small" style={{ marginBottom: 12 }}>
+                        <Space direction="vertical">
+                          <span>{dayjs(instance.effective_scheduled_for).format('YYYY-MM-DD HH:mm')}</span>
+                          <Tag color={getInstanceStatusColor(instance.status)}>{t(`pages.notifications.instanceStatus.${instance.status}`)}</Tag>
+                        </Space>
+                      </Card>
+                    )}
+                    pagination={false}
+                  />
+                ),
+              },
+            ]}
+          />
+        </Space>
+      )}
       <NotificationInstanceDrawer
         open={selectedInstanceId !== null}
         instance={selectedInstance}
@@ -2226,6 +2362,16 @@ interface ActivityTabProps {
 
 const ActivityTab: React.FC<ActivityTabProps> = ({ activity, loading, error }) => {
   const { t } = useTranslation();
+  const groupedActivity = useMemo(() => {
+    const groups: Record<'attention' | 'recent', NotificationActivity[]> = {
+      attention: [],
+      recent: [],
+    };
+    activity.forEach((item) => {
+      groups[getActivitySectionKey(item)].push(item);
+    });
+    return groups;
+  }, [activity]);
 
   const columns: TableProps<NotificationActivity>['columns'] = [
     {
@@ -2262,24 +2408,91 @@ const ActivityTab: React.FC<ActivityTabProps> = ({ activity, loading, error }) =
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <NoticeError error={error} />
-      <ResponsiveDataView<NotificationActivity>
-        data={activity}
-        loading={loading}
-        columns={columns}
-        rowKey={(record) => `${record.activity_type}-${record.activity_id}`}
-        emptyText={t('pages.notifications.noActivity')}
-        emptyDescription={t('pages.notifications.noActivityDescription')}
-        renderCard={(item) => (
-          <Card key={`${item.activity_type}-${item.activity_id}`} title={item.learner_display_name || item.activity_type} size="small" style={{ marginBottom: 12 }}>
-            <Space direction="vertical">
-              <span>{item.occurred_at ? dayjs(item.occurred_at).format('YYYY-MM-DD HH:mm') : '-'}</span>
-              <Tag color={getActivityStatusColor(item.status)}>{getActivityStatusLabel(item.status, t)}</Tag>
-              <span>{getActivityDetails(item, t)}</span>
+      {loading ? (
+        <Card loading />
+      ) : activity.length === 0 ? (
+        <Empty
+          description={(
+            <Space direction="vertical" size={4}>
+              <Typography.Text>{t('pages.notifications.noActivity')}</Typography.Text>
+              <Typography.Text type="secondary">{t('pages.notifications.noActivityDescription')}</Typography.Text>
             </Space>
-          </Card>
-        )}
-        pagination={false}
-      />
+          )}
+        />
+      ) : (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          {(['attention', 'recent'] as const).map((sectionKey) => {
+            const items = groupedActivity[sectionKey];
+            if (items.length === 0) {
+              return null;
+            }
+
+            return (
+              <Card
+                key={sectionKey}
+                title={t(`pages.notifications.activitySections.${sectionKey}`)}
+                extra={<Tag color={sectionKey === 'attention' ? 'red' : 'blue'}>{items.length}</Tag>}
+              >
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  {items.map((item) => (
+                    <Card key={`${item.activity_type}-${item.activity_id}`} size="small" type="inner">
+                      <Space direction="vertical" style={{ width: '100%' }} size="small">
+                        <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
+                          <Space wrap>
+                            <Typography.Text strong>
+                              {item.learner_display_name || t(`pages.notifications.eventTypes.${item.event_type}`)}
+                            </Typography.Text>
+                            <Tag>{getActivityTypeLabel(item.activity_type, t)}</Tag>
+                            <Tag color={getActivityStatusColor(item.status)}>
+                              {getActivityStatusLabel(item.status, t)}
+                            </Tag>
+                          </Space>
+                          <Typography.Text>
+                            {item.occurred_at ? dayjs(item.occurred_at).format('YYYY-MM-DD HH:mm') : '-'}
+                          </Typography.Text>
+                        </Space>
+                        <Typography.Text>
+                          {getActivityDetails(item, t)}
+                        </Typography.Text>
+                      </Space>
+                    </Card>
+                  ))}
+                </Space>
+              </Card>
+            );
+          })}
+
+          <Collapse
+            size="small"
+            items={[
+              {
+                key: 'technical-activity',
+                label: t('pages.notifications.technicalList'),
+                children: (
+                  <ResponsiveDataView<NotificationActivity>
+                    data={activity}
+                    loading={false}
+                    columns={columns}
+                    rowKey={(record) => `${record.activity_type}-${record.activity_id}`}
+                    emptyText={t('pages.notifications.noActivity')}
+                    emptyDescription={t('pages.notifications.noActivityDescription')}
+                    renderCard={(item) => (
+                      <Card key={`${item.activity_type}-${item.activity_id}`} title={item.learner_display_name || item.activity_type} size="small" style={{ marginBottom: 12 }}>
+                        <Space direction="vertical">
+                          <span>{item.occurred_at ? dayjs(item.occurred_at).format('YYYY-MM-DD HH:mm') : '-'}</span>
+                          <Tag color={getActivityStatusColor(item.status)}>{getActivityStatusLabel(item.status, t)}</Tag>
+                          <span>{getActivityDetails(item, t)}</span>
+                        </Space>
+                      </Card>
+                    )}
+                    pagination={false}
+                  />
+                ),
+              },
+            ]}
+          />
+        </Space>
+      )}
     </Space>
   );
 };
