@@ -28,6 +28,21 @@ const translations: Record<string, string> = {
   'pages.notifications.rolloutChecklist.steps.2': 'Refresh the notification plan and review the queue and warnings.',
   'pages.notifications.rolloutChecklist.steps.3': 'Enable the new system for one learner and verify real notifications.',
   'pages.notifications.rolloutChecklist.steps.4': 'Only after a successful pilot, enable the new system globally.',
+  'pages.notifications.rolloutStatus.title': 'Current pilot status',
+  'pages.notifications.rolloutStatus.nextActionTitle': 'Recommended next action',
+  'pages.notifications.rolloutStatus.globalMode': 'Global mode',
+  'pages.notifications.rolloutStatus.totalLearners': 'Learners in scope',
+  'pages.notifications.rolloutStatus.learnersInTestMode': 'Learners in test mode',
+  'pages.notifications.rolloutStatus.learnersInNew': 'Learners on the new system',
+  'pages.notifications.rolloutStatus.plannedNotifications': 'Notifications in plan',
+  'pages.notifications.rolloutStatus.readyForDelivery': 'Ready for real delivery now',
+  'pages.notifications.rolloutStatus.attentionAlerts': 'Events requiring attention',
+  'pages.notifications.rolloutStatus.nextActions.choosePilotLearner': 'Choose one learner for the new-system pilot before running real deliveries.',
+  'pages.notifications.rolloutStatus.nextActions.readyForControlledSend': 'You can now run a controlled manual delivery for the pilot and inspect the real message flow.',
+  'pages.notifications.rolloutStatus.nextActions.refreshPlan': 'Refresh the notification plan so you can inspect the future queue before any real sends.',
+  'pages.notifications.rolloutStatus.nextActions.enableTestMode': 'Enable the global test mode or move one learner to test mode first so you can build the notification plan safely.',
+  'pages.notifications.rolloutStatus.nextActions.waitForDueNotifications': 'The plan is ready, but there are no due notifications for real delivery right now. Wait for the due time or check the schedule.',
+  'pages.notifications.rolloutStatus.nextActions.reviewAlerts': 'Review attention-required events first so the pilot does not hide real problems.',
   'pages.notifications.pilotControls.title': 'Manual pilot controls',
   'pages.notifications.pilotControls.noticeTitle': 'Use this instead of automatic Beat during the pilot',
   'pages.notifications.pilotControls.noticeDescription': 'Process jobs first',
@@ -35,6 +50,8 @@ const translations: Record<string, string> = {
   'pages.notifications.pilotControls.processJobsQueued': 'Notification job processing queued',
   'pages.notifications.pilotControls.deliverNow': 'Run delivery tick',
   'pages.notifications.pilotControls.deliveryQueued': 'Delivery tick queued',
+  'pages.notifications.pilotControls.statusSummary': 'Currently in plan: {{planned}}. Ready for real delivery: {{ready}}.',
+  'pages.notifications.pilotControls.deliveryBlockedHint': 'There are no due notifications with delivery enabled right now.',
   'pages.notifications.pilotControls.deliverNowConfirmTitle': 'Run real delivery for due notifications?',
   'pages.notifications.pilotControls.deliverNowConfirmDescription': 'This action can send real messages',
   'pages.notifications.modes.inherit': 'Inherit',
@@ -293,6 +310,7 @@ describe('Notifications', () => {
 
     expect(await screen.findByText('Learner pilot')).toBeInTheDocument();
     expect(await screen.findByText('Vika')).toBeInTheDocument();
+    expect(await screen.findByText('Current pilot status')).toBeInTheDocument();
     expect(await screen.findByText('Safe rollout checklist')).toBeInTheDocument();
     expect(await screen.findByText('Manual pilot controls')).toBeInTheDocument();
   });

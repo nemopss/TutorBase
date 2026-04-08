@@ -439,6 +439,11 @@
         "shadow": "Shadow 모드",
         "new": "새 시스템"
       },
+      "modeDescriptions": {
+        "legacy": "학생들은 계속 기존 알림만 받습니다. 새 시스템은 전체 전환 없이 설정과 검증 용도로만 유지됩니다.",
+        "shadow": "새 시스템이 알림 계획을 만들고 큐를 보여주지만, 아직 모든 학생의 기본 발송 경로가 되면 안 됩니다.",
+        "new": "새 시스템이 모든 학생의 기본 발송 경로가 됩니다. 성공적인 파일럿과 실제 발송 검증 이후에만 이 모드를 켜세요."
+      },
       "capModes": {
         "warn_only": "경고만",
         "enforce": "차단"
@@ -610,6 +615,25 @@
           "4": "파일럿이 성공한 뒤에만 새 시스템을 전체에 적용하세요."
         }
       },
+      "rolloutStatus": {
+        "title": "현재 파일럿 상태",
+        "nextActionTitle": "다음 권장 작업",
+        "globalMode": "전체 모드",
+        "totalLearners": "대상 학생 수",
+        "learnersInTestMode": "테스트 모드 학생 수",
+        "learnersInNew": "새 시스템 학생 수",
+        "plannedNotifications": "계획된 알림 수",
+        "readyForDelivery": "지금 실제 전송 가능한 알림 수",
+        "attentionAlerts": "주의가 필요한 이벤트 수",
+        "nextActions": {
+          "reviewAlerts": "파일럿이 실제 문제를 가리지 않도록 먼저 주의가 필요한 이벤트를 확인하세요.",
+          "enableTestMode": "먼저 전체 테스트 모드를 켜거나 학생 한 명을 테스트 모드로 전환해 안전하게 알림 계획을 만드세요.",
+          "refreshPlan": "실제 전송 전에 미래 큐를 확인할 수 있도록 알림 계획을 새로고치세요.",
+          "choosePilotLearner": "실제 전송을 실행하기 전에 새 시스템 파일럿용 학생 한 명을 선택하세요.",
+          "waitForDueNotifications": "계획은 준비됐지만 지금 실제 전송 대상 due 알림이 없습니다. 시간이 될 때까지 기다리거나 일정을 확인하세요.",
+          "readyForControlledSend": "이제 파일럿용 수동 전송을 신중하게 실행하고 실제 메시지 흐름을 확인할 수 있습니다."
+        }
+      },
       "pilotControls": {
         "title": "수동 파일럿 제어",
         "noticeTitle": "파일럿 중에는 자동 Beat 대신 이것을 사용하세요",
@@ -618,6 +642,8 @@
         "processJobsQueued": "Notification job 처리 작업이 큐에 등록되었습니다: {{taskId}}",
         "deliverNow": "Delivery tick 실행",
         "deliveryQueued": "Delivery tick 작업이 큐에 등록되었습니다: {{taskId}}",
+        "statusSummary": "현재 계획 수: {{planned}}. 지금 실제 전송 가능: {{ready}}.",
+        "deliveryBlockedHint": "현재 delivery enabled 상태의 due 알림이 없습니다. 먼저 계획을 새로고치거나 파일럿 학생을 새 시스템으로 전환하거나 해당 시간이 될 때까지 기다리세요.",
         "deliverNowConfirmTitle": "기한 도래 알림의 실제 전송을 실행할까요?",
         "deliverNowConfirmDescription": "이 작업은 이미 새 notification pipeline을 사용하는 학생들에게 실제 메시지를 보낼 수 있습니다."
       },

@@ -440,6 +440,11 @@
         "shadow": "Shadow mode",
         "new": "New system"
       },
+      "modeDescriptions": {
+        "legacy": "Learners keep receiving only legacy reminders. The new system stays available for setup and verification without a mass switch.",
+        "shadow": "The new system builds the notification plan and shows the queue, but it should not become the primary delivery path for all learners yet.",
+        "new": "The new system becomes the primary path for all learners. Enable this only after a successful pilot and real delivery verification."
+      },
       "capModes": {
         "warn_only": "Warn only",
         "enforce": "Enforce"
@@ -611,6 +616,25 @@
           "4": "Only after a successful pilot, enable the new system globally."
         }
       },
+      "rolloutStatus": {
+        "title": "Current pilot status",
+        "nextActionTitle": "Recommended next action",
+        "globalMode": "Global mode",
+        "totalLearners": "Learners in scope",
+        "learnersInTestMode": "Learners in test mode",
+        "learnersInNew": "Learners on the new system",
+        "plannedNotifications": "Notifications in plan",
+        "readyForDelivery": "Ready for real delivery now",
+        "attentionAlerts": "Events requiring attention",
+        "nextActions": {
+          "reviewAlerts": "Review attention-required events first so the pilot does not hide real problems.",
+          "enableTestMode": "Enable the global test mode or move one learner to test mode first so you can build the notification plan safely.",
+          "refreshPlan": "Refresh the notification plan so you can inspect the future queue before any real sends.",
+          "choosePilotLearner": "Choose one learner for the new-system pilot before running real deliveries.",
+          "waitForDueNotifications": "The plan is ready, but there are no due notifications for real delivery right now. Wait for the due time or check the schedule.",
+          "readyForControlledSend": "You can now run a controlled manual delivery for the pilot and inspect the real message flow."
+        }
+      },
       "pilotControls": {
         "title": "Manual pilot controls",
         "noticeTitle": "Use this instead of automatic Beat during the pilot",
@@ -619,6 +643,8 @@
         "processJobsQueued": "Notification job processing queued: {{taskId}}",
         "deliverNow": "Run delivery tick",
         "deliveryQueued": "Delivery tick queued: {{taskId}}",
+        "statusSummary": "Currently in plan: {{planned}}. Ready for real delivery: {{ready}}.",
+        "deliveryBlockedHint": "There are no due notifications with delivery enabled right now. Refresh the plan, switch the pilot learner to the new system, or wait for the due time first.",
         "deliverNowConfirmTitle": "Run real delivery for due notifications?",
         "deliverNowConfirmDescription": "This action can send real messages to learners who already use the new notification pipeline."
       },

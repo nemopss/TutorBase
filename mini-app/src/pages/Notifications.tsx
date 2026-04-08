@@ -258,6 +258,16 @@ interface NotificationPreviewResponse {
   warnings: string[];
 }
 
+interface NotificationPilotSummary {
+  globalMode: string;
+  totalLearners: number;
+  learnerNewCount: number;
+  learnerShadowCount: number;
+  plannedCount: number;
+  dueDeliveryCount: number;
+  attentionAlertCount: number;
+}
+
 const CATEGORY_OPTIONS = [
   'lesson_confirmation',
   'lesson_reminder',
@@ -601,6 +611,71 @@ const formatAudienceSummary = (assignments: NotificationAssignment[], t: Transla
   return parts.length > 0 ? parts.join(' · ') : '—';
 };
 
+const buildNotificationPilotSummary = (
+  settings: NotificationSettings | undefined,
+  learnerModes: LearnerNotificationMode[],
+  instances: NotificationInstance[],
+  activity: NotificationActivity[],
+): NotificationPilotSummary => {
+  const now = dayjs();
+
+  return {
+    globalMode: settings?.mode ?? 'legacy',
+    totalLearners: learnerModes.length,
+    learnerNewCount: learnerModes.filter((learner) => learner.effective_mode === 'new').length,
+    learnerShadowCount: learnerModes.filter((learner) => learner.effective_mode === 'shadow').length,
+    plannedCount: instances.length,
+    dueDeliveryCount: instances.filter((instance) => (
+      instance.status === 'scheduled'
+      && instance.delivery_enabled
+      && !dayjs(instance.effective_scheduled_for).isAfter(now)
+    )).length,
+    attentionAlertCount: activity.filter((item) => item.activity_type === 'teacher_alert' || item.status === 'requires_attention').length,
+  };
+};
+
+const getPilotNextAction = (
+  summary: NotificationPilotSummary,
+): { type: 'success' | 'info' | 'warning' | 'error'; translationKey: string } => {
+  if (summary.attentionAlertCount > 0) {
+    return { type: 'warning', translationKey: 'pages.notifications.rolloutStatus.nextActions.reviewAlerts' };
+  }
+  if (summary.globalMode === 'legacy' && summary.learnerShadowCount === 0 && summary.learnerNewCount === 0) {
+    return { type: 'info', translationKey: 'pages.notifications.rolloutStatus.nextActions.enableTestMode' };
+  }
+  if (summary.plannedCount === 0) {
+    return { type: 'info', translationKey: 'pages.notifications.rolloutStatus.nextActions.refreshPlan' };
+  }
+  if (summary.learnerNewCount === 0 && summary.globalMode !== 'new') {
+    return { type: 'warning', translationKey: 'pages.notifications.rolloutStatus.nextActions.choosePilotLearner' };
+  }
+  if (summary.dueDeliveryCount === 0) {
+    return { type: 'info', translationKey: 'pages.notifications.rolloutStatus.nextActions.waitForDueNotifications' };
+  }
+  return { type: 'success', translationKey: 'pages.notifications.rolloutStatus.nextActions.readyForControlledSend' };
+};
+
+const getPilotChecklistStatus = (
+  summary: NotificationPilotSummary,
+): Array<{ titleKey: string; status: 'finish' | 'process' | 'wait' }> => [
+  {
+    titleKey: 'pages.notifications.rolloutChecklist.steps.1',
+    status: summary.globalMode === 'new' ? 'wait' : 'finish',
+  },
+  {
+    titleKey: 'pages.notifications.rolloutChecklist.steps.2',
+    status: summary.plannedCount > 0 ? 'finish' : 'process',
+  },
+  {
+    titleKey: 'pages.notifications.rolloutChecklist.steps.3',
+    status: summary.learnerNewCount > 0 || summary.globalMode === 'new' ? 'finish' : 'process',
+  },
+  {
+    titleKey: 'pages.notifications.rolloutChecklist.steps.4',
+    status: summary.globalMode === 'new' ? 'finish' : 'wait',
+  },
+];
+
 const buildTriggerConfig = (values: RuleWizardValues): Record<string, unknown> => {
   switch (values.trigger_type) {
     case 'day_offset_at_time':
@@ -752,7 +827,7 @@ const Notifications: React.FC = () => {
   const instancesQuery = useQuery<NotificationInstance[], Error>({
     queryKey: ['notificationInstances'],
     queryFn: fetchNotificationInstances,
-    enabled: activeTab === 'queue',
+    enabled: activeTab === 'queue' || activeTab === 'settings',
   });
 
   const instanceDetailQuery = useQuery<NotificationInstance, Error>({
@@ -764,7 +839,7 @@ const Notifications: React.FC = () => {
   const activityQuery = useQuery<NotificationActivity[], Error>({
     queryKey: ['notificationActivity'],
     queryFn: fetchNotificationActivity,
-    enabled: activeTab === 'activity',
+    enabled: activeTab === 'activity' || activeTab === 'settings',
   });
 
   const settingsQuery = useQuery<NotificationSettings, Error>({
@@ -931,6 +1006,16 @@ const Notifications: React.FC = () => {
     [t],
   );
 
+  const pilotSummary = useMemo(
+    () => buildNotificationPilotSummary(
+      settingsQuery.data,
+      learnerModesQuery.data ?? [],
+      instancesQuery.data ?? [],
+      activityQuery.data ?? [],
+    ),
+    [activityQuery.data, instancesQuery.data, learnerModesQuery.data, settingsQuery.data],
+  );
+
   const openRuleWizard = () => {
     setRulePreview(null);
     setRuleWizardStep(0);
@@ -1054,6 +1139,7 @@ const Notifications: React.FC = () => {
           learnerModesError={learnerModesQuery.error}
           learnerModeUpdating={learnerModeMutation.isPending}
           onLearnerModeChange={(learnerId, modeOverride) => learnerModeMutation.mutate({ learnerId, modeOverride })}
+          pilotSummary={pilotSummary}
           processingJobs={processJobsMutation.isPending}
           deliveringNow={deliverNowMutation.isPending}
           onProcessJobs={() => processJobsMutation.mutate()}
@@ -2209,6 +2295,7 @@ interface SettingsTabProps {
   learnerModesError: Error | null;
   learnerModeUpdating: boolean;
   onLearnerModeChange: (learnerId: number, modeOverride: string) => void;
+  pilotSummary: NotificationPilotSummary;
   processingJobs: boolean;
   deliveringNow: boolean;
   onProcessJobs: () => void;
@@ -2226,6 +2313,7 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   learnerModesError,
   learnerModeUpdating,
   onLearnerModeChange,
+  pilotSummary,
   processingJobs,
   deliveringNow,
   onProcessJobs,
@@ -2234,6 +2322,11 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   const { t } = useTranslation();
   const [pendingGlobalNewValues, setPendingGlobalNewValues] = useState<NotificationSettingsFormValues | null>(null);
   const [confirmDeliverNowOpen, setConfirmDeliverNowOpen] = useState(false);
+  const selectedMode = Form.useWatch('mode', form) ?? pilotSummary.globalMode;
+  const nextAction = getPilotNextAction(pilotSummary);
+  const checklistItems = getPilotChecklistStatus(pilotSummary);
+  const currentChecklistIndex = checklistItems.findIndex((item) => item.status === 'process');
+  const deliveryBlocked = pilotSummary.dueDeliveryCount === 0;
 
   const handleSubmit = (values: NotificationSettingsFormValues) => {
     if (values.mode === 'new') {
@@ -2246,6 +2339,40 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <NoticeError error={error} />
+      <Card title={t('pages.notifications.rolloutStatus.title')}>
+        <Alert
+          type={nextAction.type}
+          showIcon
+          message={t('pages.notifications.rolloutStatus.nextActionTitle')}
+          description={t(nextAction.translationKey)}
+          style={{ marginBottom: 16 }}
+        />
+        <Descriptions bordered size="small" column={{ xs: 1, md: 2 }}>
+          <Descriptions.Item label={t('pages.notifications.rolloutStatus.globalMode')}>
+            <Tag color={pilotSummary.globalMode === 'new' ? 'red' : pilotSummary.globalMode === 'shadow' ? 'blue' : 'default'}>
+              {t(`pages.notifications.modes.${pilotSummary.globalMode}`)}
+            </Tag>
+          </Descriptions.Item>
+          <Descriptions.Item label={t('pages.notifications.rolloutStatus.totalLearners')}>
+            {pilotSummary.totalLearners}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('pages.notifications.rolloutStatus.learnersInTestMode')}>
+            {pilotSummary.learnerShadowCount}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('pages.notifications.rolloutStatus.learnersInNew')}>
+            {pilotSummary.learnerNewCount}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('pages.notifications.rolloutStatus.plannedNotifications')}>
+            {pilotSummary.plannedCount}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('pages.notifications.rolloutStatus.readyForDelivery')}>
+            {pilotSummary.dueDeliveryCount}
+          </Descriptions.Item>
+          <Descriptions.Item label={t('pages.notifications.rolloutStatus.attentionAlerts')}>
+            {pilotSummary.attentionAlertCount}
+          </Descriptions.Item>
+        </Descriptions>
+      </Card>
       <Card title={t('pages.notifications.rolloutChecklist.title')}>
         <Alert
           type="info"
@@ -2254,13 +2381,15 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           description={t('pages.notifications.rolloutChecklist.noticeDescription')}
           style={{ marginBottom: 16 }}
         />
-        <Space direction="vertical" size="small">
-          {[1, 2, 3, 4].map((step) => (
-            <Typography.Text key={step}>
-              {step}. {t(`pages.notifications.rolloutChecklist.steps.${step}`)}
-            </Typography.Text>
-          ))}
-        </Space>
+        <Steps
+          direction="vertical"
+          size="small"
+          current={currentChecklistIndex === -1 ? checklistItems.length - 1 : currentChecklistIndex}
+          items={checklistItems.map((item) => ({
+            status: item.status,
+            title: t(item.titleKey),
+          }))}
+        />
       </Card>
       <Card title={t('pages.notifications.pilotControls.title')}>
         <Alert
@@ -2270,14 +2399,30 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           description={t('pages.notifications.pilotControls.noticeDescription')}
           style={{ marginBottom: 16 }}
         />
+        <Typography.Paragraph type="secondary">
+          {t('pages.notifications.pilotControls.statusSummary', {
+            planned: pilotSummary.plannedCount,
+            ready: pilotSummary.dueDeliveryCount,
+          })}
+        </Typography.Paragraph>
         <Space wrap>
           <Button onClick={onProcessJobs} loading={processingJobs}>
             {t('pages.notifications.pilotControls.processJobs')}
           </Button>
-          <Button danger onClick={() => setConfirmDeliverNowOpen(true)} loading={deliveringNow}>
+          <Button
+            danger
+            disabled={deliveryBlocked}
+            onClick={() => setConfirmDeliverNowOpen(true)}
+            loading={deliveringNow}
+          >
             {t('pages.notifications.pilotControls.deliverNow')}
           </Button>
         </Space>
+        {deliveryBlocked && (
+          <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
+            {t('pages.notifications.pilotControls.deliveryBlockedHint')}
+          </Typography.Paragraph>
+        )}
       </Card>
       <Card loading={loading}>
         <Form<NotificationSettingsFormValues> form={form} layout="vertical" onFinish={handleSubmit}>
@@ -2292,6 +2437,9 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                   ]}
                 />
               </Form.Item>
+              <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
+                {t(`pages.notifications.modeDescriptions.${selectedMode}`)}
+              </Typography.Paragraph>
             </Col>
             <Col xs={24} md={8}>
               <Form.Item name="daily_cap" label={t('pages.notifications.dailyCap')}>
