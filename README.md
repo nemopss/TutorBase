@@ -114,6 +114,7 @@ docker compose up -d --remove-orphans
 - `mini-app/src/pages/Admin.tsx` — админ-панель.
 - `monitoring/` — Prometheus/Grafana шаблоны.
 - `docs/` — архитектурные заметки и планы.
+  - Для первого production pilot новой notification-системы используйте [docs/notifications_prod_pilot_runbook.md](docs/notifications_prod_pilot_runbook.md).
 
 ## 📄 License
 
