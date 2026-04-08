@@ -310,6 +310,32 @@ async def test_materialize_rules_creates_combined_instance_with_components():
 
 
 @pytest.mark.asyncio
+async def test_materialize_rules_keeps_single_instance_warnings_and_event_context():
+    event = PreviewEvent(
+        event_type=EventType.LESSON,
+        event_id=617,
+        learner_id=10,
+        starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+        timezone="UTC",
+        package_status="active",
+        lesson_status="scheduled",
+        has_homework=True,
+        metadata={
+            "calendar_conflict_count": 2,
+            "calendar_conflict_lesson_ids": [581, 617],
+            "calendar_conflict_package_ids": [64, 74],
+        },
+    )
+
+    result = await MaterializeRulesUseCase(_uow(event=event)).execute((_draft(),))
+
+    instance = result.planned_instances[0]
+    assert instance.explanation["warnings"] == ["calendar_conflict:active_lessons_same_slot"]
+    assert instance.explanation["event_starts_at"] == "2026-04-08T20:00:00+00:00"
+    assert instance.explanation["calendar_conflict"]["count"] == 2
+
+
+@pytest.mark.asyncio
 async def test_materialize_active_rules_records_job_summary():
     rule = _draft()
     uow = _uow()

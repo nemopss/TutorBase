@@ -376,7 +376,22 @@
       "delivery": "Доставка",
       "occurredAt": "Время",
       "activityType": "Тип события",
+      "activityTypes": {
+        "deliveryAttempt": "Попытка доставки",
+        "response": "Ответ ученика",
+        "teacherAlert": "Нужно внимание"
+      },
+      "activityStatuses": {
+        "requiresAttention": "Требует внимания",
+        "confirmed": "Подтверждено",
+        "declined": "Отказ"
+      },
+      "activityDetails": {
+        "lessonDeclined": "Ученик отказался от урока",
+        "lessonDeclinedWithReason": "Ученик отказался от урока: {{reason}}"
+      },
       "details": "Детали",
+      "viewDetails": "Подробнее",
       "templateKey": "Ключ шаблона",
       "templateBody": "Текст шаблона",
       "templateBodyPlaceholder": "Привет, {student_name}! Напоминаю об уроке {lesson_datetime}.",
@@ -386,8 +401,12 @@
       "pause": "Пауза",
       "archive": "Архивировать",
       "sendNow": "Отправить сейчас",
-      "materializeShadow": "Собрать shadow-очередь",
-      "materializeQueued": "Shadow-очередь пересчитана",
+      "sendNowConfirmTitle": "Отправить уведомление вне очереди?",
+      "sendNowConfirmDescription": "Для ученика {{learner}} уведомление категории «{{category}}» будет поставлено в ближайшую очередь отправки.",
+      "materializeShadow": "Обновить план уведомлений",
+      "materializeQueued": "План уведомлений обновлён",
+      "materializeHelpTitle": "Пересчитать будущие уведомления",
+      "materializeHelpDescription": "Это действие только обновляет будущий план уведомлений и тестовую очередь. Ученикам сообщения не отправляются.",
       "templateCreated": "Шаблон создан",
       "templateArchived": "Шаблон архивирован",
       "ruleCreated": "Правило создано как черновик",
@@ -403,10 +422,13 @@
       "noTemplates": "Шаблонов пока нет",
       "noTemplatesDescription": "Создайте шаблон или используйте системные шаблоны после seed-миграции.",
       "noInstances": "В очереди пока нет уведомлений",
-      "noInstancesDescription": "Активируйте правило и соберите shadow-очередь, чтобы увидеть будущие отправки.",
+      "noInstancesDescription": "Активируйте правило и обновите план уведомлений, чтобы увидеть будущие отправки.",
       "noActivity": "Событий пока нет",
       "noActivityDescription": "Доставка и ответы учеников появятся здесь.",
       "systemMode": "Режим системы",
+      "globalNewConfirmTitle": "Включить новую систему глобально?",
+      "globalNewConfirmDescription": "Это переключит весь tenant на новую систему уведомлений. Делайте это только после shadow-проверки и пилота на отдельных учениках.",
+      "enableGlobalNew": "Включить новую систему всем",
       "dailyCap": "Лимит в день",
       "capMode": "Режим лимита",
       "quietHoursStart": "Тихие часы с",
@@ -430,7 +452,7 @@
         "archived": "Архив"
       },
       "instanceStatus": {
-        "shadow": "Shadow",
+        "shadow": "Тестовый",
         "scheduled": "Запланировано",
         "processing": "В обработке",
         "sent": "Отправлено",
@@ -439,6 +461,24 @@
         "skipped": "Пропущено",
         "failed": "Ошибка",
         "expired": "Истекло"
+      },
+      "warningLabels": {
+        "quietHoursShifted": "Сдвинуто из-за тихих часов",
+        "calendarConflict": "Есть другой активный урок в тот же слот",
+        "combined": "Объединено с другим уведомлением",
+        "homeworkInherited": "Домашка взята по наследованию"
+      },
+      "statusReasons": {
+        "missingContact": "У ученика нет Telegram chat_id",
+        "learnerNotificationsDisabled": "У ученика глобально отключены уведомления",
+        "preferencesNotificationsDisabled": "Уведомления отключены настройками",
+        "categoryDisabled": "Категория отключена настройками",
+        "packageNotActive": "Пакет не активен",
+        "lessonNotSchedulable": "Урок не в статусе scheduled/rescheduled",
+        "lessonHasNoHomework": "Для урока нет домашки",
+        "manualCancelled": "Отменено вручную",
+        "manualSendNow": "Поставлено на немедленную отправку",
+        "cancelledFromUi": "Отменено из интерфейса уведомлений"
       },
       "categories": {
         "lesson_confirmation": "Подтверждение урока",
@@ -540,6 +580,48 @@
         "enableNewForLearner": "Включить new",
         "noLearners": "Ученики не найдены",
         "noLearnersDescription": "Добавьте учеников, чтобы управлять rollout новой системы."
+      },
+      "rolloutChecklist": {
+        "title": "Чеклист безопасного rollout",
+        "noticeTitle": "Рекомендуемый порядок перед продом",
+        "noticeDescription": "Сначала проверяйте новую систему в тестовом режиме, потом включайте её точечно ученикам, и только после этого переводите всех.",
+        "steps": {
+          "1": "Оставьте общий режим в legacy или тестовом режиме.",
+          "2": "Обновите план уведомлений и проверьте очередь и предупреждения.",
+          "3": "Включите новую систему одному ученику и проверьте реальные уведомления.",
+          "4": "Только после успешного пилота включайте новую систему глобально."
+        }
+      },
+      "queueDetails": {
+        "title": "Детали уведомления",
+        "titleWithId": "Детали уведомления #{{id}}",
+        "summary": "Сводка",
+        "source": "Источник",
+        "statusReason": "Причина статуса",
+        "eventTime": "Время события",
+        "effectiveScheduledFor": "Фактическое время отправки",
+        "deliveryEnabled": "Доставка включена",
+        "deliveryDisabled": "Доставка отключена",
+        "priority": "Важность",
+        "channel": "Канал",
+        "rule": "Правило",
+        "event": "Событие",
+        "combination": "Комбинация",
+        "dedupeKey": "Ключ дедупликации",
+        "warnings": "Предупреждения",
+        "noWarnings": "Дополнительных предупреждений нет",
+        "calendarConflictTitle": "У ученика есть пересечение уроков",
+        "calendarConflictDescription": "На этот слот найдено уроков: {{count}}. Lesson IDs: {{lessonIds}}. Package IDs: {{packageIds}}.",
+        "components": "Компоненты объединённого уведомления",
+        "componentKey": "Ключ компонента",
+        "latestAttempt": "Последняя попытка доставки",
+        "providerMessageId": "Telegram message_id",
+        "providerChatId": "Telegram chat_id",
+        "error": "Ошибка",
+        "sentAt": "Отправлено",
+        "noAttempt": "Попыток ещё не было",
+        "debug": "Технические детали",
+        "notFound": "Уведомление не найдено"
       }
     },
     "groups": {

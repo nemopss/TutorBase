@@ -374,7 +374,22 @@
       "delivery": "전송",
       "occurredAt": "시간",
       "activityType": "활동 유형",
+      "activityTypes": {
+        "deliveryAttempt": "전송 시도",
+        "response": "학생 응답",
+        "teacherAlert": "주의 필요"
+      },
+      "activityStatuses": {
+        "requiresAttention": "주의 필요",
+        "confirmed": "확인됨",
+        "declined": "거절"
+      },
+      "activityDetails": {
+        "lessonDeclined": "학생이 수업을 거절했습니다",
+        "lessonDeclinedWithReason": "학생이 수업을 거절했습니다: {{reason}}"
+      },
       "details": "상세",
+      "viewDetails": "상세 보기",
       "templateKey": "템플릿 키",
       "templateBody": "템플릿 텍스트",
       "templateBodyPlaceholder": "안녕하세요, {student_name}! {lesson_datetime} 수업 알림입니다.",
@@ -384,8 +399,12 @@
       "pause": "일시 중지",
       "archive": "보관",
       "sendNow": "지금 보내기",
-      "materializeShadow": "Shadow 큐 생성",
-      "materializeQueued": "Shadow 큐가 다시 생성되었습니다",
+      "sendNowConfirmTitle": "이 알림을 일반 큐 밖에서 보낼까요?",
+      "sendNowConfirmDescription": "{{learner}}에게 “{{category}}” 알림이 다음 전송 틱에 예약됩니다.",
+      "materializeShadow": "알림 계획 새로고침",
+      "materializeQueued": "알림 계획이 갱신되었습니다",
+      "materializeHelpTitle": "향후 알림 다시 계산",
+      "materializeHelpDescription": "이 작업은 향후 알림 계획과 테스트 큐만 갱신합니다. 학생에게 실제 메시지를 보내지 않습니다.",
       "templateCreated": "템플릿이 생성되었습니다",
       "templateArchived": "템플릿이 보관되었습니다",
       "ruleCreated": "규칙이 초안으로 생성되었습니다",
@@ -401,10 +420,13 @@
       "noTemplates": "아직 템플릿이 없습니다",
       "noTemplatesDescription": "템플릿을 만들거나 seed migration 이후 시스템 템플릿을 사용하세요.",
       "noInstances": "큐에 알림이 없습니다",
-      "noInstancesDescription": "규칙을 활성화하고 shadow 큐를 생성하면 예정된 전송이 표시됩니다.",
+      "noInstancesDescription": "규칙을 활성화하고 알림 계획을 새로고치면 예정된 전송이 표시됩니다.",
       "noActivity": "아직 활동이 없습니다",
       "noActivityDescription": "전송과 학생 응답이 여기에 표시됩니다.",
       "systemMode": "시스템 모드",
+      "globalNewConfirmTitle": "새 시스템을 전체에 적용할까요?",
+      "globalNewConfirmDescription": "이 작업은 전체 tenant를 새 알림 시스템으로 전환합니다. shadow 검증과 학생별 파일럿 이후에만 실행하세요.",
+      "enableGlobalNew": "전체에 새 시스템 적용",
       "dailyCap": "일일 제한",
       "capMode": "제한 모드",
       "quietHoursStart": "방해 금지 시작",
@@ -428,7 +450,7 @@
         "archived": "보관됨"
       },
       "instanceStatus": {
-        "shadow": "Shadow",
+        "shadow": "테스트",
         "scheduled": "예약됨",
         "processing": "처리 중",
         "sent": "전송됨",
@@ -437,6 +459,24 @@
         "skipped": "건너뜀",
         "failed": "실패",
         "expired": "만료됨"
+      },
+      "warningLabels": {
+        "quietHoursShifted": "방해 금지 시간으로 인해 이동됨",
+        "calendarConflict": "같은 시간대에 다른 활성 수업이 있습니다",
+        "combined": "다른 알림과 결합됨",
+        "homeworkInherited": "기본 설정에서 숙제를 상속받음"
+      },
+      "statusReasons": {
+        "missingContact": "학생에게 Telegram chat_id가 없습니다",
+        "learnerNotificationsDisabled": "학생의 알림이 전역으로 비활성화되었습니다",
+        "preferencesNotificationsDisabled": "환경설정으로 알림이 비활성화되었습니다",
+        "categoryDisabled": "이 카테고리가 환경설정에서 꺼져 있습니다",
+        "packageNotActive": "패키지가 활성 상태가 아닙니다",
+        "lessonNotSchedulable": "수업 상태가 scheduled/rescheduled가 아닙니다",
+        "lessonHasNoHomework": "이 수업에는 숙제가 없습니다",
+        "manualCancelled": "수동으로 취소됨",
+        "manualSendNow": "즉시 전송으로 예약됨",
+        "cancelledFromUi": "알림 UI에서 취소됨"
       },
       "categories": {
         "lesson_confirmation": "수업 확인",
@@ -538,6 +578,48 @@
         "enableNewForLearner": "new 켜기",
         "noLearners": "학생이 없습니다",
         "noLearnersDescription": "새 시스템 롤아웃을 관리하려면 학생을 추가하세요."
+      },
+      "rolloutChecklist": {
+        "title": "안전한 롤아웃 체크리스트",
+        "noticeTitle": "프로덕션 전 권장 순서",
+        "noticeDescription": "먼저 테스트 모드에서 새 시스템을 확인하고, 그다음 개별 학생에게 적용한 뒤, 마지막에 전체 전환을 진행하세요.",
+        "steps": {
+          "1": "전체 모드는 legacy 또는 테스트 모드로 유지하세요.",
+          "2": "알림 계획을 새로고치고 큐와 경고를 확인하세요.",
+          "3": "학생 한 명에게 새 시스템을 켜고 실제 알림을 확인하세요.",
+          "4": "파일럿이 성공한 뒤에만 새 시스템을 전체에 적용하세요."
+        }
+      },
+      "queueDetails": {
+        "title": "알림 상세",
+        "titleWithId": "알림 #{{id}}",
+        "summary": "요약",
+        "source": "출처",
+        "statusReason": "상태 사유",
+        "eventTime": "이벤트 시간",
+        "effectiveScheduledFor": "실제 전송 시간",
+        "deliveryEnabled": "전송 사용",
+        "deliveryDisabled": "전송 비활성화",
+        "priority": "우선순위",
+        "channel": "채널",
+        "rule": "규칙",
+        "event": "이벤트",
+        "combination": "결합",
+        "dedupeKey": "중복 제거 키",
+        "warnings": "경고",
+        "noWarnings": "추가 경고 없음",
+        "calendarConflictTitle": "학생의 수업 시간이 겹칩니다",
+        "calendarConflictDescription": "이 시간대의 수업 수: {{count}}. Lesson IDs: {{lessonIds}}. Package IDs: {{packageIds}}.",
+        "components": "결합된 알림 구성 요소",
+        "componentKey": "구성 요소 키",
+        "latestAttempt": "최근 전송 시도",
+        "providerMessageId": "Telegram message_id",
+        "providerChatId": "Telegram chat_id",
+        "error": "오류",
+        "sentAt": "전송 시각",
+        "noAttempt": "아직 시도 없음",
+        "debug": "기술 세부 정보",
+        "notFound": "알림을 찾을 수 없습니다"
       }
     },
     "groups": {

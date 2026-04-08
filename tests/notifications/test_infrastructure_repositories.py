@@ -595,6 +595,32 @@ def test_instance_and_activity_mappers_preserve_ui_context():
             occurred_at=now + timedelta(seconds=10),
         )
     )
+    teacher_alert_activity = _response_activity_from_row(
+        FakeRow(
+            NotificationResponse(
+                id=302,
+                tenant_id=1,
+                notification_instance_id=16016,
+                event_type="lesson",
+                event_id=617,
+                recipient_type="learner",
+                recipient_id=10,
+                learner_id=10,
+                action_key="decline_lesson",
+                response_value="declined",
+                response_text="Не успеваю сегодня",
+                response_metadata={"source": "callback"},
+                created_at=now + timedelta(seconds=20),
+            ),
+            instance_id=16016,
+            category_key="lesson_confirmation",
+            event_type="lesson",
+            event_id=617,
+            learner_id=10,
+            learner_display_name="Вика",
+            occurred_at=now + timedelta(seconds=20),
+        )
+    )
 
     assert instance_record.instance_id == 16016
     assert instance_record.learner_display_name == "Вика"
@@ -605,6 +631,11 @@ def test_instance_and_activity_mappers_preserve_ui_context():
     assert delivery_activity.provider_message_id == "777"
     assert response_activity.activity_type == "response"
     assert response_activity.action_key == "confirm_lesson"
+    assert teacher_alert_activity.activity_type == "teacher_alert"
+    assert teacher_alert_activity.category == CategoryKey.TEACHER_ALERT
+    assert teacher_alert_activity.status == "requires_attention"
+    assert teacher_alert_activity.metadata["response_text"] == "Не успеваю сегодня"
+    assert teacher_alert_activity.metadata["alert_code"] == "lesson_declined"
 
 
 @pytest.mark.asyncio

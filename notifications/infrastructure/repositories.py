@@ -2547,20 +2547,33 @@ def _delivery_activity_from_row(row) -> NotificationActivityRecord:
 
 def _response_activity_from_row(row) -> NotificationActivityRecord:
     response = row[0]
+    is_teacher_alert = response.response_value == "declined"
+    metadata = dict(response.response_metadata or {})
+    if response.response_text:
+        metadata["response_text"] = response.response_text
+    if is_teacher_alert:
+        metadata = {
+            **metadata,
+            "alert_code": "lesson_declined" if row.event_type == EventType.LESSON.value else "response_declined",
+            "source_activity_type": "response",
+            "source_category": row.category_key,
+        }
     return NotificationActivityRecord(
-        activity_type="response",
+        activity_type="teacher_alert" if is_teacher_alert else "response",
         activity_id=response.id,
         notification_instance_id=row.instance_id,
-        category=CategoryKey(row.category_key) if row.category_key else None,
+        category=CategoryKey.TEACHER_ALERT if is_teacher_alert else (
+            CategoryKey(row.category_key) if row.category_key else None
+        ),
         event_type=EventType(row.event_type),
         event_id=row.event_id,
         learner_id=row.learner_id,
         learner_display_name=row.learner_display_name,
-        status=response.response_value,
+        status="requires_attention" if is_teacher_alert else response.response_value,
         action_key=response.action_key,
         response_value=response.response_value,
         occurred_at=row.occurred_at,
-        metadata=response.response_metadata or {},
+        metadata=metadata,
     )
 
 

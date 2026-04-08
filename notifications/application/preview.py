@@ -279,6 +279,9 @@ def _explanation(draft, event, recipient, reason: str) -> dict:
         "learner_name": recipient.display_name,
         "event_type": event.event_type.value,
         "event_id": event.event_id,
+        "event_starts_at": event.starts_at.isoformat() if event.starts_at is not None else None,
+        "event_ends_at": event.ends_at.isoformat() if event.ends_at is not None else None,
+        "event_timezone": event.timezone,
         "reason": reason,
     }
     calendar_conflict = _calendar_conflict_metadata(event)

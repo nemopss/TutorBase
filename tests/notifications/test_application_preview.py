@@ -115,6 +115,8 @@ async def test_preview_rule_schedules_lesson_notification():
     assert instance.scheduled_for == datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc)
     assert instance.effective_scheduled_for == datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc)
     assert instance.explanation["learner_name"] == "Вика"
+    assert instance.explanation["event_starts_at"] == "2026-04-08T20:00:00+03:00"
+    assert instance.explanation["event_timezone"] == "Europe/Moscow"
 
 
 @pytest.mark.asyncio

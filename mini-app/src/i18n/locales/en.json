@@ -375,7 +375,22 @@
       "delivery": "Delivery",
       "occurredAt": "Time",
       "activityType": "Activity type",
+      "activityTypes": {
+        "deliveryAttempt": "Delivery attempt",
+        "response": "Learner response",
+        "teacherAlert": "Needs attention"
+      },
+      "activityStatuses": {
+        "requiresAttention": "Requires attention",
+        "confirmed": "Confirmed",
+        "declined": "Declined"
+      },
+      "activityDetails": {
+        "lessonDeclined": "The learner declined the lesson",
+        "lessonDeclinedWithReason": "The learner declined the lesson: {{reason}}"
+      },
       "details": "Details",
+      "viewDetails": "View details",
       "templateKey": "Template key",
       "templateBody": "Template text",
       "templateBodyPlaceholder": "Hi, {student_name}! Reminder for your lesson at {lesson_datetime}.",
@@ -385,8 +400,12 @@
       "pause": "Pause",
       "archive": "Archive",
       "sendNow": "Send now",
-      "materializeShadow": "Build shadow queue",
-      "materializeQueued": "Shadow queue rebuilt",
+      "sendNowConfirmTitle": "Send this notification outside the normal queue?",
+      "sendNowConfirmDescription": "For {{learner}}, the “{{category}}” notification will be scheduled for the next delivery tick.",
+      "materializeShadow": "Refresh notification plan",
+      "materializeQueued": "Notification plan refreshed",
+      "materializeHelpTitle": "Recalculate future notifications",
+      "materializeHelpDescription": "This only refreshes the future notification plan and shadow queue. It does not send messages to learners.",
       "templateCreated": "Template created",
       "templateArchived": "Template archived",
       "ruleCreated": "Rule created as draft",
@@ -402,10 +421,13 @@
       "noTemplates": "No templates yet",
       "noTemplatesDescription": "Create a template or use system templates after seed migration.",
       "noInstances": "No notifications in the queue",
-      "noInstancesDescription": "Activate a rule and build the shadow queue to see future deliveries.",
+      "noInstancesDescription": "Activate a rule and refresh the notification plan to see future deliveries.",
       "noActivity": "No activity yet",
       "noActivityDescription": "Deliveries and learner responses will appear here.",
       "systemMode": "System mode",
+      "globalNewConfirmTitle": "Enable the new system globally?",
+      "globalNewConfirmDescription": "This will switch the whole tenant to the new notification system. Do this only after shadow verification and a learner-by-learner pilot.",
+      "enableGlobalNew": "Enable for all learners",
       "dailyCap": "Daily cap",
       "capMode": "Cap mode",
       "quietHoursStart": "Quiet hours start",
@@ -429,7 +451,7 @@
         "archived": "Archived"
       },
       "instanceStatus": {
-        "shadow": "Shadow",
+        "shadow": "Test",
         "scheduled": "Scheduled",
         "processing": "Processing",
         "sent": "Sent",
@@ -438,6 +460,24 @@
         "skipped": "Skipped",
         "failed": "Failed",
         "expired": "Expired"
+      },
+      "warningLabels": {
+        "quietHoursShifted": "Shifted due to quiet hours",
+        "calendarConflict": "Another active lesson exists in the same slot",
+        "combined": "Combined with another notification",
+        "homeworkInherited": "Homework inherited from defaults"
+      },
+      "statusReasons": {
+        "missingContact": "The learner has no Telegram chat_id",
+        "learnerNotificationsDisabled": "Notifications are globally disabled for the learner",
+        "preferencesNotificationsDisabled": "Notifications are disabled by preferences",
+        "categoryDisabled": "This category is disabled by preferences",
+        "packageNotActive": "Package is not active",
+        "lessonNotSchedulable": "Lesson is not in scheduled/rescheduled status",
+        "lessonHasNoHomework": "This lesson has no homework",
+        "manualCancelled": "Cancelled manually",
+        "manualSendNow": "Scheduled for immediate delivery",
+        "cancelledFromUi": "Cancelled from the notifications UI"
       },
       "categories": {
         "lesson_confirmation": "Lesson confirmation",
@@ -539,6 +579,48 @@
         "enableNewForLearner": "Enable new",
         "noLearners": "No learners found",
         "noLearnersDescription": "Add learners to manage the new system rollout."
+      },
+      "rolloutChecklist": {
+        "title": "Safe rollout checklist",
+        "noticeTitle": "Recommended order before production",
+        "noticeDescription": "First verify the new system in test mode, then enable it for individual learners, and only after that switch everyone.",
+        "steps": {
+          "1": "Keep the global mode as legacy or test mode.",
+          "2": "Refresh the notification plan and review the queue and warnings.",
+          "3": "Enable the new system for one learner and verify real notifications.",
+          "4": "Only after a successful pilot, enable the new system globally."
+        }
+      },
+      "queueDetails": {
+        "title": "Notification details",
+        "titleWithId": "Notification #{{id}}",
+        "summary": "Summary",
+        "source": "Source",
+        "statusReason": "Status reason",
+        "eventTime": "Event time",
+        "effectiveScheduledFor": "Effective delivery time",
+        "deliveryEnabled": "Delivery enabled",
+        "deliveryDisabled": "Delivery disabled",
+        "priority": "Priority",
+        "channel": "Channel",
+        "rule": "Rule",
+        "event": "Event",
+        "combination": "Combination",
+        "dedupeKey": "Dedupe key",
+        "warnings": "Warnings",
+        "noWarnings": "No additional warnings",
+        "calendarConflictTitle": "The learner has lesson conflicts",
+        "calendarConflictDescription": "Lessons found in this slot: {{count}}. Lesson IDs: {{lessonIds}}. Package IDs: {{packageIds}}.",
+        "components": "Combined notification components",
+        "componentKey": "Component key",
+        "latestAttempt": "Latest delivery attempt",
+        "providerMessageId": "Telegram message_id",
+        "providerChatId": "Telegram chat_id",
+        "error": "Error",
+        "sentAt": "Sent at",
+        "noAttempt": "No attempts yet",
+        "debug": "Technical details",
+        "notFound": "Notification not found"
       }
     },
     "groups": {

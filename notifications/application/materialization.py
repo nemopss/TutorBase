@@ -238,7 +238,10 @@ def _planned_instance(
         channel="telegram",
         dedupe_key=_single_dedupe_key(instance, template_key),
         status_reason=None if instance.reason == "scheduled" else instance.reason,
-        explanation=instance.explanation,
+        explanation={
+            **instance.explanation,
+            "warnings": list(instance.warnings),
+        },
     )
 
 

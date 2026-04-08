@@ -21,8 +21,48 @@ const translations: Record<string, string> = {
   'pages.notifications.rollout.noticeTitle': 'Safe rollout',
   'pages.notifications.rollout.noticeDescription': 'Roll out safely',
   'pages.notifications.rollout.effectiveMode': 'Effective mode',
+  'pages.notifications.rolloutChecklist.title': 'Safe rollout checklist',
+  'pages.notifications.rolloutChecklist.noticeTitle': 'Recommended order before production',
+  'pages.notifications.rolloutChecklist.noticeDescription': 'Verify in test mode first',
+  'pages.notifications.rolloutChecklist.steps.1': 'Keep the global mode as legacy or test mode.',
+  'pages.notifications.rolloutChecklist.steps.2': 'Refresh the notification plan and review the queue and warnings.',
+  'pages.notifications.rolloutChecklist.steps.3': 'Enable the new system for one learner and verify real notifications.',
+  'pages.notifications.rolloutChecklist.steps.4': 'Only after a successful pilot, enable the new system globally.',
   'pages.notifications.modes.inherit': 'Inherit',
   'pages.notifications.modes.shadow': 'Shadow',
+  'pages.notifications.modes.legacy': 'Legacy',
+  'pages.notifications.modes.new': 'New',
+  'pages.notifications.viewDetails': 'View details',
+  'pages.notifications.sendNow': 'Send now',
+  'pages.notifications.sendNowConfirmTitle': 'Send this notification outside the normal queue?',
+  'pages.notifications.sendNowConfirmDescription': 'Send now confirmation',
+  'pages.notifications.globalNewConfirmTitle': 'Enable the new system globally?',
+  'pages.notifications.globalNewConfirmDescription': 'Global new confirmation',
+  'pages.notifications.enableGlobalNew': 'Enable for all learners',
+  'pages.notifications.queueDetails.titleWithId': 'Notification #{{id}}',
+  'pages.notifications.queueDetails.summary': 'Summary',
+  'pages.notifications.queueDetails.source': 'Source',
+  'pages.notifications.queueDetails.warnings': 'Warnings',
+  'pages.notifications.queueDetails.latestAttempt': 'Latest delivery attempt',
+  'pages.notifications.queueDetails.debug': 'Technical details',
+  'pages.notifications.queueDetails.statusReason': 'Status reason',
+  'pages.notifications.queueDetails.eventTime': 'Event time',
+  'pages.notifications.queueDetails.effectiveScheduledFor': 'Effective delivery time',
+  'pages.notifications.queueDetails.deliveryEnabled': 'Delivery enabled',
+  'pages.notifications.queueDetails.deliveryDisabled': 'Delivery disabled',
+  'pages.notifications.queueDetails.priority': 'Priority',
+  'pages.notifications.queueDetails.channel': 'Channel',
+  'pages.notifications.queueDetails.rule': 'Rule',
+  'pages.notifications.queueDetails.event': 'Event',
+  'pages.notifications.queueDetails.combination': 'Combination',
+  'pages.notifications.queueDetails.dedupeKey': 'Dedupe key',
+  'pages.notifications.queueDetails.noWarnings': 'No additional warnings',
+  'pages.notifications.queueDetails.providerMessageId': 'Telegram message_id',
+  'pages.notifications.queueDetails.providerChatId': 'Telegram chat_id',
+  'pages.notifications.queueDetails.error': 'Error',
+  'pages.notifications.queueDetails.sentAt': 'Sent at',
+  'pages.notifications.queueDetails.noAttempt': 'No attempts yet',
+  'pages.notifications.warningLabels.calendarConflict': 'Another active lesson exists in the same slot',
   'navigation.newBadge': 'NEW',
 };
 
@@ -101,6 +141,84 @@ jest.mock('../../services/api', () => ({
       return Promise.resolve({ data: { items: [{ id: 10, display_name: 'Vika' }] } });
     }
 
+    if (url === '/notifications/instances') {
+      return Promise.resolve({
+        data: [
+          {
+            id: 1,
+            rule_id: 1,
+            category: 'lesson_confirmation',
+            event_type: 'lesson',
+            event_id: 617,
+            event_key: 'lesson:617',
+            recipient_type: 'learner',
+            recipient_id: 10,
+            learner_id: 10,
+            learner_display_name: 'Vika',
+            scheduled_for: '2026-04-07T07:00:00+00:00',
+            effective_scheduled_for: '2026-04-07T07:00:00+00:00',
+            status: 'scheduled',
+            status_reason: null,
+            delivery_enabled: true,
+            priority: 'normal',
+            channel: 'telegram',
+            dedupe_key: 'single|lesson_confirmation|rule:1',
+            combination_key: null,
+            explanation: {
+              rule_name: 'Lesson confirmation',
+              event_starts_at: '2026-04-08T20:00:00+03:00',
+              warnings: ['calendar_conflict:active_lessons_same_slot'],
+              calendar_conflict: {
+                count: 2,
+                lesson_ids: [581, 617],
+                package_ids: [64, 74],
+              },
+            },
+            components: [],
+            latest_attempt: null,
+          },
+        ],
+      });
+    }
+
+    if (url === '/notifications/instances/1') {
+      return Promise.resolve({
+        data: {
+          id: 1,
+          rule_id: 1,
+          category: 'lesson_confirmation',
+          event_type: 'lesson',
+          event_id: 617,
+          event_key: 'lesson:617',
+          recipient_type: 'learner',
+          recipient_id: 10,
+          learner_id: 10,
+          learner_display_name: 'Vika',
+          scheduled_for: '2026-04-07T07:00:00+00:00',
+          effective_scheduled_for: '2026-04-07T07:00:00+00:00',
+          status: 'scheduled',
+          status_reason: null,
+          delivery_enabled: true,
+          priority: 'normal',
+          channel: 'telegram',
+          dedupe_key: 'single|lesson_confirmation|rule:1',
+          combination_key: null,
+          explanation: {
+            rule_name: 'Lesson confirmation',
+            event_starts_at: '2026-04-08T20:00:00+03:00',
+            warnings: ['calendar_conflict:active_lessons_same_slot'],
+            calendar_conflict: {
+              count: 2,
+              lesson_ids: [581, 617],
+              package_ids: [64, 74],
+            },
+          },
+          components: [],
+          latest_attempt: null,
+        },
+      });
+    }
+
     if (url === '/groups') {
       return Promise.resolve({ data: [] });
     }
@@ -166,5 +284,25 @@ describe('Notifications', () => {
 
     expect(await screen.findByText('Learner pilot')).toBeInTheDocument();
     expect(await screen.findByText('Vika')).toBeInTheDocument();
+    expect(await screen.findByText('Safe rollout checklist')).toBeInTheDocument();
+  });
+
+  it('opens queue details drawer', async () => {
+    renderComponent();
+
+    fireEvent.click(await screen.findByText('Queue'));
+    fireEvent.click(await screen.findByText('View details'));
+
+    expect(await screen.findByText('Summary')).toBeInTheDocument();
+    expect(await screen.findByText('Another active lesson exists in the same slot')).toBeInTheDocument();
+  });
+
+  it('opens send now confirmation', async () => {
+    renderComponent();
+
+    fireEvent.click(await screen.findByText('Queue'));
+    fireEvent.click(await screen.findByText('Send now'));
+
+    expect(await screen.findByText('Send this notification outside the normal queue?')).toBeInTheDocument();
   });
 });

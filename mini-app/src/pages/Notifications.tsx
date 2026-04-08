@@ -5,7 +5,10 @@ import {
   Button,
   Card,
   Col,
+  Descriptions,
   Divider,
+  Drawer,
+  Empty,
   Form,
   Input,
   InputNumber,
@@ -65,10 +68,25 @@ interface NotificationTemplate {
 interface NotificationDeliveryAttempt {
   status: string;
   provider_message_id?: string | null;
+  provider_chat_id?: string | null;
   error_code?: string | null;
   error_message?: string | null;
+  started_at?: string | null;
   sent_at?: string | null;
   finished_at?: string | null;
+  created_at?: string | null;
+  attempt_no?: number;
+  channel?: string;
+  provider?: string;
+}
+
+interface NotificationInstanceComponent {
+  component_id: number;
+  rule_id?: number | null;
+  category: string;
+  template_id?: number | null;
+  component_key: string;
+  metadata: Record<string, unknown>;
 }
 
 interface NotificationInstance {
@@ -77,6 +95,10 @@ interface NotificationInstance {
   category: string;
   event_type: string;
   event_id?: number | null;
+  event_key: string;
+  recipient_type: string;
+  recipient_id: number;
+  learner_id?: number | null;
   learner_display_name?: string | null;
   scheduled_for: string;
   effective_scheduled_for: string;
@@ -84,8 +106,14 @@ interface NotificationInstance {
   status_reason?: string | null;
   delivery_enabled: boolean;
   priority: string;
+  channel: string;
+  dedupe_key: string;
   combination_key?: string | null;
+  explanation: Record<string, unknown>;
+  components: NotificationInstanceComponent[];
   latest_attempt?: NotificationDeliveryAttempt | null;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 interface NotificationActivity {
@@ -102,6 +130,7 @@ interface NotificationActivity {
   error_message?: string | null;
   provider_message_id?: string | null;
   occurred_at?: string | null;
+  metadata: Record<string, unknown>;
 }
 
 interface NotificationSettings {
@@ -243,6 +272,11 @@ const fetchNotificationInstances = async (): Promise<NotificationInstance[]> => 
   return data;
 };
 
+const fetchNotificationInstanceDetail = async (instanceId: number): Promise<NotificationInstance> => {
+  const { data } = await api.get(`/notifications/instances/${instanceId}`);
+  return data;
+};
+
 const fetchNotificationActivity = async (): Promise<NotificationActivity[]> => {
   const { data } = await api.get('/notifications/activity', { params: { limit: 100 } });
   return data;
@@ -353,6 +387,126 @@ const formatApiError = (error: Error): string => {
   }
 
   return error.message;
+};
+
+type TranslateFn = (key: string, options?: Record<string, unknown>) => string;
+
+const getWarningLabel = (warning: string, t: TranslateFn): string => {
+  switch (warning) {
+    case 'quiet_hours_shifted':
+      return t('pages.notifications.warningLabels.quietHoursShifted');
+    case 'calendar_conflict:active_lessons_same_slot':
+      return t('pages.notifications.warningLabels.calendarConflict');
+    case 'combined':
+      return t('pages.notifications.warningLabels.combined');
+    case 'homework_inherited':
+      return t('pages.notifications.warningLabels.homeworkInherited');
+    default:
+      return warning;
+  }
+};
+
+const getStatusReasonLabel = (reason: string | null | undefined, t: TranslateFn): string => {
+  if (!reason) return '—';
+  switch (reason) {
+    case 'missing_contact':
+      return t('pages.notifications.statusReasons.missingContact');
+    case 'learner_notifications_disabled':
+      return t('pages.notifications.statusReasons.learnerNotificationsDisabled');
+    case 'preferences_notifications_disabled':
+      return t('pages.notifications.statusReasons.preferencesNotificationsDisabled');
+    case 'category_disabled':
+      return t('pages.notifications.statusReasons.categoryDisabled');
+    case 'package_not_active':
+      return t('pages.notifications.statusReasons.packageNotActive');
+    case 'lesson_not_schedulable':
+      return t('pages.notifications.statusReasons.lessonNotSchedulable');
+    case 'lesson_has_no_homework':
+      return t('pages.notifications.statusReasons.lessonHasNoHomework');
+    case 'manual_cancelled':
+      return t('pages.notifications.statusReasons.manualCancelled');
+    case 'manual_send_now':
+      return t('pages.notifications.statusReasons.manualSendNow');
+    case 'cancelled_from_notifications_ui':
+      return t('pages.notifications.statusReasons.cancelledFromUi');
+    default:
+      return reason;
+  }
+};
+
+const extractInstanceWarnings = (instance: NotificationInstance): string[] => {
+  const explanationWarnings = Array.isArray(instance.explanation?.warnings)
+    ? (instance.explanation.warnings as string[])
+    : [];
+
+  const componentWarnings = Array.isArray(instance.explanation?.component_explanations)
+    ? (instance.explanation.component_explanations as Array<Record<string, unknown>>).flatMap((item) => (
+      Array.isArray(item.warnings) ? (item.warnings as string[]) : []
+    ))
+    : [];
+
+  const warnings = [...explanationWarnings, ...componentWarnings];
+  if (instance.explanation?.calendar_conflict) {
+    warnings.push('calendar_conflict:active_lessons_same_slot');
+  }
+  if (instance.combination_key) {
+    warnings.push('combined');
+  }
+  return [...new Set(warnings)];
+};
+
+const formatDateTime = (value?: string | null): string => (value ? dayjs(value).format('YYYY-MM-DD HH:mm') : '—');
+
+const getActivityTypeLabel = (activityType: string, t: TranslateFn): string => {
+  switch (activityType) {
+    case 'delivery_attempt':
+      return t('pages.notifications.activityTypes.deliveryAttempt');
+    case 'response':
+      return t('pages.notifications.activityTypes.response');
+    case 'teacher_alert':
+      return t('pages.notifications.activityTypes.teacherAlert');
+    default:
+      return activityType;
+  }
+};
+
+const getActivityStatusLabel = (status: string, t: TranslateFn): string => {
+  switch (status) {
+    case 'requires_attention':
+      return t('pages.notifications.activityStatuses.requiresAttention');
+    case 'confirmed':
+      return t('pages.notifications.activityStatuses.confirmed');
+    case 'declined':
+      return t('pages.notifications.activityStatuses.declined');
+    default:
+      return status;
+  }
+};
+
+const getActivityStatusColor = (status: string): string => {
+  switch (status) {
+    case 'requires_attention':
+    case 'declined':
+      return 'red';
+    case 'confirmed':
+    case 'sent':
+      return 'green';
+    case 'failed':
+      return 'red';
+    default:
+      return 'blue';
+  }
+};
+
+const getActivityDetails = (activity: NotificationActivity, t: TranslateFn): string => {
+  if (activity.activity_type === 'teacher_alert') {
+    const responseText = typeof activity.metadata?.response_text === 'string' ? activity.metadata.response_text : null;
+    if (responseText) {
+      return t('pages.notifications.activityDetails.lessonDeclinedWithReason', { reason: responseText });
+    }
+    return t('pages.notifications.activityDetails.lessonDeclined');
+  }
+  return activity.error_message || activity.response_value || activity.provider_message_id || '—';
 };
 
 const buildTriggerConfig = (values: RuleWizardValues): Record<string, unknown> => {
@@ -486,6 +640,7 @@ const Notifications: React.FC = () => {
   const [ruleWizardOpen, setRuleWizardOpen] = useState(false);
   const [ruleWizardStep, setRuleWizardStep] = useState(0);
   const [rulePreview, setRulePreview] = useState<NotificationPreviewResponse | null>(null);
+  const [selectedQueueInstanceId, setSelectedQueueInstanceId] = useState<number | null>(null);
   const [templateForm] = Form.useForm<NotificationTemplateFormValues>();
   const [ruleForm] = Form.useForm<RuleWizardValues>();
   const [settingsForm] = Form.useForm<NotificationSettingsFormValues>();
@@ -506,6 +661,12 @@ const Notifications: React.FC = () => {
     queryKey: ['notificationInstances'],
     queryFn: fetchNotificationInstances,
     enabled: activeTab === 'queue',
+  });
+
+  const instanceDetailQuery = useQuery<NotificationInstance, Error>({
+    queryKey: ['notificationInstanceDetail', selectedQueueInstanceId],
+    queryFn: () => fetchNotificationInstanceDetail(selectedQueueInstanceId as number),
+    enabled: activeTab === 'queue' && selectedQueueInstanceId !== null,
   });
 
   const activityQuery = useQuery<NotificationActivity[], Error>({
@@ -622,6 +783,7 @@ const Notifications: React.FC = () => {
     mutationFn: cancelInstance,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notificationInstances'] });
+      queryClient.invalidateQueries({ queryKey: ['notificationInstanceDetail'] });
       message.success(t('pages.notifications.instanceCancelled'));
     },
     onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
@@ -631,6 +793,7 @@ const Notifications: React.FC = () => {
     mutationFn: sendInstanceNow,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notificationInstances'] });
+      queryClient.invalidateQueries({ queryKey: ['notificationInstanceDetail'] });
       message.success(t('pages.notifications.instanceScheduledNow'));
     },
     onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
@@ -747,6 +910,12 @@ const Notifications: React.FC = () => {
           error={instancesQuery.error}
           onCancel={(instanceId) => cancelInstanceMutation.mutate(instanceId)}
           onSendNow={(instanceId) => sendNowMutation.mutate(instanceId)}
+          onOpenDetails={(instanceId) => setSelectedQueueInstanceId(instanceId)}
+          selectedInstance={instanceDetailQuery.data ?? null}
+          selectedInstanceId={selectedQueueInstanceId}
+          detailLoading={instanceDetailQuery.isLoading}
+          detailError={instanceDetailQuery.error}
+          onCloseDetails={() => setSelectedQueueInstanceId(null)}
           actionPending={cancelInstanceMutation.isPending || sendNowMutation.isPending}
         />
       ),
@@ -1360,6 +1529,12 @@ const RulesTab: React.FC<RulesTabProps> = ({
           {t('pages.notifications.createRuleWizard')}
         </Button>
       </Space>
+      <Alert
+        type="info"
+        showIcon
+        message={t('pages.notifications.materializeHelpTitle')}
+        description={t('pages.notifications.materializeHelpDescription')}
+      />
       <NoticeError error={error} />
       <ResponsiveDataView<NotificationRule>
         data={rules}
@@ -1479,10 +1654,34 @@ interface QueueTabProps {
   actionPending: boolean;
   onCancel: (instanceId: number) => void;
   onSendNow: (instanceId: number) => void;
+  onOpenDetails: (instanceId: number) => void;
+  selectedInstance: NotificationInstance | null;
+  selectedInstanceId: number | null;
+  detailLoading: boolean;
+  detailError: Error | null;
+  onCloseDetails: () => void;
 }
 
-const QueueTab: React.FC<QueueTabProps> = ({ instances, loading, error, actionPending, onCancel, onSendNow }) => {
+const QueueTab: React.FC<QueueTabProps> = ({
+  instances,
+  loading,
+  error,
+  actionPending,
+  onCancel,
+  onSendNow,
+  onOpenDetails,
+  selectedInstance,
+  selectedInstanceId,
+  detailLoading,
+  detailError,
+  onCloseDetails,
+}) => {
   const { t } = useTranslation();
+  const [pendingSendNowInstance, setPendingSendNowInstance] = useState<NotificationInstance | null>(null);
+
+  const handleSendNowClick = (instance: NotificationInstance) => {
+    setPendingSendNowInstance(instance);
+  };
 
   const columns: TableProps<NotificationInstance>['columns'] = [
     {
@@ -1524,11 +1723,14 @@ const QueueTab: React.FC<QueueTabProps> = ({ instances, loading, error, actionPe
       key: 'actions',
       render: (_, record) => (
         <Space wrap>
+          <Button type="link" onClick={() => onOpenDetails(record.id)}>
+            {t('pages.notifications.viewDetails')}
+          </Button>
           <Button
             type="link"
             disabled={['sent', 'processing', 'shadow'].includes(record.status)}
             loading={actionPending}
-            onClick={() => onSendNow(record.id)}
+            onClick={() => handleSendNowClick(record)}
           >
             {t('pages.notifications.sendNow')}
           </Button>
@@ -1562,7 +1764,10 @@ const QueueTab: React.FC<QueueTabProps> = ({ instances, loading, error, actionPe
               <span>{dayjs(instance.effective_scheduled_for).format('YYYY-MM-DD HH:mm')}</span>
               <Tag color={getInstanceStatusColor(instance.status)}>{t(`pages.notifications.instanceStatus.${instance.status}`)}</Tag>
               <Space wrap>
-                <Button size="small" disabled={['sent', 'processing', 'shadow'].includes(instance.status)} onClick={() => onSendNow(instance.id)}>
+                <Button size="small" onClick={() => onOpenDetails(instance.id)}>
+                  {t('pages.notifications.viewDetails')}
+                </Button>
+                <Button size="small" disabled={['sent', 'processing', 'shadow'].includes(instance.status)} onClick={() => handleSendNowClick(instance)}>
                   {t('pages.notifications.sendNow')}
                 </Button>
                 <Button size="small" danger disabled={['sent', 'processing'].includes(instance.status)} onClick={() => onCancel(instance.id)}>
@@ -1574,7 +1779,238 @@ const QueueTab: React.FC<QueueTabProps> = ({ instances, loading, error, actionPe
         )}
         pagination={false}
       />
+      <NotificationInstanceDrawer
+        open={selectedInstanceId !== null}
+        instance={selectedInstance}
+        loading={detailLoading}
+        error={detailError}
+        onClose={onCloseDetails}
+      />
+      <Modal
+        open={Boolean(pendingSendNowInstance)}
+        title={t('pages.notifications.sendNowConfirmTitle')}
+        okText={t('pages.notifications.sendNow')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ danger: true, loading: actionPending }}
+        onCancel={() => setPendingSendNowInstance(null)}
+        onOk={() => {
+          if (!pendingSendNowInstance) return;
+          onSendNow(pendingSendNowInstance.id);
+          setPendingSendNowInstance(null);
+        }}
+      >
+        <Alert
+          type="warning"
+          showIcon
+          message={t('pages.notifications.sendNowConfirmDescription', {
+            learner: pendingSendNowInstance?.learner_display_name ?? `#${pendingSendNowInstance?.recipient_id ?? '—'}`,
+            category: pendingSendNowInstance ? t(`pages.notifications.categories.${pendingSendNowInstance.category}`) : '',
+          })}
+        />
+      </Modal>
     </Space>
+  );
+};
+
+interface NotificationInstanceDrawerProps {
+  open: boolean;
+  instance: NotificationInstance | null;
+  loading: boolean;
+  error: Error | null;
+  onClose: () => void;
+}
+
+const NotificationInstanceDrawer: React.FC<NotificationInstanceDrawerProps> = ({
+  open,
+  instance,
+  loading,
+  error,
+  onClose,
+}) => {
+  const { t } = useTranslation();
+
+  const warnings = useMemo(
+    () => (instance ? extractInstanceWarnings(instance) : []),
+    [instance],
+  );
+  const calendarConflict = instance?.explanation?.calendar_conflict as Record<string, unknown> | undefined;
+  const componentExplanations = Array.isArray(instance?.explanation?.component_explanations)
+    ? instance?.explanation?.component_explanations as Array<Record<string, unknown>>
+    : [];
+
+  return (
+    <Drawer
+      open={open}
+      width={720}
+      title={instance ? t('pages.notifications.queueDetails.titleWithId', { id: instance.id }) : t('pages.notifications.queueDetails.title')}
+      onClose={onClose}
+      destroyOnHidden
+    >
+      {loading ? (
+        <Card loading />
+      ) : error ? (
+        <Alert
+          type="error"
+          showIcon
+          message={t('errors.loadFailed', { message: formatApiError(error) })}
+        />
+      ) : !instance ? (
+        <Empty description={t('pages.notifications.queueDetails.notFound')} />
+      ) : (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Descriptions bordered column={1} size="small" title={t('pages.notifications.queueDetails.summary')}>
+            <Descriptions.Item label={t('pages.notifications.learner')}>
+              {instance.learner_display_name || `#${instance.recipient_id}`}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.category')}>
+              <Tag>{t(`pages.notifications.categories.${instance.category}`)}</Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.status')}>
+              <Tag color={getInstanceStatusColor(instance.status)}>
+                {t(`pages.notifications.instanceStatus.${instance.status}`)}
+              </Tag>
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.statusReason')}>
+              {getStatusReasonLabel(instance.status_reason, t)}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.eventTime')}>
+              {formatDateTime((instance.explanation?.event_starts_at as string | undefined) ?? null)}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.scheduledFor')}>
+              {formatDateTime(instance.scheduled_for)}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.effectiveScheduledFor')}>
+              {formatDateTime(instance.effective_scheduled_for)}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.delivery')}>
+              {instance.delivery_enabled ? t('pages.notifications.queueDetails.deliveryEnabled') : t('pages.notifications.queueDetails.deliveryDisabled')}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.priority')}>
+              {t(`pages.notifications.priorities.${instance.priority}`)}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.channel')}>
+              {instance.channel}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Descriptions bordered column={1} size="small" title={t('pages.notifications.queueDetails.source')}>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.rule')}>
+              {instance.explanation?.rule_name
+                ? `${String(instance.explanation.rule_name)}${instance.rule_id ? ` (#${instance.rule_id})` : ''}`
+                : instance.rule_id ? `#${instance.rule_id}` : '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.event')}>
+              {`${t(`pages.notifications.eventTypes.${instance.event_type}`)} #${instance.event_id ?? '—'}`}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.combination')}>
+              {instance.combination_key || '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.dedupeKey')}>
+              <Typography.Text code copyable>
+                {instance.dedupe_key}
+              </Typography.Text>
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Card size="small" title={t('pages.notifications.queueDetails.warnings')}>
+            {warnings.length === 0 ? (
+              <Typography.Text type="secondary">
+                {t('pages.notifications.queueDetails.noWarnings')}
+              </Typography.Text>
+            ) : (
+              <Space wrap>
+                {warnings.map((warning) => (
+                  <Tag color="orange" key={warning}>
+                    {getWarningLabel(warning, t)}
+                  </Tag>
+                ))}
+              </Space>
+            )}
+          </Card>
+
+          {calendarConflict && (
+            <Alert
+              type="warning"
+              showIcon
+              message={t('pages.notifications.queueDetails.calendarConflictTitle')}
+              description={t('pages.notifications.queueDetails.calendarConflictDescription', {
+                count: Number(calendarConflict.count || 0),
+                lessonIds: Array.isArray(calendarConflict.lesson_ids) ? (calendarConflict.lesson_ids as Array<number | string>).join(', ') : '—',
+                packageIds: Array.isArray(calendarConflict.package_ids) ? (calendarConflict.package_ids as Array<number | string>).join(', ') : '—',
+              })}
+            />
+          )}
+
+          {instance.components.length > 0 && (
+            <Card size="small" title={t('pages.notifications.queueDetails.components')}>
+              <Space direction="vertical" style={{ width: '100%' }}>
+                {instance.components.map((component, index) => {
+                  const componentExplanation = componentExplanations[index];
+                  const componentWarnings = Array.isArray(componentExplanation?.warnings)
+                    ? componentExplanation.warnings as string[]
+                    : [];
+                  return (
+                    <Card key={component.component_id} size="small" type="inner" title={t(`pages.notifications.categories.${component.category}`)}>
+                      <Space direction="vertical" size={4}>
+                        <Typography.Text>
+                          {t('pages.notifications.queueDetails.rule')}: {component.rule_id ? `#${component.rule_id}` : '—'}
+                        </Typography.Text>
+                        <Typography.Text>
+                          {t('pages.notifications.queueDetails.componentKey')}: <Typography.Text code>{component.component_key}</Typography.Text>
+                        </Typography.Text>
+                        <Typography.Text>
+                          {t('pages.notifications.queueDetails.eventTime')}: {formatDateTime((componentExplanation?.event_starts_at as string | undefined) ?? null)}
+                        </Typography.Text>
+                        {componentWarnings.length > 0 && (
+                          <Space wrap>
+                            {componentWarnings.map((warning) => (
+                              <Tag color="orange" key={`${component.component_id}-${warning}`}>
+                                {getWarningLabel(warning, t)}
+                              </Tag>
+                            ))}
+                          </Space>
+                        )}
+                      </Space>
+                    </Card>
+                  );
+                })}
+              </Space>
+            </Card>
+          )}
+
+          <Descriptions bordered column={1} size="small" title={t('pages.notifications.queueDetails.latestAttempt')}>
+            <Descriptions.Item label={t('pages.notifications.status')}>
+              {instance.latest_attempt
+                ? instance.latest_attempt.status
+                : t('pages.notifications.queueDetails.noAttempt')}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.providerMessageId')}>
+              {instance.latest_attempt?.provider_message_id || '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.providerChatId')}>
+              {instance.latest_attempt?.provider_chat_id || '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.error')}>
+              {instance.latest_attempt?.error_message || instance.latest_attempt?.error_code || '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.sentAt')}>
+              {formatDateTime(instance.latest_attempt?.sent_at)}
+            </Descriptions.Item>
+          </Descriptions>
+
+          <Card size="small" title={t('pages.notifications.queueDetails.debug')}>
+            <Typography.Paragraph
+              copyable={{ text: JSON.stringify(instance.explanation, null, 2) }}
+              style={{ marginBottom: 0 }}
+            >
+              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                {JSON.stringify(instance.explanation, null, 2)}
+              </pre>
+            </Typography.Paragraph>
+          </Card>
+        </Space>
+      )}
+    </Drawer>
   );
 };
 
@@ -1598,7 +2034,7 @@ const ActivityTab: React.FC<ActivityTabProps> = ({ activity, loading, error }) =
       title: t('pages.notifications.activityType'),
       dataIndex: 'activity_type',
       key: 'activity_type',
-      render: (value: string) => <Tag>{value}</Tag>,
+      render: (value: string) => <Tag>{getActivityTypeLabel(value, t)}</Tag>,
     },
     {
       title: t('pages.notifications.learner'),
@@ -1610,11 +2046,12 @@ const ActivityTab: React.FC<ActivityTabProps> = ({ activity, loading, error }) =
       title: t('pages.notifications.status'),
       dataIndex: 'status',
       key: 'status',
+      render: (value: string) => <Tag color={getActivityStatusColor(value)}>{getActivityStatusLabel(value, t)}</Tag>,
     },
     {
       title: t('pages.notifications.details'),
       key: 'details',
-      render: (_, record) => record.error_message || record.response_value || record.provider_message_id || '-',
+      render: (_, record) => getActivityDetails(record, t),
     },
   ];
 
@@ -1632,8 +2069,8 @@ const ActivityTab: React.FC<ActivityTabProps> = ({ activity, loading, error }) =
           <Card key={`${item.activity_type}-${item.activity_id}`} title={item.learner_display_name || item.activity_type} size="small" style={{ marginBottom: 12 }}>
             <Space direction="vertical">
               <span>{item.occurred_at ? dayjs(item.occurred_at).format('YYYY-MM-DD HH:mm') : '-'}</span>
-              <span>{item.status}</span>
-              <span>{item.error_message || item.response_value || item.provider_message_id || '-'}</span>
+              <Tag color={getActivityStatusColor(item.status)}>{getActivityStatusLabel(item.status, t)}</Tag>
+              <span>{getActivityDetails(item, t)}</span>
             </Space>
           </Card>
         )}
@@ -1669,12 +2106,37 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   onLearnerModeChange,
 }) => {
   const { t } = useTranslation();
+  const [pendingGlobalNewValues, setPendingGlobalNewValues] = useState<NotificationSettingsFormValues | null>(null);
+
+  const handleSubmit = (values: NotificationSettingsFormValues) => {
+    if (values.mode === 'new') {
+      setPendingGlobalNewValues(values);
+      return;
+    }
+    onSubmit(values);
+  };
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <NoticeError error={error} />
+      <Card title={t('pages.notifications.rolloutChecklist.title')}>
+        <Alert
+          type="info"
+          showIcon
+          message={t('pages.notifications.rolloutChecklist.noticeTitle')}
+          description={t('pages.notifications.rolloutChecklist.noticeDescription')}
+          style={{ marginBottom: 16 }}
+        />
+        <Space direction="vertical" size="small">
+          {[1, 2, 3, 4].map((step) => (
+            <Typography.Text key={step}>
+              {step}. {t(`pages.notifications.rolloutChecklist.steps.${step}`)}
+            </Typography.Text>
+          ))}
+        </Space>
+      </Card>
       <Card loading={loading}>
-        <Form<NotificationSettingsFormValues> form={form} layout="vertical" onFinish={onSubmit}>
+        <Form<NotificationSettingsFormValues> form={form} layout="vertical" onFinish={handleSubmit}>
           <Row gutter={16}>
             <Col xs={24} md={8}>
               <Form.Item name="mode" label={t('pages.notifications.systemMode')} rules={[{ required: true }]}>
@@ -1736,6 +2198,26 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         updating={learnerModeUpdating}
         onModeChange={onLearnerModeChange}
       />
+
+      <Modal
+        open={Boolean(pendingGlobalNewValues)}
+        title={t('pages.notifications.globalNewConfirmTitle')}
+        okText={t('pages.notifications.enableGlobalNew')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ danger: true, loading: saving }}
+        onCancel={() => setPendingGlobalNewValues(null)}
+        onOk={() => {
+          if (!pendingGlobalNewValues) return;
+          onSubmit(pendingGlobalNewValues);
+          setPendingGlobalNewValues(null);
+        }}
+      >
+        <Alert
+          type="warning"
+          showIcon
+          message={t('pages.notifications.globalNewConfirmDescription')}
+        />
+      </Modal>
     </Space>
   );
 };
