@@ -270,6 +270,14 @@ const Reminders: React.FC = () => {
       <PageHeader 
         title={t('pages.reminders.title')}
         subtitle={t('pages.reminders.subtitle')}
+        actions={<Tag color="warning">{t('navigation.legacyBadge')}</Tag>}
+      />
+      <Alert
+        type="warning"
+        showIcon
+        message={t('pages.reminders.legacyNoticeTitle')}
+        description={t('pages.reminders.legacyNoticeDescription')}
+        style={{ marginBottom: 16 }}
       />
       
       <Space style={{ marginBottom: 16 }} wrap>

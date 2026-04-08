@@ -45,9 +45,15 @@ from utils.tasks.metrics import (
     sync_package_metrics_task,
     bulk_sync_package_metrics_task,
 )
+from utils.tasks.notifications import (
+    deliver_due_notifications_task,
+    process_notification_jobs_task,
+)
 
 __all__ = [
     'regenerate_package_reminders_task',
     'sync_package_metrics_task',
     'bulk_sync_package_metrics_task',
+    'deliver_due_notifications_task',
+    'process_notification_jobs_task',
 ]

@@ -44,6 +44,7 @@ from aiogram.types import InlineKeyboardMarkup
 from config import config
 from database import crud
 from database.engine import async_session
+from notifications.infrastructure.modes import should_suppress_legacy_reminder_for_learner
 from utils import texts
 from utils.formatters import escape_html_text, split_chat_identifier
 
@@ -168,6 +169,21 @@ class ReminderScheduler:
             instance: ReminderInstance to process
             now_utc: Current UTC time for status updates
         """
+        if await self._should_suppress_legacy_instance(session, instance):
+            logging.info(
+                "Skipping legacy reminder instance #%s: learner #%s uses new notification system",
+                instance.id,
+                instance.learner_id,
+            )
+            await crud.set_reminder_instance_status(
+                session,
+                instance,
+                status='skipped',
+                active=False,
+                comment='Suppressed by new notification system',
+            )
+            return
+
         # Check if notifications are enabled for this learner
         if instance.learner and not instance.learner.notifications_enabled:
             logging.info(
@@ -247,6 +263,17 @@ class ReminderScheduler:
             instance.retry_count = 0
             session.add(instance)
             await self._log_instance_sent(instance, schedule_label)
+
+    async def _should_suppress_legacy_instance(self, session, instance) -> bool:
+        tenant_id = getattr(instance, 'tenant_id', None)
+        learner_id = getattr(instance, 'learner_id', None)
+        if tenant_id is None or learner_id is None:
+            return False
+        return await should_suppress_legacy_reminder_for_learner(
+            session,
+            tenant_id=tenant_id,
+            learner_id=learner_id,
+        )
 
     async def _handle_instance_send_failure(
         self, 

@@ -1,0 +1,490 @@
+from dataclasses import dataclass, field
+from datetime import datetime, timezone
+
+import pytest
+
+from notifications.application.dto import (
+    AudienceSelector,
+    ClaimDueNotificationsResult,
+    ClaimedNotificationInstance,
+    DeliverySendResult,
+    ExecuteNotificationDeliveryResult,
+    InstanceUpsertResult,
+    NotificationJobDraft,
+    NotificationJobRecord,
+    NotificationInstanceDraft,
+    NotificationRuleDraft,
+    PreviewEvent,
+    PreviewRecipient,
+    RenderedNotification,
+)
+from notifications.application.delivery import (
+    ClaimDueNotificationsUseCase,
+    ExecuteClaimedNotificationDeliveryUseCase,
+    NotificationDeliveryError,
+)
+from notifications.application.materialization import (
+    MaterializeActiveRulesUseCase,
+    MaterializeRulesUseCase,
+    RunMaterializeActiveRulesJobUseCase,
+)
+from notifications.domain.enums import CategoryKey, EventType, InstanceStatus, Priority, TriggerType
+
+
+@dataclass
+class FakeAudienceResolver:
+    recipients: tuple[PreviewRecipient, ...]
+
+    async def resolve_recipients(self, assignments):
+        return self.recipients
+
+
+@dataclass
+class FakeEventRepository:
+    events: tuple[PreviewEvent, ...]
+
+    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit):
+        return tuple(
+            event
+            for event in self.events
+            if event.event_type == event_type and event.learner_id in learner_ids
+        )[:limit]
+
+
+class FakePreferenceRepository:
+    async def get_global_preference(self):
+        return None
+
+    async def get_group_preferences_for_learner(self, learner_id):
+        return ()
+
+    async def get_learner_preference(self, learner_id):
+        return None
+
+
+@dataclass
+class FakeInstanceRepository:
+    upserted: tuple[NotificationInstanceDraft, ...] = ()
+    claim_result: ClaimDueNotificationsResult = ClaimDueNotificationsResult(claimed=())
+    sent_calls: list[dict] = field(default_factory=list)
+    failed_calls: list[dict] = field(default_factory=list)
+
+    async def upsert_planned_instances(self, instances):
+        self.upserted = instances
+        return InstanceUpsertResult(planned_count=len(instances), inserted_count=len(instances))
+
+    async def claim_due_instances(self, *, now, limit: int, lease_seconds: int):
+        return self.claim_result
+
+    async def mark_delivery_sent(self, **kwargs):
+        self.sent_calls.append(kwargs)
+
+    async def mark_delivery_failed(self, **kwargs):
+        self.failed_calls.append(kwargs)
+
+
+@dataclass
+class FakeRuleRepository:
+    rules: tuple[NotificationRuleDraft, ...]
+
+    async def list_active_rules(self):
+        return self.rules
+
+
+@dataclass
+class FakeJobRepository:
+    records: list[NotificationJobRecord] = field(default_factory=list)
+    summaries: list[dict] = field(default_factory=list)
+
+    async def create_job(self, draft: NotificationJobDraft):
+        record = NotificationJobRecord(
+            job_id=1,
+            job_type=draft.job_type,
+            status="queued",
+            scope=draft.scope,
+        )
+        self.records.append(record)
+        return record
+
+    async def mark_running(self, job_id: int):
+        record = NotificationJobRecord(
+            job_id=job_id,
+            job_type=self.records[-1].job_type,
+            status="running",
+            scope=self.records[-1].scope,
+        )
+        self.records.append(record)
+        return record
+
+    async def mark_succeeded(self, job_id: int, *, result_summary: dict):
+        self.summaries.append(result_summary)
+        record = NotificationJobRecord(
+            job_id=job_id,
+            job_type=self.records[-1].job_type,
+            status="succeeded",
+            scope=self.records[-1].scope,
+        )
+        self.records.append(record)
+        return record
+
+    async def mark_failed(self, job_id: int, *, error: str):
+        raise AssertionError("mark_failed should not be called in this test")
+
+
+@dataclass
+class FakeMaterializationUnitOfWork:
+    audience_resolver: FakeAudienceResolver
+    events: FakeEventRepository
+    preferences: FakePreferenceRepository = field(default_factory=FakePreferenceRepository)
+    rules: FakeRuleRepository = field(default_factory=lambda: FakeRuleRepository(rules=()))
+    jobs: FakeJobRepository = field(default_factory=FakeJobRepository)
+    instances: FakeInstanceRepository = field(default_factory=FakeInstanceRepository)
+    committed: bool = False
+
+    async def commit(self):
+        self.committed = True
+
+
+@dataclass
+class FakeRenderer:
+    rendered: RenderedNotification = field(
+        default_factory=lambda: RenderedNotification(
+            text="Привет, Вика!",
+            parse_mode=None,
+            reply_markup_snapshot={"inline_keyboard": []},
+        )
+    )
+
+    async def render(self, instance):
+        return self.rendered
+
+
+@dataclass
+class FakeChannelAdapter:
+    result: DeliverySendResult | None = None
+    error: Exception | None = None
+
+    async def send(self, *, instance, rendered):
+        if self.error is not None:
+            raise self.error
+        return self.result or DeliverySendResult(
+            provider="telegram",
+            provider_chat_id="5390064156",
+            provider_message_id="777",
+            sent_at=datetime(2026, 4, 7, 7, 0, 5, tzinfo=timezone.utc),
+        )
+
+
+def _draft(
+    category: CategoryKey = CategoryKey.LESSON_CONFIRMATION,
+    *,
+    rule_id: int = 1,
+) -> NotificationRuleDraft:
+    return NotificationRuleDraft(
+        rule_id=rule_id,
+        name=category.value,
+        category=category,
+        event_type=EventType.LESSON,
+        trigger_type=TriggerType.DAY_OFFSET_AT_TIME,
+        trigger_config={"days": -1, "local_time": "10:00"},
+        template_body="Привет, {student_name}!",
+        template_key=category.value,
+        assignments=(AudienceSelector(scope_type="learner", scope_id=10),),
+    )
+
+
+def _claimed_instance() -> ClaimedNotificationInstance:
+    return ClaimedNotificationInstance(
+        instance_id=101,
+        attempt_id=201,
+        attempt_no=1,
+        rule_id=1,
+        category=CategoryKey.LESSON_CONFIRMATION,
+        event_type=EventType.LESSON,
+        event_id=617,
+        recipient_type="learner",
+        recipient_id=10,
+        learner_id=10,
+        effective_scheduled_for=datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc),
+        priority=Priority.NORMAL,
+        channel="telegram",
+    )
+
+
+def _uow(
+    *,
+    recipient: PreviewRecipient | None = None,
+    event: PreviewEvent | None = None,
+) -> FakeMaterializationUnitOfWork:
+    return FakeMaterializationUnitOfWork(
+        audience_resolver=FakeAudienceResolver(
+            recipients=(recipient or PreviewRecipient(learner_id=10, display_name="Вика"),)
+        ),
+        events=FakeEventRepository(
+            events=(
+                event
+                or PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=617,
+                    learner_id=10,
+                    starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=True,
+                ),
+            )
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_materialize_rules_upserts_scheduled_instance_drafts():
+    uow = _uow()
+
+    result = await MaterializeRulesUseCase(uow).execute((_draft(),))
+
+    assert uow.committed
+    assert result.upsert_result.inserted_count == 1
+    instance = result.planned_instances[0]
+    assert instance.status == InstanceStatus.SCHEDULED
+    assert instance.delivery_enabled is True
+    assert instance.dedupe_key.startswith("single|lesson_confirmation|lesson_confirmation|")
+    assert uow.instances.upserted == result.planned_instances
+
+
+@pytest.mark.asyncio
+async def test_materialize_rules_can_create_shadow_instances_without_delivery():
+    result = await MaterializeRulesUseCase(_uow()).execute((_draft(),), shadow=True)
+
+    instance = result.planned_instances[0]
+    assert instance.status == InstanceStatus.SHADOW
+    assert instance.delivery_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_materialize_rules_keeps_skipped_no_contact_instance_visible():
+    recipient = PreviewRecipient(learner_id=10, display_name="Вика", has_contact=False)
+
+    result = await MaterializeRulesUseCase(_uow(recipient=recipient)).execute((_draft(),))
+
+    instance = result.planned_instances[0]
+    assert instance.status == InstanceStatus.SKIPPED
+    assert instance.status_reason == "missing_contact"
+    assert instance.delivery_enabled is False
+
+
+@pytest.mark.asyncio
+async def test_materialize_rules_creates_combined_instance_with_components():
+    confirmation = _draft(CategoryKey.LESSON_CONFIRMATION, rule_id=1)
+    homework = _draft(CategoryKey.HOMEWORK, rule_id=2)
+    event = PreviewEvent(
+        event_type=EventType.LESSON,
+        event_id=617,
+        learner_id=10,
+        starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+        timezone="UTC",
+        package_status="active",
+        lesson_status="scheduled",
+        has_homework=True,
+        metadata={
+            "calendar_conflict_count": 2,
+            "calendar_conflict_lesson_ids": [581, 617],
+            "calendar_conflict_package_ids": [64, 74],
+        },
+    )
+
+    result = await MaterializeRulesUseCase(_uow(event=event)).execute((confirmation, homework))
+
+    assert len(result.planned_instances) == 1
+    instance = result.planned_instances[0]
+    assert instance.rule_id is None
+    assert instance.combination_key == "lesson_confirmation_homework"
+    assert instance.dedupe_key.startswith("combined|lesson_confirmation_homework|")
+    assert "calendar_conflict:active_lessons_same_slot" in instance.explanation["warnings"]
+    assert instance.explanation["component_explanations"][0]["calendar_conflict"]["count"] == 2
+    assert [component.category for component in instance.components] == [
+        CategoryKey.LESSON_CONFIRMATION,
+        CategoryKey.HOMEWORK,
+    ]
+
+
+@pytest.mark.asyncio
+async def test_materialize_rules_keeps_single_instance_warnings_and_event_context():
+    event = PreviewEvent(
+        event_type=EventType.LESSON,
+        event_id=617,
+        learner_id=10,
+        starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+        timezone="UTC",
+        package_status="active",
+        lesson_status="scheduled",
+        has_homework=True,
+        metadata={
+            "calendar_conflict_count": 2,
+            "calendar_conflict_lesson_ids": [581, 617],
+            "calendar_conflict_package_ids": [64, 74],
+        },
+    )
+
+    result = await MaterializeRulesUseCase(_uow(event=event)).execute((_draft(),))
+
+    instance = result.planned_instances[0]
+    assert instance.explanation["warnings"] == ["calendar_conflict:active_lessons_same_slot"]
+    assert instance.explanation["event_starts_at"] == "2026-04-08T20:00:00+00:00"
+    assert instance.explanation["calendar_conflict"]["count"] == 2
+
+
+@pytest.mark.asyncio
+async def test_materialize_active_rules_records_job_summary():
+    rule = _draft()
+    uow = _uow()
+    uow.rules = FakeRuleRepository(rules=(rule,))
+
+    result = await MaterializeActiveRulesUseCase(uow).execute()
+
+    assert uow.committed
+    assert result.job.status == "succeeded"
+    assert uow.jobs.summaries == [
+        {
+            "rules_count": 1,
+            "planned_count": 1,
+            "upserted_count": 0,
+            "warnings": [],
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_run_materialize_active_rules_job_uses_claimed_job_scope():
+    rule = _draft()
+    uow = _uow()
+    uow.rules = FakeRuleRepository(rules=(rule,))
+    job = NotificationJobRecord(
+        job_id=99,
+        job_type="materialize_active_rules",
+        status="running",
+        scope={"horizon_days": 60, "limit": 200, "delivery_enabled": False, "shadow": True},
+    )
+    uow.jobs.records.append(job)
+
+    result = await RunMaterializeActiveRulesJobUseCase(uow).execute(job)
+
+    assert uow.committed
+    assert result.job.status == "succeeded"
+    assert result.materialization.planned_instances[0].status == InstanceStatus.SHADOW
+    assert result.materialization.planned_instances[0].delivery_enabled is False
+    assert uow.jobs.summaries[-1]["rules_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_claim_due_notifications_commits_claimed_instances():
+    uow = _uow()
+    uow.instances.claim_result = ClaimDueNotificationsResult(
+        claimed=(
+            ClaimedNotificationInstance(
+                instance_id=101,
+                attempt_id=201,
+                attempt_no=1,
+                rule_id=1,
+                category=CategoryKey.LESSON_CONFIRMATION,
+                event_type=EventType.LESSON,
+                event_id=617,
+                recipient_type="learner",
+                recipient_id=10,
+                learner_id=10,
+                effective_scheduled_for=datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc),
+                priority=Priority.NORMAL,
+                channel="telegram",
+            ),
+        )
+    )
+
+    result = await ClaimDueNotificationsUseCase(uow).execute(
+        now=datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc),
+        limit=100,
+    )
+
+    assert uow.committed
+    assert result.claimed[0].instance_id == 101
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_marks_attempt_sent():
+    uow = _uow()
+    renderer = FakeRenderer()
+    adapter = FakeChannelAdapter()
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow,
+        renderer=renderer,
+        channel_adapter=adapter,
+    ).execute(_claimed_instance())
+
+    assert isinstance(result, ExecuteNotificationDeliveryResult)
+    assert uow.committed
+    assert result.status == InstanceStatus.SENT
+    assert result.provider_message_id == "777"
+    assert uow.instances.sent_calls == [
+        {
+            "instance_id": 101,
+            "attempt_id": 201,
+            "rendered": renderer.rendered,
+            "send_result": adapter.result
+            or DeliverySendResult(
+                provider="telegram",
+                provider_chat_id="5390064156",
+                provider_message_id="777",
+                sent_at=datetime(2026, 4, 7, 7, 0, 5, tzinfo=timezone.utc),
+            ),
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_marks_retryable_failure():
+    uow = _uow()
+    error = NotificationDeliveryError(
+        "Telegram timeout",
+        error_code="telegram_timeout",
+        retryable=True,
+    )
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow,
+        renderer=FakeRenderer(),
+        channel_adapter=FakeChannelAdapter(error=error),
+    ).execute(_claimed_instance(), now=datetime(2026, 4, 7, 7, 1, tzinfo=timezone.utc))
+
+    assert uow.committed
+    assert result.status == InstanceStatus.SCHEDULED
+    assert result.error_code == "telegram_timeout"
+    assert uow.instances.failed_calls == [
+        {
+            "instance_id": 101,
+            "attempt_id": 201,
+            "error_code": "telegram_timeout",
+            "error_message": "Telegram timeout",
+            "retryable": True,
+            "failed_at": datetime(2026, 4, 7, 7, 1, tzinfo=timezone.utc),
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_marks_permanent_failure():
+    uow = _uow()
+    error = NotificationDeliveryError(
+        "Bot was blocked by the user",
+        error_code="telegram_forbidden",
+        retryable=False,
+    )
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow,
+        renderer=FakeRenderer(),
+        channel_adapter=FakeChannelAdapter(error=error),
+    ).execute(_claimed_instance(), now=datetime(2026, 4, 7, 7, 1, tzinfo=timezone.utc))
+
+    assert result.status == InstanceStatus.FAILED
+    assert uow.instances.failed_calls[0]["retryable"] is False

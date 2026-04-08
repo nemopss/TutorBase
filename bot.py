@@ -17,6 +17,7 @@ from handlers import application as app_h
 from handlers import start as start_h
 from handlers import funnel as funnel_h
 from handlers import cases as cases_h
+from handlers import notifications as notifications_h
 from handlers import reminders as reminders_h
 from middlewares.logging import LoggingMiddleware, LoggingFilter
 from middlewares.db import DbSessionMiddleware
@@ -55,6 +56,7 @@ async def main():
     dp.include_router(admin_test_reminders_h.router)
     dp.include_router(funnel_h.router)
     dp.include_router(cases_h.router)
+    dp.include_router(notifications_h.router)
     dp.include_router(reminders_h.router)
 
     try:

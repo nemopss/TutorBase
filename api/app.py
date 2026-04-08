@@ -41,7 +41,23 @@ from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 
 from config import config
-from api.routes import auth, packages, lessons, templates, reminders, metrics, learners, users, health, tenants, invitations, payments, finance
+from api.routes import (
+    auth,
+    finance,
+    groups,
+    health,
+    invitations,
+    learners,
+    lessons,
+    metrics,
+    notifications,
+    packages,
+    payments,
+    reminders,
+    templates,
+    tenants,
+    users,
+)
 from api.metrics_updater import lifespan_with_metrics
 from api.errors import register_exception_handlers
 
@@ -117,5 +133,7 @@ def create_app() -> FastAPI:
     app.include_router(invitations.router, prefix=API_PREFIX, tags=["invitations"])
     app.include_router(payments.router, prefix=f"{API_PREFIX}/payments", tags=["payments"])
     app.include_router(finance.router, prefix=f"{API_PREFIX}/finance", tags=["finance"])
+    app.include_router(groups.router, prefix=f"{API_PREFIX}/groups", tags=["groups"])
+    app.include_router(notifications.router, prefix=f"{API_PREFIX}/notifications", tags=["notifications"])
 
     return app

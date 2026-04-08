@@ -47,6 +47,10 @@
     "finance": "Finance",
     "templates": "Templates",
     "reminders": "Reminders",
+    "notifications": "Notifications",
+    "groups": "Groups",
+    "newBadge": "NEW",
+    "legacyBadge": "LEGACY",
     "analytics": "Analytics",
     "admin": "Admin",
     "inviteCodes": "Invite Codes"
@@ -312,6 +316,8 @@
     "reminders": {
       "title": "Reminders",
       "subtitle": "Manage automated reminders for lessons and payments",
+      "legacyNoticeTitle": "Legacy reminder system",
+      "legacyNoticeDescription": "This page is kept for the migration period. The redesigned system lives on the Notifications page.",
       "noReminders": "No reminders found",
       "noRemindersDescription": "Reminders will be automatically created when you schedule lessons",
       "scheduledFor": "Scheduled For",
@@ -342,6 +348,448 @@
         "payment_day": "Payment Day",
         "homework": "Homework",
         "package_renewal": "Package Renewal"
+      }
+    },
+    "notifications": {
+      "title": "Notifications",
+      "subtitle": "New flexible system for notification rules, templates, and delivery",
+      "pilotNoticeTitle": "Pilot mode",
+      "pilotNoticeDescription": "This page controls the redesigned system. Until the delivery beat is enabled, queue actions only prepare instances for the new pipeline.",
+      "tabs": {
+        "rules": "Rules",
+        "templates": "Templates",
+        "queue": "Queue",
+        "activity": "Activity",
+        "settings": "Settings"
+      },
+      "name": "Name",
+      "description": "Description",
+      "category": "Category",
+      "status": "Status",
+      "trigger": "Trigger",
+      "audience": "Audience",
+      "version": "Version",
+      "source": "Source",
+      "scheduledFor": "Scheduled for",
+      "learner": "Learner",
+      "delivery": "Delivery",
+      "occurredAt": "Time",
+      "activityType": "Activity type",
+      "activityTypes": {
+        "deliveryAttempt": "Delivery attempt",
+        "response": "Learner response",
+        "teacherAlert": "Needs attention"
+      },
+      "activityStatuses": {
+        "requiresAttention": "Requires attention",
+        "confirmed": "Confirmed",
+        "declined": "Declined"
+      },
+      "activityDetails": {
+        "lessonDeclined": "The learner declined the lesson",
+        "lessonDeclinedWithReason": "The learner declined the lesson: {{reason}}"
+      },
+      "details": "Details",
+      "viewDetails": "View details",
+      "templateKey": "Template key",
+      "templateBody": "Template text",
+      "templateBodyPlaceholder": "Hi, {student_name}! Reminder for your lesson at {lesson_datetime}.",
+      "createTemplate": "Create template",
+      "createRuleWizard": "Create rule",
+      "activate": "Activate",
+      "pause": "Pause",
+      "archive": "Archive",
+      "sendNow": "Send now",
+      "sendNowConfirmTitle": "Send this notification outside the normal queue?",
+      "sendNowConfirmDescription": "For {{learner}}, the “{{category}}” notification will be scheduled for the next delivery tick.",
+      "technicalList": "Technical details",
+      "materializeShadow": "Refresh notification plan",
+      "materializeQueued": "Notification plan refreshed",
+      "materializeHelpTitle": "Recalculate future notifications",
+      "materializeHelpDescription": "This only refreshes the future notification plan and shadow queue. It does not send messages to learners.",
+      "templatesHelpTitle": "Reusable message library",
+      "templatesHelpDescription": "System templates are a good starting point, and custom templates help with repeated scenarios.",
+      "queueHelpTitle": "Planned future notifications",
+      "queueHelpDescription": "Start with the nearest cards and warnings. Technical details are only needed when you need to investigate a specific case.",
+      "activityHelpTitle": "Activity and learner responses",
+      "activityHelpDescription": "Start with the “Needs attention” section. The rest is mostly delivery history and confirmation that things worked.",
+      "settingsPanelTitle": "General settings for the new system",
+      "settingsPanelDescription": "Most of the time it is enough to choose the system mode. Expand the rest only when you need extra constraints.",
+      "advancedSettingsTitle": "Advanced settings",
+      "templateCreated": "Template created",
+      "templateArchived": "Template archived",
+      "ruleCreated": "Rule created as draft",
+      "ruleUpdated": "Rule updated",
+      "learnerModeSaved": "Learner mode saved",
+      "instanceCancelled": "Delivery cancelled",
+      "instanceScheduledNow": "Delivery scheduled for the next tick",
+      "settingsSaved": "Settings saved",
+      "systemTemplate": "System",
+      "tenantTemplate": "Custom",
+      "noRules": "No rules yet",
+      "noRulesDescription": "Rules define what to send and when to send it.",
+      "noTemplates": "No templates yet",
+      "noTemplatesDescription": "Create a template or use system templates after seed migration.",
+      "noInstances": "No notifications in the queue",
+      "noInstancesDescription": "Activate a rule and refresh the notification plan to see future deliveries.",
+      "noActivity": "No activity yet",
+      "noActivityDescription": "Deliveries and learner responses will appear here.",
+      "queueSections": {
+        "past_due": "Needs attention now",
+        "today": "Today",
+        "tomorrow": "Tomorrow",
+        "later": "Later"
+      },
+      "queueTimeline": {
+        "deliveryLine": "{{event}} · event at {{eventTime}}"
+      },
+      "activitySections": {
+        "attention": "Needs attention",
+        "recent": "Recent activity"
+      },
+      "ruleSections": {
+        "active": "Active rules",
+        "draft": "Drafts",
+        "paused": "Paused",
+        "archived": "Archived"
+      },
+      "templateSections": {
+        "system": "System templates",
+        "custom": "Custom templates",
+        "archived": "Archived templates"
+      },
+      "systemMode": "System mode",
+      "globalNewConfirmTitle": "Enable the new system globally?",
+      "globalNewConfirmDescription": "This will switch all learners to the new notification system. Do this only after test-mode verification and a learner-by-learner pilot.",
+      "enableGlobalNew": "Enable for all learners",
+      "dailyCap": "Daily cap",
+      "capMode": "Cap mode",
+      "quietHoursStart": "Quiet hours start",
+      "quietHoursEnd": "Quiet hours end",
+      "timezone": "Timezone",
+      "notificationsEnabled": "Notifications enabled",
+      "modes": {
+        "inherit": "Inherit",
+        "legacy": "Legacy system",
+        "shadow": "Shadow mode",
+        "new": "New system"
+      },
+      "modeDescriptions": {
+        "legacy": "Learners keep receiving only legacy reminders. The new system stays available for setup and verification without a mass switch.",
+        "shadow": "The new system builds the notification plan and shows the queue, but it should not become the primary delivery path for all learners yet.",
+        "new": "The new system becomes the primary path for all learners. Enable this only after a successful pilot and real delivery verification."
+      },
+      "capModes": {
+        "warn_only": "Warn only",
+        "enforce": "Enforce"
+      },
+      "ruleStatus": {
+        "draft": "Draft",
+        "active": "Active",
+        "paused": "Paused",
+        "archived": "Archived"
+      },
+      "instanceStatus": {
+        "shadow": "Test",
+        "scheduled": "Scheduled",
+        "processing": "Processing",
+        "sent": "Sent",
+        "cancelled": "Cancelled",
+        "suppressed": "Suppressed",
+        "skipped": "Skipped",
+        "failed": "Failed",
+        "expired": "Expired"
+      },
+      "warningLabels": {
+        "quietHoursShifted": "Shifted due to quiet hours",
+        "calendarConflict": "Another active lesson exists in the same slot",
+        "combined": "Combined with another notification",
+        "homeworkInherited": "Homework inherited from defaults"
+      },
+      "statusReasons": {
+        "missingContact": "The learner has no Telegram chat_id",
+        "learnerNotificationsDisabled": "Notifications are globally disabled for the learner",
+        "preferencesNotificationsDisabled": "Notifications are disabled by preferences",
+        "categoryDisabled": "This category is disabled by preferences",
+        "packageNotActive": "Package is not active",
+        "lessonNotSchedulable": "Lesson is not in scheduled/rescheduled status",
+        "lessonHasNoHomework": "This lesson has no homework",
+        "manualCancelled": "Cancelled manually",
+        "manualSendNow": "Scheduled for immediate delivery",
+        "cancelledFromUi": "Cancelled from the notifications UI"
+      },
+      "categories": {
+        "lesson_confirmation": "Lesson confirmation",
+        "lesson_reminder": "Lesson reminder",
+        "homework": "Homework",
+        "package_renewal": "Package renewal",
+        "payment": "Payment",
+        "custom": "Custom",
+        "teacher_alert": "Teacher alert"
+      },
+      "eventTypes": {
+        "lesson": "Lesson",
+        "package": "Package",
+        "custom_date": "Custom date"
+      },
+      "triggerTypes": {
+        "relative_offset": "Relative offset",
+        "day_offset_at_time": "Day and time",
+        "after_event_offset": "After event",
+        "absolute_datetime": "Exact datetime"
+      },
+      "triggerSummary": {
+        "dayOffsetAtTime": "{{event}} · {{days}} day(s) before at {{time}}",
+        "relativeOffset": "{{event}} · {{minutes}} min. before",
+        "afterEventOffset": "{{event}} · {{minutes}} min. after",
+        "absoluteDatetime": "{{event}} · {{datetime}}"
+      },
+      "priorities": {
+        "low": "Soft",
+        "normal": "Normal",
+        "high": "Important"
+      },
+      "audienceScopes": {
+        "all_learners": "All learners",
+        "learner": "Specific learners",
+        "group": "Groups",
+        "package": "Packages"
+      },
+      "audienceSummary": {
+        "allLearners": "All learners",
+        "learners": "{{count}} learner(s)",
+        "groups": "{{count}} group(s)",
+        "packages": "{{count}} package(s)",
+        "exclusions": "Exclusions: {{count}}"
+      },
+      "assignmentLabels": {
+        "all_learners": "All learners",
+        "learner": "Learner #{{id}}",
+        "group": "Group #{{id}}",
+        "package": "Package #{{id}}",
+        "excludedPrefix": "Excl."
+      },
+      "variables": {
+        "student_name": "Learner name",
+        "lesson_date": "Lesson date",
+        "lesson_time": "Lesson time",
+        "lesson_datetime": "Lesson date and time",
+        "package_title": "Package title",
+        "teacher_name": "Teacher name"
+      },
+      "ruleWizard": {
+        "title": "Create notification rule",
+        "steps": {
+          "message": "What to send",
+          "trigger": "When",
+          "audience": "Who",
+          "preview": "Check"
+        },
+        "next": "Next",
+        "back": "Back",
+        "preview": "Show result",
+        "saveDraft": "Save draft",
+        "presetTitle": "Start with a ready scenario",
+        "presetDescription": "Pick the closest scenario first, then adjust the text, timing, and audience. This is faster and safer than building a rule from scratch.",
+        "namePlaceholder": "Example: Vocabulary reminder for Vika",
+        "messageSource": "Message source",
+        "useTemplate": "Choose template",
+        "writeCustom": "Write custom text",
+        "template": "Template",
+        "templatePlaceholder": "Choose a template for this category",
+        "insertVariable": "Insert variable:",
+        "eventType": "Event",
+        "eventTypeTeacher": "What should this notification be tied to",
+        "priority": "Priority",
+        "whenToSend": "When to send",
+        "howImportant": "How important is it",
+        "dayOffset": "Day offset",
+        "localTime": "Local time",
+        "minutesOffset": "Minutes offset",
+        "absoluteDatetime": "Date and time",
+        "combinePolicy": "Combination",
+        "combineLessonHomework": "Combine lesson confirmation with homework",
+        "customDateNeedsAbsoluteTrigger": "For custom dates, prefer the “Exact datetime” trigger.",
+        "audienceScope": "Audience type",
+        "whoGetsIt": "Who should receive this notification",
+        "audienceItems": "Who to select",
+        "excludedLearners": "Exclude learners",
+        "excludedLearnersPlaceholder": "Optional",
+        "previewEmpty": "Click “Show preview” to see future deliveries.",
+        "previewWarnings": "Things to review before saving",
+        "previewSummary": "What this rule will produce",
+        "previewCount": "Future deliveries found: {{count}}",
+        "previewLearnersCount": "Learners affected: {{count}}",
+        "previewLine": "Learner #{{learnerId}} · send at {{scheduledFor}}",
+        "combinedSummary": "Will be combined: {{components}}",
+        "advancedSettings": "Advanced settings",
+        "optionalAudienceSettings": "Exclusions and optional settings",
+        "triggerChoices": {
+          "day_offset_at_time": "A day before at a specific time",
+          "relative_offset": "A few minutes or hours before the event",
+          "after_event_offset": "Some time after the event",
+          "absolute_datetime": "At an exact date and time"
+        },
+        "previewKinds": {
+          "single": "Regular notification",
+          "combined": "Combined notification"
+        },
+        "components": "Components",
+        "stepHelp": {
+          "messageTitle": "First decide what the learner should see",
+          "messageDescription": "Use a ready-made template or write your own message. The rule name is only for your own management.",
+          "triggerTitle": "Now decide when this message should be sent",
+          "triggerDescription": "Choose the event first, then set the send timing relative to that event. For the first pilot, use simple scenarios.",
+          "audienceTitle": "Last step before checking: who should get it",
+          "audienceDescription": "You can target all learners, selected learners, groups, or packages, and then exclude specific learners if needed."
+        },
+        "presets": {
+          "lesson_confirmation": {
+            "title": "Lesson confirmation",
+            "description": "Remind the learner about the next lesson and ask them to confirm it.",
+            "name": "Lesson confirmation"
+          },
+          "homework": {
+            "title": "Homework reminder",
+            "description": "Remind the learner about homework before the next lesson.",
+            "name": "Homework reminder"
+          },
+          "package_renewal": {
+            "title": "Package renewal",
+            "description": "Warn in advance that the package is ending and should be renewed.",
+            "name": "Package renewal"
+          },
+          "custom_message": {
+            "title": "Custom message",
+            "description": "Create a one-off or fully custom notification with your own text.",
+            "name": "Custom message"
+          }
+        },
+        "validation": {
+          "nameRequired": "Enter a rule name.",
+          "categoryRequired": "Choose a category.",
+          "templateRequired": "Choose a template or switch to custom text.",
+          "messageRequired": "Enter notification text.",
+          "triggerRequired": "Fill event, trigger, and priority.",
+          "dayTriggerRequired": "Fill day offset and local time.",
+          "minutesRequired": "Enter minutes offset.",
+          "absoluteDatetimeRequired": "Enter date and time.",
+          "audienceRequired": "Choose at least one recipient."
+        }
+      },
+      "rollout": {
+        "title": "Learner pilot",
+        "noticeTitle": "Safe rollout",
+        "noticeDescription": "For production, keep the global mode on the legacy or test system first, then enable the new system for one learner at a time. New mode suppresses legacy reminders for the selected learner.",
+        "overrideMode": "Mode for this learner",
+        "effectiveMode": "Effective mode",
+        "updatedAt": "Updated",
+        "newConfirmTitle": "Enable the new system for this learner?",
+        "newConfirmDescription": "For {{name}}, legacy reminders will be disabled and delivery will move to the new notification system.",
+        "enableNewForLearner": "Enable new system",
+        "noLearners": "No learners found",
+        "noLearnersDescription": "Add learners to manage the new system rollout."
+      },
+      "rolloutChecklist": {
+        "title": "Safe rollout checklist",
+        "noticeTitle": "Recommended order before production",
+        "noticeDescription": "First verify the new system in test mode, then enable it for individual learners, and only after that switch everyone.",
+        "steps": {
+          "1": "Keep the global mode as legacy or test mode.",
+          "2": "Refresh the notification plan and review the queue and warnings.",
+          "3": "Enable the new system for one learner and verify real notifications.",
+          "4": "Only after a successful pilot, enable the new system globally."
+        }
+      },
+      "rolloutStatus": {
+        "title": "Current pilot status",
+        "nextActionTitle": "Recommended next action",
+        "globalMode": "Global mode",
+        "totalLearners": "Learners in scope",
+        "learnersInTestMode": "Learners in test mode",
+        "learnersInNew": "Learners on the new system",
+        "plannedNotifications": "Notifications in plan",
+        "readyForDelivery": "Ready for real delivery now",
+        "attentionAlerts": "Events requiring attention",
+        "nextActions": {
+          "reviewAlerts": "Review attention-required events first so the pilot does not hide real problems.",
+          "enableTestMode": "Enable the global test mode or move one learner to test mode first so you can build the notification plan safely.",
+          "refreshPlan": "Refresh the notification plan so you can inspect the future queue before any real sends.",
+          "choosePilotLearner": "Choose one learner for the new-system pilot before running real deliveries.",
+          "waitForDueNotifications": "The plan is ready, but there are no due notifications for real delivery right now. Wait for the due time or check the schedule.",
+          "readyForControlledSend": "You can now run a controlled manual delivery for the pilot and inspect the real message flow."
+        }
+      },
+      "pilotControls": {
+        "title": "Manual pilot controls",
+        "noticeTitle": "Use this instead of automatic Beat during the pilot",
+        "noticeDescription": "Refresh background tasks and the notification plan first, then manually run real delivery only when you are ready for the pilot.",
+        "processJobs": "Refresh background tasks",
+        "processJobsQueued": "Background refresh queued: {{taskId}}",
+        "deliverNow": "Run delivery",
+        "deliveryQueued": "Delivery queued: {{taskId}}",
+        "statusSummary": "Currently in plan: {{planned}}. Ready for real delivery: {{ready}}.",
+        "deliveryBlockedHint": "There are no due notifications with delivery enabled right now. Refresh the plan, switch the pilot learner to the new system, or wait for the due time first.",
+        "deliverNowConfirmTitle": "Run real delivery for due notifications?",
+        "deliverNowConfirmDescription": "This action can send real messages to learners who already use the new system."
+      },
+      "queueDetails": {
+        "title": "Notification details",
+        "titleWithId": "Notification #{{id}}",
+        "summary": "Summary",
+        "source": "Source",
+        "statusReason": "Status reason",
+        "eventTime": "Event time",
+        "effectiveScheduledFor": "Effective delivery time",
+        "deliveryEnabled": "Delivery enabled",
+        "deliveryDisabled": "Delivery disabled",
+        "priority": "Priority",
+        "channel": "Channel",
+        "rule": "Rule",
+        "event": "Event",
+        "combination": "Combination",
+        "dedupeKey": "Dedupe key",
+        "warnings": "Warnings",
+        "noWarnings": "No additional warnings",
+        "calendarConflictTitle": "The learner has lesson conflicts",
+        "calendarConflictDescription": "Lessons found in this slot: {{count}}. Lesson IDs: {{lessonIds}}. Package IDs: {{packageIds}}.",
+        "components": "Combined notification components",
+        "componentKey": "Component key",
+        "latestAttempt": "Latest delivery attempt",
+        "providerMessageId": "Telegram message_id",
+        "providerChatId": "Telegram chat_id",
+        "error": "Error",
+        "sentAt": "Sent at",
+        "noAttempt": "No attempts yet",
+        "debug": "Technical details",
+        "notFound": "Notification not found"
+      }
+    },
+    "groups": {
+      "title": "Groups",
+      "subtitle": "Learner audiences for notification rules and future group scheduling",
+      "noticeTitle": "Future-ready for group lessons",
+      "noticeDescription": "For now, groups are used as notification audiences. Group schedules and shared packages will be added in a separate redesign.",
+      "createGroup": "Create group",
+      "groupCreated": "Group created",
+      "groupArchived": "Group archived",
+      "memberRemoved": "Learner removed from group",
+      "name": "Name",
+      "description": "Description",
+      "color": "Color",
+      "status": "Status",
+      "members": "Members",
+      "memberNames": "Learners",
+      "selectLearners": "Select learners",
+      "removeMember": "Remove {{name}}",
+      "archive": "Archive",
+      "noGroups": "No groups yet",
+      "noGroupsDescription": "Create a group to assign notifications to multiple learners.",
+      "noDescription": "No description",
+      "statuses": {
+        "active": "Active",
+        "paused": "Paused",
+        "archived": "Archived"
       }
     },
     "analytics": {

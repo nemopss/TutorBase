@@ -47,6 +47,10 @@
     "finance": "Финансы",
     "templates": "Шаблоны",
     "reminders": "Напоминания",
+    "notifications": "Уведомления",
+    "groups": "Группы",
+    "newBadge": "NEW",
+    "legacyBadge": "LEGACY",
     "analytics": "Аналитика",
     "admin": "Админ",
     "inviteCodes": "Инвайт-коды"
@@ -313,6 +317,8 @@
     "reminders": {
       "title": "Напоминания",
       "subtitle": "Управление автоматическими напоминаниями об уроках и оплате",
+      "legacyNoticeTitle": "Старая система напоминаний",
+      "legacyNoticeDescription": "Эта страница оставлена для переходного периода. Новая система находится на странице «Уведомления».",
       "noReminders": "Напоминания не найдены",
       "noRemindersDescription": "Напоминания создаются автоматически при планировании уроков",
       "scheduledFor": "Запланировано на",
@@ -343,6 +349,448 @@
         "payment_day": "Оплата (за день)",
         "homework": "Домашнее задание",
         "package_renewal": "Продление пакета"
+      }
+    },
+    "notifications": {
+      "title": "Уведомления",
+      "subtitle": "Новая гибкая система уведомлений, правил, шаблонов и доставки",
+      "pilotNoticeTitle": "Тестовый режим",
+      "pilotNoticeDescription": "Здесь настраивается новая система уведомлений. Пока автоматическая отправка не включена, вы в основном проверяете будущий план, предупреждения и пилотные настройки.",
+      "tabs": {
+        "rules": "Правила",
+        "templates": "Шаблоны",
+        "queue": "Очередь",
+        "activity": "События",
+        "settings": "Настройки"
+      },
+      "name": "Название",
+      "description": "Описание",
+      "category": "Категория",
+      "status": "Статус",
+      "trigger": "Триггер",
+      "audience": "Аудитория",
+      "version": "Версия",
+      "source": "Источник",
+      "scheduledFor": "Запланировано",
+      "learner": "Ученик",
+      "delivery": "Доставка",
+      "occurredAt": "Время",
+      "activityType": "Тип события",
+      "activityTypes": {
+        "deliveryAttempt": "Попытка доставки",
+        "response": "Ответ ученика",
+        "teacherAlert": "Нужно внимание"
+      },
+      "activityStatuses": {
+        "requiresAttention": "Требует внимания",
+        "confirmed": "Подтверждено",
+        "declined": "Отказ"
+      },
+      "activityDetails": {
+        "lessonDeclined": "Ученик отказался от урока",
+        "lessonDeclinedWithReason": "Ученик отказался от урока: {{reason}}"
+      },
+      "details": "Детали",
+      "viewDetails": "Подробнее",
+      "templateKey": "Ключ шаблона",
+      "templateBody": "Текст шаблона",
+      "templateBodyPlaceholder": "Привет, {student_name}! Напоминаю об уроке {lesson_datetime}.",
+      "createTemplate": "Создать шаблон",
+      "createRuleWizard": "Создать правило",
+      "activate": "Активировать",
+      "pause": "Пауза",
+      "archive": "Архивировать",
+      "sendNow": "Отправить сейчас",
+      "sendNowConfirmTitle": "Отправить уведомление вне очереди?",
+      "sendNowConfirmDescription": "Для ученика {{learner}} уведомление категории «{{category}}» будет поставлено в ближайшую очередь отправки.",
+      "technicalList": "Технические детали",
+      "materializeShadow": "Обновить план уведомлений",
+      "materializeQueued": "План уведомлений обновлён",
+      "materializeHelpTitle": "Пересчитать будущие уведомления",
+      "materializeHelpDescription": "Это действие только обновляет будущий план уведомлений и тестовую очередь. Ученикам сообщения не отправляются.",
+      "templatesHelpTitle": "Библиотека готовых текстов",
+      "templatesHelpDescription": "Системные шаблоны можно использовать как основу, а свои шаблоны удобно хранить для повторяющихся сценариев.",
+      "queueHelpTitle": "План будущих уведомлений",
+      "queueHelpDescription": "Сначала смотрите на ближайшие карточки и предупреждения. Технические детали нужны только для разбора спорных случаев.",
+      "activityHelpTitle": "Лента событий и ответов",
+      "activityHelpDescription": "Сначала разбирайте блок «Требует внимания». Остальные события полезны как история и проверка доставки.",
+      "settingsPanelTitle": "Общие настройки новой системы",
+      "settingsPanelDescription": "Обычно здесь достаточно выбрать режим системы. Остальные ограничения можно раскрыть и настроить при необходимости.",
+      "advancedSettingsTitle": "Дополнительные настройки",
+      "templateCreated": "Шаблон создан",
+      "templateArchived": "Шаблон архивирован",
+      "ruleCreated": "Правило создано как черновик",
+      "ruleUpdated": "Правило обновлено",
+      "learnerModeSaved": "Режим ученика сохранён",
+      "instanceCancelled": "Отправка отменена",
+      "instanceScheduledNow": "Отправка поставлена в ближайшую очередь",
+      "settingsSaved": "Настройки сохранены",
+      "systemTemplate": "Системный",
+      "tenantTemplate": "Свой",
+      "noRules": "Правил пока нет",
+      "noRulesDescription": "Правила будут управлять тем, что и когда отправлять ученикам.",
+      "noTemplates": "Шаблонов пока нет",
+      "noTemplatesDescription": "Создайте шаблон или используйте системные шаблоны после seed-миграции.",
+      "noInstances": "В очереди пока нет уведомлений",
+      "noInstancesDescription": "Активируйте правило и обновите план уведомлений, чтобы увидеть будущие отправки.",
+      "noActivity": "Событий пока нет",
+      "noActivityDescription": "Доставка и ответы учеников появятся здесь.",
+      "queueSections": {
+        "past_due": "Нужно проверить сейчас",
+        "today": "Сегодня",
+        "tomorrow": "Завтра",
+        "later": "Позже"
+      },
+      "queueTimeline": {
+        "deliveryLine": "{{event}} · событие {{eventTime}}"
+      },
+      "activitySections": {
+        "attention": "Требует внимания",
+        "recent": "Недавние события"
+      },
+      "ruleSections": {
+        "active": "Активные правила",
+        "draft": "Черновики",
+        "paused": "На паузе",
+        "archived": "Архив"
+      },
+      "templateSections": {
+        "system": "Системные шаблоны",
+        "custom": "Свои шаблоны",
+        "archived": "Архивные шаблоны"
+      },
+      "systemMode": "Режим системы",
+      "globalNewConfirmTitle": "Включить новую систему глобально?",
+      "globalNewConfirmDescription": "Это переключит всех учеников на новую систему уведомлений. Делайте это только после проверки в тестовом режиме и пилота на отдельных учениках.",
+      "enableGlobalNew": "Включить новую систему всем",
+      "dailyCap": "Лимит в день",
+      "capMode": "Режим лимита",
+      "quietHoursStart": "Тихие часы с",
+      "quietHoursEnd": "Тихие часы до",
+      "timezone": "Часовой пояс",
+      "notificationsEnabled": "Уведомления включены",
+      "modes": {
+        "inherit": "Наследовать",
+        "legacy": "Старая система",
+        "shadow": "Тестовый режим",
+        "new": "Новая система"
+      },
+      "modeDescriptions": {
+        "legacy": "Ученикам продолжают отправляться только старые напоминания. Новая система доступна для настройки и проверки без массового переключения.",
+        "shadow": "Новая система строит план уведомлений и показывает очередь, но не должна становиться основным каналом отправки для всех учеников.",
+        "new": "Новая система становится основной для всех учеников. Включайте этот режим только после успешного пилота и проверки реальной доставки."
+      },
+      "capModes": {
+        "warn_only": "Только предупреждать",
+        "enforce": "Блокировать"
+      },
+      "ruleStatus": {
+        "draft": "Черновик",
+        "active": "Активно",
+        "paused": "Пауза",
+        "archived": "Архив"
+      },
+      "instanceStatus": {
+        "shadow": "Тестовый",
+        "scheduled": "Запланировано",
+        "processing": "В обработке",
+        "sent": "Отправлено",
+        "cancelled": "Отменено",
+        "suppressed": "Подавлено",
+        "skipped": "Пропущено",
+        "failed": "Ошибка",
+        "expired": "Истекло"
+      },
+      "warningLabels": {
+        "quietHoursShifted": "Сдвинуто из-за тихих часов",
+        "calendarConflict": "Есть другой активный урок в тот же слот",
+        "combined": "Объединено с другим уведомлением",
+        "homeworkInherited": "Домашка взята по наследованию"
+      },
+      "statusReasons": {
+        "missingContact": "У ученика нет Telegram chat_id",
+        "learnerNotificationsDisabled": "У ученика глобально отключены уведомления",
+        "preferencesNotificationsDisabled": "Уведомления отключены настройками",
+        "categoryDisabled": "Категория отключена настройками",
+        "packageNotActive": "Пакет не активен",
+        "lessonNotSchedulable": "Урок не в статусе scheduled/rescheduled",
+        "lessonHasNoHomework": "Для урока нет домашки",
+        "manualCancelled": "Отменено вручную",
+        "manualSendNow": "Поставлено на немедленную отправку",
+        "cancelledFromUi": "Отменено из интерфейса уведомлений"
+      },
+      "categories": {
+        "lesson_confirmation": "Подтверждение урока",
+        "lesson_reminder": "Напоминание об уроке",
+        "homework": "Домашка",
+        "package_renewal": "Продление пакета",
+        "payment": "Оплата",
+        "custom": "Кастомное",
+        "teacher_alert": "Уведомление учителю"
+      },
+      "eventTypes": {
+        "lesson": "Урок",
+        "package": "Пакет",
+        "custom_date": "Произвольная дата"
+      },
+      "triggerTypes": {
+        "relative_offset": "Смещение от события",
+        "day_offset_at_time": "День и время",
+        "after_event_offset": "После события",
+        "absolute_datetime": "Конкретная дата"
+      },
+      "triggerSummary": {
+        "dayOffsetAtTime": "{{event}} · за {{days}} дн. в {{time}}",
+        "relativeOffset": "{{event}} · за {{minutes}} мин.",
+        "afterEventOffset": "{{event}} · через {{minutes}} мин.",
+        "absoluteDatetime": "{{event}} · {{datetime}}"
+      },
+      "priorities": {
+        "low": "Мягкое",
+        "normal": "Обычное",
+        "high": "Важное"
+      },
+      "audienceScopes": {
+        "all_learners": "Все ученики",
+        "learner": "Конкретные ученики",
+        "group": "Группы",
+        "package": "Пакеты"
+      },
+      "audienceSummary": {
+        "allLearners": "Все ученики",
+        "learners": "{{count}} учеников",
+        "groups": "{{count}} групп",
+        "packages": "{{count}} пакетов",
+        "exclusions": "Исключений: {{count}}"
+      },
+      "assignmentLabels": {
+        "all_learners": "Все ученики",
+        "learner": "Ученик #{{id}}",
+        "group": "Группа #{{id}}",
+        "package": "Пакет #{{id}}",
+        "excludedPrefix": "Искл."
+      },
+      "variables": {
+        "student_name": "Имя ученика",
+        "lesson_date": "Дата урока",
+        "lesson_time": "Время урока",
+        "lesson_datetime": "Дата и время урока",
+        "package_title": "Название пакета",
+        "teacher_name": "Имя преподавателя"
+      },
+      "ruleWizard": {
+        "title": "Создать правило уведомления",
+        "steps": {
+          "message": "Что отправить",
+          "trigger": "Когда",
+          "audience": "Кому",
+          "preview": "Проверка"
+        },
+        "next": "Дальше",
+        "back": "Назад",
+        "preview": "Показать результат",
+        "saveDraft": "Сохранить черновик",
+        "presetTitle": "Начните с готового сценария",
+        "presetDescription": "Выберите ближайший сценарий, а потом подправьте текст, время и аудиторию. Это быстрее и безопаснее, чем собирать правило с нуля.",
+        "namePlaceholder": "Например: Вике vocabulary перед уроком",
+        "messageSource": "Источник текста",
+        "useTemplate": "Выбрать шаблон",
+        "writeCustom": "Написать свой текст",
+        "template": "Шаблон",
+        "templatePlaceholder": "Выберите шаблон этой категории",
+        "insertVariable": "Вставить переменную:",
+        "eventType": "Событие",
+        "eventTypeTeacher": "К какому событию привязать",
+        "priority": "Важность",
+        "whenToSend": "Когда отправлять",
+        "howImportant": "Насколько это важно",
+        "dayOffset": "Смещение в днях",
+        "localTime": "Локальное время",
+        "minutesOffset": "Смещение в минутах",
+        "absoluteDatetime": "Дата и время",
+        "combinePolicy": "Объединение",
+        "combineLessonHomework": "Объединять подтверждение урока с домашкой",
+        "customDateNeedsAbsoluteTrigger": "Для произвольной даты лучше выбрать триггер “Конкретная дата”.",
+        "audienceScope": "Тип аудитории",
+        "whoGetsIt": "Кто получит это уведомление",
+        "audienceItems": "Кого выбрать",
+        "excludedLearners": "Исключить учеников",
+        "excludedLearnersPlaceholder": "Опционально",
+        "previewEmpty": "Нажмите “Показать preview”, чтобы увидеть будущие отправки.",
+        "previewWarnings": "На что стоит обратить внимание",
+        "previewSummary": "Что получится из этого правила",
+        "previewCount": "Будущих отправок найдено: {{count}}",
+        "previewLearnersCount": "Это затронет учеников: {{count}}",
+        "previewLine": "Ученик #{{learnerId}} · отправка {{scheduledFor}}",
+        "combinedSummary": "Будет объединено: {{components}}",
+        "advancedSettings": "Дополнительные настройки",
+        "optionalAudienceSettings": "Исключения и дополнительные настройки",
+        "triggerChoices": {
+          "day_offset_at_time": "За день в конкретное время",
+          "relative_offset": "За несколько минут или часов до события",
+          "after_event_offset": "Через некоторое время после события",
+          "absolute_datetime": "В конкретную дату и время"
+        },
+        "previewKinds": {
+          "single": "Обычное уведомление",
+          "combined": "Объединённое уведомление"
+        },
+        "components": "Компоненты",
+        "stepHelp": {
+          "messageTitle": "Сначала определите, что именно увидит ученик",
+          "messageDescription": "Можно взять готовый шаблон или написать свой текст. Название правила нужно только вам для управления.",
+          "triggerTitle": "Теперь выберите, когда это сообщение должно приходить",
+          "triggerDescription": "Сначала выберите событие, затем время отправки относительно этого события. Для первого пилота лучше использовать простые сценарии.",
+          "audienceTitle": "Последний шаг перед preview: кому это отправлять",
+          "audienceDescription": "Можно выбрать всех учеников, конкретных учеников, группы или пакеты, а потом при необходимости исключить отдельных учеников."
+        },
+        "presets": {
+          "lesson_confirmation": {
+            "title": "Подтверждение урока",
+            "description": "Напомнить ученику о ближайшем уроке и попросить подтвердить его.",
+            "name": "Подтверждение урока"
+          },
+          "homework": {
+            "title": "Напоминание о домашке",
+            "description": "Напомнить ученику про домашнее задание перед ближайшим уроком.",
+            "name": "Напоминание о домашке"
+          },
+          "package_renewal": {
+            "title": "Продление пакета",
+            "description": "Напомнить заранее, что пакет подходит к концу и его пора продлить.",
+            "name": "Продление пакета"
+          },
+          "custom_message": {
+            "title": "Своё сообщение",
+            "description": "Создать разовое или кастомное уведомление с вашим текстом.",
+            "name": "Своё сообщение"
+          }
+        },
+        "validation": {
+          "nameRequired": "Укажите название правила.",
+          "categoryRequired": "Выберите категорию.",
+          "templateRequired": "Выберите шаблон или переключитесь на свой текст.",
+          "messageRequired": "Введите текст уведомления.",
+          "triggerRequired": "Заполните событие, триггер и важность.",
+          "dayTriggerRequired": "Заполните смещение в днях и локальное время.",
+          "minutesRequired": "Укажите смещение в минутах.",
+          "absoluteDatetimeRequired": "Укажите дату и время.",
+          "audienceRequired": "Выберите хотя бы одного получателя."
+        }
+      },
+      "rollout": {
+        "title": "Пилот по ученикам",
+        "noticeTitle": "Безопасное включение",
+        "noticeDescription": "Для прод-режима сначала оставьте общий режим на старой или тестовой системе, а новую включайте точечно одному ученику. Новый режим отключает старые напоминания для выбранного ученика.",
+        "overrideMode": "Режим для ученика",
+        "effectiveMode": "Итоговый режим",
+        "updatedAt": "Обновлено",
+        "newConfirmTitle": "Включить новую систему ученику?",
+        "newConfirmDescription": "Для {{name}} старые напоминания будут отключены, а отправка перейдёт на новую систему уведомлений.",
+        "enableNewForLearner": "Включить новую систему",
+        "noLearners": "Ученики не найдены",
+        "noLearnersDescription": "Добавьте учеников, чтобы управлять rollout новой системы."
+      },
+      "rolloutChecklist": {
+        "title": "Чеклист безопасного rollout",
+        "noticeTitle": "Рекомендуемый порядок перед продом",
+        "noticeDescription": "Сначала проверяйте новую систему в тестовом режиме, потом включайте её точечно ученикам, и только после этого переводите всех.",
+        "steps": {
+          "1": "Оставьте общий режим в legacy или тестовом режиме.",
+          "2": "Обновите план уведомлений и проверьте очередь и предупреждения.",
+          "3": "Включите новую систему одному ученику и проверьте реальные уведомления.",
+          "4": "Только после успешного пилота включайте новую систему глобально."
+        }
+      },
+      "rolloutStatus": {
+        "title": "Текущий статус пилота",
+        "nextActionTitle": "Следующее рекомендуемое действие",
+        "globalMode": "Общий режим",
+        "totalLearners": "Учеников в контуре",
+        "learnersInTestMode": "Учеников в тестовом режиме",
+        "learnersInNew": "Учеников на новой системе",
+        "plannedNotifications": "Уведомлений в плане",
+        "readyForDelivery": "Готово к реальной отправке сейчас",
+        "attentionAlerts": "Событий, требующих внимания",
+        "nextActions": {
+          "reviewAlerts": "Сначала разберите события, требующие внимания, чтобы пилот не маскировал реальные проблемы.",
+          "enableTestMode": "Сначала включите общий тестовый режим или переведите одного ученика в тестовый режим, чтобы безопасно собрать план уведомлений.",
+          "refreshPlan": "Обновите план уведомлений, чтобы увидеть будущую очередь перед реальной отправкой.",
+          "choosePilotLearner": "Выберите одного ученика для пилота на новой системе, прежде чем запускать реальные отправки.",
+          "waitForDueNotifications": "План уже собран, но сейчас нет due-уведомлений для реальной отправки. Дождитесь нужного времени или проверьте расписание.",
+          "readyForControlledSend": "Можно аккуратно запускать ручную отправку для пилота и проверять реальный поток сообщений."
+        }
+      },
+      "pilotControls": {
+        "title": "Ручной запуск пилота",
+        "noticeTitle": "Используйте вместо автоматического Beat на пилоте",
+        "noticeDescription": "Сначала обновите фоновые задачи и план уведомлений, а затем вручную запускайте реальную отправку только когда готовы к пилоту.",
+        "processJobs": "Обновить фоновые задачи",
+        "processJobsQueued": "Фоновое обновление поставлено в очередь: {{taskId}}",
+        "deliverNow": "Запустить отправку",
+        "deliveryQueued": "Задача отправки поставлена в очередь: {{taskId}}",
+        "statusSummary": "Сейчас в плане: {{planned}}. Готово к реальной отправке: {{ready}}.",
+        "deliveryBlockedHint": "Сейчас нет due-уведомлений с включённой доставкой. Сначала обновите план, переведите пилотного ученика на новую систему или дождитесь нужного времени.",
+        "deliverNowConfirmTitle": "Запустить реальную отправку готовых уведомлений?",
+        "deliverNowConfirmDescription": "Это действие может отправить реальные сообщения ученикам, для которых уже включена новая система."
+      },
+      "queueDetails": {
+        "title": "Детали уведомления",
+        "titleWithId": "Детали уведомления #{{id}}",
+        "summary": "Сводка",
+        "source": "Источник",
+        "statusReason": "Причина статуса",
+        "eventTime": "Время события",
+        "effectiveScheduledFor": "Фактическое время отправки",
+        "deliveryEnabled": "Доставка включена",
+        "deliveryDisabled": "Доставка отключена",
+        "priority": "Важность",
+        "channel": "Канал",
+        "rule": "Правило",
+        "event": "Событие",
+        "combination": "Комбинация",
+        "dedupeKey": "Ключ дедупликации",
+        "warnings": "Предупреждения",
+        "noWarnings": "Дополнительных предупреждений нет",
+        "calendarConflictTitle": "У ученика есть пересечение уроков",
+        "calendarConflictDescription": "На этот слот найдено уроков: {{count}}. Lesson IDs: {{lessonIds}}. Package IDs: {{packageIds}}.",
+        "components": "Компоненты объединённого уведомления",
+        "componentKey": "Ключ компонента",
+        "latestAttempt": "Последняя попытка доставки",
+        "providerMessageId": "Telegram message_id",
+        "providerChatId": "Telegram chat_id",
+        "error": "Ошибка",
+        "sentAt": "Отправлено",
+        "noAttempt": "Попыток ещё не было",
+        "debug": "Технические детали",
+        "notFound": "Уведомление не найдено"
+      }
+    },
+    "groups": {
+      "title": "Группы",
+      "subtitle": "Аудитории учеников для правил уведомлений и будущего группового расписания",
+      "noticeTitle": "Архитектурный запас под групповые уроки",
+      "noticeDescription": "Сейчас группы используются как аудитории для уведомлений. Групповое расписание и общие пакеты будут добавлены отдельным реворком.",
+      "createGroup": "Создать группу",
+      "groupCreated": "Группа создана",
+      "groupArchived": "Группа архивирована",
+      "memberRemoved": "Ученик удалён из группы",
+      "name": "Название",
+      "description": "Описание",
+      "color": "Цвет",
+      "status": "Статус",
+      "members": "Участники",
+      "memberNames": "Ученики",
+      "selectLearners": "Выберите учеников",
+      "removeMember": "Убрать {{name}}",
+      "archive": "Архивировать",
+      "noGroups": "Групп пока нет",
+      "noGroupsDescription": "Создайте группу, чтобы назначать уведомления нескольким ученикам.",
+      "noDescription": "Без описания",
+      "statuses": {
+        "active": "Активна",
+        "paused": "Пауза",
+        "archived": "Архив"
       }
     },
     "analytics": {

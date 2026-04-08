@@ -21,6 +21,9 @@ class DummyBot:
 
 
 class DummySession:
+    def add(self, instance):
+        pass
+
     async def commit(self):
         pass
 
@@ -33,6 +36,11 @@ def scheduler(monkeypatch):
     bot = DummyBot()
     sched = ReminderScheduler(bot)
     monkeypatch.setattr(config, "ADMINS", [999])
+
+    async def fake_should_suppress(session, instance):
+        return False
+
+    monkeypatch.setattr(sched, "_should_suppress_legacy_instance", fake_should_suppress)
     return sched
 
 
@@ -48,6 +56,8 @@ def _make_instance(**overrides):
     )
     defaults = dict(
         id=1,
+        tenant_id=1,
+        learner_id=learner.id,
         learner=learner,
         package=overrides.pop("package", SimpleNamespace(learner=learner)),
         package_id=1,
@@ -63,6 +73,7 @@ def _make_instance(**overrides):
         last_response=None,
         last_response_at=None,
         last_decline_reason=None,
+        retry_count=0,
     )
     defaults.update(overrides)
     return SimpleNamespace(**defaults)
@@ -82,6 +93,30 @@ async def test_process_instance_notifications_disabled(scheduler, monkeypatch):
 
     assert calls[0]["status"] == "skipped"
     assert calls[0]["active"] is False
+
+
+@pytest.mark.asyncio
+async def test_process_instance_suppresses_legacy_when_new_notifications_enabled(
+    scheduler,
+    monkeypatch,
+):
+    calls = []
+
+    async def fake_set_status(session, instance, **kwargs):
+        calls.append(kwargs)
+
+    async def fake_should_suppress(session, instance):
+        return True
+
+    monkeypatch.setattr(crud, "set_reminder_instance_status", fake_set_status)
+    monkeypatch.setattr(scheduler, "_should_suppress_legacy_instance", fake_should_suppress)
+
+    await scheduler._process_instance(DummySession(), _make_instance(), datetime.now(timezone.utc))
+
+    assert calls[0]["status"] == "skipped"
+    assert calls[0]["active"] is False
+    assert calls[0]["comment"] == "Suppressed by new notification system"
+    assert scheduler._bot.sent == []
 
 
 @pytest.mark.asyncio

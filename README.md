@@ -88,6 +88,11 @@ npm run dev
    - перезапускает nginx при изменениях API/фронта/конфига;
    - при изменении `docker-compose.yml` пересоздаёт весь стек.
 
+Важно:
+- миграции применяются через `bot`-контейнер, потому что основной [`Dockerfile`](Dockerfile) использует [`entrypoint.sh`](entrypoint.sh) с `alembic upgrade head`;
+- отдельный `api`-контейнер, собираемый из [`Dockerfile.api`](Dockerfile.api), миграции сам не выполняет;
+- если выкатывается код, зависящий от новых таблиц/полей, безопасный порядок такой: сначала должен обновиться и стартовать `bot`, и только потом проверяется `api`.
+
 > Понадобятся секреты: `SERVER_HOST`, `SERVER_USER`, `SERVER_SSH_KEY`, `GHCR_PAT`.
 
 ### Ручное обновление
@@ -114,6 +119,7 @@ docker compose up -d --remove-orphans
 - `mini-app/src/pages/Admin.tsx` — админ-панель.
 - `monitoring/` — Prometheus/Grafana шаблоны.
 - `docs/` — архитектурные заметки и планы.
+  - Для первого production pilot новой notification-системы используйте [docs/notifications_prod_pilot_runbook.md](docs/notifications_prod_pilot_runbook.md).
 
 ## 📄 License
 

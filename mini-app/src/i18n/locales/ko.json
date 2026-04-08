@@ -47,6 +47,10 @@
     "finance": "재정",
     "templates": "템플릿",
     "reminders": "알림",
+    "notifications": "알림",
+    "groups": "그룹",
+    "newBadge": "NEW",
+    "legacyBadge": "LEGACY",
     "analytics": "분석",
     "admin": "관리자",
     "inviteCodes": "초대 코드"
@@ -311,6 +315,8 @@
     "reminders": {
       "title": "알림",
       "subtitle": "수업 및 결제에 대한 자동 알림 관리",
+      "legacyNoticeTitle": "기존 알림 시스템",
+      "legacyNoticeDescription": "이 페이지는 마이그레이션 기간 동안 유지됩니다. 새 시스템은 알림 페이지에 있습니다.",
       "noReminders": "알림을 찾을 수 없습니다",
       "noRemindersDescription": "수업을 예약하면 알림이 자동으로 생성됩니다",
       "scheduledFor": "예정 시간",
@@ -341,6 +347,448 @@
         "payment_day": "결제일",
         "homework": "숙제",
         "package_renewal": "패키지 갱신"
+      }
+    },
+    "notifications": {
+      "title": "알림",
+      "subtitle": "알림 규칙, 템플릿, 전송을 위한 새로운 유연한 시스템",
+      "pilotNoticeTitle": "테스트 모드",
+      "pilotNoticeDescription": "이 페이지는 새 시스템을 관리합니다. delivery beat가 켜지기 전까지 큐 작업은 새 파이프라인용 인스턴스만 준비합니다.",
+      "tabs": {
+        "rules": "규칙",
+        "templates": "템플릿",
+        "queue": "큐",
+        "activity": "활동",
+        "settings": "설정"
+      },
+      "name": "이름",
+      "description": "설명",
+      "category": "카테고리",
+      "status": "상태",
+      "trigger": "트리거",
+      "audience": "대상",
+      "version": "버전",
+      "source": "소스",
+      "scheduledFor": "예약 시간",
+      "learner": "학생",
+      "delivery": "전송",
+      "occurredAt": "시간",
+      "activityType": "활동 유형",
+      "activityTypes": {
+        "deliveryAttempt": "전송 시도",
+        "response": "학생 응답",
+        "teacherAlert": "주의 필요"
+      },
+      "activityStatuses": {
+        "requiresAttention": "주의 필요",
+        "confirmed": "확인됨",
+        "declined": "거절"
+      },
+      "activityDetails": {
+        "lessonDeclined": "학생이 수업을 거절했습니다",
+        "lessonDeclinedWithReason": "학생이 수업을 거절했습니다: {{reason}}"
+      },
+      "details": "상세",
+      "viewDetails": "상세 보기",
+      "templateKey": "템플릿 키",
+      "templateBody": "템플릿 텍스트",
+      "templateBodyPlaceholder": "안녕하세요, {student_name}! {lesson_datetime} 수업 알림입니다.",
+      "createTemplate": "템플릿 생성",
+      "createRuleWizard": "규칙 생성",
+      "activate": "활성화",
+      "pause": "일시 중지",
+      "archive": "보관",
+      "sendNow": "지금 보내기",
+      "sendNowConfirmTitle": "이 알림을 일반 큐 밖에서 보낼까요?",
+      "sendNowConfirmDescription": "{{learner}}에게 “{{category}}” 알림이 다음 전송 틱에 예약됩니다.",
+      "technicalList": "기술 세부 정보",
+      "materializeShadow": "알림 계획 새로고침",
+      "materializeQueued": "알림 계획이 갱신되었습니다",
+      "materializeHelpTitle": "향후 알림 다시 계산",
+      "materializeHelpDescription": "이 작업은 향후 알림 계획과 테스트 큐만 갱신합니다. 학생에게 실제 메시지를 보내지 않습니다.",
+      "templatesHelpTitle": "재사용 가능한 메시지 라이브러리",
+      "templatesHelpDescription": "시스템 템플릿은 좋은 출발점이고, 사용자 템플릿은 반복되는 시나리오에 편리합니다.",
+      "queueHelpTitle": "예정된 알림 계획",
+      "queueHelpDescription": "먼저 가까운 카드와 경고를 확인하세요. 기술 세부 정보는 특정 사례를 자세히 볼 때만 필요합니다.",
+      "activityHelpTitle": "이벤트와 학생 응답",
+      "activityHelpDescription": "먼저 ‘확인이 필요함’ 섹션을 보세요. 나머지는 주로 이력과 발송 확인용입니다.",
+      "settingsPanelTitle": "새 시스템의 일반 설정",
+      "settingsPanelDescription": "대부분은 시스템 모드만 선택하면 충분합니다. 추가 제약이 필요할 때만 나머지 설정을 펼치세요.",
+      "advancedSettingsTitle": "추가 설정",
+      "templateCreated": "템플릿이 생성되었습니다",
+      "templateArchived": "템플릿이 보관되었습니다",
+      "ruleCreated": "규칙이 초안으로 생성되었습니다",
+      "ruleUpdated": "규칙이 업데이트되었습니다",
+      "learnerModeSaved": "학생 모드가 저장되었습니다",
+      "instanceCancelled": "전송이 취소되었습니다",
+      "instanceScheduledNow": "전송이 다음 틱에 예약되었습니다",
+      "settingsSaved": "설정이 저장되었습니다",
+      "systemTemplate": "시스템",
+      "tenantTemplate": "사용자 정의",
+      "noRules": "아직 규칙이 없습니다",
+      "noRulesDescription": "규칙은 무엇을 언제 보낼지 정의합니다.",
+      "noTemplates": "아직 템플릿이 없습니다",
+      "noTemplatesDescription": "템플릿을 만들거나 seed migration 이후 시스템 템플릿을 사용하세요.",
+      "noInstances": "큐에 알림이 없습니다",
+      "noInstancesDescription": "규칙을 활성화하고 알림 계획을 새로고치면 예정된 전송이 표시됩니다.",
+      "noActivity": "아직 활동이 없습니다",
+      "noActivityDescription": "전송과 학생 응답이 여기에 표시됩니다.",
+      "queueSections": {
+        "past_due": "지금 확인이 필요함",
+        "today": "오늘",
+        "tomorrow": "내일",
+        "later": "이후"
+      },
+      "queueTimeline": {
+        "deliveryLine": "{{event}} · 이벤트 시간 {{eventTime}}"
+      },
+      "activitySections": {
+        "attention": "확인이 필요함",
+        "recent": "최근 활동"
+      },
+      "ruleSections": {
+        "active": "활성 규칙",
+        "draft": "초안",
+        "paused": "일시 중지됨",
+        "archived": "보관됨"
+      },
+      "templateSections": {
+        "system": "시스템 템플릿",
+        "custom": "사용자 정의 템플릿",
+        "archived": "보관된 템플릿"
+      },
+      "systemMode": "시스템 모드",
+      "globalNewConfirmTitle": "새 시스템을 전체에 적용할까요?",
+      "globalNewConfirmDescription": "이 작업은 모든 학생을 새 알림 시스템으로 전환합니다. 테스트 모드 확인과 학생별 파일럿 이후에만 실행하세요.",
+      "enableGlobalNew": "전체에 새 시스템 적용",
+      "dailyCap": "일일 제한",
+      "capMode": "제한 모드",
+      "quietHoursStart": "방해 금지 시작",
+      "quietHoursEnd": "방해 금지 종료",
+      "timezone": "시간대",
+      "notificationsEnabled": "알림 사용",
+      "modes": {
+        "inherit": "상속",
+        "legacy": "기존 시스템",
+        "shadow": "Shadow 모드",
+        "new": "새 시스템"
+      },
+      "modeDescriptions": {
+        "legacy": "학생들은 계속 기존 알림만 받습니다. 새 시스템은 전체 전환 없이 설정과 검증 용도로만 유지됩니다.",
+        "shadow": "새 시스템이 알림 계획을 만들고 큐를 보여주지만, 아직 모든 학생의 기본 발송 경로가 되면 안 됩니다.",
+        "new": "새 시스템이 모든 학생의 기본 발송 경로가 됩니다. 성공적인 파일럿과 실제 발송 검증 이후에만 이 모드를 켜세요."
+      },
+      "capModes": {
+        "warn_only": "경고만",
+        "enforce": "차단"
+      },
+      "ruleStatus": {
+        "draft": "초안",
+        "active": "활성",
+        "paused": "일시 중지",
+        "archived": "보관됨"
+      },
+      "instanceStatus": {
+        "shadow": "테스트",
+        "scheduled": "예약됨",
+        "processing": "처리 중",
+        "sent": "전송됨",
+        "cancelled": "취소됨",
+        "suppressed": "억제됨",
+        "skipped": "건너뜀",
+        "failed": "실패",
+        "expired": "만료됨"
+      },
+      "warningLabels": {
+        "quietHoursShifted": "방해 금지 시간으로 인해 이동됨",
+        "calendarConflict": "같은 시간대에 다른 활성 수업이 있습니다",
+        "combined": "다른 알림과 결합됨",
+        "homeworkInherited": "기본 설정에서 숙제를 상속받음"
+      },
+      "statusReasons": {
+        "missingContact": "학생에게 Telegram chat_id가 없습니다",
+        "learnerNotificationsDisabled": "학생의 알림이 전역으로 비활성화되었습니다",
+        "preferencesNotificationsDisabled": "환경설정으로 알림이 비활성화되었습니다",
+        "categoryDisabled": "이 카테고리가 환경설정에서 꺼져 있습니다",
+        "packageNotActive": "패키지가 활성 상태가 아닙니다",
+        "lessonNotSchedulable": "수업 상태가 scheduled/rescheduled가 아닙니다",
+        "lessonHasNoHomework": "이 수업에는 숙제가 없습니다",
+        "manualCancelled": "수동으로 취소됨",
+        "manualSendNow": "즉시 전송으로 예약됨",
+        "cancelledFromUi": "알림 UI에서 취소됨"
+      },
+      "categories": {
+        "lesson_confirmation": "수업 확인",
+        "lesson_reminder": "수업 알림",
+        "homework": "숙제",
+        "package_renewal": "패키지 갱신",
+        "payment": "결제",
+        "custom": "사용자 정의",
+        "teacher_alert": "교사 알림"
+      },
+      "eventTypes": {
+        "lesson": "수업",
+        "package": "패키지",
+        "custom_date": "사용자 지정 날짜"
+      },
+      "triggerTypes": {
+        "relative_offset": "상대 오프셋",
+        "day_offset_at_time": "날짜와 시간",
+        "after_event_offset": "이벤트 후",
+        "absolute_datetime": "정확한 날짜/시간"
+      },
+      "triggerSummary": {
+        "dayOffsetAtTime": "{{event}} · {{days}}일 전 {{time}}",
+        "relativeOffset": "{{event}} · {{minutes}}분 전",
+        "afterEventOffset": "{{event}} · {{minutes}}분 후",
+        "absoluteDatetime": "{{event}} · {{datetime}}"
+      },
+      "priorities": {
+        "low": "부드러운 알림",
+        "normal": "일반",
+        "high": "중요"
+      },
+      "audienceScopes": {
+        "all_learners": "모든 학생",
+        "learner": "특정 학생",
+        "group": "그룹",
+        "package": "패키지"
+      },
+      "audienceSummary": {
+        "allLearners": "모든 학생",
+        "learners": "학생 {{count}}명",
+        "groups": "그룹 {{count}}개",
+        "packages": "패키지 {{count}}개",
+        "exclusions": "제외 {{count}}개"
+      },
+      "assignmentLabels": {
+        "all_learners": "모든 학생",
+        "learner": "학생 #{{id}}",
+        "group": "그룹 #{{id}}",
+        "package": "패키지 #{{id}}",
+        "excludedPrefix": "제외"
+      },
+      "variables": {
+        "student_name": "학생 이름",
+        "lesson_date": "수업 날짜",
+        "lesson_time": "수업 시간",
+        "lesson_datetime": "수업 날짜와 시간",
+        "package_title": "패키지 이름",
+        "teacher_name": "교사 이름"
+      },
+      "ruleWizard": {
+        "title": "알림 규칙 생성",
+        "steps": {
+          "message": "보낼 내용",
+          "trigger": "시점",
+          "audience": "대상",
+          "preview": "확인"
+        },
+        "next": "다음",
+        "back": "뒤로",
+        "preview": "결과 보기",
+        "saveDraft": "초안 저장",
+        "presetTitle": "준비된 시나리오로 시작하세요",
+        "presetDescription": "가장 가까운 시나리오를 먼저 고른 뒤 텍스트, 시간, 대상을 조정하세요. 처음부터 규칙을 조합하는 것보다 빠르고 안전합니다.",
+        "namePlaceholder": "예: Vika 어휘 알림",
+        "messageSource": "메시지 소스",
+        "useTemplate": "템플릿 선택",
+        "writeCustom": "직접 작성",
+        "template": "템플릿",
+        "templatePlaceholder": "이 카테고리의 템플릿을 선택하세요",
+        "insertVariable": "변수 삽입:",
+        "eventType": "이벤트",
+        "eventTypeTeacher": "무슨 이벤트에 연결할까요",
+        "priority": "우선순위",
+        "whenToSend": "언제 보낼까요",
+        "howImportant": "얼마나 중요한가요",
+        "dayOffset": "일 단위 오프셋",
+        "localTime": "현지 시간",
+        "minutesOffset": "분 단위 오프셋",
+        "absoluteDatetime": "날짜와 시간",
+        "combinePolicy": "결합",
+        "combineLessonHomework": "수업 확인과 숙제를 결합",
+        "customDateNeedsAbsoluteTrigger": "사용자 지정 날짜에는 “정확한 날짜/시간” 트리거를 권장합니다.",
+        "audienceScope": "대상 유형",
+        "whoGetsIt": "누가 이 알림을 받아야 하나요",
+        "audienceItems": "선택 대상",
+        "excludedLearners": "제외할 학생",
+        "excludedLearnersPlaceholder": "선택 사항",
+        "previewEmpty": "미리보기를 눌러 예정된 전송을 확인하세요.",
+        "previewWarnings": "저장 전에 확인할 점",
+        "previewSummary": "이 규칙으로 만들어질 내용",
+        "previewCount": "예정된 전송 수: {{count}}",
+        "previewLearnersCount": "영향을 받는 학생 수: {{count}}",
+        "previewLine": "학생 #{{learnerId}} · 전송 {{scheduledFor}}",
+        "combinedSummary": "다음 항목과 결합됨: {{components}}",
+        "advancedSettings": "추가 설정",
+        "optionalAudienceSettings": "제외 대상 및 추가 설정",
+        "triggerChoices": {
+          "day_offset_at_time": "하루 전 특정 시간에",
+          "relative_offset": "이벤트 몇 분 또는 몇 시간 전",
+          "after_event_offset": "이벤트 후 일정 시간 뒤",
+          "absolute_datetime": "정확한 날짜와 시간에"
+        },
+        "previewKinds": {
+          "single": "일반 알림",
+          "combined": "결합 알림"
+        },
+        "components": "구성 요소",
+        "stepHelp": {
+          "messageTitle": "먼저 학생이 보게 될 내용을 정하세요",
+          "messageDescription": "준비된 템플릿을 쓰거나 직접 작성할 수 있습니다. 규칙 이름은 관리용입니다.",
+          "triggerTitle": "이제 이 메시지를 언제 보낼지 정하세요",
+          "triggerDescription": "먼저 이벤트를 고르고, 그 이벤트를 기준으로 발송 시점을 정하세요. 첫 파일럿에서는 단순한 시나리오를 권장합니다.",
+          "audienceTitle": "확인 전 마지막 단계: 누구에게 보낼지 정하세요",
+          "audienceDescription": "모든 학생, 특정 학생, 그룹, 패키지를 선택할 수 있고, 필요하면 일부 학생을 제외할 수도 있습니다."
+        },
+        "presets": {
+          "lesson_confirmation": {
+            "title": "수업 확인",
+            "description": "다음 수업을 학생에게 알려주고 참석 여부를 확인합니다.",
+            "name": "수업 확인"
+          },
+          "homework": {
+            "title": "숙제 알림",
+            "description": "다음 수업 전에 학생에게 숙제를 다시 알려줍니다.",
+            "name": "숙제 알림"
+          },
+          "package_renewal": {
+            "title": "패키지 연장",
+            "description": "패키지가 곧 끝난다는 점을 미리 알려 연장을 준비하게 합니다.",
+            "name": "패키지 연장"
+          },
+          "custom_message": {
+            "title": "직접 작성",
+            "description": "원하는 텍스트로 일회성 또는 완전 사용자 정의 알림을 만듭니다.",
+            "name": "직접 작성"
+          }
+        },
+        "validation": {
+          "nameRequired": "규칙 이름을 입력하세요.",
+          "categoryRequired": "카테고리를 선택하세요.",
+          "templateRequired": "템플릿을 선택하거나 직접 작성으로 전환하세요.",
+          "messageRequired": "알림 텍스트를 입력하세요.",
+          "triggerRequired": "이벤트, 트리거, 우선순위를 입력하세요.",
+          "dayTriggerRequired": "일 단위 오프셋과 현지 시간을 입력하세요.",
+          "minutesRequired": "분 단위 오프셋을 입력하세요.",
+          "absoluteDatetimeRequired": "날짜와 시간을 입력하세요.",
+          "audienceRequired": "수신자를 하나 이상 선택하세요."
+        }
+      },
+      "rollout": {
+        "title": "학생별 파일럿",
+        "noticeTitle": "안전한 롤아웃",
+        "noticeDescription": "프로덕션에서는 먼저 전체 모드를 기존 시스템 또는 테스트 시스템으로 유지하고, 새 시스템은 학생 한 명씩 켜세요. 새 모드는 선택한 학생의 기존 알림을 억제합니다.",
+        "overrideMode": "학생별 모드",
+        "effectiveMode": "적용 모드",
+        "updatedAt": "업데이트됨",
+        "newConfirmTitle": "이 학생에게 새 시스템을 켤까요?",
+        "newConfirmDescription": "{{name}}의 기존 알림은 비활성화되고 새 알림 시스템으로 전환됩니다.",
+        "enableNewForLearner": "새 시스템 켜기",
+        "noLearners": "학생이 없습니다",
+        "noLearnersDescription": "새 시스템 롤아웃을 관리하려면 학생을 추가하세요."
+      },
+      "rolloutChecklist": {
+        "title": "안전한 롤아웃 체크리스트",
+        "noticeTitle": "프로덕션 전 권장 순서",
+        "noticeDescription": "먼저 테스트 모드에서 새 시스템을 확인하고, 그다음 개별 학생에게 적용한 뒤, 마지막에 전체 전환을 진행하세요.",
+        "steps": {
+          "1": "전체 모드는 legacy 또는 테스트 모드로 유지하세요.",
+          "2": "알림 계획을 새로고치고 큐와 경고를 확인하세요.",
+          "3": "학생 한 명에게 새 시스템을 켜고 실제 알림을 확인하세요.",
+          "4": "파일럿이 성공한 뒤에만 새 시스템을 전체에 적용하세요."
+        }
+      },
+      "rolloutStatus": {
+        "title": "현재 파일럿 상태",
+        "nextActionTitle": "다음 권장 작업",
+        "globalMode": "전체 모드",
+        "totalLearners": "대상 학생 수",
+        "learnersInTestMode": "테스트 모드 학생 수",
+        "learnersInNew": "새 시스템 학생 수",
+        "plannedNotifications": "계획된 알림 수",
+        "readyForDelivery": "지금 실제 전송 가능한 알림 수",
+        "attentionAlerts": "주의가 필요한 이벤트 수",
+        "nextActions": {
+          "reviewAlerts": "파일럿이 실제 문제를 가리지 않도록 먼저 주의가 필요한 이벤트를 확인하세요.",
+          "enableTestMode": "먼저 전체 테스트 모드를 켜거나 학생 한 명을 테스트 모드로 전환해 안전하게 알림 계획을 만드세요.",
+          "refreshPlan": "실제 전송 전에 미래 큐를 확인할 수 있도록 알림 계획을 새로고치세요.",
+          "choosePilotLearner": "실제 전송을 실행하기 전에 새 시스템 파일럿용 학생 한 명을 선택하세요.",
+          "waitForDueNotifications": "계획은 준비됐지만 지금 실제 전송 대상 due 알림이 없습니다. 시간이 될 때까지 기다리거나 일정을 확인하세요.",
+          "readyForControlledSend": "이제 파일럿용 수동 전송을 신중하게 실행하고 실제 메시지 흐름을 확인할 수 있습니다."
+        }
+      },
+      "pilotControls": {
+        "title": "수동 파일럿 제어",
+        "noticeTitle": "파일럿 중에는 자동 Beat 대신 이것을 사용하세요",
+        "noticeDescription": "먼저 백그라운드 작업과 알림 계획을 갱신한 뒤, 파일럿 준비가 끝났을 때만 실제 전송을 수동으로 실행하세요.",
+        "processJobs": "백그라운드 작업 갱신",
+        "processJobsQueued": "백그라운드 갱신 작업이 큐에 등록되었습니다: {{taskId}}",
+        "deliverNow": "전송 실행",
+        "deliveryQueued": "전송 작업이 큐에 등록되었습니다: {{taskId}}",
+        "statusSummary": "현재 계획 수: {{planned}}. 지금 실제 전송 가능: {{ready}}.",
+        "deliveryBlockedHint": "현재 delivery enabled 상태의 due 알림이 없습니다. 먼저 계획을 새로고치거나 파일럿 학생을 새 시스템으로 전환하거나 해당 시간이 될 때까지 기다리세요.",
+        "deliverNowConfirmTitle": "기한 도래 알림의 실제 전송을 실행할까요?",
+        "deliverNowConfirmDescription": "이 작업은 이미 새 시스템을 사용하는 학생들에게 실제 메시지를 보낼 수 있습니다."
+      },
+      "queueDetails": {
+        "title": "알림 상세",
+        "titleWithId": "알림 #{{id}}",
+        "summary": "요약",
+        "source": "출처",
+        "statusReason": "상태 사유",
+        "eventTime": "이벤트 시간",
+        "effectiveScheduledFor": "실제 전송 시간",
+        "deliveryEnabled": "전송 사용",
+        "deliveryDisabled": "전송 비활성화",
+        "priority": "우선순위",
+        "channel": "채널",
+        "rule": "규칙",
+        "event": "이벤트",
+        "combination": "결합",
+        "dedupeKey": "중복 제거 키",
+        "warnings": "경고",
+        "noWarnings": "추가 경고 없음",
+        "calendarConflictTitle": "학생의 수업 시간이 겹칩니다",
+        "calendarConflictDescription": "이 시간대의 수업 수: {{count}}. Lesson IDs: {{lessonIds}}. Package IDs: {{packageIds}}.",
+        "components": "결합된 알림 구성 요소",
+        "componentKey": "구성 요소 키",
+        "latestAttempt": "최근 전송 시도",
+        "providerMessageId": "Telegram message_id",
+        "providerChatId": "Telegram chat_id",
+        "error": "오류",
+        "sentAt": "전송 시각",
+        "noAttempt": "아직 시도 없음",
+        "debug": "기술 세부 정보",
+        "notFound": "알림을 찾을 수 없습니다"
+      }
+    },
+    "groups": {
+      "title": "그룹",
+      "subtitle": "알림 규칙과 향후 그룹 일정용 학생 대상",
+      "noticeTitle": "그룹 수업을 위한 확장 구조",
+      "noticeDescription": "현재 그룹은 알림 대상으로 사용됩니다. 그룹 일정과 공유 패키지는 별도 리디자인에서 추가됩니다.",
+      "createGroup": "그룹 생성",
+      "groupCreated": "그룹이 생성되었습니다",
+      "groupArchived": "그룹이 보관되었습니다",
+      "memberRemoved": "학생이 그룹에서 제거되었습니다",
+      "name": "이름",
+      "description": "설명",
+      "color": "색상",
+      "status": "상태",
+      "members": "구성원",
+      "memberNames": "학생",
+      "selectLearners": "학생 선택",
+      "removeMember": "{{name}} 제거",
+      "archive": "보관",
+      "noGroups": "아직 그룹이 없습니다",
+      "noGroupsDescription": "여러 학생에게 알림을 지정하려면 그룹을 만드세요.",
+      "noDescription": "설명 없음",
+      "statuses": {
+        "active": "활성",
+        "paused": "일시 중지",
+        "archived": "보관됨"
       }
     },
     "analytics": {
