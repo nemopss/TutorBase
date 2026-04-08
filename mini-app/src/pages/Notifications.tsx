@@ -30,6 +30,8 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
+import TenantContextRequired from '../components/common/TenantContextRequired';
+import { useAuth } from '../auth/AuthProvider';
 import api from '../services/api';
 
 type NotificationsTabKey = 'rules' | 'templates' | 'queue' | 'activity' | 'settings';
@@ -888,6 +890,7 @@ const getRuleWizardValidation = (values: RuleWizardValues): { step: number; tran
 
 const Notifications: React.FC = () => {
   const { t } = useTranslation();
+  const { tenantId } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<NotificationsTabKey>('rules');
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
@@ -898,65 +901,66 @@ const Notifications: React.FC = () => {
   const [templateForm] = Form.useForm<NotificationTemplateFormValues>();
   const [ruleForm] = Form.useForm<RuleWizardValues>();
   const [settingsForm] = Form.useForm<NotificationSettingsFormValues>();
+  const requiresTenantContext = tenantId === null;
 
   const rulesQuery = useQuery<NotificationRule[], Error>({
     queryKey: ['notificationRules'],
     queryFn: fetchNotificationRules,
-    enabled: activeTab === 'rules',
+    enabled: !requiresTenantContext && activeTab === 'rules',
   });
 
   const templatesQuery = useQuery<NotificationTemplate[], Error>({
     queryKey: ['notificationTemplates'],
     queryFn: fetchNotificationTemplates,
-    enabled: activeTab === 'templates' || templateModalOpen || ruleWizardOpen,
+    enabled: !requiresTenantContext && (activeTab === 'templates' || templateModalOpen || ruleWizardOpen),
   });
 
   const instancesQuery = useQuery<NotificationInstance[], Error>({
     queryKey: ['notificationInstances'],
     queryFn: fetchNotificationInstances,
-    enabled: activeTab === 'queue' || activeTab === 'settings',
+    enabled: !requiresTenantContext && (activeTab === 'queue' || activeTab === 'settings'),
   });
 
   const instanceDetailQuery = useQuery<NotificationInstance, Error>({
     queryKey: ['notificationInstanceDetail', selectedQueueInstanceId],
     queryFn: () => fetchNotificationInstanceDetail(selectedQueueInstanceId as number),
-    enabled: activeTab === 'queue' && selectedQueueInstanceId !== null,
+    enabled: !requiresTenantContext && activeTab === 'queue' && selectedQueueInstanceId !== null,
   });
 
   const activityQuery = useQuery<NotificationActivity[], Error>({
     queryKey: ['notificationActivity'],
     queryFn: fetchNotificationActivity,
-    enabled: activeTab === 'activity' || activeTab === 'settings',
+    enabled: !requiresTenantContext && (activeTab === 'activity' || activeTab === 'settings'),
   });
 
   const settingsQuery = useQuery<NotificationSettings, Error>({
     queryKey: ['notificationSettings'],
     queryFn: fetchNotificationSettings,
-    enabled: activeTab === 'settings',
+    enabled: !requiresTenantContext && activeTab === 'settings',
   });
 
   const learnerModesQuery = useQuery<LearnerNotificationMode[], Error>({
     queryKey: ['learnerNotificationModes'],
     queryFn: fetchLearnerNotificationModes,
-    enabled: activeTab === 'settings',
+    enabled: !requiresTenantContext && activeTab === 'settings',
   });
 
   const learnersQuery = useQuery<Learner[], Error>({
     queryKey: ['learnersForNotificationWizard'],
     queryFn: fetchLearners,
-    enabled: ruleWizardOpen,
+    enabled: !requiresTenantContext && ruleWizardOpen,
   });
 
   const groupsQuery = useQuery<LearnerGroup[], Error>({
     queryKey: ['groupsForNotificationWizard'],
     queryFn: fetchGroups,
-    enabled: ruleWizardOpen,
+    enabled: !requiresTenantContext && ruleWizardOpen,
   });
 
   const packagesQuery = useQuery<LessonPackage[], Error>({
     queryKey: ['packagesForNotificationWizard'],
     queryFn: fetchActivePackages,
-    enabled: ruleWizardOpen,
+    enabled: !requiresTenantContext && ruleWizardOpen,
   });
 
   useEffect(() => {
@@ -1244,6 +1248,20 @@ const Notifications: React.FC = () => {
       ),
     },
   ];
+
+  if (requiresTenantContext) {
+    return (
+      <div>
+        <PageHeader
+          title={t('pages.notifications.title')}
+          subtitle={t('pages.notifications.subtitle')}
+          actions={<Tag color="green">{t('navigation.newBadge')}</Tag>}
+        />
+
+        <TenantContextRequired sectionLabel={t('pages.notifications.title')} />
+      </div>
+    );
+  }
 
   return (
     <div>

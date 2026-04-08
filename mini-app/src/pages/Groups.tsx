@@ -6,6 +6,8 @@ import { PlusOutlined, TeamOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
+import TenantContextRequired from '../components/common/TenantContextRequired';
+import { useAuth } from '../auth/AuthProvider';
 import api from '../services/api';
 
 interface Learner {
@@ -72,18 +74,22 @@ const removeGroupMember = async ({ groupId, learnerId }: { groupId: number; lear
 
 const Groups: React.FC = () => {
   const { t } = useTranslation();
+  const { tenantId } = useAuth();
   const queryClient = useQueryClient();
   const [createModalOpen, setCreateModalOpen] = useState(false);
   const [form] = Form.useForm<LearnerGroupFormValues>();
+  const requiresTenantContext = tenantId === null;
 
   const groupsQuery = useQuery<LearnerGroup[], Error>({
     queryKey: ['learnerGroups'],
     queryFn: fetchGroups,
+    enabled: !requiresTenantContext,
   });
 
   const learnersQuery = useQuery<Learner[], Error>({
     queryKey: ['learnersForGroups'],
     queryFn: fetchLearners,
+    enabled: !requiresTenantContext,
   });
 
   const createMutation = useMutation({
@@ -192,6 +198,24 @@ const Groups: React.FC = () => {
       ),
     },
   ];
+
+  if (requiresTenantContext) {
+    return (
+      <div>
+        <PageHeader
+          title={t('pages.groups.title')}
+          subtitle={t('pages.groups.subtitle')}
+          actions={(
+            <Button type="primary" icon={<PlusOutlined />} disabled>
+              {t('pages.groups.createGroup')}
+            </Button>
+          )}
+        />
+
+        <TenantContextRequired sectionLabel={t('pages.groups.title')} />
+      </div>
+    );
+  }
 
   return (
     <div>
