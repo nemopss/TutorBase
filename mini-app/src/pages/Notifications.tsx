@@ -144,6 +144,15 @@ interface NotificationSettings {
   cap_mode?: string | null;
 }
 
+interface NotificationTaskTriggerResult {
+  task_id: string;
+  task_name: string;
+  tenant_id: number;
+  limit: number;
+  job_type?: string | null;
+  queued: boolean;
+}
+
 interface LearnerNotificationMode {
   learner_id: number;
   display_name: string;
@@ -162,6 +171,7 @@ interface NotificationTemplateFormValues {
 
 interface NotificationSettingsFormValues {
   mode: string;
+  confirm_global_new?: boolean;
   notifications_enabled?: boolean;
   quiet_hours_start?: string;
   quiet_hours_end?: string;
@@ -365,6 +375,20 @@ const updateLearnerNotificationMode = async ({
 }): Promise<LearnerNotificationMode> => {
   const { data } = await api.patch(`/notifications/learner-modes/${learnerId}`, {
     mode_override: modeOverride,
+  });
+  return data;
+};
+
+const triggerNotificationJobProcessing = async (): Promise<NotificationTaskTriggerResult> => {
+  const { data } = await api.post('/notifications/pilot/process-jobs', {
+    limit: 20,
+  });
+  return data;
+};
+
+const triggerNotificationDeliveryTick = async (): Promise<NotificationTaskTriggerResult> => {
+  const { data } = await api.post('/notifications/pilot/deliver-now', {
+    limit: 100,
   });
   return data;
 };
@@ -886,6 +910,22 @@ const Notifications: React.FC = () => {
     onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
   });
 
+  const processJobsMutation = useMutation({
+    mutationFn: triggerNotificationJobProcessing,
+    onSuccess: (result) => {
+      message.success(t('pages.notifications.pilotControls.processJobsQueued', { taskId: result.task_id }));
+    },
+    onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
+  });
+
+  const deliverNowMutation = useMutation({
+    mutationFn: triggerNotificationDeliveryTick,
+    onSuccess: (result) => {
+      message.success(t('pages.notifications.pilotControls.deliveryQueued', { taskId: result.task_id }));
+    },
+    onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
+  });
+
   const categoryOptions = useMemo(
     () => CATEGORY_OPTIONS.map((category) => ({ value: category, label: t(`pages.notifications.categories.${category}`) })),
     [t],
@@ -1014,6 +1054,10 @@ const Notifications: React.FC = () => {
           learnerModesError={learnerModesQuery.error}
           learnerModeUpdating={learnerModeMutation.isPending}
           onLearnerModeChange={(learnerId, modeOverride) => learnerModeMutation.mutate({ learnerId, modeOverride })}
+          processingJobs={processJobsMutation.isPending}
+          deliveringNow={deliverNowMutation.isPending}
+          onProcessJobs={() => processJobsMutation.mutate()}
+          onDeliverNow={() => deliverNowMutation.mutate()}
         />
       ),
     },
@@ -2165,6 +2209,10 @@ interface SettingsTabProps {
   learnerModesError: Error | null;
   learnerModeUpdating: boolean;
   onLearnerModeChange: (learnerId: number, modeOverride: string) => void;
+  processingJobs: boolean;
+  deliveringNow: boolean;
+  onProcessJobs: () => void;
+  onDeliverNow: () => void;
 }
 
 const SettingsTab: React.FC<SettingsTabProps> = ({
@@ -2178,9 +2226,14 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
   learnerModesError,
   learnerModeUpdating,
   onLearnerModeChange,
+  processingJobs,
+  deliveringNow,
+  onProcessJobs,
+  onDeliverNow,
 }) => {
   const { t } = useTranslation();
   const [pendingGlobalNewValues, setPendingGlobalNewValues] = useState<NotificationSettingsFormValues | null>(null);
+  const [confirmDeliverNowOpen, setConfirmDeliverNowOpen] = useState(false);
 
   const handleSubmit = (values: NotificationSettingsFormValues) => {
     if (values.mode === 'new') {
@@ -2207,6 +2260,23 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
               {step}. {t(`pages.notifications.rolloutChecklist.steps.${step}`)}
             </Typography.Text>
           ))}
+        </Space>
+      </Card>
+      <Card title={t('pages.notifications.pilotControls.title')}>
+        <Alert
+          type="warning"
+          showIcon
+          message={t('pages.notifications.pilotControls.noticeTitle')}
+          description={t('pages.notifications.pilotControls.noticeDescription')}
+          style={{ marginBottom: 16 }}
+        />
+        <Space wrap>
+          <Button onClick={onProcessJobs} loading={processingJobs}>
+            {t('pages.notifications.pilotControls.processJobs')}
+          </Button>
+          <Button danger onClick={() => setConfirmDeliverNowOpen(true)} loading={deliveringNow}>
+            {t('pages.notifications.pilotControls.deliverNow')}
+          </Button>
         </Space>
       </Card>
       <Card loading={loading}>
@@ -2282,7 +2352,10 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         onCancel={() => setPendingGlobalNewValues(null)}
         onOk={() => {
           if (!pendingGlobalNewValues) return;
-          onSubmit(pendingGlobalNewValues);
+          onSubmit({
+            ...pendingGlobalNewValues,
+            confirm_global_new: true,
+          });
           setPendingGlobalNewValues(null);
         }}
       >
@@ -2290,6 +2363,24 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           type="warning"
           showIcon
           message={t('pages.notifications.globalNewConfirmDescription')}
+        />
+      </Modal>
+      <Modal
+        open={confirmDeliverNowOpen}
+        title={t('pages.notifications.pilotControls.deliverNowConfirmTitle')}
+        okText={t('pages.notifications.pilotControls.deliverNow')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ danger: true, loading: deliveringNow }}
+        onCancel={() => setConfirmDeliverNowOpen(false)}
+        onOk={() => {
+          onDeliverNow();
+          setConfirmDeliverNowOpen(false);
+        }}
+      >
+        <Alert
+          type="warning"
+          showIcon
+          message={t('pages.notifications.pilotControls.deliverNowConfirmDescription')}
         />
       </Modal>
     </Space>

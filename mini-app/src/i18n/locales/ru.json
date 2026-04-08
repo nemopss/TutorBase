@@ -612,6 +612,17 @@
           "4": "Только после успешного пилота включайте новую систему глобально."
         }
       },
+      "pilotControls": {
+        "title": "Ручной запуск пилота",
+        "noticeTitle": "Используйте вместо автоматического Beat на пилоте",
+        "noticeDescription": "Сначала обработайте notification jobs, затем вручную запустите delivery tick только когда готовы к реальной отправке.",
+        "processJobs": "Обработать pending jobs",
+        "processJobsQueued": "Задача обработки jobs поставлена в очередь: {{taskId}}",
+        "deliverNow": "Запустить delivery tick",
+        "deliveryQueued": "Задача delivery tick поставлена в очередь: {{taskId}}",
+        "deliverNowConfirmTitle": "Запустить реальную отправку готовых уведомлений?",
+        "deliverNowConfirmDescription": "Это действие может отправить реальные сообщения ученикам, для которых уже включён новый notification pipeline."
+      },
       "queueDetails": {
         "title": "Детали уведомления",
         "titleWithId": "Детали уведомления #{{id}}",

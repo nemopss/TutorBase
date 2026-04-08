@@ -38,6 +38,8 @@ from api.schemas.notifications import (
     NotificationRulesPreviewRequest,
     NotificationSettingsResponse,
     NotificationSettingsUpdateRequest,
+    NotificationTaskTriggerRequest,
+    NotificationTaskTriggerResponse,
     NotificationTemplateCreateRequest,
     NotificationTemplateResponse,
     NotificationTemplateUpdateRequest,
@@ -100,6 +102,7 @@ from notifications.application.templates import (
 )
 from notifications.domain.enums import EventType, InstanceStatus
 from notifications.infrastructure.repositories import SqlAlchemySessionNotificationUnitOfWork
+from utils.tasks.notifications import deliver_due_notifications_task, process_notification_jobs_task
 
 router = APIRouter()
 
@@ -129,6 +132,41 @@ async def update_notification_settings(
         _settings_update_from_request(payload)
     )
     return _settings_response(settings)
+
+
+@router.post("/pilot/process-jobs", response_model=NotificationTaskTriggerResponse)
+async def trigger_notification_job_processing(
+    payload: NotificationTaskTriggerRequest = Body(default=NotificationTaskTriggerRequest()),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
+) -> NotificationTaskTriggerResponse:
+    tenant_id = _require_tenant_id(current_tenant)
+    task = process_notification_jobs_task.delay(tenant_id=tenant_id, job_type=payload.job_type, limit=payload.limit)
+    return NotificationTaskTriggerResponse(
+        task_id=task.id,
+        task_name=process_notification_jobs_task.name,
+        tenant_id=tenant_id,
+        limit=payload.limit,
+        job_type=payload.job_type,
+        queued=True,
+    )
+
+
+@router.post("/pilot/deliver-now", response_model=NotificationTaskTriggerResponse)
+async def trigger_notification_delivery_tick(
+    payload: NotificationTaskTriggerRequest = Body(default=NotificationTaskTriggerRequest()),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
+) -> NotificationTaskTriggerResponse:
+    tenant_id = _require_tenant_id(current_tenant)
+    task = deliver_due_notifications_task.delay(tenant_id=tenant_id, limit=payload.limit)
+    return NotificationTaskTriggerResponse(
+        task_id=task.id,
+        task_name=deliver_due_notifications_task.name,
+        tenant_id=tenant_id,
+        limit=payload.limit,
+        queued=True,
+    )
 
 
 @router.get("/learner-modes", response_model=list[LearnerNotificationModeResponse])
@@ -681,6 +719,7 @@ def _settings_update_from_request(payload: NotificationSettingsUpdateRequest) ->
     fields_set = payload.model_fields_set
     return NotificationSettingsUpdateDraft(
         mode=payload.mode,
+        confirm_global_new=payload.confirm_global_new,
         notifications_enabled=payload.notifications_enabled,
         notifications_enabled_set="notifications_enabled" in fields_set,
         quiet_hours_start=payload.quiet_hours_start,

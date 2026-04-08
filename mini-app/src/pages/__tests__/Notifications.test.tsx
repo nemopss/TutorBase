@@ -28,6 +28,15 @@ const translations: Record<string, string> = {
   'pages.notifications.rolloutChecklist.steps.2': 'Refresh the notification plan and review the queue and warnings.',
   'pages.notifications.rolloutChecklist.steps.3': 'Enable the new system for one learner and verify real notifications.',
   'pages.notifications.rolloutChecklist.steps.4': 'Only after a successful pilot, enable the new system globally.',
+  'pages.notifications.pilotControls.title': 'Manual pilot controls',
+  'pages.notifications.pilotControls.noticeTitle': 'Use this instead of automatic Beat during the pilot',
+  'pages.notifications.pilotControls.noticeDescription': 'Process jobs first',
+  'pages.notifications.pilotControls.processJobs': 'Process pending jobs',
+  'pages.notifications.pilotControls.processJobsQueued': 'Notification job processing queued',
+  'pages.notifications.pilotControls.deliverNow': 'Run delivery tick',
+  'pages.notifications.pilotControls.deliveryQueued': 'Delivery tick queued',
+  'pages.notifications.pilotControls.deliverNowConfirmTitle': 'Run real delivery for due notifications?',
+  'pages.notifications.pilotControls.deliverNowConfirmDescription': 'This action can send real messages',
   'pages.notifications.modes.inherit': 'Inherit',
   'pages.notifications.modes.shadow': 'Shadow',
   'pages.notifications.modes.legacy': 'Legacy',
@@ -285,6 +294,7 @@ describe('Notifications', () => {
     expect(await screen.findByText('Learner pilot')).toBeInTheDocument();
     expect(await screen.findByText('Vika')).toBeInTheDocument();
     expect(await screen.findByText('Safe rollout checklist')).toBeInTheDocument();
+    expect(await screen.findByText('Manual pilot controls')).toBeInTheDocument();
   });
 
   it('opens queue details drawer', async () => {

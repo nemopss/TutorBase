@@ -176,6 +176,20 @@ class MaterializeActiveRulesResponse(BaseResponse):
     warnings: list[str] = Field(default_factory=list)
 
 
+class NotificationTaskTriggerRequest(BaseRequest):
+    limit: int = Field(20, ge=1, le=500)
+    job_type: str | None = Field(None, max_length=64)
+
+
+class NotificationTaskTriggerResponse(BaseResponse):
+    task_id: str
+    task_name: str
+    tenant_id: int
+    limit: int
+    job_type: str | None = None
+    queued: bool = True
+
+
 class NotificationReconcileEventRequest(BaseRequest):
     event_type: EventType
     event_id: int = Field(..., ge=1)
@@ -195,6 +209,7 @@ class NotificationJobResponse(BaseResponse):
 
 class NotificationSettingsUpdateRequest(BaseRequest):
     mode: NotificationSystemMode | None = None
+    confirm_global_new: bool = False
     notifications_enabled: bool | None = None
     quiet_hours_start: str | None = Field(None, pattern=r"^\d{2}:\d{2}$")
     quiet_hours_end: str | None = Field(None, pattern=r"^\d{2}:\d{2}$")

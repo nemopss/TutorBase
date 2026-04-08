@@ -75,6 +75,22 @@ async def test_get_and_update_settings_use_cases():
 
 
 @pytest.mark.asyncio
+async def test_update_settings_requires_explicit_confirmation_for_global_new():
+    repository = FakeSettingsRepository(
+        settings=NotificationSettingsRecord(tenant_id=1, mode=NotificationSystemMode.SHADOW)
+    )
+    uow = FakeUnitOfWork(settings=repository)
+
+    with pytest.raises(ValueError, match="requires explicit confirmation"):
+        await UpdateNotificationSettingsUseCase(uow).execute(
+            NotificationSettingsUpdateDraft(mode=NotificationSystemMode.NEW)
+        )
+
+    assert repository.updated_settings is None
+    assert uow.committed is False
+
+
+@pytest.mark.asyncio
 async def test_learner_mode_use_cases():
     mode = LearnerNotificationModeRecord(
         learner_id=10,

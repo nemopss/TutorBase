@@ -62,6 +62,8 @@ def test_notification_routes_are_registered():
     assert "/api/v1/notifications/rules/{rule_id}/pause" in paths
     assert "/api/v1/notifications/rules/{rule_id}/archive" in paths
     assert "/api/v1/notifications/settings" in paths
+    assert "/api/v1/notifications/pilot/process-jobs" in paths
+    assert "/api/v1/notifications/pilot/deliver-now" in paths
     assert "/api/v1/notifications/learner-modes" in paths
     assert "/api/v1/notifications/learner-modes/{learner_id}" in paths
     assert "/api/v1/notifications/instances" in paths
@@ -242,6 +244,7 @@ def test_rule_response_maps_application_record_for_ui():
 def test_settings_update_request_tracks_nullable_fields():
     request = NotificationSettingsUpdateRequest(
         mode=NotificationSystemMode.SHADOW,
+        confirm_global_new=False,
         notifications_enabled=None,
         quiet_hours_start=None,
         daily_cap=None,
@@ -252,6 +255,7 @@ def test_settings_update_request_tracks_nullable_fields():
     draft = _settings_update_from_request(request)
 
     assert draft.mode == NotificationSystemMode.SHADOW
+    assert draft.confirm_global_new is False
     assert draft.notifications_enabled is None
     assert draft.notifications_enabled_set is True
     assert draft.quiet_hours_start is None

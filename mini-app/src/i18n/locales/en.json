@@ -611,6 +611,17 @@
           "4": "Only after a successful pilot, enable the new system globally."
         }
       },
+      "pilotControls": {
+        "title": "Manual pilot controls",
+        "noticeTitle": "Use this instead of automatic Beat during the pilot",
+        "noticeDescription": "Process notification jobs first, then manually run a delivery tick only when you are ready for real sends.",
+        "processJobs": "Process pending jobs",
+        "processJobsQueued": "Notification job processing queued: {{taskId}}",
+        "deliverNow": "Run delivery tick",
+        "deliveryQueued": "Delivery tick queued: {{taskId}}",
+        "deliverNowConfirmTitle": "Run real delivery for due notifications?",
+        "deliverNowConfirmDescription": "This action can send real messages to learners who already use the new notification pipeline."
+      },
       "queueDetails": {
         "title": "Notification details",
         "titleWithId": "Notification #{{id}}",

@@ -420,6 +420,7 @@ class NotificationTemplateRecord:
 @dataclass(frozen=True)
 class NotificationSettingsUpdateDraft:
     mode: NotificationSystemMode | None = None
+    confirm_global_new: bool = False
     notifications_enabled: bool | None = None
     notifications_enabled_set: bool = False
     quiet_hours_start: str | None = None

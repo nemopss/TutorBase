@@ -7,6 +7,7 @@ from notifications.application.dto import (
     NotificationSettingsUpdateDraft,
 )
 from notifications.application.ports import NotificationMaterializationUnitOfWork
+from notifications.domain.enums import NotificationSystemMode
 
 
 class GetNotificationSettingsUseCase:
@@ -22,6 +23,8 @@ class UpdateNotificationSettingsUseCase:
         self._uow = uow
 
     async def execute(self, draft: NotificationSettingsUpdateDraft) -> NotificationSettingsRecord:
+        if draft.mode == NotificationSystemMode.NEW and not draft.confirm_global_new:
+            raise ValueError("Enabling the new notification system globally requires explicit confirmation")
         settings = await self._uow.settings.update_settings(draft)
         await self._uow.commit()
         return settings
