@@ -459,7 +459,7 @@
       },
       "systemMode": "시스템 모드",
       "globalNewConfirmTitle": "새 시스템을 전체에 적용할까요?",
-      "globalNewConfirmDescription": "이 작업은 전체 tenant를 새 알림 시스템으로 전환합니다. shadow 검증과 학생별 파일럿 이후에만 실행하세요.",
+      "globalNewConfirmDescription": "이 작업은 모든 학생을 새 알림 시스템으로 전환합니다. 테스트 모드 확인과 학생별 파일럿 이후에만 실행하세요.",
       "enableGlobalNew": "전체에 새 시스템 적용",
       "dailyCap": "일일 제한",
       "capMode": "제한 모드",
@@ -582,11 +582,11 @@
           "message": "보낼 내용",
           "trigger": "시점",
           "audience": "대상",
-          "preview": "미리보기"
+          "preview": "확인"
         },
         "next": "다음",
         "back": "뒤로",
-        "preview": "미리보기",
+        "preview": "결과 보기",
         "saveDraft": "초안 저장",
         "presetTitle": "준비된 시나리오로 시작하세요",
         "presetDescription": "가장 가까운 시나리오를 먼저 고른 뒤 텍스트, 시간, 대상을 조정하세요. 처음부터 규칙을 조합하는 것보다 빠르고 안전합니다.",
@@ -639,7 +639,7 @@
           "messageDescription": "준비된 템플릿을 쓰거나 직접 작성할 수 있습니다. 규칙 이름은 관리용입니다.",
           "triggerTitle": "이제 이 메시지를 언제 보낼지 정하세요",
           "triggerDescription": "먼저 이벤트를 고르고, 그 이벤트를 기준으로 발송 시점을 정하세요. 첫 파일럿에서는 단순한 시나리오를 권장합니다.",
-          "audienceTitle": "마지막 단계: 누구에게 보낼지 정하세요",
+          "audienceTitle": "확인 전 마지막 단계: 누구에게 보낼지 정하세요",
           "audienceDescription": "모든 학생, 특정 학생, 그룹, 패키지를 선택할 수 있고, 필요하면 일부 학생을 제외할 수도 있습니다."
         },
         "presets": {
@@ -679,13 +679,13 @@
       "rollout": {
         "title": "학생별 파일럿",
         "noticeTitle": "안전한 롤아웃",
-        "noticeDescription": "프로덕션에서는 먼저 전체 모드를 legacy 또는 shadow로 유지하고, 새 시스템은 학생 한 명씩 켜세요. new 모드는 선택한 학생의 legacy 알림을 억제합니다.",
+        "noticeDescription": "프로덕션에서는 먼저 전체 모드를 기존 시스템 또는 테스트 시스템으로 유지하고, 새 시스템은 학생 한 명씩 켜세요. 새 모드는 선택한 학생의 기존 알림을 억제합니다.",
         "overrideMode": "학생별 모드",
         "effectiveMode": "적용 모드",
         "updatedAt": "업데이트됨",
         "newConfirmTitle": "이 학생에게 새 시스템을 켤까요?",
-        "newConfirmDescription": "{{name}}의 legacy 알림은 억제되고 새 notification 시스템으로 전환됩니다.",
-        "enableNewForLearner": "new 켜기",
+        "newConfirmDescription": "{{name}}의 기존 알림은 비활성화되고 새 알림 시스템으로 전환됩니다.",
+        "enableNewForLearner": "새 시스템 켜기",
         "noLearners": "학생이 없습니다",
         "noLearnersDescription": "새 시스템 롤아웃을 관리하려면 학생을 추가하세요."
       },
@@ -722,15 +722,15 @@
       "pilotControls": {
         "title": "수동 파일럿 제어",
         "noticeTitle": "파일럿 중에는 자동 Beat 대신 이것을 사용하세요",
-        "noticeDescription": "먼저 notification jobs를 처리한 뒤, 실제 전송이 가능할 때만 delivery tick을 수동으로 실행하세요.",
-        "processJobs": "대기 중인 jobs 처리",
-        "processJobsQueued": "Notification job 처리 작업이 큐에 등록되었습니다: {{taskId}}",
-        "deliverNow": "Delivery tick 실행",
-        "deliveryQueued": "Delivery tick 작업이 큐에 등록되었습니다: {{taskId}}",
+        "noticeDescription": "먼저 백그라운드 작업과 알림 계획을 갱신한 뒤, 파일럿 준비가 끝났을 때만 실제 전송을 수동으로 실행하세요.",
+        "processJobs": "백그라운드 작업 갱신",
+        "processJobsQueued": "백그라운드 갱신 작업이 큐에 등록되었습니다: {{taskId}}",
+        "deliverNow": "전송 실행",
+        "deliveryQueued": "전송 작업이 큐에 등록되었습니다: {{taskId}}",
         "statusSummary": "현재 계획 수: {{planned}}. 지금 실제 전송 가능: {{ready}}.",
         "deliveryBlockedHint": "현재 delivery enabled 상태의 due 알림이 없습니다. 먼저 계획을 새로고치거나 파일럿 학생을 새 시스템으로 전환하거나 해당 시간이 될 때까지 기다리세요.",
         "deliverNowConfirmTitle": "기한 도래 알림의 실제 전송을 실행할까요?",
-        "deliverNowConfirmDescription": "이 작업은 이미 새 notification pipeline을 사용하는 학생들에게 실제 메시지를 보낼 수 있습니다."
+        "deliverNowConfirmDescription": "이 작업은 이미 새 시스템을 사용하는 학생들에게 실제 메시지를 보낼 수 있습니다."
       },
       "queueDetails": {
         "title": "알림 상세",

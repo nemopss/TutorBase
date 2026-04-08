@@ -460,7 +460,7 @@
       },
       "systemMode": "System mode",
       "globalNewConfirmTitle": "Enable the new system globally?",
-      "globalNewConfirmDescription": "This will switch the whole tenant to the new notification system. Do this only after shadow verification and a learner-by-learner pilot.",
+      "globalNewConfirmDescription": "This will switch all learners to the new notification system. Do this only after test-mode verification and a learner-by-learner pilot.",
       "enableGlobalNew": "Enable for all learners",
       "dailyCap": "Daily cap",
       "capMode": "Cap mode",
@@ -583,11 +583,11 @@
           "message": "What to send",
           "trigger": "When",
           "audience": "Who",
-          "preview": "Preview"
+          "preview": "Check"
         },
         "next": "Next",
         "back": "Back",
-        "preview": "Show preview",
+        "preview": "Show result",
         "saveDraft": "Save draft",
         "presetTitle": "Start with a ready scenario",
         "presetDescription": "Pick the closest scenario first, then adjust the text, timing, and audience. This is faster and safer than building a rule from scratch.",
@@ -640,7 +640,7 @@
           "messageDescription": "Use a ready-made template or write your own message. The rule name is only for your own management.",
           "triggerTitle": "Now decide when this message should be sent",
           "triggerDescription": "Choose the event first, then set the send timing relative to that event. For the first pilot, use simple scenarios.",
-          "audienceTitle": "Last step before preview: who should get it",
+          "audienceTitle": "Last step before checking: who should get it",
           "audienceDescription": "You can target all learners, selected learners, groups, or packages, and then exclude specific learners if needed."
         },
         "presets": {
@@ -680,13 +680,13 @@
       "rollout": {
         "title": "Learner pilot",
         "noticeTitle": "Safe rollout",
-        "noticeDescription": "For production, keep the global mode as legacy or shadow first, then enable the new system for one learner at a time. New mode suppresses legacy reminders for the selected learner.",
+        "noticeDescription": "For production, keep the global mode on the legacy or test system first, then enable the new system for one learner at a time. New mode suppresses legacy reminders for the selected learner.",
         "overrideMode": "Mode for this learner",
         "effectiveMode": "Effective mode",
         "updatedAt": "Updated",
         "newConfirmTitle": "Enable the new system for this learner?",
-        "newConfirmDescription": "For {{name}}, legacy reminders will be suppressed and delivery will move to the new notification system.",
-        "enableNewForLearner": "Enable new",
+        "newConfirmDescription": "For {{name}}, legacy reminders will be disabled and delivery will move to the new notification system.",
+        "enableNewForLearner": "Enable new system",
         "noLearners": "No learners found",
         "noLearnersDescription": "Add learners to manage the new system rollout."
       },
@@ -723,15 +723,15 @@
       "pilotControls": {
         "title": "Manual pilot controls",
         "noticeTitle": "Use this instead of automatic Beat during the pilot",
-        "noticeDescription": "Process notification jobs first, then manually run a delivery tick only when you are ready for real sends.",
-        "processJobs": "Process pending jobs",
-        "processJobsQueued": "Notification job processing queued: {{taskId}}",
-        "deliverNow": "Run delivery tick",
-        "deliveryQueued": "Delivery tick queued: {{taskId}}",
+        "noticeDescription": "Refresh background tasks and the notification plan first, then manually run real delivery only when you are ready for the pilot.",
+        "processJobs": "Refresh background tasks",
+        "processJobsQueued": "Background refresh queued: {{taskId}}",
+        "deliverNow": "Run delivery",
+        "deliveryQueued": "Delivery queued: {{taskId}}",
         "statusSummary": "Currently in plan: {{planned}}. Ready for real delivery: {{ready}}.",
         "deliveryBlockedHint": "There are no due notifications with delivery enabled right now. Refresh the plan, switch the pilot learner to the new system, or wait for the due time first.",
         "deliverNowConfirmTitle": "Run real delivery for due notifications?",
-        "deliverNowConfirmDescription": "This action can send real messages to learners who already use the new notification pipeline."
+        "deliverNowConfirmDescription": "This action can send real messages to learners who already use the new system."
       },
       "queueDetails": {
         "title": "Notification details",

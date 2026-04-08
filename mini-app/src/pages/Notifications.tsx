@@ -2615,11 +2615,6 @@ const NotificationInstanceDrawer: React.FC<NotificationInstanceDrawerProps> = ({
             <Descriptions.Item label={t('pages.notifications.queueDetails.combination')}>
               {instance.combination_key || '—'}
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.notifications.queueDetails.dedupeKey')}>
-              <Typography.Text code copyable>
-                {instance.dedupe_key}
-              </Typography.Text>
-            </Descriptions.Item>
           </Descriptions>
 
           <Card size="small" title={t('pages.notifications.queueDetails.warnings')}>
@@ -2694,12 +2689,6 @@ const NotificationInstanceDrawer: React.FC<NotificationInstanceDrawerProps> = ({
                 ? instance.latest_attempt.status
                 : t('pages.notifications.queueDetails.noAttempt')}
             </Descriptions.Item>
-            <Descriptions.Item label={t('pages.notifications.queueDetails.providerMessageId')}>
-              {instance.latest_attempt?.provider_message_id || '—'}
-            </Descriptions.Item>
-            <Descriptions.Item label={t('pages.notifications.queueDetails.providerChatId')}>
-              {instance.latest_attempt?.provider_chat_id || '—'}
-            </Descriptions.Item>
             <Descriptions.Item label={t('pages.notifications.queueDetails.error')}>
               {instance.latest_attempt?.error_message || instance.latest_attempt?.error_code || '—'}
             </Descriptions.Item>
@@ -2716,11 +2705,19 @@ const NotificationInstanceDrawer: React.FC<NotificationInstanceDrawerProps> = ({
                 label: t('pages.notifications.queueDetails.debug'),
                 children: (
                   <Typography.Paragraph
-                    copyable={{ text: JSON.stringify(instance.explanation, null, 2) }}
+                    copyable={{ text: JSON.stringify({
+                      dedupe_key: instance.dedupe_key,
+                      explanation: instance.explanation,
+                      latest_attempt: instance.latest_attempt,
+                    }, null, 2) }}
                     style={{ marginBottom: 0 }}
                   >
                     <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                      {JSON.stringify(instance.explanation, null, 2)}
+                      {JSON.stringify({
+                        dedupe_key: instance.dedupe_key,
+                        explanation: instance.explanation,
+                        latest_attempt: instance.latest_attempt,
+                      }, null, 2)}
                     </pre>
                   </Typography.Paragraph>
                 ),
