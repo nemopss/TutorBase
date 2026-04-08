@@ -500,6 +500,12 @@
         "after_event_offset": "После события",
         "absolute_datetime": "Конкретная дата"
       },
+      "triggerSummary": {
+        "dayOffsetAtTime": "{{event}} · за {{days}} дн. в {{time}}",
+        "relativeOffset": "{{event}} · за {{minutes}} мин.",
+        "afterEventOffset": "{{event}} · через {{minutes}} мин.",
+        "absoluteDatetime": "{{event}} · {{datetime}}"
+      },
       "priorities": {
         "low": "Мягкое",
         "normal": "Обычное",
@@ -510,6 +516,20 @@
         "learner": "Конкретные ученики",
         "group": "Группы",
         "package": "Пакеты"
+      },
+      "audienceSummary": {
+        "allLearners": "Все ученики",
+        "learners": "{{count}} учеников",
+        "groups": "{{count}} групп",
+        "packages": "{{count}} пакетов",
+        "exclusions": "Исключений: {{count}}"
+      },
+      "assignmentLabels": {
+        "all_learners": "Все ученики",
+        "learner": "Ученик #{{id}}",
+        "group": "Группа #{{id}}",
+        "package": "Пакет #{{id}}",
+        "excludedPrefix": "Искл."
       },
       "variables": {
         "student_name": "Имя ученика",

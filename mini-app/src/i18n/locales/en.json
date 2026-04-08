@@ -499,6 +499,12 @@
         "after_event_offset": "After event",
         "absolute_datetime": "Exact datetime"
       },
+      "triggerSummary": {
+        "dayOffsetAtTime": "{{event}} · {{days}} day(s) before at {{time}}",
+        "relativeOffset": "{{event}} · {{minutes}} min. before",
+        "afterEventOffset": "{{event}} · {{minutes}} min. after",
+        "absoluteDatetime": "{{event}} · {{datetime}}"
+      },
       "priorities": {
         "low": "Soft",
         "normal": "Normal",
@@ -509,6 +515,20 @@
         "learner": "Specific learners",
         "group": "Groups",
         "package": "Packages"
+      },
+      "audienceSummary": {
+        "allLearners": "All learners",
+        "learners": "{{count}} learner(s)",
+        "groups": "{{count}} group(s)",
+        "packages": "{{count}} package(s)",
+        "exclusions": "Exclusions: {{count}}"
+      },
+      "assignmentLabels": {
+        "all_learners": "All learners",
+        "learner": "Learner #{{id}}",
+        "group": "Group #{{id}}",
+        "package": "Package #{{id}}",
+        "excludedPrefix": "Excl."
       },
       "variables": {
         "student_name": "Learner name",

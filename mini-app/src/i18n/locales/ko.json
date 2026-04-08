@@ -498,6 +498,12 @@
         "after_event_offset": "이벤트 후",
         "absolute_datetime": "정확한 날짜/시간"
       },
+      "triggerSummary": {
+        "dayOffsetAtTime": "{{event}} · {{days}}일 전 {{time}}",
+        "relativeOffset": "{{event}} · {{minutes}}분 전",
+        "afterEventOffset": "{{event}} · {{minutes}}분 후",
+        "absoluteDatetime": "{{event}} · {{datetime}}"
+      },
       "priorities": {
         "low": "부드러운 알림",
         "normal": "일반",
@@ -508,6 +514,20 @@
         "learner": "특정 학생",
         "group": "그룹",
         "package": "패키지"
+      },
+      "audienceSummary": {
+        "allLearners": "모든 학생",
+        "learners": "학생 {{count}}명",
+        "groups": "그룹 {{count}}개",
+        "packages": "패키지 {{count}}개",
+        "exclusions": "제외 {{count}}개"
+      },
+      "assignmentLabels": {
+        "all_learners": "모든 학생",
+        "learner": "학생 #{{id}}",
+        "group": "그룹 #{{id}}",
+        "package": "패키지 #{{id}}",
+        "excludedPrefix": "제외"
       },
       "variables": {
         "student_name": "학생 이름",

@@ -5,6 +5,7 @@ import {
   Button,
   Card,
   Col,
+  Collapse,
   Descriptions,
   Divider,
   Drawer,
@@ -507,6 +508,73 @@ const getActivityDetails = (activity: NotificationActivity, t: TranslateFn): str
     return t('pages.notifications.activityDetails.lessonDeclined');
   }
   return activity.error_message || activity.response_value || activity.provider_message_id || '—';
+};
+
+const formatRuleTrigger = (rule: NotificationRule, t: TranslateFn): string => {
+  const eventLabel = t(`pages.notifications.eventTypes.${rule.event_type}`);
+  const triggerConfig = rule.trigger_config ?? {};
+
+  switch (rule.trigger_type) {
+    case 'day_offset_at_time':
+      return t('pages.notifications.triggerSummary.dayOffsetAtTime', {
+        event: eventLabel,
+        days: Math.abs(Number(triggerConfig.days ?? 0)),
+        time: String(triggerConfig.local_time ?? '—'),
+      });
+    case 'relative_offset':
+      return t('pages.notifications.triggerSummary.relativeOffset', {
+        event: eventLabel,
+        minutes: Math.abs(Number(triggerConfig.minutes ?? 0)),
+      });
+    case 'after_event_offset':
+      return t('pages.notifications.triggerSummary.afterEventOffset', {
+        event: eventLabel,
+        minutes: Math.abs(Number(triggerConfig.minutes ?? 0)),
+      });
+    case 'absolute_datetime':
+      return t('pages.notifications.triggerSummary.absoluteDatetime', {
+        event: eventLabel,
+        datetime: triggerConfig.datetime ? dayjs(String(triggerConfig.datetime)).format('YYYY-MM-DD HH:mm') : '—',
+      });
+    default:
+      return `${eventLabel} · ${t(`pages.notifications.triggerTypes.${rule.trigger_type}`)}`;
+  }
+};
+
+const formatAssignmentLabel = (assignment: NotificationAssignment, t: TranslateFn): string => {
+  const label = assignment.scope_type === 'all_learners'
+    ? t('pages.notifications.assignmentLabels.all_learners')
+    : t(`pages.notifications.assignmentLabels.${assignment.scope_type}`, {
+      id: assignment.scope_id ?? '—',
+    });
+  return assignment.is_exclusion
+    ? `${t('pages.notifications.assignmentLabels.excludedPrefix')} ${label}`
+    : label;
+};
+
+const formatAudienceSummary = (assignments: NotificationAssignment[], t: TranslateFn): string => {
+  const included = assignments.filter((assignment) => !assignment.is_exclusion);
+  const excludedCount = assignments.filter((assignment) => assignment.is_exclusion).length;
+
+  if (included.some((assignment) => assignment.scope_type === 'all_learners')) {
+    return excludedCount > 0
+      ? `${t('pages.notifications.audienceSummary.allLearners')} · ${t('pages.notifications.audienceSummary.exclusions', { count: excludedCount })}`
+      : t('pages.notifications.audienceSummary.allLearners');
+  }
+
+  const counts = included.reduce<Record<string, number>>((acc, assignment) => {
+    acc[assignment.scope_type] = (acc[assignment.scope_type] ?? 0) + 1;
+    return acc;
+  }, {});
+
+  const parts = [
+    counts.learner ? t('pages.notifications.audienceSummary.learners', { count: counts.learner }) : null,
+    counts.group ? t('pages.notifications.audienceSummary.groups', { count: counts.group }) : null,
+    counts.package ? t('pages.notifications.audienceSummary.packages', { count: counts.package }) : null,
+    excludedCount ? t('pages.notifications.audienceSummary.exclusions', { count: excludedCount }) : null,
+  ].filter(Boolean);
+
+  return parts.length > 0 ? parts.join(' · ') : '—';
 };
 
 const buildTriggerConfig = (values: RuleWizardValues): Record<string, unknown> => {
@@ -1474,12 +1542,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
     {
       title: t('pages.notifications.trigger'),
       key: 'trigger',
-      render: (_, record) => (
-        <Space direction="vertical" size={0}>
-          <span>{t(`pages.notifications.eventTypes.${record.event_type}`)}</span>
-          <span style={{ color: '#8c8c8c' }}>{t(`pages.notifications.triggerTypes.${record.trigger_type}`)}</span>
-        </Space>
-      ),
+      render: (_, record) => formatRuleTrigger(record, t),
     },
     {
       title: t('pages.notifications.audience'),
@@ -1488,7 +1551,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
         <Space wrap>
           {record.assignments.map((assignment, index) => (
             <Tag key={`${assignment.scope_type}-${assignment.scope_id ?? 'all'}-${index}`} color={assignment.is_exclusion ? 'red' : 'blue'}>
-              {assignment.is_exclusion ? '-' : '+'} {assignment.scope_type}{assignment.scope_id ? ` #${assignment.scope_id}` : ''}
+              {formatAssignmentLabel(assignment, t)}
             </Tag>
           ))}
         </Space>
@@ -1548,6 +1611,8 @@ const RulesTab: React.FC<RulesTabProps> = ({
             <Space direction="vertical">
               <Tag color={getRuleStatusColor(rule.status)}>{t(`pages.notifications.ruleStatus.${rule.status}`)}</Tag>
               <span>{t(`pages.notifications.categories.${rule.category}`)}</span>
+              <Typography.Text>{formatRuleTrigger(rule, t)}</Typography.Text>
+              <Typography.Text type="secondary">{formatAudienceSummary(rule.assignments, t)}</Typography.Text>
               <Space wrap>
                 {rule.status !== 'active' && rule.status !== 'archived' && (
                   <Button size="small" onClick={() => onSetStatus(rule.id, 'activate')}>{t('pages.notifications.activate')}</Button>
@@ -1998,16 +2063,25 @@ const NotificationInstanceDrawer: React.FC<NotificationInstanceDrawerProps> = ({
             </Descriptions.Item>
           </Descriptions>
 
-          <Card size="small" title={t('pages.notifications.queueDetails.debug')}>
-            <Typography.Paragraph
-              copyable={{ text: JSON.stringify(instance.explanation, null, 2) }}
-              style={{ marginBottom: 0 }}
-            >
-              <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
-                {JSON.stringify(instance.explanation, null, 2)}
-              </pre>
-            </Typography.Paragraph>
-          </Card>
+          <Collapse
+            size="small"
+            items={[
+              {
+                key: 'debug',
+                label: t('pages.notifications.queueDetails.debug'),
+                children: (
+                  <Typography.Paragraph
+                    copyable={{ text: JSON.stringify(instance.explanation, null, 2) }}
+                    style={{ marginBottom: 0 }}
+                  >
+                    <pre style={{ margin: 0, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>
+                      {JSON.stringify(instance.explanation, null, 2)}
+                    </pre>
+                  </Typography.Paragraph>
+                ),
+              },
+            ]}
+          />
         </Space>
       )}
     </Drawer>
