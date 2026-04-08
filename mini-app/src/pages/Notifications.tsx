@@ -1601,7 +1601,7 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
               description={t('pages.notifications.ruleWizard.stepHelp.triggerDescription')}
             />
             <Row gutter={16}>
-              <Col xs={24} md={8}>
+              <Col xs={24} md={12}>
                 <Form.Item name="event_type" label={t('pages.notifications.ruleWizard.eventTypeTeacher')} rules={[{ required: true }]}>
                   <Select
                     options={[
@@ -1612,25 +1612,14 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
                   />
                 </Form.Item>
               </Col>
-              <Col xs={24} md={8}>
+              <Col xs={24} md={12}>
                 <Form.Item name="trigger_type" label={t('pages.notifications.ruleWizard.whenToSend')} rules={[{ required: true }]}>
                   <Select
                     options={[
-                      { value: 'day_offset_at_time', label: t('pages.notifications.triggerTypes.day_offset_at_time') },
-                      { value: 'relative_offset', label: t('pages.notifications.triggerTypes.relative_offset') },
-                      { value: 'after_event_offset', label: t('pages.notifications.triggerTypes.after_event_offset') },
-                      { value: 'absolute_datetime', label: t('pages.notifications.triggerTypes.absolute_datetime') },
-                    ]}
-                  />
-                </Form.Item>
-              </Col>
-              <Col xs={24} md={8}>
-                <Form.Item name="priority" label={t('pages.notifications.ruleWizard.howImportant')} rules={[{ required: true }]}>
-                  <Select
-                    options={[
-                      { value: 'low', label: t('pages.notifications.priorities.low') },
-                      { value: 'normal', label: t('pages.notifications.priorities.normal') },
-                      { value: 'high', label: t('pages.notifications.priorities.high') },
+                      { value: 'day_offset_at_time', label: t('pages.notifications.ruleWizard.triggerChoices.day_offset_at_time') },
+                      { value: 'relative_offset', label: t('pages.notifications.ruleWizard.triggerChoices.relative_offset') },
+                      { value: 'after_event_offset', label: t('pages.notifications.ruleWizard.triggerChoices.after_event_offset') },
+                      { value: 'absolute_datetime', label: t('pages.notifications.ruleWizard.triggerChoices.absolute_datetime') },
                     ]}
                   />
                 </Form.Item>
@@ -1664,20 +1653,43 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
               </Form.Item>
             )}
 
-            {category === 'lesson_confirmation' && (
-              <Form.Item name="combine_policy_key" label={t('pages.notifications.ruleWizard.combinePolicy')}>
-                <Select
-                  allowClear
-                  options={[
-                    { value: 'lesson_confirmation_homework', label: t('pages.notifications.ruleWizard.combineLessonHomework') },
-                  ]}
-                />
-              </Form.Item>
-            )}
-
             {eventType === 'custom_date' && triggerType !== 'absolute_datetime' && (
               <Alert type="warning" showIcon message={t('pages.notifications.ruleWizard.customDateNeedsAbsoluteTrigger')} />
             )}
+
+            <Collapse
+              size="small"
+              items={[
+                {
+                  key: 'wizard-advanced-trigger',
+                  label: t('pages.notifications.ruleWizard.advancedSettings'),
+                  children: (
+                    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                      <Form.Item name="priority" label={t('pages.notifications.ruleWizard.howImportant')} rules={[{ required: true }]}>
+                        <Select
+                          options={[
+                            { value: 'low', label: t('pages.notifications.priorities.low') },
+                            { value: 'normal', label: t('pages.notifications.priorities.normal') },
+                            { value: 'high', label: t('pages.notifications.priorities.high') },
+                          ]}
+                        />
+                      </Form.Item>
+
+                      {category === 'lesson_confirmation' && (
+                        <Form.Item name="combine_policy_key" label={t('pages.notifications.ruleWizard.combinePolicy')}>
+                          <Select
+                            allowClear
+                            options={[
+                              { value: 'lesson_confirmation_homework', label: t('pages.notifications.ruleWizard.combineLessonHomework') },
+                            ]}
+                          />
+                        </Form.Item>
+                      )}
+                    </Space>
+                  ),
+                },
+              ]}
+            />
           </Space>
         )}
 
@@ -1713,16 +1725,27 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
               </Form.Item>
             )}
 
-            <Form.Item name="excluded_learner_ids" label={t('pages.notifications.ruleWizard.excludedLearners')}>
-              <Select
-                mode="multiple"
-                loading={loadingLookups}
-                showSearch
-                optionFilterProp="label"
-                options={learnerOptions}
-                placeholder={t('pages.notifications.ruleWizard.excludedLearnersPlaceholder')}
-              />
-            </Form.Item>
+            <Collapse
+              size="small"
+              items={[
+                {
+                  key: 'wizard-advanced-audience',
+                  label: t('pages.notifications.ruleWizard.optionalAudienceSettings'),
+                  children: (
+                    <Form.Item name="excluded_learner_ids" label={t('pages.notifications.ruleWizard.excludedLearners')}>
+                      <Select
+                        mode="multiple"
+                        loading={loadingLookups}
+                        showSearch
+                        optionFilterProp="label"
+                        options={learnerOptions}
+                        placeholder={t('pages.notifications.ruleWizard.excludedLearnersPlaceholder')}
+                      />
+                    </Form.Item>
+                  ),
+                },
+              ]}
+            />
           </Space>
         )}
 
@@ -1759,6 +1782,10 @@ const VariableButtons: React.FC<{ onInsert: (variable: string) => void }> = ({ o
 
 const PreviewStep: React.FC<{ preview: NotificationPreviewResponse | null; loading: boolean }> = ({ preview, loading }) => {
   const { t } = useTranslation();
+  const learnerCount = useMemo(
+    () => new Set((preview?.instances ?? []).map((instance) => instance.learner_id)).size,
+    [preview],
+  );
 
   if (loading) {
     return <Card loading />;
@@ -1775,13 +1802,16 @@ const PreviewStep: React.FC<{ preview: NotificationPreviewResponse | null; loadi
           type="warning"
           showIcon
           message={t('pages.notifications.ruleWizard.previewWarnings')}
-          description={preview.warnings.join(', ')}
+          description={preview.warnings.map((warning) => getWarningLabel(warning, t)).join(', ')}
         />
       )}
       <Card>
         <Typography.Title level={5}>{t('pages.notifications.ruleWizard.previewSummary')}</Typography.Title>
         <Typography.Paragraph>
           {t('pages.notifications.ruleWizard.previewCount', { count: preview.instances.length })}
+        </Typography.Paragraph>
+        <Typography.Paragraph type="secondary">
+          {t('pages.notifications.ruleWizard.previewLearnersCount', { count: learnerCount })}
         </Typography.Paragraph>
         <Divider />
         <Space direction="vertical" style={{ width: '100%' }}>
@@ -2107,6 +2137,12 @@ const TemplatesTab: React.FC<TemplatesTabProps> = ({ templates, loading, error, 
       <Button type="primary" icon={<PlusOutlined />} onClick={onCreate}>
         {t('pages.notifications.createTemplate')}
       </Button>
+      <Alert
+        type="info"
+        showIcon
+        message={t('pages.notifications.templatesHelpTitle')}
+        description={t('pages.notifications.templatesHelpDescription')}
+      />
       <NoticeError error={error} />
       {loading ? (
         <Card loading />
@@ -2323,6 +2359,12 @@ const QueueTab: React.FC<QueueTabProps> = ({
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Alert
+        type="info"
+        showIcon
+        message={t('pages.notifications.queueHelpTitle')}
+        description={t('pages.notifications.queueHelpDescription')}
+      />
       <NoticeError error={error} />
       {loading ? (
         <Card loading />
@@ -2744,6 +2786,12 @@ const ActivityTab: React.FC<ActivityTabProps> = ({ activity, loading, error }) =
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Alert
+        type="info"
+        showIcon
+        message={t('pages.notifications.activityHelpTitle')}
+        description={t('pages.notifications.activityHelpDescription')}
+      />
       <NoticeError error={error} />
       {loading ? (
         <Card loading />
@@ -2974,10 +3022,13 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
           </Typography.Paragraph>
         )}
       </Card>
-      <Card loading={loading}>
+      <Card title={t('pages.notifications.settingsPanelTitle')} loading={loading}>
+        <Typography.Paragraph type="secondary">
+          {t('pages.notifications.settingsPanelDescription')}
+        </Typography.Paragraph>
         <Form<NotificationSettingsFormValues> form={form} layout="vertical" onFinish={handleSubmit}>
           <Row gutter={16}>
-            <Col xs={24} md={8}>
+            <Col xs={24} md={12}>
               <Form.Item name="mode" label={t('pages.notifications.systemMode')} rules={[{ required: true }]}>
                 <Select
                   options={[
@@ -2991,42 +3042,60 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
                 {t(`pages.notifications.modeDescriptions.${selectedMode}`)}
               </Typography.Paragraph>
             </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="daily_cap" label={t('pages.notifications.dailyCap')}>
-                <InputNumber min={0} max={50} style={{ width: '100%' }} />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="cap_mode" label={t('pages.notifications.capMode')}>
-                <Select
-                  options={[
-                    { value: 'warn_only', label: t('pages.notifications.capModes.warn_only') },
-                    { value: 'enforce', label: t('pages.notifications.capModes.enforce') },
-                  ]}
-                />
-              </Form.Item>
-            </Col>
           </Row>
-          <Row gutter={16}>
-            <Col xs={24} md={8}>
-              <Form.Item name="quiet_hours_start" label={t('pages.notifications.quietHoursStart')}>
-                <Input placeholder="21:00" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="quiet_hours_end" label={t('pages.notifications.quietHoursEnd')}>
-                <Input placeholder="09:00" />
-              </Form.Item>
-            </Col>
-            <Col xs={24} md={8}>
-              <Form.Item name="timezone" label={t('pages.notifications.timezone')}>
-                <Input placeholder="Europe/Moscow" />
-              </Form.Item>
-            </Col>
-          </Row>
-          <Form.Item name="notifications_enabled" valuePropName="checked" label={t('pages.notifications.notificationsEnabled')}>
-            <Switch />
-          </Form.Item>
+          <Collapse
+            size="small"
+            style={{ marginBottom: 16 }}
+            items={[
+              {
+                key: 'advanced-settings',
+                label: t('pages.notifications.advancedSettingsTitle'),
+                children: (
+                  <>
+                    <Row gutter={16}>
+                      <Col xs={24} md={8}>
+                        <Form.Item name="daily_cap" label={t('pages.notifications.dailyCap')}>
+                          <InputNumber min={0} max={50} style={{ width: '100%' }} />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} md={8}>
+                        <Form.Item name="cap_mode" label={t('pages.notifications.capMode')}>
+                          <Select
+                            options={[
+                              { value: 'warn_only', label: t('pages.notifications.capModes.warn_only') },
+                              { value: 'enforce', label: t('pages.notifications.capModes.enforce') },
+                            ]}
+                          />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} md={8}>
+                        <Form.Item name="notifications_enabled" valuePropName="checked" label={t('pages.notifications.notificationsEnabled')}>
+                          <Switch />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                    <Row gutter={16}>
+                      <Col xs={24} md={8}>
+                        <Form.Item name="quiet_hours_start" label={t('pages.notifications.quietHoursStart')}>
+                          <Input placeholder="21:00" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} md={8}>
+                        <Form.Item name="quiet_hours_end" label={t('pages.notifications.quietHoursEnd')}>
+                          <Input placeholder="09:00" />
+                        </Form.Item>
+                      </Col>
+                      <Col xs={24} md={8}>
+                        <Form.Item name="timezone" label={t('pages.notifications.timezone')}>
+                          <Input placeholder="Europe/Moscow" />
+                        </Form.Item>
+                      </Col>
+                    </Row>
+                  </>
+                ),
+              },
+            ]}
+          />
           <Button type="primary" htmlType="submit" loading={saving}>
             {t('common.save')}
           </Button>
