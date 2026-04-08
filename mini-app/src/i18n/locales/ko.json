@@ -437,6 +437,17 @@
         "attention": "확인이 필요함",
         "recent": "최근 활동"
       },
+      "ruleSections": {
+        "active": "활성 규칙",
+        "draft": "초안",
+        "paused": "일시 중지됨",
+        "archived": "보관됨"
+      },
+      "templateSections": {
+        "system": "시스템 템플릿",
+        "custom": "사용자 정의 템플릿",
+        "archived": "보관된 템플릿"
+      },
       "systemMode": "시스템 모드",
       "globalNewConfirmTitle": "새 시스템을 전체에 적용할까요?",
       "globalNewConfirmDescription": "이 작업은 전체 tenant를 새 알림 시스템으로 전환합니다. shadow 검증과 학생별 파일럿 이후에만 실행하세요.",

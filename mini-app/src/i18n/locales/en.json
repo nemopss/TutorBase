@@ -438,6 +438,17 @@
         "attention": "Needs attention",
         "recent": "Recent activity"
       },
+      "ruleSections": {
+        "active": "Active rules",
+        "draft": "Drafts",
+        "paused": "Paused",
+        "archived": "Archived"
+      },
+      "templateSections": {
+        "system": "System templates",
+        "custom": "Custom templates",
+        "archived": "Archived templates"
+      },
       "systemMode": "System mode",
       "globalNewConfirmTitle": "Enable the new system globally?",
       "globalNewConfirmDescription": "This will switch the whole tenant to the new notification system. Do this only after shadow verification and a learner-by-learner pilot.",

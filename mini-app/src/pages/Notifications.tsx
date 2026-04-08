@@ -703,6 +703,17 @@ const getActivitySectionKey = (item: NotificationActivity): 'attention' | 'recen
     : 'recent'
 );
 
+const getRuleSectionOrder: Array<'active' | 'draft' | 'paused' | 'archived'> = ['active', 'draft', 'paused', 'archived'];
+
+const getTemplateSectionKey = (template: NotificationTemplate): 'system' | 'custom' | 'archived' => {
+  if (template.archived_at) {
+    return 'archived';
+  }
+  return template.system ? 'system' : 'custom';
+};
+
+const getTemplateSectionOrder: Array<'system' | 'custom' | 'archived'> = ['system', 'custom', 'archived'];
+
 const buildTriggerConfig = (values: RuleWizardValues): Record<string, unknown> => {
   switch (values.trigger_type) {
     case 'day_offset_at_time':
@@ -1677,6 +1688,20 @@ const RulesTab: React.FC<RulesTabProps> = ({
   onCreateRule,
 }) => {
   const { t } = useTranslation();
+  const groupedRules = useMemo(() => {
+    const groups: Record<'active' | 'draft' | 'paused' | 'archived', NotificationRule[]> = {
+      active: [],
+      draft: [],
+      paused: [],
+      archived: [],
+    };
+
+    rules.forEach((rule) => {
+      groups[rule.status as keyof typeof groups]?.push(rule);
+    });
+
+    return groups;
+  }, [rules]);
 
   const columns: TableProps<NotificationRule>['columns'] = [
     {
@@ -1756,33 +1781,103 @@ const RulesTab: React.FC<RulesTabProps> = ({
         description={t('pages.notifications.materializeHelpDescription')}
       />
       <NoticeError error={error} />
-      <ResponsiveDataView<NotificationRule>
-        data={rules}
-        loading={loading}
-        columns={columns}
-        rowKey="id"
-        emptyText={t('pages.notifications.noRules')}
-        emptyDescription={t('pages.notifications.noRulesDescription')}
-        renderCard={(rule) => (
-          <Card key={rule.id} title={rule.name} size="small" style={{ marginBottom: 12 }}>
-            <Space direction="vertical">
-              <Tag color={getRuleStatusColor(rule.status)}>{t(`pages.notifications.ruleStatus.${rule.status}`)}</Tag>
-              <span>{t(`pages.notifications.categories.${rule.category}`)}</span>
-              <Typography.Text>{formatRuleTrigger(rule, t)}</Typography.Text>
-              <Typography.Text type="secondary">{formatAudienceSummary(rule.assignments, t)}</Typography.Text>
-              <Space wrap>
-                {rule.status !== 'active' && rule.status !== 'archived' && (
-                  <Button size="small" onClick={() => onSetStatus(rule.id, 'activate')}>{t('pages.notifications.activate')}</Button>
-                )}
-                {rule.status === 'active' && (
-                  <Button size="small" onClick={() => onSetStatus(rule.id, 'pause')}>{t('pages.notifications.pause')}</Button>
-                )}
-              </Space>
+      {loading ? (
+        <Card loading />
+      ) : rules.length === 0 ? (
+        <Empty
+          description={(
+            <Space direction="vertical" size={4}>
+              <Typography.Text>{t('pages.notifications.noRules')}</Typography.Text>
+              <Typography.Text type="secondary">{t('pages.notifications.noRulesDescription')}</Typography.Text>
             </Space>
-          </Card>
-        )}
-        pagination={false}
-      />
+          )}
+        />
+      ) : (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          {getRuleSectionOrder.map((sectionKey) => {
+            const sectionRules = groupedRules[sectionKey];
+            if (sectionRules.length === 0) {
+              return null;
+            }
+
+            return (
+              <Card
+                key={sectionKey}
+                title={t(`pages.notifications.ruleSections.${sectionKey}`)}
+                extra={<Tag>{sectionRules.length}</Tag>}
+              >
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  {sectionRules.map((rule) => (
+                    <Card key={rule.id} size="small" type="inner">
+                      <Space direction="vertical" style={{ width: '100%' }} size="small">
+                        <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
+                          <Space wrap>
+                            <Typography.Text strong>{rule.name}</Typography.Text>
+                            <Tag>{t(`pages.notifications.categories.${rule.category}`)}</Tag>
+                            <Tag color={getRuleStatusColor(rule.status)}>{t(`pages.notifications.ruleStatus.${rule.status}`)}</Tag>
+                          </Space>
+                          <Typography.Text type="secondary">
+                            {t(`pages.notifications.eventTypes.${rule.event_type}`)}
+                          </Typography.Text>
+                        </Space>
+                        <Typography.Text>{formatRuleTrigger(rule, t)}</Typography.Text>
+                        <Typography.Text type="secondary">{formatAudienceSummary(rule.assignments, t)}</Typography.Text>
+                        <Space wrap>
+                          {rule.status !== 'active' && rule.status !== 'archived' && (
+                            <Button size="small" onClick={() => onSetStatus(rule.id, 'activate')}>
+                              {t('pages.notifications.activate')}
+                            </Button>
+                          )}
+                          {rule.status === 'active' && (
+                            <Button size="small" onClick={() => onSetStatus(rule.id, 'pause')}>
+                              {t('pages.notifications.pause')}
+                            </Button>
+                          )}
+                          {rule.status !== 'archived' && (
+                            <Button size="small" danger onClick={() => onSetStatus(rule.id, 'archive')}>
+                              {t('pages.notifications.archive')}
+                            </Button>
+                          )}
+                        </Space>
+                      </Space>
+                    </Card>
+                  ))}
+                </Space>
+              </Card>
+            );
+          })}
+
+          <Collapse
+            size="small"
+            items={[
+              {
+                key: 'technical-rules',
+                label: t('pages.notifications.technicalList'),
+                children: (
+                  <ResponsiveDataView<NotificationRule>
+                    data={rules}
+                    loading={false}
+                    columns={columns}
+                    rowKey="id"
+                    emptyText={t('pages.notifications.noRules')}
+                    emptyDescription={t('pages.notifications.noRulesDescription')}
+                    renderCard={(rule) => (
+                      <Card key={rule.id} title={rule.name} size="small" style={{ marginBottom: 12 }}>
+                        <Space direction="vertical">
+                          <Tag color={getRuleStatusColor(rule.status)}>{t(`pages.notifications.ruleStatus.${rule.status}`)}</Tag>
+                          <span>{t(`pages.notifications.categories.${rule.category}`)}</span>
+                          <Typography.Text>{formatRuleTrigger(rule, t)}</Typography.Text>
+                        </Space>
+                      </Card>
+                    )}
+                    pagination={false}
+                  />
+                ),
+              },
+            ]}
+          />
+        </Space>
+      )}
     </Space>
   );
 };
@@ -1798,6 +1893,19 @@ interface TemplatesTabProps {
 
 const TemplatesTab: React.FC<TemplatesTabProps> = ({ templates, loading, error, archiving, onCreate, onArchive }) => {
   const { t } = useTranslation();
+  const groupedTemplates = useMemo(() => {
+    const groups: Record<'system' | 'custom' | 'archived', NotificationTemplate[]> = {
+      system: [],
+      custom: [],
+      archived: [],
+    };
+
+    templates.forEach((template) => {
+      groups[getTemplateSectionKey(template)].push(template);
+    });
+
+    return groups;
+  }, [templates]);
 
   const columns: TableProps<NotificationTemplate>['columns'] = [
     {
@@ -1848,23 +1956,100 @@ const TemplatesTab: React.FC<TemplatesTabProps> = ({ templates, loading, error, 
         {t('pages.notifications.createTemplate')}
       </Button>
       <NoticeError error={error} />
-      <ResponsiveDataView<NotificationTemplate>
-        data={templates}
-        loading={loading}
-        columns={columns}
-        rowKey="id"
-        emptyText={t('pages.notifications.noTemplates')}
-        emptyDescription={t('pages.notifications.noTemplatesDescription')}
-        renderCard={(template) => (
-          <Card key={template.id} title={template.name} size="small" style={{ marginBottom: 12 }}>
-            <Space direction="vertical">
-              <Tag>{t(`pages.notifications.categories.${template.category}`)}</Tag>
-              <span>{template.body}</span>
+      {loading ? (
+        <Card loading />
+      ) : templates.length === 0 ? (
+        <Empty
+          description={(
+            <Space direction="vertical" size={4}>
+              <Typography.Text>{t('pages.notifications.noTemplates')}</Typography.Text>
+              <Typography.Text type="secondary">{t('pages.notifications.noTemplatesDescription')}</Typography.Text>
             </Space>
-          </Card>
-        )}
-        pagination={false}
-      />
+          )}
+        />
+      ) : (
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          {getTemplateSectionOrder.map((sectionKey) => {
+            const sectionTemplates = groupedTemplates[sectionKey];
+            if (sectionTemplates.length === 0) {
+              return null;
+            }
+
+            return (
+              <Card
+                key={sectionKey}
+                title={t(`pages.notifications.templateSections.${sectionKey}`)}
+                extra={<Tag>{sectionTemplates.length}</Tag>}
+              >
+                <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                  {sectionTemplates.map((template) => (
+                    <Card key={template.id} size="small" type="inner">
+                      <Space direction="vertical" style={{ width: '100%' }} size="small">
+                        <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
+                          <Space wrap>
+                            <Typography.Text strong>{template.name}</Typography.Text>
+                            <Tag>{t(`pages.notifications.categories.${template.category}`)}</Tag>
+                            <Tag color={template.system ? 'purple' : 'blue'}>
+                              {template.system ? t('pages.notifications.systemTemplate') : t('pages.notifications.tenantTemplate')}
+                            </Tag>
+                          </Space>
+                          <Typography.Text type="secondary">
+                            v{template.version}
+                          </Typography.Text>
+                        </Space>
+                        <Typography.Paragraph style={{ marginBottom: 0 }}>
+                          {template.body}
+                        </Typography.Paragraph>
+                        {!template.system && !template.archived_at && (
+                          <Space wrap>
+                            <Button
+                              size="small"
+                              danger
+                              disabled={archiving}
+                              onClick={() => onArchive(template.id)}
+                            >
+                              {t('pages.notifications.archive')}
+                            </Button>
+                          </Space>
+                        )}
+                      </Space>
+                    </Card>
+                  ))}
+                </Space>
+              </Card>
+            );
+          })}
+
+          <Collapse
+            size="small"
+            items={[
+              {
+                key: 'technical-templates',
+                label: t('pages.notifications.technicalList'),
+                children: (
+                  <ResponsiveDataView<NotificationTemplate>
+                    data={templates}
+                    loading={false}
+                    columns={columns}
+                    rowKey="id"
+                    emptyText={t('pages.notifications.noTemplates')}
+                    emptyDescription={t('pages.notifications.noTemplatesDescription')}
+                    renderCard={(template) => (
+                      <Card key={template.id} title={template.name} size="small" style={{ marginBottom: 12 }}>
+                        <Space direction="vertical">
+                          <Tag>{t(`pages.notifications.categories.${template.category}`)}</Tag>
+                          <span>{template.body}</span>
+                        </Space>
+                      </Card>
+                    )}
+                    pagination={false}
+                  />
+                ),
+              },
+            ]}
+          />
+        </Space>
+      )}
     </Space>
   );
 };

@@ -439,6 +439,17 @@
         "attention": "Требует внимания",
         "recent": "Недавние события"
       },
+      "ruleSections": {
+        "active": "Активные правила",
+        "draft": "Черновики",
+        "paused": "На паузе",
+        "archived": "Архив"
+      },
+      "templateSections": {
+        "system": "Системные шаблоны",
+        "custom": "Свои шаблоны",
+        "archived": "Архивные шаблоны"
+      },
       "systemMode": "Режим системы",
       "globalNewConfirmTitle": "Включить новую систему глобально?",
       "globalNewConfirmDescription": "Это переключит весь tenant на новую систему уведомлений. Делайте это только после shadow-проверки и пилота на отдельных учениках.",
