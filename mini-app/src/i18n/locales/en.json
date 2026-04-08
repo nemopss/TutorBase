@@ -35,7 +35,14 @@
     "copyChatId": "Copy Chat ID",
     "chatIdCopied": "Chat ID copied",
     "noLearnersFound": "No learners found",
-    "clearSearch": "Clear search"
+    "clearSearch": "Clear search",
+    "tenantContextRequired": {
+      "title": "Choose a school first",
+      "description": "The {{section}} section works only inside a selected school context.",
+      "globalContextNotice": "You are currently in the global view without a selected school.",
+      "switchHint": "Select a school with the tenant switcher in the menu, then open this section again.",
+      "noSwitcherHint": "Tenant switching is not available in this mode. Open this section from a session that already has a selected school."
+    }
   },
   "navigation": {
     "dashboard": "Dashboard",

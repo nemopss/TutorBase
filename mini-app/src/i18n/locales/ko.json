@@ -35,7 +35,14 @@
     "copyChatId": "Chat ID 복사",
     "chatIdCopied": "Chat ID 복사됨",
     "noLearnersFound": "학생을 찾을 수 없습니다",
-    "clearSearch": "검색 지우기"
+    "clearSearch": "검색 지우기",
+    "tenantContextRequired": {
+      "title": "먼저 학교를 선택하세요",
+      "description": "{{section}} 섹션은 선택된 학교 컨텍스트에서만 사용할 수 있습니다.",
+      "globalContextNotice": "현재 선택된 학교 없이 전체 보기 상태입니다.",
+      "switchHint": "메뉴의 학교 전환기에서 학교를 선택한 뒤 이 섹션을 다시 여세요.",
+      "noSwitcherHint": "현재 모드에서는 여기서 학교를 전환할 수 없습니다. 이미 학교가 선택된 세션에서 이 섹션을 여세요."
+    }
   },
   "navigation": {
     "dashboard": "대시보드",
