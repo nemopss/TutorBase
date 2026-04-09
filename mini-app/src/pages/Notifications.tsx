@@ -518,6 +518,23 @@ const getActivityTypeLabel = (activityType: string, t: TranslateFn): string => {
   }
 };
 
+const getInstanceStatusLabel = (status: string, t: TranslateFn): string => {
+  switch (status) {
+    case 'sent':
+    case 'scheduled':
+    case 'processing':
+    case 'failed':
+    case 'cancelled':
+    case 'shadow':
+    case 'skipped':
+    case 'suppressed':
+    case 'expired':
+      return t(`pages.notifications.instanceStatus.${status}`);
+    default:
+      return status;
+  }
+};
+
 const getActivityStatusLabel = (status: string, t: TranslateFn): string => {
   switch (status) {
     case 'requires_attention':
@@ -527,7 +544,7 @@ const getActivityStatusLabel = (status: string, t: TranslateFn): string => {
     case 'declined':
       return t('pages.notifications.activityStatuses.declined');
     default:
-      return status;
+      return getInstanceStatusLabel(status, t);
   }
 };
 
@@ -554,7 +571,44 @@ const getActivityDetails = (activity: NotificationActivity, t: TranslateFn): str
     }
     return t('pages.notifications.activityDetails.lessonDeclined');
   }
-  return activity.error_message || activity.response_value || activity.provider_message_id || '—';
+
+  if (activity.activity_type === 'response') {
+    if (activity.response_value === 'confirmed' && activity.action_key === 'confirm_lesson') {
+      return t('pages.notifications.activityDetails.lessonConfirmed');
+    }
+    if (activity.response_value === 'declined' && activity.action_key === 'decline_lesson') {
+      const responseText = typeof activity.metadata?.response_text === 'string' ? activity.metadata.response_text : null;
+      if (responseText) {
+        return t('pages.notifications.activityDetails.lessonDeclinedWithReason', { reason: responseText });
+      }
+      return t('pages.notifications.activityDetails.lessonDeclined');
+    }
+    if (activity.response_value === 'confirmed') {
+      return t('pages.notifications.activityDetails.responseConfirmed');
+    }
+    return t('pages.notifications.activityDetails.responseRecorded');
+  }
+
+  if (activity.activity_type === 'delivery_attempt') {
+    if (activity.status === 'sent') {
+      return t('pages.notifications.activityDetails.deliverySent');
+    }
+    if (activity.status === 'processing') {
+      return t('pages.notifications.activityDetails.deliveryProcessing');
+    }
+    if (activity.status === 'scheduled') {
+      return t('pages.notifications.activityDetails.deliveryScheduled');
+    }
+    if (activity.status === 'failed') {
+      const reason = activity.error_message || activity.error_code;
+      return reason
+        ? t('pages.notifications.activityDetails.deliveryFailedWithReason', { reason })
+        : t('pages.notifications.activityDetails.deliveryFailed');
+    }
+    return t('pages.notifications.activityDetails.deliveryRecorded');
+  }
+
+  return activity.error_message || activity.error_code || '—';
 };
 
 const formatRuleTrigger = (rule: NotificationRule, t: TranslateFn): string => {
@@ -1073,6 +1127,9 @@ const Notifications: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notificationSettings'] });
       queryClient.invalidateQueries({ queryKey: ['learnerNotificationModes'] });
+      queryClient.invalidateQueries({ queryKey: ['notificationInstances'] });
+      queryClient.invalidateQueries({ queryKey: ['notificationActivity'] });
+      queryClient.invalidateQueries({ queryKey: ['notificationInstanceDetail'] });
       message.success(t('pages.notifications.settingsSaved'));
     },
     onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
@@ -1082,6 +1139,9 @@ const Notifications: React.FC = () => {
     mutationFn: updateLearnerNotificationMode,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['learnerNotificationModes'] });
+      queryClient.invalidateQueries({ queryKey: ['notificationInstances'] });
+      queryClient.invalidateQueries({ queryKey: ['notificationActivity'] });
+      queryClient.invalidateQueries({ queryKey: ['notificationInstanceDetail'] });
       message.success(t('pages.notifications.learnerModeSaved'));
     },
     onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
@@ -2348,15 +2408,19 @@ const QueueTab: React.FC<QueueTabProps> = ({
       title: t('pages.notifications.status'),
       dataIndex: 'status',
       key: 'status',
-      render: (status: string) => <Tag color={getInstanceStatusColor(status)}>{t(`pages.notifications.instanceStatus.${status}`)}</Tag>,
+      render: (status: string) => <Tag color={getInstanceStatusColor(status)}>{getInstanceStatusLabel(status, t)}</Tag>,
     },
     {
       title: t('pages.notifications.delivery'),
       key: 'delivery',
       render: (_, record) => record.latest_attempt ? (
         <Space direction="vertical" size={0}>
-          <span>{record.latest_attempt.status}</span>
-          {record.latest_attempt.provider_message_id && <span>#{record.latest_attempt.provider_message_id}</span>}
+          <span>{getInstanceStatusLabel(record.latest_attempt.status, t)}</span>
+          {record.latest_attempt.provider_message_id && (
+            <Typography.Text type="secondary">
+              {t('pages.notifications.queueDetails.providerMessageId')}: #{record.latest_attempt.provider_message_id}
+            </Typography.Text>
+          )}
         </Space>
       ) : '-',
     },
@@ -2719,8 +2783,14 @@ const NotificationInstanceDrawer: React.FC<NotificationInstanceDrawerProps> = ({
           <Descriptions bordered column={1} size="small" title={t('pages.notifications.queueDetails.latestAttempt')}>
             <Descriptions.Item label={t('pages.notifications.status')}>
               {instance.latest_attempt
-                ? instance.latest_attempt.status
+                ? getInstanceStatusLabel(instance.latest_attempt.status, t)
                 : t('pages.notifications.queueDetails.noAttempt')}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.providerMessageId')}>
+              {instance.latest_attempt?.provider_message_id ? `#${instance.latest_attempt.provider_message_id}` : '—'}
+            </Descriptions.Item>
+            <Descriptions.Item label={t('pages.notifications.queueDetails.providerChatId')}>
+              {instance.latest_attempt?.provider_chat_id || '—'}
             </Descriptions.Item>
             <Descriptions.Item label={t('pages.notifications.queueDetails.error')}>
               {instance.latest_attempt?.error_message || instance.latest_attempt?.error_code || '—'}

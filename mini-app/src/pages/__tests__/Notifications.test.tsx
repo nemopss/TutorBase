@@ -75,6 +75,14 @@ const translations: Record<string, string> = {
   'pages.notifications.queueTimeline.deliveryLine': '{{event}} · event at {{eventTime}}',
   'pages.notifications.activitySections.attention': 'Needs attention',
   'pages.notifications.activitySections.recent': 'Recent activity',
+  'pages.notifications.activityDetails.lessonConfirmed': 'The learner confirmed the lesson',
+  'pages.notifications.activityDetails.responseConfirmed': 'The learner confirmed the notification',
+  'pages.notifications.activityDetails.responseRecorded': 'The learner response was recorded',
+  'pages.notifications.activityDetails.deliverySent': 'The message was sent via Telegram',
+  'pages.notifications.activityDetails.deliveryProcessing': 'The notification is being sent now',
+  'pages.notifications.activityDetails.deliveryScheduled': 'The notification is queued for the next delivery tick',
+  'pages.notifications.activityDetails.deliveryFailed': 'The message could not be delivered',
+  'pages.notifications.activityDetails.deliveryRecorded': 'A delivery event was recorded',
   'pages.notifications.modes.inherit': 'Inherit',
   'pages.notifications.modes.shadow': 'Shadow',
   'pages.notifications.modes.legacy': 'Legacy',
@@ -112,6 +120,15 @@ const translations: Record<string, string> = {
   'pages.notifications.queueDetails.error': 'Error',
   'pages.notifications.queueDetails.sentAt': 'Sent at',
   'pages.notifications.queueDetails.noAttempt': 'No attempts yet',
+  'pages.notifications.instanceStatus.sent': 'Sent',
+  'pages.notifications.instanceStatus.scheduled': 'Scheduled',
+  'pages.notifications.instanceStatus.processing': 'Processing',
+  'pages.notifications.instanceStatus.failed': 'Failed',
+  'pages.notifications.instanceStatus.cancelled': 'Cancelled',
+  'pages.notifications.instanceStatus.shadow': 'Test',
+  'pages.notifications.instanceStatus.skipped': 'Skipped',
+  'pages.notifications.instanceStatus.suppressed': 'Suppressed',
+  'pages.notifications.instanceStatus.expired': 'Expired',
   'pages.notifications.warningLabels.calendarConflict': 'Another active lesson exists in the same slot',
   'navigation.newBadge': 'NEW',
   'common.tenantContextRequired.title': 'Choose a school first',
@@ -301,6 +318,46 @@ const mockGet = jest.fn((url: string, _config?: unknown) => {
       });
     }
 
+    if (url === '/notifications/activity') {
+      return Promise.resolve({
+        data: [
+          {
+            activity_type: 'response',
+            activity_id: 301,
+            notification_instance_id: 1,
+            category: 'lesson_confirmation',
+            event_type: 'lesson',
+            event_id: 617,
+            learner_id: 10,
+            learner_display_name: 'Vika',
+            status: 'confirmed',
+            action_key: 'confirm_lesson',
+            response_value: 'confirmed',
+            occurred_at: '2026-04-07T07:05:00+00:00',
+            metadata: {},
+          },
+          {
+            activity_type: 'delivery_attempt',
+            activity_id: 201,
+            notification_instance_id: 1,
+            category: 'lesson_confirmation',
+            event_type: 'lesson',
+            event_id: 617,
+            learner_id: 10,
+            learner_display_name: 'Vika',
+            status: 'sent',
+            provider_message_id: '3106',
+            occurred_at: '2026-04-07T07:00:03+00:00',
+            metadata: {
+              attempt_no: 1,
+              channel: 'telegram',
+              provider: 'telegram',
+            },
+          },
+        ],
+      });
+    }
+
     if (url === '/groups') {
       return Promise.resolve({ data: [] });
     }
@@ -442,6 +499,17 @@ describe('Notifications', () => {
         }),
       }),
     );
+  });
+
+  it('shows human-readable activity details instead of raw response and message ids', async () => {
+    renderComponent();
+
+    fireEvent.click(await screen.findByText('Activity'));
+
+    expect(await screen.findByText('The learner confirmed the lesson')).toBeInTheDocument();
+    expect(await screen.findByText('The message was sent via Telegram')).toBeInTheDocument();
+    expect(screen.queryByText('confirmed')).not.toBeInTheDocument();
+    expect(screen.queryByText('3106')).not.toBeInTheDocument();
   });
 
   it('shows tenant selection prompt in global super-admin context without firing notification queries', async () => {

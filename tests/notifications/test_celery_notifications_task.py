@@ -1,10 +1,13 @@
 import importlib
 import sys
+from datetime import datetime, timezone
 
 import pytest
 
 from utils.tasks.notifications import (
     _active_tenant_ids,
+    _build_delivery_log_message,
+    NotificationDeliveryLogContext,
     deliver_due_notifications_task,
     process_notification_jobs_task,
 )
@@ -60,3 +63,23 @@ async def test_active_tenant_ids_returns_ordered_ids_from_query_result():
 
     assert result == (1, 2)
     assert session.statements
+
+
+def test_build_delivery_log_message_is_human_readable():
+    context = NotificationDeliveryLogContext(
+        learner_name="Testlex",
+        category_name="Подтверждение урока",
+        event_type="lesson",
+        lesson_scheduled_at=datetime(2026, 4, 9, 19, 0, tzinfo=timezone.utc),
+    )
+
+    message = _build_delivery_log_message(
+        context,
+        provider_message_id="3106",
+    )
+
+    assert "#notification_sent" in message
+    assert "Testlex" in message
+    assert "Подтверждение урока" in message
+    assert "2026-04-09 22:00:00 MSK" in message
+    assert "3106" in message

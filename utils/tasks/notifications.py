@@ -4,15 +4,17 @@ from __future__ import annotations
 
 import asyncio
 import logging
+from dataclasses import dataclass
+from datetime import datetime
 from typing import Optional
 
 from aiogram import Bot
-from sqlalchemy import select
+from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
 
 from config import config
-from database.models import Tenant
+from database.models import Learner, Lesson, Tenant
 from notifications.application.delivery import (
     ClaimDueNotificationsUseCase,
     ExecuteClaimedNotificationDeliveryUseCase,
@@ -24,13 +26,23 @@ from notifications.application.reconciliation import (
     RunReconcileNotificationEventJobUseCase,
     RunReconcileNotificationGroupMembershipJobUseCase,
 )
+from notifications.infrastructure.models import NotificationCategory, NotificationInstance
 from notifications.infrastructure.rendering import SqlAlchemyNotificationRenderer
 from notifications.infrastructure.repositories import SqlAlchemySessionNotificationUnitOfWork
 from notifications.infrastructure.telegram_delivery import TelegramNotificationChannelAdapter
 from utils.celery_app import celery_app
+from utils.formatters import escape_html_text, format_timestamp_msk
 
 
 logger = logging.getLogger(__name__)
+
+
+@dataclass(frozen=True)
+class NotificationDeliveryLogContext:
+    learner_name: str
+    category_name: str
+    event_type: str
+    lesson_scheduled_at: datetime | None = None
 
 
 @celery_app.task(
@@ -300,6 +312,13 @@ async def _deliver_for_tenant(
         ).execute(claimed)
         if result.status.value == "sent":
             sent += 1
+            await _send_delivery_log(
+                session,
+                bot=bot,
+                tenant_id=tenant_id,
+                instance_id=claimed.instance_id,
+                provider_message_id=result.provider_message_id,
+            )
         else:
             failed += 1
 
@@ -311,4 +330,100 @@ async def _deliver_for_tenant(
     }
 
 
-__all__ = ["deliver_due_notifications_task", "process_notification_jobs_task"]
+async def _send_delivery_log(
+    session,
+    *,
+    bot: Bot,
+    tenant_id: int,
+    instance_id: int,
+    provider_message_id: str | None,
+) -> None:
+    context = await _delivery_log_context(session, tenant_id=tenant_id, instance_id=instance_id)
+    if context is None:
+        logger.warning("Delivery log context not found for notification instance #%s", instance_id)
+        return
+    try:
+        await bot.send_message(
+            config.LOGS_CHAT_ID,
+            _build_delivery_log_message(
+                context,
+                provider_message_id=provider_message_id,
+            ),
+            parse_mode="HTML",
+        )
+    except Exception as exc:
+        logger.error("Failed to send notification delivery log for instance #%s: %s", instance_id, exc)
+
+
+async def _delivery_log_context(
+    session,
+    *,
+    tenant_id: int,
+    instance_id: int,
+) -> NotificationDeliveryLogContext | None:
+    result = await session.execute(
+        select(
+            Learner.display_name.label("learner_name"),
+            NotificationCategory.display_name.label("category_name"),
+            NotificationInstance.event_type,
+            Lesson.scheduled_at.label("lesson_scheduled_at"),
+        )
+        .select_from(NotificationInstance)
+        .outerjoin(Learner, Learner.id == NotificationInstance.learner_id)
+        .outerjoin(NotificationCategory, NotificationCategory.id == NotificationInstance.category_id)
+        .outerjoin(
+            Lesson,
+            and_(
+                NotificationInstance.event_type == "lesson",
+                Lesson.id == NotificationInstance.event_id,
+            ),
+        )
+        .where(
+            NotificationInstance.tenant_id == tenant_id,
+            NotificationInstance.id == instance_id,
+        )
+    )
+    row = result.one_or_none()
+    if row is None:
+        return None
+    return NotificationDeliveryLogContext(
+        learner_name=row.learner_name or "Ученик",
+        category_name=row.category_name or "Уведомление",
+        event_type=row.event_type,
+        lesson_scheduled_at=row.lesson_scheduled_at,
+    )
+
+
+def _build_delivery_log_message(
+    context: NotificationDeliveryLogContext,
+    *,
+    provider_message_id: str | None,
+) -> str:
+    lines = [
+        "#notification_sent",
+        f"Ученик: {escape_html_text(context.learner_name)}",
+        f"Категория: {escape_html_text(context.category_name)}",
+    ]
+    if context.event_type == "lesson" and context.lesson_scheduled_at is not None:
+        lines.append(
+            f"Урок: {escape_html_text(format_timestamp_msk(context.lesson_scheduled_at))}"
+        )
+    if provider_message_id:
+        lines.append(f"Telegram message_id: <code>{escape_html_text(provider_message_id)}</code>")
+    mention = _log_notify_mention()
+    if mention:
+        lines.append(mention)
+    return "\n".join(lines)
+
+
+def _log_notify_mention() -> str | None:
+    if not config.REMINDER_NOTIFY_USERNAME:
+        return None
+    return f"@{escape_html_text(config.REMINDER_NOTIFY_USERNAME, default=config.REMINDER_NOTIFY_USERNAME)}"
+
+
+__all__ = [
+    "deliver_due_notifications_task",
+    "process_notification_jobs_task",
+    "_build_delivery_log_message",
+]

@@ -393,8 +393,17 @@
         "declined": "Declined"
       },
       "activityDetails": {
+        "lessonConfirmed": "The learner confirmed the lesson",
         "lessonDeclined": "The learner declined the lesson",
-        "lessonDeclinedWithReason": "The learner declined the lesson: {{reason}}"
+        "lessonDeclinedWithReason": "The learner declined the lesson: {{reason}}",
+        "responseConfirmed": "The learner confirmed the notification",
+        "responseRecorded": "The learner response was recorded",
+        "deliverySent": "The message was sent via Telegram",
+        "deliveryProcessing": "The notification is being sent now",
+        "deliveryScheduled": "The notification is queued for the next delivery tick",
+        "deliveryFailed": "The message could not be delivered",
+        "deliveryFailedWithReason": "The message could not be delivered: {{reason}}",
+        "deliveryRecorded": "A delivery event was recorded"
       },
       "details": "Details",
       "viewDetails": "View details",

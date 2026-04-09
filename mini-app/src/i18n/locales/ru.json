@@ -394,8 +394,17 @@
         "declined": "Отказ"
       },
       "activityDetails": {
+        "lessonConfirmed": "Ученик подтвердил урок",
         "lessonDeclined": "Ученик отказался от урока",
-        "lessonDeclinedWithReason": "Ученик отказался от урока: {{reason}}"
+        "lessonDeclinedWithReason": "Ученик отказался от урока: {{reason}}",
+        "responseConfirmed": "Ученик подтвердил уведомление",
+        "responseRecorded": "Ответ ученика записан",
+        "deliverySent": "Сообщение отправлено в Telegram",
+        "deliveryProcessing": "Уведомление сейчас отправляется",
+        "deliveryScheduled": "Уведомление поставлено в ближайшую отправку",
+        "deliveryFailed": "Не удалось отправить сообщение",
+        "deliveryFailedWithReason": "Не удалось отправить сообщение: {{reason}}",
+        "deliveryRecorded": "Событие доставки записано"
       },
       "details": "Детали",
       "viewDetails": "Подробнее",

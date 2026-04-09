@@ -392,8 +392,17 @@
         "declined": "거절"
       },
       "activityDetails": {
+        "lessonConfirmed": "학생이 수업을 확인했습니다",
         "lessonDeclined": "학생이 수업을 거절했습니다",
-        "lessonDeclinedWithReason": "학생이 수업을 거절했습니다: {{reason}}"
+        "lessonDeclinedWithReason": "학생이 수업을 거절했습니다: {{reason}}",
+        "responseConfirmed": "학생이 알림을 확인했습니다",
+        "responseRecorded": "학생 응답이 기록되었습니다",
+        "deliverySent": "메시지가 Telegram으로 전송되었습니다",
+        "deliveryProcessing": "알림을 지금 전송하는 중입니다",
+        "deliveryScheduled": "알림이 다음 전송 틱에 대기 중입니다",
+        "deliveryFailed": "메시지를 전송하지 못했습니다",
+        "deliveryFailedWithReason": "메시지를 전송하지 못했습니다: {{reason}}",
+        "deliveryRecorded": "전송 이벤트가 기록되었습니다"
       },
       "details": "상세",
       "viewDetails": "상세 보기",
