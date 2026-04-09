@@ -470,7 +470,7 @@ def test_event_lookup_statements_are_scoped_to_tenant_and_event_id():
 def test_notification_instances_statement_supports_queue_filters():
     stmt = _notification_instances_stmt(
         tenant_id=1,
-        status="scheduled",
+        statuses=("scheduled", "shadow"),
         learner_id=10,
         event_type=EventType.LESSON,
         scheduled_from=datetime(2026, 4, 8, 0, 0, tzinfo=timezone.utc),
@@ -481,7 +481,7 @@ def test_notification_instances_statement_supports_queue_filters():
     compiled = str(stmt.compile(dialect=postgresql.dialect()))
 
     assert "notification_instances.tenant_id =" in compiled
-    assert "notification_instances.status =" in compiled
+    assert "notification_instances.status IN" in compiled
     assert "notification_instances.learner_id =" in compiled
     assert "notification_instances.event_type =" in compiled
     assert "notification_instances.effective_scheduled_for >=" in compiled

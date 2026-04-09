@@ -91,8 +91,18 @@ class FakeAuditLogRepository:
 
 
 @dataclass
+class FakeInstanceRepository:
+    cancel_rule_calls: list[dict] = field(default_factory=list)
+
+    async def cancel_future_instances_for_rules(self, *, rule_ids, reason: str):
+        self.cancel_rule_calls.append({"rule_ids": rule_ids, "reason": reason})
+        return 0
+
+
+@dataclass
 class FakeUnitOfWork:
     rules: FakeRuleRepository
+    instances: FakeInstanceRepository = field(default_factory=FakeInstanceRepository)
     audit_log: FakeAuditLogRepository = field(default_factory=FakeAuditLogRepository)
     committed: bool = False
 
@@ -157,8 +167,28 @@ async def test_status_use_cases_commit_status_transition():
         (1, "paused"),
         (1, "archived"),
     ]
+    assert uow.instances.cancel_rule_calls == [
+        {"rule_ids": (1,), "reason": "rule_not_active"},
+        {"rule_ids": (1,), "reason": "rule_not_active"},
+    ]
     assert [record.action for record in uow.audit_log.records] == ["activated", "paused", "archived"]
     assert activated is not None and activated.status == RuleStatus.ACTIVE
     assert paused is not None and paused.status == RuleStatus.PAUSED
     assert archived is not None and archived.status == RuleStatus.ARCHIVED
     assert uow.committed
+
+
+@pytest.mark.asyncio
+async def test_update_rule_cancels_future_instances_when_status_becomes_inactive():
+    repository = FakeRuleRepository(rules=(_record(rule_id=1, status=RuleStatus.ACTIVE),))
+    uow = FakeUnitOfWork(rules=repository)
+
+    updated = await UpdateNotificationRuleUseCase(uow).execute(
+        rule_id=1,
+        draft=NotificationRuleUpdateDraft(status=RuleStatus.PAUSED),
+    )
+
+    assert updated is not None
+    assert uow.instances.cancel_rule_calls == [
+        {"rule_ids": (1,), "reason": "rule_not_active"}
+    ]

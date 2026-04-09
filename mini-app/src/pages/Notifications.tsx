@@ -281,6 +281,16 @@ const CATEGORY_OPTIONS = [
   'teacher_alert',
 ];
 
+const ACTIVE_QUEUE_INSTANCE_STATUSES = new Set([
+  'shadow',
+  'scheduled',
+  'processing',
+  'skipped',
+  'suppressed',
+]);
+
+const isQueueInstance = (instance: NotificationInstance): boolean => ACTIVE_QUEUE_INSTANCE_STATUSES.has(instance.status);
+
 const fetchNotificationRules = async (): Promise<NotificationRule[]> => {
   const { data } = await api.get('/notifications/rules');
   return data;
@@ -292,7 +302,7 @@ const fetchNotificationTemplates = async (): Promise<NotificationTemplate[]> => 
 };
 
 const fetchNotificationInstances = async (): Promise<NotificationInstance[]> => {
-  const { data } = await api.get('/notifications/instances', { params: { limit: 100 } });
+  const { data } = await api.get('/notifications/instances', { params: { limit: 100, queue_only: true } });
   return data;
 };
 
@@ -621,14 +631,15 @@ const buildNotificationPilotSummary = (
   activity: NotificationActivity[],
 ): NotificationPilotSummary => {
   const now = dayjs();
+  const plannedInstances = instances.filter(isQueueInstance);
 
   return {
     globalMode: settings?.mode ?? 'legacy',
     totalLearners: learnerModes.length,
     learnerNewCount: learnerModes.filter((learner) => learner.effective_mode === 'new').length,
     learnerShadowCount: learnerModes.filter((learner) => learner.effective_mode === 'shadow').length,
-    plannedCount: instances.length,
-    dueDeliveryCount: instances.filter((instance) => (
+    plannedCount: plannedInstances.length,
+    dueDeliveryCount: plannedInstances.filter((instance) => (
       instance.status === 'scheduled'
       && instance.delivery_enabled
       && !dayjs(instance.effective_scheduled_for).isAfter(now)
@@ -2291,6 +2302,10 @@ const QueueTab: React.FC<QueueTabProps> = ({
 }) => {
   const { t } = useTranslation();
   const [pendingSendNowInstance, setPendingSendNowInstance] = useState<NotificationInstance | null>(null);
+  const visibleInstances = useMemo(
+    () => instances.filter(isQueueInstance),
+    [instances],
+  );
   const groupedInstances = useMemo(() => {
     const groups: Record<string, NotificationInstance[]> = {
       past_due: [],
@@ -2299,12 +2314,12 @@ const QueueTab: React.FC<QueueTabProps> = ({
       later: [],
     };
 
-    instances.forEach((instance) => {
+    visibleInstances.forEach((instance) => {
       groups[getQueueSectionKey(instance.effective_scheduled_for)].push(instance);
     });
 
     return groups;
-  }, [instances]);
+  }, [visibleInstances]);
 
   const handleSendNowClick = (instance: NotificationInstance) => {
     setPendingSendNowInstance(instance);
@@ -2386,7 +2401,7 @@ const QueueTab: React.FC<QueueTabProps> = ({
       <NoticeError error={error} />
       {loading ? (
         <Card loading />
-      ) : instances.length === 0 ? (
+      ) : visibleInstances.length === 0 ? (
         <Empty
           description={(
             <Space direction="vertical" size={4}>
@@ -2485,7 +2500,7 @@ const QueueTab: React.FC<QueueTabProps> = ({
                 label: t('pages.notifications.technicalList'),
                 children: (
                   <ResponsiveDataView<NotificationInstance>
-                    data={instances}
+                    data={visibleInstances}
                     loading={false}
                     columns={columns}
                     rowKey="id"

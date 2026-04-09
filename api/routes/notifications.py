@@ -106,6 +106,14 @@ from utils.tasks.notifications import deliver_due_notifications_task, process_no
 
 router = APIRouter()
 
+QUEUE_INSTANCE_STATUSES = (
+    InstanceStatus.SHADOW,
+    InstanceStatus.SCHEDULED,
+    InstanceStatus.PROCESSING,
+    InstanceStatus.SKIPPED,
+    InstanceStatus.SUPPRESSED,
+)
+
 
 @router.get("/settings", response_model=NotificationSettingsResponse)
 async def get_notification_settings(
@@ -218,6 +226,7 @@ async def set_learner_notification_mode(
 @router.get("/instances", response_model=list[NotificationInstanceResponse])
 async def list_notification_instances(
     status_filter: InstanceStatus | None = Query(None, alias="status"),
+    queue_only: bool = False,
     learner_id: int | None = None,
     event_type: EventType | None = None,
     scheduled_from: datetime | None = None,
@@ -231,6 +240,7 @@ async def list_notification_instances(
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
     instances = await ListNotificationInstancesUseCase(uow).execute(
         status=status_filter,
+        statuses=QUEUE_INSTANCE_STATUSES if queue_only and status_filter is None else None,
         learner_id=learner_id,
         event_type=event_type,
         scheduled_from=scheduled_from,

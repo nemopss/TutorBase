@@ -24,17 +24,28 @@ class FakeInstanceRepository:
     activity: tuple[NotificationActivityRecord, ...]
     cancelled: list[tuple[int, str | None]] = field(default_factory=list)
     scheduled_now: list[tuple[int, datetime]] = field(default_factory=list)
+    last_list_kwargs: dict[str, object] = field(default_factory=dict)
 
     async def list_instances(
         self,
         *,
         status=None,
+        statuses=None,
         learner_id=None,
         event_type=None,
         scheduled_from=None,
         scheduled_to=None,
         limit=100,
     ):
+        self.last_list_kwargs = {
+            "status": status,
+            "statuses": statuses,
+            "learner_id": learner_id,
+            "event_type": event_type,
+            "scheduled_from": scheduled_from,
+            "scheduled_to": scheduled_to,
+            "limit": limit,
+        }
         return self.instances[:limit]
 
     async def get_instance(self, instance_id):
@@ -99,13 +110,34 @@ def _instance() -> NotificationInstanceRecord:
 @pytest.mark.asyncio
 async def test_list_and_get_instances_use_cases():
     instance = _instance()
-    uow = FakeUnitOfWork(instances=FakeInstanceRepository(instances=(instance,), activity=()))
+    repository = FakeInstanceRepository(instances=(instance,), activity=())
+    uow = FakeUnitOfWork(instances=repository)
 
     listed = await ListNotificationInstancesUseCase(uow).execute(status=InstanceStatus.SCHEDULED)
     fetched = await GetNotificationInstanceUseCase(uow).execute(1)
 
     assert listed == (instance,)
     assert fetched == instance
+    assert repository.last_list_kwargs["status"] == InstanceStatus.SCHEDULED.value
+    assert repository.last_list_kwargs["statuses"] is None
+
+
+@pytest.mark.asyncio
+async def test_list_instances_use_case_supports_multiple_statuses():
+    instance = _instance()
+    repository = FakeInstanceRepository(instances=(instance,), activity=())
+    uow = FakeUnitOfWork(instances=repository)
+
+    listed = await ListNotificationInstancesUseCase(uow).execute(
+        statuses=(InstanceStatus.SCHEDULED, InstanceStatus.SHADOW),
+    )
+
+    assert listed == (instance,)
+    assert repository.last_list_kwargs["status"] is None
+    assert repository.last_list_kwargs["statuses"] == (
+        InstanceStatus.SCHEDULED.value,
+        InstanceStatus.SHADOW.value,
+    )
 
 
 @pytest.mark.asyncio

@@ -769,6 +769,7 @@ class SqlAlchemyNotificationInstanceRepository:
         self,
         *,
         status: str | None = None,
+        statuses: tuple[str, ...] | None = None,
         learner_id: int | None = None,
         event_type: EventType | None = None,
         scheduled_from: datetime | None = None,
@@ -779,6 +780,7 @@ class SqlAlchemyNotificationInstanceRepository:
             _notification_instances_stmt(
                 self._tenant_id,
                 status=status,
+                statuses=statuses,
                 learner_id=learner_id,
                 event_type=event_type,
                 scheduled_from=scheduled_from,
@@ -2022,6 +2024,7 @@ def _notification_instances_stmt(
     *,
     instance_id: int | None = None,
     status: str | None = None,
+    statuses: tuple[str, ...] | None = None,
     learner_id: int | None = None,
     event_type: EventType | None = None,
     scheduled_from: datetime | None = None,
@@ -2049,6 +2052,8 @@ def _notification_instances_stmt(
         stmt = stmt.where(NotificationInstance.id == instance_id)
     if status is not None:
         stmt = stmt.where(NotificationInstance.status == status)
+    elif statuses:
+        stmt = stmt.where(NotificationInstance.status.in_(statuses))
     if learner_id is not None:
         stmt = stmt.where(NotificationInstance.learner_id == learner_id)
     if event_type is not None:

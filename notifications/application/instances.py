@@ -16,14 +16,19 @@ class ListNotificationInstancesUseCase:
         self,
         *,
         status: InstanceStatus | None = None,
+        statuses: tuple[InstanceStatus, ...] | None = None,
         learner_id: int | None = None,
         event_type: EventType | None = None,
         scheduled_from: datetime | None = None,
         scheduled_to: datetime | None = None,
         limit: int = 100,
     ) -> tuple[NotificationInstanceRecord, ...]:
+        if status is not None and statuses is not None:
+            raise ValueError("Use either status or statuses when listing notification instances")
+
         return await self._uow.instances.list_instances(
             status=status.value if status is not None else None,
+            statuses=tuple(item.value for item in statuses) if statuses is not None else None,
             learner_id=learner_id,
             event_type=event_type,
             scheduled_from=scheduled_from,

@@ -121,6 +121,9 @@ class FakeRuleRepository:
     async def list_active_rules(self):
         return self.rules
 
+    async def list_rules(self, *, include_archived=False):
+        return self.rules
+
 
 @dataclass
 class FakeJobRepository:
@@ -397,7 +400,7 @@ async def test_materialize_active_rules_records_job_summary():
         }
     ]
     assert uow.instances.cancel_rule_calls == [
-        {"rule_ids": (1,), "reason": "rematerialized:active_rules"}
+        {"rule_ids": (1,), "reason": "rematerialized:all_rules"}
     ]
 
 
@@ -478,6 +481,45 @@ async def test_materialize_active_rules_respects_learner_rollout_modes():
 
 
 @pytest.mark.asyncio
+async def test_materialize_active_rules_cleans_future_instances_for_paused_rules():
+    active_rule = _draft(rule_id=5)
+
+    @dataclass
+    class FakeRuleCatalogRepository(FakeRuleRepository):
+        all_rules: tuple[NotificationRuleDraft, ...] = ()
+
+        async def list_rules(self, *, include_archived=False):
+            return self.all_rules if include_archived else self.rules
+
+    uow = _uow()
+    uow.rules = FakeRuleCatalogRepository(
+        rules=(active_rule,),
+        all_rules=(
+            _draft(rule_id=1),
+            _draft(rule_id=2),
+            active_rule,
+        ),
+    )
+    uow.settings = FakeSettingsRepository(
+        settings=NotificationSettingsRecord(tenant_id=1, mode=NotificationSystemMode.LEGACY),
+        learner_modes=(
+            LearnerNotificationModeRecord(
+                learner_id=10,
+                display_name="Вика",
+                mode_override=NotificationSystemMode.NEW,
+                effective_mode=NotificationSystemMode.NEW,
+            ),
+        ),
+    )
+
+    await MaterializeActiveRulesUseCase(uow).execute()
+
+    assert uow.instances.cancel_rule_calls == [
+        {"rule_ids": (1, 2, 5), "reason": "rematerialized:all_rules"}
+    ]
+
+
+@pytest.mark.asyncio
 async def test_run_materialize_active_rules_job_uses_claimed_job_scope():
     rule = _draft()
     uow = _uow()
@@ -508,6 +550,9 @@ async def test_run_materialize_active_rules_job_uses_claimed_job_scope():
     assert result.materialization.planned_instances[0].status == InstanceStatus.SHADOW
     assert result.materialization.planned_instances[0].delivery_enabled is False
     assert uow.jobs.summaries[-1]["rules_count"] == 1
+    assert uow.instances.cancel_rule_calls == [
+        {"rule_ids": (1,), "reason": "rematerialized:all_rules"}
+    ]
 
 
 @pytest.mark.asyncio

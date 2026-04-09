@@ -58,6 +58,11 @@ class UpdateNotificationRuleUseCase:
         before = await self._uow.rules.get_rule(rule_id)
         rule = await self._uow.rules.update_rule(rule_id, draft)
         if rule is not None:
+            await _cancel_future_instances_for_inactive_rule(
+                self._uow,
+                rule_id=rule.rule_id,
+                status=draft.status,
+            )
             await record_notification_audit(
                 self._uow,
                 entity_type="notification_rule",
@@ -110,6 +115,11 @@ class PauseNotificationRuleUseCase:
         before = await self._uow.rules.get_rule(rule_id)
         rule = await self._uow.rules.set_rule_status(rule_id, RuleStatus.PAUSED.value)
         if rule is not None:
+            await _cancel_future_instances_for_inactive_rule(
+                self._uow,
+                rule_id=rule.rule_id,
+                status=RuleStatus.PAUSED,
+            )
             await record_notification_audit(
                 self._uow,
                 entity_type="notification_rule",
@@ -136,6 +146,11 @@ class ArchiveNotificationRuleUseCase:
         before = await self._uow.rules.get_rule(rule_id)
         rule = await self._uow.rules.set_rule_status(rule_id, RuleStatus.ARCHIVED.value)
         if rule is not None:
+            await _cancel_future_instances_for_inactive_rule(
+                self._uow,
+                rule_id=rule.rule_id,
+                status=RuleStatus.ARCHIVED,
+            )
             await record_notification_audit(
                 self._uow,
                 entity_type="notification_rule",
@@ -147,3 +162,18 @@ class ArchiveNotificationRuleUseCase:
             )
         await self._uow.commit()
         return rule
+
+
+async def _cancel_future_instances_for_inactive_rule(
+    uow: NotificationMaterializationUnitOfWork,
+    *,
+    rule_id: int,
+    status: RuleStatus | None,
+) -> None:
+    if status not in {RuleStatus.DRAFT, RuleStatus.PAUSED, RuleStatus.ARCHIVED}:
+        return
+
+    await uow.instances.cancel_future_instances_for_rules(
+        rule_ids=(rule_id,),
+        reason="rule_not_active",
+    )

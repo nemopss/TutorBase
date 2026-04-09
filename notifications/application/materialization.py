@@ -68,17 +68,8 @@ class MaterializeActiveRulesUseCase:
             )
         )
         job = await self._uow.jobs.mark_running(job.job_id)
+        await _cancel_future_instances_for_all_rules(self._uow)
         rules = await self._uow.rules.list_active_rules()
-        active_rule_ids = tuple(
-            int(rule.rule_id)
-            for rule in rules
-            if isinstance(rule.rule_id, int)
-        )
-        if active_rule_ids:
-            await self._uow.instances.cancel_future_instances_for_rules(
-                rule_ids=active_rule_ids,
-                reason="rematerialized:active_rules",
-            )
         materialization = await _materialize_rules(
             self._uow,
             rules,
@@ -115,17 +106,8 @@ class RunMaterializeActiveRulesJobUseCase:
         if job.status != "running":
             raise ValueError(f"Notification job {job.job_id} is not running")
 
+        await _cancel_future_instances_for_all_rules(self._uow)
         rules = await self._uow.rules.list_active_rules()
-        active_rule_ids = tuple(
-            int(rule.rule_id)
-            for rule in rules
-            if isinstance(rule.rule_id, int)
-        )
-        if active_rule_ids:
-            await self._uow.instances.cancel_future_instances_for_rules(
-                rule_ids=active_rule_ids,
-                reason="rematerialized:active_rules",
-            )
         materialization = await _materialize_rules(
             self._uow,
             rules,
@@ -147,6 +129,26 @@ class RunMaterializeActiveRulesJobUseCase:
         )
         await self._uow.commit()
         return MaterializeActiveRulesResult(job=succeeded, materialization=materialization)
+
+
+async def _cancel_future_instances_for_all_rules(
+    uow: NotificationMaterializationUnitOfWork,
+) -> None:
+    all_rules = await uow.rules.list_rules(include_archived=True)
+    all_rule_ids = tuple(
+        sorted(
+            int(rule.rule_id)
+            for rule in all_rules
+            if isinstance(rule.rule_id, int)
+        )
+    )
+    if not all_rule_ids:
+        return
+
+    await uow.instances.cancel_future_instances_for_rules(
+        rule_ids=all_rule_ids,
+        reason="rematerialized:all_rules",
+    )
 
 
 async def _materialize_rules(

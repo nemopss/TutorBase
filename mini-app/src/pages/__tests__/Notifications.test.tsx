@@ -231,6 +231,34 @@ const mockGet = jest.fn((url: string, _config?: unknown) => {
             components: [],
             latest_attempt: null,
           },
+          {
+            id: 2,
+            rule_id: 1,
+            category: 'lesson_confirmation',
+            event_type: 'lesson',
+            event_id: 618,
+            event_key: 'lesson:618',
+            recipient_type: 'learner',
+            recipient_id: 11,
+            learner_id: 11,
+            learner_display_name: 'Masha',
+            scheduled_for: '2026-04-07T08:00:00+00:00',
+            effective_scheduled_for: '2026-04-07T08:00:00+00:00',
+            status: 'cancelled',
+            status_reason: 'rematerialized:active_rules',
+            delivery_enabled: false,
+            priority: 'normal',
+            channel: 'telegram',
+            dedupe_key: 'single|lesson_confirmation|rule:1|cancelled',
+            combination_key: null,
+            explanation: {
+              rule_name: 'Lesson confirmation',
+              event_starts_at: '2026-04-08T21:00:00+03:00',
+              warnings: [],
+            },
+            components: [],
+            latest_attempt: null,
+          },
         ],
       });
     }
@@ -396,6 +424,24 @@ describe('Notifications', () => {
     fireEvent.click(await screen.findByText('Send now'));
 
     expect(await screen.findByText('Send this notification outside the normal queue?')).toBeInTheDocument();
+  });
+
+  it('requests queue-only instances and hides cancelled rows from the queue', async () => {
+    renderComponent();
+
+    fireEvent.click(await screen.findByText('Queue'));
+
+    expect(await screen.findByText('Vika')).toBeInTheDocument();
+    expect(screen.queryByText('Masha')).not.toBeInTheDocument();
+    expect(mockGet).toHaveBeenCalledWith(
+      '/notifications/instances',
+      expect.objectContaining({
+        params: expect.objectContaining({
+          limit: 100,
+          queue_only: true,
+        }),
+      }),
+    );
   });
 
   it('shows tenant selection prompt in global super-admin context without firing notification queries', async () => {

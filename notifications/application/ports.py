@@ -90,6 +90,7 @@ class NotificationInstanceRepository(Protocol):
         self,
         *,
         status: str | None = None,
+        statuses: tuple[str, ...] | None = None,
         learner_id: int | None = None,
         event_type: EventType | None = None,
         scheduled_from=None,
