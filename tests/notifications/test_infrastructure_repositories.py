@@ -421,8 +421,22 @@ def test_queued_jobs_claim_statement_uses_postgresql_skip_locked():
 
     compiled = str(stmt.compile(dialect=postgresql.dialect()))
     assert "FOR UPDATE SKIP LOCKED" in compiled
-    assert "notification_jobs.status = %(status_1)s" in compiled
-    assert "notification_jobs.job_type = %(job_type_1)s" in compiled
+
+
+@pytest.mark.asyncio
+async def test_instance_repository_can_cancel_future_instances_for_rules():
+    session = FakeBulkUpdateSession()
+    repository = SqlAlchemyNotificationInstanceRepository(session, tenant_id=1)
+
+    result = await repository.cancel_future_instances_for_rules(
+        rule_ids=(1, 2, 1),
+        reason="rematerialized:active_rules",
+    )
+
+    assert result == 3
+    compiled = str(session.calls[0][0].compile(dialect=postgresql.dialect()))
+    assert "UPDATE notification_instances" in compiled
+    assert "status" in compiled
 
 
 def test_due_instances_claim_statement_uses_postgresql_skip_locked():

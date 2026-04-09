@@ -3,6 +3,7 @@ from __future__ import annotations
 from notifications.application.dto import (
     CombinedPreviewInstance,
     InstanceUpsertResult,
+    LearnerNotificationModeRecord,
     MaterializeActiveRulesResult,
     MaterializeRulesResult,
     NotificationJobDraft,
@@ -14,7 +15,7 @@ from notifications.application.dto import (
 )
 from notifications.application.ports import NotificationMaterializationUnitOfWork
 from notifications.application.preview import PreviewRulesUseCase
-from notifications.domain.enums import InstanceStatus
+from notifications.domain.enums import InstanceStatus, NotificationSystemMode
 
 
 class MaterializeRulesUseCase:
@@ -68,6 +69,16 @@ class MaterializeActiveRulesUseCase:
         )
         job = await self._uow.jobs.mark_running(job.job_id)
         rules = await self._uow.rules.list_active_rules()
+        active_rule_ids = tuple(
+            int(rule.rule_id)
+            for rule in rules
+            if isinstance(rule.rule_id, int)
+        )
+        if active_rule_ids:
+            await self._uow.instances.cancel_future_instances_for_rules(
+                rule_ids=active_rule_ids,
+                reason="rematerialized:active_rules",
+            )
         materialization = await _materialize_rules(
             self._uow,
             rules,
@@ -76,6 +87,7 @@ class MaterializeActiveRulesUseCase:
             delivery_enabled=delivery_enabled,
             shadow=shadow,
             commit=False,
+            respect_rollout_modes=True,
         )
         job = await self._uow.jobs.mark_succeeded(
             job.job_id,
@@ -104,6 +116,16 @@ class RunMaterializeActiveRulesJobUseCase:
             raise ValueError(f"Notification job {job.job_id} is not running")
 
         rules = await self._uow.rules.list_active_rules()
+        active_rule_ids = tuple(
+            int(rule.rule_id)
+            for rule in rules
+            if isinstance(rule.rule_id, int)
+        )
+        if active_rule_ids:
+            await self._uow.instances.cancel_future_instances_for_rules(
+                rule_ids=active_rule_ids,
+                reason="rematerialized:active_rules",
+            )
         materialization = await _materialize_rules(
             self._uow,
             rules,
@@ -112,6 +134,7 @@ class RunMaterializeActiveRulesJobUseCase:
             delivery_enabled=bool(job.scope.get("delivery_enabled", True)),
             shadow=bool(job.scope.get("shadow", False)),
             commit=False,
+            respect_rollout_modes=True,
         )
         succeeded = await self._uow.jobs.mark_succeeded(
             job.job_id,
@@ -135,27 +158,50 @@ async def _materialize_rules(
     delivery_enabled: bool,
     shadow: bool,
     commit: bool,
+    respect_rollout_modes: bool = False,
 ) -> MaterializeRulesResult:
     preview = await PreviewRulesUseCase(uow).execute(
         drafts,
         horizon_days=horizon_days,
         limit=limit,
     )
+    learner_modes = (
+        await uow.settings.list_learner_modes()
+        if respect_rollout_modes
+        else ()
+    )
+    effective_mode_by_learner = {
+        mode.learner_id: mode.effective_mode
+        for mode in learner_modes
+    }
     template_key_by_rule = {draft.rule_id: draft.template_key for draft in drafts}
     planned = tuple(
         _planned_instance(
             instance,
             template_key_by_rule=template_key_by_rule,
-            delivery_enabled=delivery_enabled,
-            shadow=shadow,
+            delivery_enabled=rollout_delivery_enabled,
+            shadow=rollout_shadow,
         )
         for instance in preview.instances
+        for rollout_delivery_enabled, rollout_shadow in [_resolve_rollout_behavior(
+            instance.learner_id,
+            effective_mode_by_learner=effective_mode_by_learner,
+            default_delivery_enabled=delivery_enabled,
+            default_shadow=shadow,
+        )]
+        if rollout_delivery_enabled is not None
+    )
+    warnings = _materialization_warnings(
+        preview_warnings=preview.warnings,
+        preview_instances=preview.instances,
+        planned_instances=planned,
+        respect_rollout_modes=respect_rollout_modes,
     )
     if not planned:
         return MaterializeRulesResult(
             planned_instances=(),
             upsert_result=InstanceUpsertResult(planned_count=0),
-            warnings=preview.warnings,
+            warnings=warnings,
         )
 
     upsert_result = await uow.instances.upsert_planned_instances(planned)
@@ -164,8 +210,39 @@ async def _materialize_rules(
     return MaterializeRulesResult(
         planned_instances=planned,
         upsert_result=upsert_result,
-        warnings=preview.warnings,
+        warnings=warnings,
     )
+
+
+def _resolve_rollout_behavior(
+    learner_id: int,
+    *,
+    effective_mode_by_learner: dict[int, NotificationSystemMode],
+    default_delivery_enabled: bool,
+    default_shadow: bool,
+) -> tuple[bool | None, bool]:
+    if not effective_mode_by_learner:
+        return default_delivery_enabled, default_shadow
+
+    effective_mode = effective_mode_by_learner.get(learner_id, NotificationSystemMode.LEGACY)
+    if effective_mode == NotificationSystemMode.LEGACY:
+        return None, True
+    if effective_mode == NotificationSystemMode.SHADOW:
+        return False, True
+    return True, False
+
+
+def _materialization_warnings(
+    *,
+    preview_warnings: tuple[str, ...],
+    preview_instances: tuple[PreviewInstance | CombinedPreviewInstance, ...],
+    planned_instances: tuple[NotificationInstanceDraft, ...],
+    respect_rollout_modes: bool,
+) -> tuple[str, ...]:
+    warnings = list(preview_warnings)
+    if respect_rollout_modes and preview_instances and not planned_instances:
+        warnings.append("no_rollout_learners_selected")
+    return tuple(dict.fromkeys(warnings))
 
 
 def _planned_instance(

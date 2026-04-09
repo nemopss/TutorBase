@@ -170,6 +170,7 @@ class RunReconcileNotificationEventJobUseCase:
             delivery_enabled=delivery_enabled,
             shadow=shadow,
             commit=False,
+            respect_rollout_modes=True,
         )
         succeeded = await self._mark_succeeded(
             job,
@@ -246,6 +247,7 @@ class RunReconcileNotificationGroupMembershipJobUseCase:
                 delivery_enabled=delivery_enabled,
                 shadow=shadow,
                 commit=False,
+                respect_rollout_modes=True,
             )
 
         succeeded = await self._uow.jobs.mark_succeeded(

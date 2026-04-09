@@ -140,6 +140,9 @@ class FakeSettingsRepository:
     async def get_settings(self):
         return NotificationSettingsRecord(tenant_id=1, mode=self.mode)
 
+    async def list_learner_modes(self):
+        return ()
+
 
 @dataclass
 class FakeUnitOfWork:

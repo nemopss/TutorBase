@@ -10,8 +10,10 @@ from notifications.application.dto import (
     DeliverySendResult,
     ExecuteNotificationDeliveryResult,
     InstanceUpsertResult,
+    LearnerNotificationModeRecord,
     NotificationJobDraft,
     NotificationJobRecord,
+    NotificationSettingsRecord,
     NotificationInstanceDraft,
     NotificationRuleDraft,
     PreviewEvent,
@@ -28,7 +30,14 @@ from notifications.application.materialization import (
     MaterializeRulesUseCase,
     RunMaterializeActiveRulesJobUseCase,
 )
-from notifications.domain.enums import CategoryKey, EventType, InstanceStatus, Priority, TriggerType
+from notifications.domain.enums import (
+    CategoryKey,
+    EventType,
+    InstanceStatus,
+    NotificationSystemMode,
+    Priority,
+    TriggerType,
+)
 
 
 @dataclass
@@ -63,15 +72,37 @@ class FakePreferenceRepository:
 
 
 @dataclass
+class FakeSettingsRepository:
+    settings: NotificationSettingsRecord = field(
+        default_factory=lambda: NotificationSettingsRecord(
+            tenant_id=1,
+            mode=NotificationSystemMode.LEGACY,
+        )
+    )
+    learner_modes: tuple[LearnerNotificationModeRecord, ...] = ()
+
+    async def get_settings(self):
+        return self.settings
+
+    async def list_learner_modes(self):
+        return self.learner_modes
+
+
+@dataclass
 class FakeInstanceRepository:
     upserted: tuple[NotificationInstanceDraft, ...] = ()
     claim_result: ClaimDueNotificationsResult = ClaimDueNotificationsResult(claimed=())
     sent_calls: list[dict] = field(default_factory=list)
     failed_calls: list[dict] = field(default_factory=list)
+    cancel_rule_calls: list[dict] = field(default_factory=list)
 
     async def upsert_planned_instances(self, instances):
         self.upserted = instances
         return InstanceUpsertResult(planned_count=len(instances), inserted_count=len(instances))
+
+    async def cancel_future_instances_for_rules(self, *, rule_ids, reason: str):
+        self.cancel_rule_calls.append({"rule_ids": rule_ids, "reason": reason})
+        return 0
 
     async def claim_due_instances(self, *, now, limit: int, lease_seconds: int):
         return self.claim_result
@@ -136,6 +167,7 @@ class FakeMaterializationUnitOfWork:
     audience_resolver: FakeAudienceResolver
     events: FakeEventRepository
     preferences: FakePreferenceRepository = field(default_factory=FakePreferenceRepository)
+    settings: FakeSettingsRepository = field(default_factory=FakeSettingsRepository)
     rules: FakeRuleRepository = field(default_factory=lambda: FakeRuleRepository(rules=()))
     jobs: FakeJobRepository = field(default_factory=FakeJobRepository)
     instances: FakeInstanceRepository = field(default_factory=FakeInstanceRepository)
@@ -340,6 +372,17 @@ async def test_materialize_active_rules_records_job_summary():
     rule = _draft()
     uow = _uow()
     uow.rules = FakeRuleRepository(rules=(rule,))
+    uow.settings = FakeSettingsRepository(
+        settings=NotificationSettingsRecord(tenant_id=1, mode=NotificationSystemMode.SHADOW),
+        learner_modes=(
+            LearnerNotificationModeRecord(
+                learner_id=10,
+                display_name="Вика",
+                mode_override=NotificationSystemMode.INHERIT,
+                effective_mode=NotificationSystemMode.SHADOW,
+            ),
+        ),
+    )
 
     result = await MaterializeActiveRulesUseCase(uow).execute()
 
@@ -353,6 +396,85 @@ async def test_materialize_active_rules_records_job_summary():
             "warnings": [],
         }
     ]
+    assert uow.instances.cancel_rule_calls == [
+        {"rule_ids": (1,), "reason": "rematerialized:active_rules"}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_materialize_active_rules_respects_learner_rollout_modes():
+    rule = NotificationRuleDraft(
+        rule_id=1,
+        name="lesson_confirmation",
+        category=CategoryKey.LESSON_CONFIRMATION,
+        event_type=EventType.LESSON,
+        trigger_type=TriggerType.DAY_OFFSET_AT_TIME,
+        trigger_config={"days": -1, "local_time": "10:00"},
+        template_body="Привет, {student_name}!",
+        template_key="lesson_confirmation",
+        assignments=(AudienceSelector(scope_type="all_learners", scope_id=None),),
+    )
+    uow = FakeMaterializationUnitOfWork(
+        audience_resolver=FakeAudienceResolver(
+            recipients=(
+                PreviewRecipient(learner_id=10, display_name="Вика"),
+                PreviewRecipient(learner_id=11, display_name="Ира"),
+            )
+        ),
+        events=FakeEventRepository(
+            events=(
+                PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=617,
+                    learner_id=10,
+                    starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=True,
+                ),
+                PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=618,
+                    learner_id=11,
+                    starts_at=datetime(2026, 4, 9, 20, 0, tzinfo=timezone.utc),
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=True,
+                ),
+            )
+        ),
+        settings=FakeSettingsRepository(
+            settings=NotificationSettingsRecord(tenant_id=1, mode=NotificationSystemMode.LEGACY),
+            learner_modes=(
+                LearnerNotificationModeRecord(
+                    learner_id=10,
+                    display_name="Вика",
+                    mode_override=NotificationSystemMode.NEW,
+                    effective_mode=NotificationSystemMode.NEW,
+                ),
+                LearnerNotificationModeRecord(
+                    learner_id=11,
+                    display_name="Ира",
+                    mode_override=NotificationSystemMode.INHERIT,
+                    effective_mode=NotificationSystemMode.LEGACY,
+                ),
+            ),
+        ),
+        rules=FakeRuleRepository(rules=(rule,)),
+    )
+
+    result = await MaterializeActiveRulesUseCase(uow).execute(
+        delivery_enabled=False,
+        shadow=True,
+    )
+
+    assert len(result.materialization.planned_instances) == 1
+    instance = result.materialization.planned_instances[0]
+    assert instance.learner_id == 10
+    assert instance.status == InstanceStatus.SCHEDULED
+    assert instance.delivery_enabled is True
 
 
 @pytest.mark.asyncio
@@ -360,6 +482,17 @@ async def test_run_materialize_active_rules_job_uses_claimed_job_scope():
     rule = _draft()
     uow = _uow()
     uow.rules = FakeRuleRepository(rules=(rule,))
+    uow.settings = FakeSettingsRepository(
+        settings=NotificationSettingsRecord(tenant_id=1, mode=NotificationSystemMode.SHADOW),
+        learner_modes=(
+            LearnerNotificationModeRecord(
+                learner_id=10,
+                display_name="Вика",
+                mode_override=NotificationSystemMode.INHERIT,
+                effective_mode=NotificationSystemMode.SHADOW,
+            ),
+        ),
+    )
     job = NotificationJobRecord(
         job_id=99,
         job_type="materialize_active_rules",

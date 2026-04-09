@@ -956,6 +956,48 @@ class SqlAlchemyNotificationInstanceRepository:
         )
         return int(result.rowcount or 0)
 
+    async def cancel_future_instances_for_rules(
+        self,
+        *,
+        rule_ids: tuple[int, ...],
+        reason: str,
+    ) -> int:
+        unique_rule_ids = tuple(sorted(set(rule_ids)))
+        if not unique_rule_ids:
+            return 0
+
+        component_instance_ids = select(NotificationInstanceComponent.instance_id).where(
+            NotificationInstanceComponent.rule_id.in_(unique_rule_ids)
+        )
+        now = self._now_factory()
+        result = await self._session.execute(
+            update(NotificationInstance)
+            .where(
+                NotificationInstance.tenant_id == self._tenant_id,
+                NotificationInstance.status.in_(
+                    (
+                        InstanceStatus.SHADOW.value,
+                        InstanceStatus.SCHEDULED.value,
+                        InstanceStatus.SKIPPED.value,
+                        InstanceStatus.SUPPRESSED.value,
+                    )
+                ),
+                or_(
+                    NotificationInstance.rule_id.in_(unique_rule_ids),
+                    NotificationInstance.id.in_(component_instance_ids),
+                ),
+            )
+            .values(
+                status=InstanceStatus.CANCELLED.value,
+                status_reason=reason,
+                delivery_enabled=False,
+                processing_started_at=None,
+                processing_expires_at=None,
+                updated_at=now,
+            )
+        )
+        return int(result.rowcount or 0)
+
     async def claim_due_instances(
         self,
         *,

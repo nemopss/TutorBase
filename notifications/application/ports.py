@@ -143,6 +143,14 @@ class NotificationInstanceRepository(Protocol):
     ) -> int:
         ...
 
+    async def cancel_future_instances_for_rules(
+        self,
+        *,
+        rule_ids: tuple[int, ...],
+        reason: str,
+    ) -> int:
+        ...
+
     async def claim_due_instances(
         self,
         *,
