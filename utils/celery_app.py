@@ -43,11 +43,19 @@ Usage:
     result = my_task.apply_async(args=[arg1, arg2], countdown=60)  # Delayed execution
 """
 import logging
+from importlib import import_module
+
 from celery import Celery
 from celery.signals import task_prerun, task_postrun, task_failure, task_retry
 from config import config
 
 logger = logging.getLogger(__name__)
+
+TASK_MODULES = (
+    'utils.tasks.reminders',
+    'utils.tasks.metrics',
+    'utils.tasks.notifications',
+)
 
 # Initialize Celery app
 # Note: config.REDIS_URL typically ends with /0, so we replace it with /1 for tasks
@@ -110,6 +118,12 @@ celery_app.conf.update(
     worker_send_task_events=True,  # Send events for monitoring (Flower)
     task_send_sent_event=True,  # Send event when task is sent
 )
+
+# Import task modules explicitly so the worker always registers them at startup.
+# This avoids relying on Celery autodiscovery for a codebase that has both
+# `utils/tasks.py` and the `utils/tasks/` package.
+for module_name in TASK_MODULES:
+    import_module(module_name)
 
 
 # Signal handlers for structured logging
@@ -182,11 +196,6 @@ def health_check():
         'status': 'healthy',
         'worker': 'available',
     }
-
-
-# Auto-discover tasks from utils.tasks module
-# This ensures all task modules are imported and registered with Celery
-celery_app.autodiscover_tasks(['utils.tasks'], force=True)
 
 
 __all__ = ['celery_app', 'health_check']

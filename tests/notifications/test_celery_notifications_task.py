@@ -1,3 +1,6 @@
+import importlib
+import sys
+
 import pytest
 
 from utils.tasks.notifications import (
@@ -31,6 +34,22 @@ def test_deliver_due_notifications_task_is_registered_with_expected_name():
 
 def test_process_notification_jobs_task_is_registered_with_expected_name():
     assert process_notification_jobs_task.name == "utils.tasks.notifications.process_notification_jobs"
+
+
+def test_celery_app_import_registers_notification_tasks():
+    for module_name in (
+        "utils.tasks",
+        "utils.tasks.reminders",
+        "utils.tasks.metrics",
+        "utils.tasks.notifications",
+        "utils.celery_app",
+    ):
+        sys.modules.pop(module_name, None)
+
+    reloaded_celery_app = importlib.import_module("utils.celery_app").celery_app
+
+    assert "utils.tasks.notifications.process_notification_jobs" in reloaded_celery_app.tasks
+    assert "utils.tasks.notifications.deliver_due_notifications" in reloaded_celery_app.tasks
 
 
 @pytest.mark.asyncio
