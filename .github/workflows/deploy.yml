@@ -134,7 +134,7 @@ jobs:
               services="$services bot"
             fi
             if [ "${{ needs.changes.outputs.api }}" = "true" ]; then
-              services="$services api"
+              services="$services api celery_worker flower"
             fi
             if [ "${{ needs.changes.outputs.app }}" = "true" ]; then
               services="$services app"
