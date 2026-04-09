@@ -450,6 +450,7 @@ def test_due_instances_claim_statement_uses_postgresql_skip_locked():
     assert "FOR UPDATE SKIP LOCKED" in compiled
     assert "notification_instances.status = %(status_1)s" in compiled
     assert "notification_instances.delivery_enabled IS true" in compiled
+    assert "LEFT OUTER JOIN" not in compiled
 
 
 def test_event_lookup_statements_are_scoped_to_tenant_and_event_id():

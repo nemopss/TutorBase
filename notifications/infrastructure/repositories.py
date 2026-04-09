@@ -2006,7 +2006,7 @@ def _queued_jobs_for_claim_stmt(tenant_id: int, *, job_type: str, limit: int):
 def _due_instances_for_claim_stmt(tenant_id: int, *, now: datetime, limit: int):
     return (
         select(NotificationInstance)
-        .options(joinedload(NotificationInstance.category))
+        .options(selectinload(NotificationInstance.category))
         .where(
             NotificationInstance.tenant_id == tenant_id,
             NotificationInstance.status == "scheduled",
