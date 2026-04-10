@@ -126,12 +126,7 @@ jobs:
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             cd /srv/tutorbase/current
             git pull
-
-            if [ "${{ needs.changes.outputs.compose }}" = "true" ]; then
-              docker compose pull
-              docker compose up -d --remove-orphans
-              exit 0
-            fi
+            compose_changed="${{ needs.changes.outputs.compose }}"
 
             services=""
             if [ "${{ needs.changes.outputs.bot }}" = "true" ]; then
@@ -149,7 +144,11 @@ jobs:
               docker compose up -d $services
             fi
 
-            if [ "${{ needs.changes.outputs.nginx }}" = "true" ] || [ "${{ needs.changes.outputs.api }}" = "true" ] || [ "${{ needs.changes.outputs.app }}" = "true" ]; then
+            if [ "$compose_changed" = "true" ]; then
+              docker compose up -d --remove-orphans
+            fi
+
+            if [ "${{ needs.changes.outputs.nginx }}" = "true" ] || [ "${{ needs.changes.outputs.api }}" = "true" ] || [ "${{ needs.changes.outputs.app }}" = "true" ] || [ "$compose_changed" = "true" ]; then
               docker compose up -d nginx
               docker compose exec nginx nginx -s reload || true
             fi
