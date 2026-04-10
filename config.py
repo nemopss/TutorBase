@@ -47,6 +47,9 @@ class Settings(BaseSettings):
     DEV_INIT_DATA: str = "dev"
     DEV_USERNAME: str = "devuser"
     DEV_DISPLAY_NAME: str = "Dev User"
+    NOTIFICATIONS_AUTOMATION_ENABLED: bool = False
+    NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS: int = 60
+    NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS: int = 30
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -82,6 +85,16 @@ class Settings(BaseSettings):
         if isinstance(value, list):
             return [int(x) for x in value]
         return []
+
+    @field_validator(
+        "NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS",
+        "NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS",
+    )
+    @classmethod
+    def validate_positive_interval(cls, value: int) -> int:
+        if value <= 0:
+            raise ValueError("Notification automation interval must be greater than zero")
+        return value
 
     def build_async_database_url(self) -> str:
         if self.POSTGRESQL_HOST and self.POSTGRESQL_DBNAME:

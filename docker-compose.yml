@@ -69,6 +69,22 @@ services:
       retries: 3
       start_period: 40s
 
+  celery_beat:
+    image: ghcr.io/nemopss/tutorbase-api:latest
+    command: celery -A utils.celery_app beat --loglevel=info
+    env_file:
+      - .env
+    restart: always
+    depends_on:
+      - redis
+    environment:
+      PYTHONPATH: /app
+      REDIS_URL: redis://redis:6379/0
+    volumes:
+      - ./database:/app/database
+    networks:
+      - app-network
+
   # Flower for Celery monitoring (optional, comment out in production if not needed)
   flower:
     image: ghcr.io/nemopss/tutorbase-api:latest
@@ -79,6 +95,7 @@ services:
     depends_on:
       - redis
       - celery_worker
+      - celery_beat
     environment:
       REDIS_URL: redis://redis:6379/0
     ports:

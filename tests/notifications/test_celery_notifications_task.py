@@ -11,6 +11,7 @@ from utils.tasks.notifications import (
     deliver_due_notifications_task,
     process_notification_jobs_task,
 )
+from utils.celery_app import _build_notifications_beat_schedule
 
 
 class FakeScalarResult:
@@ -53,6 +54,32 @@ def test_celery_app_import_registers_notification_tasks():
 
     assert "utils.tasks.notifications.process_notification_jobs" in reloaded_celery_app.tasks
     assert "utils.tasks.notifications.deliver_due_notifications" in reloaded_celery_app.tasks
+
+
+def test_notifications_beat_schedule_is_empty_when_automation_is_disabled():
+    schedule = _build_notifications_beat_schedule(
+        notifications_automation_enabled=False,
+        process_jobs_interval_seconds=60,
+        delivery_interval_seconds=30,
+    )
+
+    assert schedule == {}
+
+
+def test_notifications_beat_schedule_registers_process_and_delivery_tasks():
+    schedule = _build_notifications_beat_schedule(
+        notifications_automation_enabled=True,
+        process_jobs_interval_seconds=60,
+        delivery_interval_seconds=30,
+    )
+
+    assert set(schedule) == {"notifications.process-jobs", "notifications.deliver-due"}
+    assert schedule["notifications.process-jobs"]["task"] == "utils.tasks.notifications.process_notification_jobs"
+    assert schedule["notifications.process-jobs"]["schedule"] == 60
+    assert schedule["notifications.process-jobs"]["options"]["expires"] == 55
+    assert schedule["notifications.deliver-due"]["task"] == "utils.tasks.notifications.deliver_due_notifications"
+    assert schedule["notifications.deliver-due"]["schedule"] == 30
+    assert schedule["notifications.deliver-due"]["options"]["expires"] == 25
 
 
 @pytest.mark.asyncio

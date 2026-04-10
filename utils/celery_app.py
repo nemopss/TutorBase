@@ -57,6 +57,45 @@ TASK_MODULES = (
     'utils.tasks.notifications',
 )
 
+
+def _build_notifications_beat_schedule(
+    *,
+    notifications_automation_enabled: bool,
+    process_jobs_interval_seconds: int,
+    delivery_interval_seconds: int,
+) -> dict[str, dict]:
+    if not notifications_automation_enabled:
+        return {}
+
+    process_expires = max(process_jobs_interval_seconds - 5, 1)
+    delivery_expires = max(delivery_interval_seconds - 5, 1)
+
+    return {
+        'notifications.process-jobs': {
+            'task': 'utils.tasks.notifications.process_notification_jobs',
+            'schedule': process_jobs_interval_seconds,
+            'kwargs': {
+                'tenant_id': None,
+                'job_type': None,
+                'limit': 20,
+            },
+            'options': {
+                'expires': process_expires,
+            },
+        },
+        'notifications.deliver-due': {
+            'task': 'utils.tasks.notifications.deliver_due_notifications',
+            'schedule': delivery_interval_seconds,
+            'kwargs': {
+                'tenant_id': None,
+                'limit': 100,
+            },
+            'options': {
+                'expires': delivery_expires,
+            },
+        },
+    }
+
 # Initialize Celery app
 # Note: config.REDIS_URL typically ends with /0, so we replace it with /1 for tasks
 _redis_url_base = config.REDIS_URL.rsplit('/', 1)[0]  # Remove /0 if present
@@ -117,6 +156,11 @@ celery_app.conf.update(
     # Monitoring
     worker_send_task_events=True,  # Send events for monitoring (Flower)
     task_send_sent_event=True,  # Send event when task is sent
+    beat_schedule=_build_notifications_beat_schedule(
+        notifications_automation_enabled=config.NOTIFICATIONS_AUTOMATION_ENABLED,
+        process_jobs_interval_seconds=config.NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS,
+        delivery_interval_seconds=config.NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS,
+    ),
 )
 
 # Import task modules explicitly so the worker always registers them at startup.
@@ -198,4 +242,4 @@ def health_check():
     }
 
 
-__all__ = ['celery_app', 'health_check']
+__all__ = ['celery_app', 'health_check', '_build_notifications_beat_schedule']
