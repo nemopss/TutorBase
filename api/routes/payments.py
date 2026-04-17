@@ -22,7 +22,7 @@ from api.dependencies import (
 )
 from api.schemas.finance import PaymentCreate, PaymentResponse
 from api.schemas import PaginatedResponse, PaginationParams
-from database.models import Payment, Learner, LessonPackage
+from database.models import Payment, Learner, Lesson, LessonPackage
 from services import finance_service
 
 router = APIRouter()
@@ -48,12 +48,36 @@ async def create_payment(
         raise HTTPException(status_code=404, detail="Learner not found")
     
     # Verify package if provided
+    package = None
     package_title = None
+    effective_package_id = request.package_id
     if request.package_id:
         package = await session.get(LessonPackage, request.package_id)
         if not package or package.tenant_id != current_tenant.tenant_id:
             raise HTTPException(status_code=404, detail="Package not found")
+        if package.learner_id != request.learner_id:
+            raise HTTPException(status_code=422, detail="Package does not belong to learner")
         package_title = package.title
+
+    # Lessons are package-backed in the current model. If a lesson is specified,
+    # bind the payment to that lesson's package so payment status stays in sync.
+    if request.lesson_id:
+        lesson = await session.get(Lesson, request.lesson_id)
+        if not lesson or lesson.tenant_id != current_tenant.tenant_id:
+            raise HTTPException(status_code=404, detail="Lesson not found")
+
+        lesson_package = await session.get(LessonPackage, lesson.package_id)
+        if not lesson_package or lesson_package.tenant_id != current_tenant.tenant_id:
+            raise HTTPException(status_code=404, detail="Lesson not found")
+        if lesson_package.learner_id != request.learner_id:
+            raise HTTPException(status_code=422, detail="Lesson does not belong to learner")
+        if request.package_id and lesson.package_id != request.package_id:
+            raise HTTPException(status_code=422, detail="Lesson does not belong to package")
+
+        if package is None:
+            package = lesson_package
+            effective_package_id = lesson.package_id
+            package_title = lesson_package.title
     
     try:
         payment = await finance_service.record_payment(
@@ -62,7 +86,7 @@ async def create_payment(
             learner_id=request.learner_id,
             amount=request.amount,
             paid_at=request.paid_at,
-            package_id=request.package_id,
+            package_id=effective_package_id,
             lesson_id=request.lesson_id,
             notes=request.notes,
         )
@@ -95,6 +119,7 @@ async def list_payments(
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> PaginatedResponse[PaymentResponse]:
     """List payments with optional filtering.
     

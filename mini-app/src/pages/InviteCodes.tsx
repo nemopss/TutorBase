@@ -24,7 +24,7 @@ interface InviteToken {
 
 const InviteCodes: React.FC = () => {
     const { t } = useTranslation();
-    const { user, tenantId } = useAuth();
+    const { user, tenantId, isSuperAdmin } = useAuth();
     const [tokens, setTokens] = useState<InviteToken[]>([]);
     const [loading, setLoading] = useState(false);
     const [creating, setCreating] = useState(false);
@@ -214,7 +214,7 @@ const InviteCodes: React.FC = () => {
     ];
 
     // Check if user has permission
-    const hasPermission = user?.role === 'admin' || user?.role === 'teacher';
+    const hasPermission = isSuperAdmin || user?.role === 'teacher';
 
     if (!hasPermission) {
         return (

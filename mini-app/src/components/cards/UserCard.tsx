@@ -15,6 +15,7 @@ interface UserRecord {
   username: string | null;
   telegramId: number | null;
   role: UserRole;
+  isPlatformAdmin?: boolean;
   createdAt: string;
   lastLoginAt: string | null;
 }
@@ -71,7 +72,6 @@ const UserCard: React.FC<UserCardProps> = ({
   const roleOptions = [
     { value: 'viewer', label: roleLabels.viewer },
     { value: 'teacher', label: roleLabels.teacher },
-    { value: 'admin', label: roleLabels.admin },
   ];
 
   return (
@@ -92,7 +92,10 @@ const UserCard: React.FC<UserCardProps> = ({
             <br />
             <Text type="secondary" style={{ fontSize: 12 }}>ID: {user.id}</Text>
           </div>
-          <Tag color={roleColors[user.role]}>{roleLabels[user.role]}</Tag>
+          <Space size={4} wrap>
+            <Tag color={roleColors[user.role]}>{roleLabels[user.role]}</Tag>
+            {user.isPlatformAdmin && <Tag color="gold">Владелец</Tag>}
+          </Space>
         </div>
         
         <Space direction="vertical" size={2}>
@@ -121,7 +124,7 @@ const UserCard: React.FC<UserCardProps> = ({
             onChange={(value) => onRoleChange(user.id, value)}
             size="middle"
             loading={isUpdating}
-            disabled={isUpdating || isCurrentUser}
+            disabled={isUpdating || isCurrentUser || user.isPlatformAdmin}
             style={{ minWidth: 140 }}
             dropdownMatchSelectWidth={false}
             onClick={(e) => e.stopPropagation()}

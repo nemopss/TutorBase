@@ -235,6 +235,11 @@ class UpdateLearnerNotificationsRequest(BaseRequest):
     notifications_enabled: bool = Field(..., description="Enable or disable notifications")
 
 
+class UnlinkLearnerAccountRequest(BaseRequest):
+    """Request schema for unlinking a learner from Telegram account."""
+    reason: Optional[str] = Field(None, max_length=1000, description="Optional unlink reason")
+
+
 __all__ = [
     'LearnerResponse',
     'LearnerDetailResponse',
@@ -243,4 +248,5 @@ __all__ = [
     'CreateLearnerFromChatIdRequest',
     'UpdateLearnerRequest',
     'UpdateLearnerNotificationsRequest',
+    'UnlinkLearnerAccountRequest',
 ]

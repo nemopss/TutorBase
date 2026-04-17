@@ -27,7 +27,7 @@ from database.models import User
 router = APIRouter()
 
 
-def _to_response(dto: LessonPackageDTO) -> PackageResponse:
+def _to_response(dto: LessonPackageDTO, *, include_private: bool = True) -> PackageResponse:
     progress = PackageProgressModel(
         total=dto.progress.total,
         completed=dto.progress.completed,
@@ -44,12 +44,12 @@ def _to_response(dto: LessonPackageDTO) -> PackageResponse:
         start_date=dto.start_date,
         end_date=dto.end_date,
         timezone=DEFAULT_TIMEZONE,
-        notes=dto.notes,
+        notes=dto.notes if include_private else None,
         total_lessons=dto.total_lessons,
         progress=progress,
-        price=dto.price,
-        payment_status=dto.payment_status,
-        total_paid=dto.total_paid,
+        price=dto.price if include_private else None,
+        payment_status=dto.payment_status if include_private else "hidden",
+        total_paid=dto.total_paid if include_private else 0.0,
         next_lesson_date=dto.next_lesson_date,
     )
 
@@ -102,7 +102,8 @@ async def list_packages(
         status=status_filter,
         search=search,
     )
-    items = [_to_response(pkg) for pkg in packages]
+    include_private = current_user.role != "viewer"
+    items = [_to_response(pkg, include_private=include_private) for pkg in packages]
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
@@ -111,6 +112,7 @@ async def get_package_endpoint(
     package_id: int,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> PackageResponse:
     try:
         package = await package_service.get_package(session, current_tenant, package_id)
@@ -292,6 +294,7 @@ async def preview_lesson_dates(
     lesson_count: int = Query(..., gt=0, le=100, description="Number of lessons"),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ):
     """Generate lesson date preview based on learner's schedule.
     

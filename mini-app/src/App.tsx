@@ -1,5 +1,5 @@
 import { useEffect, lazy, Suspense } from 'react';
-import { Routes, Route, Navigate } from 'react-router-dom';
+import { Routes, Route, Navigate, useLocation } from 'react-router-dom';
 import { ConfigProvider, Spin } from 'antd';
 import { useTranslation } from 'react-i18next';
 import ruRU from 'antd/locale/ru_RU';
@@ -31,7 +31,7 @@ const Settings = lazy(() => import('./pages/Settings'));
 const Analytics = lazy(() => import('./pages/Analytics'));
 const Lessons = lazy(() => import('./pages/Lessons'));
 const Learners = lazy(() => import('./pages/Learners'));
-const Admin = lazy(() => import('./pages/Admin'));
+const PlatformConsole = lazy(() => import('./pages/PlatformConsole'));
 const AccessDenied = lazy(() => import('./pages/AccessDenied'));
 const RoleSelectionScreen = lazy(() => import('./pages/RoleSelectionScreen'));
 const TutorRegistrationForm = lazy(() => import('./pages/TutorRegistrationForm'));
@@ -53,11 +53,12 @@ const PageLoader = () => (
 
 function App() {
   const { isLoading, isAuthenticated, user } = useAuth();
+  const location = useLocation();
   const { tg, autoFullscreenEnabled, requestFullscreen } = useTelegram();
   const { resolvedTheme } = useTheme();
   const { i18n } = useTranslation();
-  const isAdmin = user?.role === 'admin';
-  const hasStaffAccess = user?.role === 'admin' || user?.role === 'teacher';
+  const isPlatformAdmin = !!user?.is_platform_admin;
+  const hasStaffAccess = isPlatformAdmin || user?.role === 'teacher';
   const currentLocale = antdLocales[i18n.language as SupportedLanguage] || ruRU;
 
   useEffect(() => {
@@ -117,6 +118,23 @@ function App() {
     return <AccessDenied />;
   }
 
+  if (location.pathname.startsWith('/platform')) {
+    return (
+      <ConfigProvider theme={antdTheme} locale={currentLocale}>
+        <Suspense fallback={<PageLoader />}>
+          <Routes>
+            {isPlatformAdmin ? (
+              <Route path="/platform" element={<PlatformConsole />} />
+            ) : (
+              <Route path="/platform" element={<AccessDenied />} />
+            )}
+            <Route path="*" element={<Navigate to="/platform" replace />} />
+          </Routes>
+        </Suspense>
+      </ConfigProvider>
+    );
+  }
+
   return (
     <ConfigProvider theme={antdTheme} locale={currentLocale}>
       <AppLayout>
@@ -146,7 +164,7 @@ function App() {
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/invite-codes" element={<InviteCodes />} />
                 <Route path="/settings" element={<Settings />} />
-                {isAdmin && <Route path="/admin" element={<Admin />} />}
+                {isPlatformAdmin && <Route path="/admin" element={<Navigate to="/platform" replace />} />}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </>
             )}

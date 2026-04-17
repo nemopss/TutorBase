@@ -30,6 +30,25 @@ async def test_list_learners(client: AsyncClient, db_session: AsyncSession, curr
 
 
 @pytest.mark.asyncio
+async def test_viewer_cannot_list_or_read_learners(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session, display_name="Hidden Student")
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant, role="viewer")
+
+    list_response = await client.get("/api/v1/learners", headers=headers)
+    detail_response = await client.get(f"/api/v1/learners/{learner.id}", headers=headers)
+    finance_response = await client.get(f"/api/v1/learners/{learner.id}/finance", headers=headers)
+
+    assert list_response.status_code == 403
+    assert detail_response.status_code == 403
+    assert finance_response.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_create_learner_from_chat_id(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     headers, _ = await get_auth_headers(db_session, current_tenant)
     payload = {

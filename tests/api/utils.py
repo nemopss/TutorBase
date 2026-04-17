@@ -4,6 +4,7 @@ import random
 
 from api.dependencies import CurrentTenant
 from api.security import create_access_token
+from config import config
 from database import crud
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -19,6 +20,8 @@ async def get_auth_headers(
 ) -> tuple[dict[str, str], int]:
     """Create a user with given role and return Authorization header + user id."""
     telegram_id = telegram_id or random.randint(10_000, 1_000_000)
+    if role == "admin" and telegram_id not in config.ADMINS:
+        config.ADMINS = [*config.ADMINS, telegram_id]
 
     user = await crud.create_user(
         session,

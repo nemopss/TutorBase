@@ -24,6 +24,7 @@ import {
   CalendarOutlined,
   PlusOutlined,
   DollarOutlined,
+  DisconnectOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -183,6 +184,24 @@ const LearnerProfile: React.FC = () => {
     },
   });
 
+  // Unlink Telegram account mutation
+  const unlinkAccountMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post(`/learners/${learnerId}/unlink-account`, {
+        reason: 'manual reset from learner profile',
+      });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learners'] });
+      message.success(t('learnerProfile.unlinkAccountSuccess'));
+    },
+    onError: (err: Error) => {
+      message.error(t('errors.updateFailed', { message: err.message }));
+    },
+  });
+
   // Delete learner mutation
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -220,6 +239,17 @@ const LearnerProfile: React.FC = () => {
       display_name: values.display_name,
       notes: values.notes,
       lesson_rate: values.lesson_rate,
+    });
+  };
+
+  const handleUnlinkAccount = () => {
+    Modal.confirm({
+      title: t('learnerProfile.unlinkAccountTitle'),
+      content: t('learnerProfile.unlinkAccountConfirm'),
+      okText: t('learnerProfile.unlinkAccountAction'),
+      cancelText: t('common.cancel'),
+      okButtonProps: { danger: true, loading: unlinkAccountMutation.isPending },
+      onOk: () => unlinkAccountMutation.mutateAsync(),
     });
   };
 
@@ -303,6 +333,24 @@ const LearnerProfile: React.FC = () => {
                         <div><Text strong>{formatCurrency(learner.lesson_rate)}</Text></div>
                       </div>
                     )}
+
+                    <div>
+                      <Text type="secondary">{t('learnerProfile.telegramAccount')}</Text>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
+                        <Text>{learner.chat_id ? String(learner.chat_id) : t('learnerProfile.notLinked')}</Text>
+                        {learner.chat_id && (
+                          <Button
+                            size="small"
+                            danger
+                            icon={<DisconnectOutlined />}
+                            loading={unlinkAccountMutation.isPending}
+                            onClick={handleUnlinkAccount}
+                          >
+                            {t('learnerProfile.unlinkAccountAction')}
+                          </Button>
+                        )}
+                      </div>
+                    </div>
                     
                     {learner.first_package_date && (
                       <div>

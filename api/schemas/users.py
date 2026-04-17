@@ -47,6 +47,7 @@ class UserResponse(BaseResponse, TimestampMixin, TenantMixin):
     username: Optional[str] = Field(None, max_length=255, description="Username for login")
     telegram_id: Optional[int] = Field(None, description="Telegram ID")
     role: UserRole = Field(..., description="User role")
+    is_platform_admin: bool = Field(False, description="Whether user is an allowlisted platform operator")
     last_login_at: Optional[datetime] = Field(None, description="Last login timestamp")
 
 

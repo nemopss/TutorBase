@@ -78,6 +78,7 @@ class BotUser(Base):
     last_seen_at = Column(DateTime(timezone=True), nullable=False)
 
     learner = relationship('Learner', back_populates='bot_user', uselist=False)
+    learner_account_links = relationship('LearnerAccountLink', back_populates='bot_user')
 
 
 class User(Base):
@@ -117,6 +118,11 @@ class User(Base):
     updated_packages = relationship('LessonPackage', back_populates='updated_by')
     updated_lessons = relationship('Lesson', back_populates='updated_by')
     created_invite_tokens = relationship('InviteToken', back_populates='created_by')
+    learner_account_links = relationship(
+        'LearnerAccountLink',
+        foreign_keys='LearnerAccountLink.user_id',
+        back_populates='user',
+    )
 
 class Application(Base):
     """Student application model from Telegram bot.
@@ -237,7 +243,7 @@ class Learner(Base):
     Attributes:
         id: Primary key
         tenant_id: Associated tenant ID
-        bot_user_id: Linked Telegram bot user ID (unique)
+        bot_user_id: Linked Telegram bot user ID (unique among active links)
         display_name: Display name for the learner
         notes: Teacher notes about the learner
         notifications_enabled: Whether to send reminders to this learner
@@ -251,7 +257,7 @@ class Learner(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
-    bot_user_id = Column(Integer, ForeignKey('bot_users.id', ondelete='CASCADE'), nullable=False, unique=True)
+    bot_user_id = Column(Integer, ForeignKey('bot_users.id', ondelete='SET NULL'), nullable=True, unique=True)
     display_name = Column(String, nullable=False)
     notes = Column(Text)
     notifications_enabled = Column(Boolean, nullable=False, default=True)
@@ -264,10 +270,48 @@ class Learner(Base):
     payments = relationship('Payment', back_populates='learner', cascade='all, delete-orphan')
     schedule = relationship('LessonPackageTemplate', back_populates='learner', uselist=False, 
                            foreign_keys='LessonPackageTemplate.learner_id', cascade='all, delete-orphan')
+    account_links = relationship(
+        'LearnerAccountLink',
+        back_populates='learner',
+        cascade='all, delete-orphan',
+        order_by='LearnerAccountLink.linked_at.desc()',
+    )
 
     __table_args__ = (
         Index('ix_learners_tenant_display_name', 'tenant_id', 'display_name'),
         Index('ix_learners_tenant_created', 'tenant_id', 'created_at'),
+    )
+
+class LearnerAccountLink(Base):
+    """Historical link between a learner and a Telegram account.
+
+    Learners can be unlinked from Telegram accounts without deleting lesson,
+    payment, package, or reminder history. The active link is the row with
+    unlinked_at set to NULL.
+    """
+    __tablename__ = 'learner_account_links'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey('learners.id', ondelete='CASCADE'), nullable=False, index=True)
+    bot_user_id = Column(Integer, ForeignKey('bot_users.id', ondelete='SET NULL'), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    telegram_id = Column(BigInteger, nullable=True, index=True)
+    linked_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    unlinked_at = Column(DateTime(timezone=True), nullable=True)
+    unlinked_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    unlink_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant', back_populates='learner_account_links')
+    learner = relationship('Learner', back_populates='account_links')
+    bot_user = relationship('BotUser', back_populates='learner_account_links')
+    user = relationship('User', foreign_keys=[user_id], back_populates='learner_account_links')
+    unlinked_by = relationship('User', foreign_keys=[unlinked_by_user_id])
+
+    __table_args__ = (
+        Index('ix_learner_account_links_active', 'tenant_id', 'learner_id', 'unlinked_at'),
+        Index('ix_learner_account_links_tenant_telegram', 'tenant_id', 'telegram_id'),
     )
 
 class LessonPackageTemplate(Base):
@@ -646,6 +690,7 @@ class Tenant(Base):
     applications = relationship('Application', back_populates='tenant')
     invite_tokens = relationship('InviteToken', back_populates='tenant')
     payments = relationship('Payment', back_populates='tenant')
+    learner_account_links = relationship('LearnerAccountLink', back_populates='tenant')
 
 
 # Import models from the new notification bounded context so they share the same

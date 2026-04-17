@@ -64,11 +64,12 @@ async def list_all_lessons_endpoint(
         sort_by=sort_by,
         sort_order=sort_order,
     )
-    items = [_to_response(lesson) for lesson in lessons]
+    include_private = current_user.role != "viewer"
+    items = [_to_response(lesson, include_private=include_private) for lesson in lessons]
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
-def _to_response(dto: LessonDTO) -> LessonResponse:
+def _to_response(dto: LessonDTO, *, include_private: bool = True) -> LessonResponse:
     return LessonResponse(
         id=dto.id,
         package_id=dto.package_id,
@@ -78,7 +79,7 @@ def _to_response(dto: LessonDTO) -> LessonResponse:
         status=dto.status,
         duration_minutes=dto.duration_minutes,
         sequence_index=dto.sequence_index,
-        teacher_notes=dto.teacher_notes,
+        teacher_notes=dto.teacher_notes if include_private else None,
         homework_due_at=dto.homework_due_at,
         timezone="Europe/Moscow",
     )
@@ -90,6 +91,7 @@ async def list_lessons_for_package(
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> PaginatedResponse[LessonResponse]:
     try:
         lessons = await lesson_service.list_lessons(session, current_tenant, package_id)
@@ -145,6 +147,7 @@ async def get_lesson_endpoint(
     lesson_id: int,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> LessonResponse:
     try:
         lesson = await lesson_service.get_lesson(session, current_tenant, lesson_id)

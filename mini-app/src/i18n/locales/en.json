@@ -60,6 +60,7 @@
     "legacyBadge": "LEGACY",
     "analytics": "Analytics",
     "admin": "Admin",
+    "console": "Console",
     "inviteCodes": "Invite Codes"
   },
   "calendar": {
@@ -1097,7 +1098,13 @@
     "basicInfo": "Basic Information",
     "studiesSince": "Studies since",
     "nextLesson": "Next Lesson",
-    "createPackage": "Create Package"
+    "createPackage": "Create Package",
+    "telegramAccount": "Telegram account",
+    "notLinked": "Not linked",
+    "unlinkAccountAction": "Unlink",
+    "unlinkAccountTitle": "Unlink Telegram account?",
+    "unlinkAccountConfirm": "The learner, lessons, packages, and payments will stay in the database. The current Telegram account will lose access and can register again with a new invite code.",
+    "unlinkAccountSuccess": "Telegram account unlinked"
   },
   "schedule": {
     "currentSchedule": "Current Schedule",

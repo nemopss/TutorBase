@@ -45,6 +45,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.engine import async_session
 from api.security import TokenType, TokenVerificationError, decode_token
+from config import config
 from database import crud
 from utils.cache import cached
 
@@ -143,6 +144,26 @@ async def get_current_user(
     return user
 
 
+def is_platform_admin(user) -> bool:
+    """Return whether the user is an allowlisted platform operator."""
+    telegram_id = getattr(user, "telegram_id", None)
+    if telegram_id is None:
+        return False
+    try:
+        return int(telegram_id) in config.ADMINS
+    except (TypeError, ValueError):
+        return False
+
+
+def _has_required_role(user, roles: tuple[str, ...]) -> bool:
+    if not roles:
+        return True
+    if "admin" in roles and is_platform_admin(user):
+        return True
+    regular_roles = {role for role in roles if role != "admin"}
+    return getattr(user, "role", None) in regular_roles
+
+
 def require_roles(*roles: str):
     """Create role-based access control dependency.
 
@@ -175,7 +196,7 @@ def require_roles(*roles: str):
         Raises:
             HTTPException: 403 if user lacks required role
         """
-        if roles and user.role not in roles:
+        if not _has_required_role(user, roles):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
         return user
 
@@ -233,7 +254,7 @@ async def get_current_tenant(
     Raises:
         HTTPException: 403 if tenant not found, inactive, or token mismatch detected
     """
-    is_super_admin = user.role == 'admin'
+    is_super_admin = is_platform_admin(user)
     
     # For super-admins, check if they're switching tenant context via JWT
     if is_super_admin and credentials:
@@ -296,4 +317,3 @@ async def get_current_tenant(
             )
     
     return CurrentTenant(tenant_id=user.tenant_id, is_super_admin=is_super_admin, tenant=tenant)
-

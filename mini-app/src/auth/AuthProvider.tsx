@@ -23,6 +23,7 @@ interface User {
   id: number;
   display_name: string;
   role: string;
+  is_platform_admin?: boolean;
   telegram_id?: number;
   tenant_id?: number | null;
   last_login_at?: string;
@@ -565,7 +566,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     finishLogout();
   };
 
-  const isSuperAdmin = user?.role === 'admin';
+  const isSuperAdmin = !!user?.is_platform_admin;
   const canSwitchTenant = isSuperAdmin && authMode !== 'browser';
 
   const value = {

@@ -91,10 +91,13 @@ async def update_payment_status(
     # Refresh package to ensure we're working with latest DB state
     await session.refresh(package)
     
-    # Sum all payments for this package
+    # Sum all payments for this tenant/package pair.
     result = await session.execute(
         select(func.coalesce(func.sum(Payment.amount), Decimal("0")))
-        .where(Payment.package_id == package_id)
+        .where(
+            Payment.tenant_id == package.tenant_id,
+            Payment.package_id == package_id,
+        )
     )
     total_paid_raw = result.scalar()
     
@@ -222,8 +225,9 @@ async def get_outstanding_balance(
     
     Implements Property 3: Outstanding Balance Calculation.
     For any learner, outstanding_balance SHALL equal the sum of
-    (package.price - sum(payments for package)) for all packages
-    where payment_status != 'paid'.
+    (package.price - sum(payments for package)) for all priced packages.
+    The calculation intentionally does not trust payment_status, because that
+    field is a denormalized cache and can become stale after manual data fixes.
     
     Args:
         session: Async database session
@@ -235,13 +239,14 @@ async def get_outstanding_balance(
     
     **Validates: Requirements 5.2, 5.3**
     """
-    # Get all unpaid/partial packages for this learner
+    # Get all priced packages for this learner and compute the actual balance.
     packages_result = await session.execute(
         select(LessonPackage)
         .where(
             LessonPackage.tenant_id == current_tenant.tenant_id,
             LessonPackage.learner_id == learner_id,
-            LessonPackage.payment_status.in_(['unpaid', 'partial']),
+            LessonPackage.price.isnot(None),
+            LessonPackage.price > Decimal("0"),
         )
     )
     packages = packages_result.scalars().all()
@@ -257,7 +262,10 @@ async def get_outstanding_balance(
         # Get sum of payments for this package
         payments_result = await session.execute(
             select(func.coalesce(func.sum(Payment.amount), Decimal("0")))
-            .where(Payment.package_id == package.id)
+            .where(
+                Payment.tenant_id == current_tenant.tenant_id,
+                Payment.package_id == package.id,
+            )
         )
         total_paid = payments_result.scalar() or Decimal("0")
         
@@ -337,39 +345,36 @@ async def get_dashboard_metrics(
     )
     previous_month_income = previous_result.scalar() or Decimal("0")
     
-    # Total outstanding balance
+    # Total outstanding balance. Use actual paid amounts instead of cached
+    # payment_status so the dashboard and debtor lists cannot disagree.
     packages_result = await session.execute(
         select(LessonPackage)
         .where(
             LessonPackage.tenant_id == current_tenant.tenant_id,
-            LessonPackage.payment_status.in_(['unpaid', 'partial']),
+            LessonPackage.price.isnot(None),
+            LessonPackage.price > Decimal("0"),
         )
     )
     packages = packages_result.scalars().all()
     
     total_outstanding = Decimal("0")
+    learners_with_outstanding: set[int] = set()
     for package in packages:
         package_price = package.price or Decimal("0")
         payments_result = await session.execute(
             select(func.coalesce(func.sum(Payment.amount), Decimal("0")))
-            .where(Payment.package_id == package.id)
+            .where(
+                Payment.tenant_id == current_tenant.tenant_id,
+                Payment.package_id == package.id,
+            )
         )
         total_paid = payments_result.scalar() or Decimal("0")
         outstanding = package_price - total_paid
         if outstanding > Decimal("0"):
             total_outstanding += outstanding
-    
-    # Count of learners with actual outstanding balance (price > 0 and not fully paid)
-    unpaid_learners_result = await session.execute(
-        select(func.count(func.distinct(LessonPackage.learner_id)))
-        .where(
-            LessonPackage.tenant_id == current_tenant.tenant_id,
-            LessonPackage.payment_status.in_(['unpaid', 'partial']),
-            LessonPackage.price.isnot(None),
-            LessonPackage.price > Decimal("0"),
-        )
-    )
-    unpaid_learners_count = unpaid_learners_result.scalar() or 0
+            learners_with_outstanding.add(package.learner_id)
+
+    unpaid_learners_count = len(learners_with_outstanding)
     
     # 6-month income chart
     income_chart: list[MonthlyIncome] = []

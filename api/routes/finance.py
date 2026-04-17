@@ -20,9 +20,10 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import (
-    get_session,
-    get_current_tenant,
     CurrentTenant,
+    admin_or_teacher_required,
+    get_current_tenant,
+    get_session,
 )
 from api.schemas.finance import (
     DashboardMetricsResponse,
@@ -47,6 +48,7 @@ class ReportPeriod(str, Enum):
 async def get_dashboard(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> DashboardMetricsResponse:
     """Get financial dashboard metrics.
     
@@ -80,6 +82,7 @@ async def get_income_report(
     to_date: Optional[datetime] = Query(None, description="Custom period end"),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> IncomeReportResponse:
     """Get income report for specified period.
     
@@ -152,6 +155,7 @@ async def export_income_report(
     to_date: Optional[datetime] = Query(None, description="Custom period end"),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> StreamingResponse:
     """Export income report as CSV file.
     

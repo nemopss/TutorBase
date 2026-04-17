@@ -43,7 +43,7 @@ def _configure_browser_auth(monkeypatch):
     monkeypatch.setattr(config, "BROWSER_REFRESH_COOKIE_SECURE", False)
 
 
-async def _perform_login(client: AsyncClient, *, monkeypatch):
+async def _perform_login(client: AsyncClient, db_session: AsyncSession, *, monkeypatch):
     """Helper to login via DEV_MODE and return response payload."""
     monkeypatch.setattr(config, "DEV_MODE", True)
     monkeypatch.setattr(config, "DEV_INIT_DATA", "dev")
@@ -52,17 +52,28 @@ async def _perform_login(client: AsyncClient, *, monkeypatch):
     monkeypatch.setattr(config, "DEV_DISPLAY_NAME", "Dev Tester")
     monkeypatch.setattr(config, "ADMINS", [123456])
 
+    await factories.create_user(
+        db_session,
+        telegram_id=123456,
+        username="devuser",
+        display_name="Dev Tester",
+        role="admin",
+        tenant_id=None,
+    )
+    await db_session.commit()
+
     response = await client.post("/api/v1/auth/login", json={"init_data": "dev"})
     return response
 
 
 @pytest.mark.asyncio
 async def test_login_dev_mode_success(client: AsyncClient, db_session: AsyncSession, monkeypatch):
-    response = await _perform_login(client, monkeypatch=monkeypatch)
+    response = await _perform_login(client, db_session, monkeypatch=monkeypatch)
 
     assert response.status_code == 200
     data = response.json()
     assert data["user"]["role"] == "admin"
+    assert data["user"]["is_platform_admin"] is True
     assert data["user"]["display_name"] == "Dev Tester"
     assert data["access_token"]
     assert data["refresh_token"]
@@ -112,7 +123,7 @@ async def test_login_missing_user_id_returns_400(client: AsyncClient, monkeypatc
 
 @pytest.mark.asyncio
 async def test_refresh_returns_new_tokens(client: AsyncClient, db_session: AsyncSession, monkeypatch):
-    login_response = await _perform_login(client, monkeypatch=monkeypatch)
+    login_response = await _perform_login(client, db_session, monkeypatch=monkeypatch)
     tokens = login_response.json()
 
     refresh_request = {"refresh_token": tokens["refresh_token"]}

@@ -60,6 +60,7 @@
     "legacyBadge": "LEGACY",
     "analytics": "Аналитика",
     "admin": "Админ",
+    "console": "Консоль",
     "inviteCodes": "Инвайт-коды"
   },
   "calendar": {
@@ -1098,7 +1099,13 @@
     "basicInfo": "Основная информация",
     "studiesSince": "Занимается с",
     "nextLesson": "Следующий урок",
-    "createPackage": "Создать пакет"
+    "createPackage": "Создать пакет",
+    "telegramAccount": "Telegram-аккаунт",
+    "notLinked": "Не привязан",
+    "unlinkAccountAction": "Отвязать",
+    "unlinkAccountTitle": "Отвязать Telegram-аккаунт?",
+    "unlinkAccountConfirm": "Ученик, уроки, пакеты и платежи останутся в базе. Текущий Telegram-аккаунт потеряет доступ и сможет зарегистрироваться заново по новому инвайт-коду.",
+    "unlinkAccountSuccess": "Telegram-аккаунт отвязан"
   },
   "schedule": {
     "currentSchedule": "Текущее расписание",

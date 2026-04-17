@@ -32,6 +32,63 @@ async def test_list_packages_returns_results(client: AsyncClient, db_session: As
 
 
 @pytest.mark.asyncio
+async def test_viewer_package_list_is_own_and_hides_finance(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    telegram_id = 990001
+    own_learner = await factories.create_learner(db_session, display_name="Own", chat_id=telegram_id)
+    other_learner = await factories.create_learner(db_session, display_name="Other")
+    own_package = await factories.create_package(
+        db_session,
+        learner=own_learner,
+        title="Own Package",
+        status="active",
+        notes="Teacher-only notes",
+    )
+    own_package.price = 1000
+    own_package.payment_status = "partial"
+    await factories.create_package(db_session, learner=other_learner, title="Other Package", status="active")
+    await db_session.commit()
+
+    headers, _ = await get_auth_headers(
+        db_session,
+        current_tenant,
+        role="viewer",
+        telegram_id=telegram_id,
+    )
+
+    response = await client.get("/api/v1/packages", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    item = data["items"][0]
+    assert item["title"] == "Own Package"
+    assert item["notes"] is None
+    assert item["price"] is None
+    assert item["payment_status"] == "hidden"
+    assert item["total_paid"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_viewer_cannot_read_package_detail(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(db_session, learner=learner)
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant, role="viewer")
+
+    response = await client.get(f"/api/v1/packages/{package.id}", headers=headers)
+
+    assert response.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_create_package_success(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     headers, _ = await get_auth_headers(db_session, current_tenant)
@@ -74,8 +131,8 @@ async def test_create_package_requires_start_date_for_template(client: AsyncClie
     }
 
     response = await client.post("/api/v1/packages", json=payload, headers=headers)
-    assert response.status_code == 400
-    assert response.json()["detail"] == "start_date required for template"
+    assert response.status_code == 422
+    assert "start_date is required" in str(response.json()["detail"])
 
 
 @pytest.mark.asyncio

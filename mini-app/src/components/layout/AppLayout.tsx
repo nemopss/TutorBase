@@ -19,7 +19,6 @@ import {
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useAuth } from '../../auth/AuthProvider';
-import TenantSwitcher from '../common/TenantSwitcher';
 import TenantIndicator from '../common/TenantIndicator';
 
 const { Sider, Content } = Layout;
@@ -42,9 +41,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     return saved === 'true';
   });
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
-  const hasStaffAccess = user?.role === 'admin' || user?.role === 'teacher';
+  const { user, isSuperAdmin } = useAuth();
+  const hasStaffAccess = isSuperAdmin || user?.role === 'teacher';
   const isStudent = user?.role === 'viewer';
 
   const handleSidebarCollapse = (collapsed: boolean) => {
@@ -144,9 +142,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }), [t]);
 
   const adminMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
-    key: '/admin',
+    key: '/platform',
     icon: <CrownOutlined />,
-    label: <Link to="/admin">{t('navigation.admin')}</Link>,
+    label: <Link to="/platform">{t('navigation.console', 'Консоль')}</Link>,
   }), [t]);
 
   const settingsMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
@@ -173,12 +171,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const footerMenuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
     const items: NonNullable<MenuProps['items']> = [settingsMenuItem];
 
-    if (isAdmin) {
+    if (isSuperAdmin) {
       items.push(adminMenuItem);
     }
 
     return items;
-  }, [isAdmin, settingsMenuItem, adminMenuItem]);
+  }, [isSuperAdmin, settingsMenuItem, adminMenuItem]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -234,16 +232,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         )}
       </div>
 
-      {/* Tenant Switcher for Super Admins */}
-      {isAdmin && !isSidebarCompact && (
-        <div style={{
-          padding: '16px',
-          borderBottom: `1px solid ${colors.borderPrimary}`,
-        }}>
-          <TenantSwitcher />
-        </div>
-      )}
-
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingTop: '8px' }}>
         <Menu
           selectedKeys={[location.pathname]}
@@ -280,7 +268,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           }}
         />
 
-        {isAdmin && !isSidebarCompact && (
+        {isSuperAdmin && !isSidebarCompact && (
           <div style={{
             margin: '8px 16px 0',
             paddingTop: '12px',
@@ -377,7 +365,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               />
               <span style={{ fontSize: '18px', fontWeight: 600 }}>TutorBase</span>
             </Space>
-            {isAdmin && <TenantIndicator />}
+            {isSuperAdmin && <TenantIndicator />}
           </div>
         )}
 

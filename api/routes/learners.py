@@ -19,6 +19,7 @@ from api.schemas.learners import (
     CreateLearnerFromChatIdRequest,
     UpdateLearnerNotificationsRequest,
     UpdateLearnerRequest,
+    UnlinkLearnerAccountRequest,
 )
 from api.schemas.schedule import (
     LearnerScheduleResponse,
@@ -29,6 +30,7 @@ from api.schemas import PaginatedResponse, PaginationParams
 from database.models import Lesson, LessonPackage
 from services import learner_service
 from services import schedule_service
+from database import crud
 
 router = APIRouter()
 
@@ -87,6 +89,7 @@ async def list_all_learners(
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> PaginatedResponse[LearnerResponse]:
     """Lists all learners for the current tenant with next lesson dates."""
     learners = await learner_service.get_all_learners(session, current_tenant)
@@ -217,6 +220,47 @@ async def update_learner_notifications(
     )
 
 
+@router.post("/{learner_id}/unlink-account", response_model=LearnerResponse)
+async def unlink_learner_account(
+    learner_id: int,
+    request: UnlinkLearnerAccountRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> LearnerResponse:
+    """Unlink a learner from Telegram without deleting learner history."""
+    learner = await learner_service.get_learner_by_id(
+        session,
+        current_tenant,
+        learner_id,
+    )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+
+    learner = await crud.unlink_learner_account(
+        session,
+        current_tenant,
+        learner,
+        unlinked_by_user_id=current_user.id,
+        reason=request.reason,
+    )
+    await session.flush()
+
+    next_lesson_dates = await _get_next_lesson_dates(
+        session, [learner_id], current_tenant.tenant_id
+    )
+
+    return LearnerResponse(
+        id=learner.id,
+        display_name=learner.display_name,
+        notifications_enabled=learner.notifications_enabled,
+        chat_id=None,
+        bot_user_id=None,
+        lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
+        next_lesson_date=next_lesson_dates.get(learner_id),
+    )
+
+
 @router.delete("/{learner_id}", status_code=204)
 async def delete_learner(
     learner_id: int,
@@ -266,6 +310,7 @@ async def get_learner_detail(
     learner_id: int,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> LearnerDetailResponse:
     """Get detailed learner information for profile page.
     
@@ -306,6 +351,7 @@ async def get_learner_finance(
     learner_id: int,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ):
     """Get learner's financial profile.
     
@@ -389,6 +435,7 @@ async def get_learner_schedule(
     learner_id: int,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> LearnerScheduleResponse:
     """Get learner's weekly schedule.
     
