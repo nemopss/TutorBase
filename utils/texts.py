@@ -263,7 +263,7 @@ PAYMENT_REMINDER_DAY_BEFORE = (
 
 # Payment reminder button texts
 PAYMENT_CONFIRM_BUTTON = "✅ Всё хорошо, продолжаем"
-PAYMENT_DECLINE_BUTTON = "❌ Я не смогу оплатить"
+PAYMENT_DECLINE_BUTTON = "🤔 Нужно обсудить"
 
 # Payment reminder response texts
 PAYMENT_CONFIRM_REPLY = "Отлично! Я передам информацию преподавателю."
@@ -276,9 +276,9 @@ PAYMENT_CONFIRM_LOG = (
     "Ответ: подтвердил продолжение занятий. @{mention}"
 )
 PAYMENT_DECLINE_LOG = (
-    "#payment_decline\n"
+    "#payment_discuss\n"
     "Ученик: {name}\n"
-    "Ответ: не сможет оплатить следующий пакет. @{mention}"
+    "Ответ: хочет обсудить следующий пакет. @{mention}"
 )
 PAYMENT_REMINDERS_MENU_HEADER = "Напоминания об оплате для {name}:"
 PAYMENT_REMINDERS_EMPTY = "Для ученика {name} напоминаний об оплате пока нет."

@@ -391,12 +391,14 @@
       "activityStatuses": {
         "requiresAttention": "Требует внимания",
         "confirmed": "Подтверждено",
-        "declined": "Отказ"
+        "declined": "Отказ",
+        "needsDiscussion": "Нужно обсудить"
       },
       "activityDetails": {
         "lessonConfirmed": "Ученик подтвердил урок",
         "lessonDeclined": "Ученик отказался от урока",
         "lessonDeclinedWithReason": "Ученик отказался от урока: {{reason}}",
+        "packageRenewalNeedsDiscussion": "Ученик хочет обсудить продление пакета",
         "responseConfirmed": "Ученик подтвердил уведомление",
         "responseRecorded": "Ответ ученика записан",
         "deliverySent": "Сообщение отправлено в Telegram",

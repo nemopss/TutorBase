@@ -543,6 +543,8 @@ const getActivityStatusLabel = (status: string, t: TranslateFn): string => {
       return t('pages.notifications.activityStatuses.confirmed');
     case 'declined':
       return t('pages.notifications.activityStatuses.declined');
+    case 'needs_discussion':
+      return t('pages.notifications.activityStatuses.needsDiscussion');
     default:
       return getInstanceStatusLabel(status, t);
   }
@@ -556,6 +558,8 @@ const getActivityStatusColor = (status: string): string => {
     case 'confirmed':
     case 'sent':
       return 'green';
+    case 'needs_discussion':
+      return 'orange';
     case 'failed':
       return 'red';
     default:
@@ -565,6 +569,9 @@ const getActivityStatusColor = (status: string): string => {
 
 const getActivityDetails = (activity: NotificationActivity, t: TranslateFn): string => {
   if (activity.activity_type === 'teacher_alert') {
+    if (activity.metadata?.alert_code === 'package_renewal_needs_discussion') {
+      return t('pages.notifications.activityDetails.packageRenewalNeedsDiscussion');
+    }
     const responseText = typeof activity.metadata?.response_text === 'string' ? activity.metadata.response_text : null;
     if (responseText) {
       return t('pages.notifications.activityDetails.lessonDeclinedWithReason', { reason: responseText });
@@ -573,6 +580,9 @@ const getActivityDetails = (activity: NotificationActivity, t: TranslateFn): str
   }
 
   if (activity.activity_type === 'response') {
+    if (activity.response_value === 'needs_discussion' || activity.action_key === 'discuss_package_renewal') {
+      return t('pages.notifications.activityDetails.packageRenewalNeedsDiscussion');
+    }
     if (activity.response_value === 'confirmed' && activity.action_key === 'confirm_lesson') {
       return t('pages.notifications.activityDetails.lessonConfirmed');
     }
@@ -807,7 +817,7 @@ const RULE_WIZARD_PRESETS: Record<NonNullable<RuleWizardValues['preset_key']>, P
     category: 'package_renewal',
     event_type: 'package',
     trigger_type: 'day_offset_at_time',
-    trigger_days: -7,
+    trigger_days: -14,
     trigger_local_time: '10:00',
     priority: 'normal',
     message_mode: 'template',

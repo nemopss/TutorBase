@@ -3,12 +3,13 @@ import logging
 import sys
 from datetime import datetime, timezone
 
-from aiogram import Bot, Dispatcher
+from aiogram import Dispatcher
 from aiogram.fsm.storage.redis import RedisStorage
 
 from utils.commands import set_bot_commands
 from utils.formatters import escape_html_text, format_timestamp_msk
 from utils.state import set_bot_started_at
+from utils.telegram_bot import build_telegram_bot
 from config import config
 from handlers import admin as admin_h
 from handlers import admin_packages as admin_packages_h
@@ -28,7 +29,7 @@ from utils import texts
 
 
 async def main():
-    bot = Bot(token=config.BOT_TOKEN, parse_mode="HTML")
+    bot = build_telegram_bot(parse_mode="HTML")
     started_at = datetime.now(timezone.utc)
     set_bot_started_at(started_at)
     # storage = MemoryStorage()

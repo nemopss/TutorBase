@@ -636,6 +636,31 @@ def test_instance_and_activity_mappers_preserve_ui_context():
             occurred_at=now + timedelta(seconds=20),
         )
     )
+    package_discussion_activity = _response_activity_from_row(
+        FakeRow(
+            NotificationResponse(
+                id=303,
+                tenant_id=1,
+                notification_instance_id=17017,
+                event_type="package",
+                event_id=64,
+                recipient_type="learner",
+                recipient_id=10,
+                learner_id=10,
+                action_key="discuss_package_renewal",
+                response_value="needs_discussion",
+                response_metadata={"source": "callback"},
+                created_at=now + timedelta(seconds=30),
+            ),
+            instance_id=17017,
+            category_key="package_renewal",
+            event_type="package",
+            event_id=64,
+            learner_id=10,
+            learner_display_name="Вика",
+            occurred_at=now + timedelta(seconds=30),
+        )
+    )
 
     assert instance_record.instance_id == 16016
     assert instance_record.learner_display_name == "Вика"
@@ -651,6 +676,11 @@ def test_instance_and_activity_mappers_preserve_ui_context():
     assert teacher_alert_activity.status == "requires_attention"
     assert teacher_alert_activity.metadata["response_text"] == "Не успеваю сегодня"
     assert teacher_alert_activity.metadata["alert_code"] == "lesson_declined"
+    assert package_discussion_activity.activity_type == "teacher_alert"
+    assert package_discussion_activity.category == CategoryKey.TEACHER_ALERT
+    assert package_discussion_activity.status == "requires_attention"
+    assert package_discussion_activity.response_value == "needs_discussion"
+    assert package_discussion_activity.metadata["alert_code"] == "package_renewal_needs_discussion"
 
 
 @pytest.mark.asyncio

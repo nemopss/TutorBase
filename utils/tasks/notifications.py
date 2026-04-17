@@ -32,6 +32,7 @@ from notifications.infrastructure.repositories import SqlAlchemySessionNotificat
 from notifications.infrastructure.telegram_delivery import TelegramNotificationChannelAdapter
 from utils.celery_app import celery_app
 from utils.formatters import escape_html_text, format_timestamp_msk
+from utils.telegram_bot import build_telegram_bot
 
 
 logger = logging.getLogger(__name__)
@@ -202,7 +203,7 @@ async def _deliver_due_notifications_async(tenant_id: int | None, limit: int) ->
         pool_pre_ping=True,
     )
     task_session = async_sessionmaker(task_engine, expire_on_commit=False)
-    bot = Bot(token=config.BOT_TOKEN)
+    bot = build_telegram_bot()
 
     try:
         async with task_session() as session:

@@ -12,6 +12,8 @@ from utils.tasks.notifications import (
     process_notification_jobs_task,
 )
 from utils.celery_app import _build_notifications_beat_schedule
+from utils.telegram_bot import build_telegram_bot
+from config import config
 
 
 class FakeScalarResult:
@@ -80,6 +82,16 @@ def test_notifications_beat_schedule_registers_process_and_delivery_tasks():
     assert schedule["notifications.deliver-due"]["task"] == "utils.tasks.notifications.deliver_due_notifications"
     assert schedule["notifications.deliver-due"]["schedule"] == 30
     assert schedule["notifications.deliver-due"]["options"]["expires"] == 25
+
+
+@pytest.mark.asyncio
+async def test_build_telegram_bot_uses_configured_request_timeout():
+    bot = build_telegram_bot()
+
+    try:
+        assert bot.session.timeout == config.TELEGRAM_REQUEST_TIMEOUT_SECONDS
+    finally:
+        await bot.session.close()
 
 
 @pytest.mark.asyncio

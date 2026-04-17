@@ -31,6 +31,7 @@ ALLOWED_TEMPLATE_VARIABLES: tuple[TemplateVariable, ...] = (
     TemplateVariable("lesson_time", "Время урока"),
     TemplateVariable("lesson_datetime", "Дата и время урока"),
     TemplateVariable("package_title", "Название пакета"),
+    TemplateVariable("package_end", "Дата окончания пакета"),
     TemplateVariable("teacher_name", "Имя преподавателя"),
     TemplateVariable("homework_due_at", "Дедлайн домашки"),
     TemplateVariable("custom_note", "Дополнительная заметка"),
