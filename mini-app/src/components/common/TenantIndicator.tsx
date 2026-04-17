@@ -31,27 +31,32 @@ const TenantIndicator: React.FC = () => {
     const [loading, setLoading] = useState(false);
 
     useEffect(() => {
+        const fetchTenantName = async () => {
+            if (tenantId === null) return;
+
+            setLoading(true);
+            try {
+                const response = await api.get<Tenant>(`/tenants/${tenantId}`);
+                setTenantName(response.data.name);
+            } catch (error) {
+                console.error('Failed to fetch tenant name:', error);
+                setTenantName(`Tenant ${tenantId}`);
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        if (!isSuperAdmin) {
+            setTenantName(null);
+            return;
+        }
+
         if (tenantId !== null) {
             fetchTenantName();
         } else {
             setTenantName(null);
         }
-    }, [tenantId]);
-
-    const fetchTenantName = async () => {
-        if (tenantId === null) return;
-
-        setLoading(true);
-        try {
-            const response = await api.get<Tenant>(`/tenants/${tenantId}`);
-            setTenantName(response.data.name);
-        } catch (error) {
-            console.error('Failed to fetch tenant name:', error);
-            setTenantName(`Tenant ${tenantId}`);
-        } finally {
-            setLoading(false);
-        }
-    };
+    }, [isSuperAdmin, tenantId]);
 
     // Don't show for regular users (they can only see their own tenant)
     if (!isSuperAdmin) {

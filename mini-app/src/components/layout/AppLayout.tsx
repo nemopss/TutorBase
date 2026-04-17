@@ -52,6 +52,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     localStorage.setItem(SIDEBAR_COLLAPSED_KEY, String(collapsed));
   };
 
+  const isSidebarCompact = !isMobile && sidebarCollapsed;
+  const sidebarWidth = sidebarCollapsed ? 80 : 240;
+
   // Build menu items with translations
   const baseMenuItems: NonNullable<MenuProps['items']> = useMemo(() => [
     {
@@ -119,11 +122,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       icon: <BarChartOutlined />,
       label: <Link to="/analytics">{t('navigation.analytics')}</Link>,
     },
-    {
-      key: '/settings',
-      icon: <SettingOutlined />,
-      label: <Link to="/settings">{t('navigation.settings')}</Link>,
-    },
   ], [t]);
 
   const studentMenuItems: NonNullable<MenuProps['items']> = useMemo(() => [
@@ -136,11 +134,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       key: '/schedule',
       icon: <CalendarOutlined />,
       label: <Link to="/schedule">{t('navigation.schedule')}</Link>,
-    },
-    {
-      key: '/settings',
-      icon: <SettingOutlined />,
-      label: <Link to="/settings">{t('navigation.settings')}</Link>,
     },
   ], [t]);
 
@@ -156,7 +149,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     label: <Link to="/admin">{t('navigation.admin')}</Link>,
   }), [t]);
 
-  const menuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
+  const settingsMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
+    key: '/settings',
+    icon: <SettingOutlined />,
+    label: <Link to="/settings">{t('navigation.settings')}</Link>,
+  }), [t]);
+
+  const mainMenuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
     if (isStudent) {
       return studentMenuItems;
     }
@@ -165,21 +164,21 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
     // Add Invite Codes for teachers and admins
     if (hasStaffAccess) {
-      const settingsIndex = items.findIndex(item => item?.key === '/settings');
-      if (settingsIndex !== -1) {
-        items.splice(settingsIndex, 0, inviteCodesMenuItem);
-      } else {
-        items.push(inviteCodesMenuItem);
-      }
+      items.push(inviteCodesMenuItem);
     }
 
-    // Add Admin menu for admins only
+    return items;
+  }, [hasStaffAccess, isStudent, baseMenuItems, studentMenuItems, inviteCodesMenuItem]);
+
+  const footerMenuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
+    const items: NonNullable<MenuProps['items']> = [settingsMenuItem];
+
     if (isAdmin) {
       items.push(adminMenuItem);
     }
 
     return items;
-  }, [isAdmin, hasStaffAccess, isStudent, baseMenuItems, studentMenuItems, inviteCodesMenuItem, adminMenuItem]);
+  }, [isAdmin, settingsMenuItem, adminMenuItem]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -190,22 +189,53 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }, []);
 
   const menuContent = (
-    <>
+    <div style={{ display: 'flex', flexDirection: 'column', height: '100%', minHeight: 0 }}>
       <div style={{
-        padding: sidebarCollapsed ? '20px 8px' : '20px 16px',
-        fontSize: sidebarCollapsed ? '16px' : '18px',
+        padding: isSidebarCompact ? '16px 10px' : '16px',
+        minHeight: '64px',
         fontWeight: 600,
         color: colors.textPrimary,
         borderBottom: `1px solid ${colors.borderPrimary}`,
-        textAlign: 'center',
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: isSidebarCompact ? 'center' : 'space-between',
+        gap: '8px',
         whiteSpace: 'nowrap',
         overflow: 'hidden',
       }}>
-        {sidebarCollapsed ? '📚' : '📚 TutorBase'}
+        <span style={{
+          display: 'inline-flex',
+          alignItems: 'center',
+          justifyContent: isSidebarCompact ? 'center' : 'flex-start',
+          gap: '8px',
+          minWidth: 0,
+          fontSize: isSidebarCompact ? '18px' : '18px',
+        }}>
+          <span aria-hidden="true">📚</span>
+          {!isSidebarCompact && <span style={{ overflow: 'hidden', textOverflow: 'ellipsis' }}>TutorBase</span>}
+        </span>
+
+        {!isMobile && (
+          <Button
+            type="text"
+            size="small"
+            aria-label={sidebarCollapsed ? t('navigation.expandSidebar', 'Expand sidebar') : t('navigation.collapseSidebar', 'Collapse sidebar')}
+            icon={sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            onClick={() => handleSidebarCollapse(!sidebarCollapsed)}
+            style={{
+              flex: '0 0 auto',
+              width: 32,
+              height: 32,
+              minWidth: 32,
+              padding: 0,
+              color: colors.textSecondary,
+            }}
+          />
+        )}
       </div>
 
       {/* Tenant Switcher for Super Admins */}
-      {isAdmin && (
+      {isAdmin && !isSidebarCompact && (
         <div style={{
           padding: '16px',
           borderBottom: `1px solid ${colors.borderPrimary}`,
@@ -214,24 +244,67 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         </div>
       )}
 
-      <Menu
-        selectedKeys={[location.pathname]}
-        mode="inline"
-        items={menuItems}
-        onClick={() => isMobile && setDrawerVisible(false)}
-        style={{
-          background: 'transparent',
-          border: 'none',
-          marginTop: '8px',
-          fontSize: '14px',
-          color: colors.textPrimary,
-        }}
-      />
-    </>
+      <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingTop: '8px' }}>
+        <Menu
+          selectedKeys={[location.pathname]}
+          mode="inline"
+          inlineCollapsed={isSidebarCompact}
+          items={mainMenuItems}
+          onClick={() => isMobile && setDrawerVisible(false)}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            fontSize: '14px',
+            color: colors.textPrimary,
+          }}
+        />
+      </div>
+
+      <div style={{
+        flex: '0 0 auto',
+        borderTop: `1px solid ${colors.borderPrimary}`,
+        padding: '8px 0',
+        background: colors.bgSecondary,
+      }}>
+        <Menu
+          selectedKeys={[location.pathname]}
+          mode="inline"
+          inlineCollapsed={isSidebarCompact}
+          items={footerMenuItems}
+          onClick={() => isMobile && setDrawerVisible(false)}
+          style={{
+            background: 'transparent',
+            border: 'none',
+            fontSize: '14px',
+            color: colors.textPrimary,
+          }}
+        />
+
+        {isAdmin && !isSidebarCompact && (
+          <div style={{
+            margin: '8px 16px 0',
+            paddingTop: '12px',
+            borderTop: `1px solid ${colors.borderPrimary}`,
+          }}>
+            <TenantIndicator />
+          </div>
+        )}
+      </div>
+    </div>
   );
 
   return (
-    <Layout style={{ minHeight: '100vh', background: colors.bgPrimary }}>
+    <Layout style={{
+      minHeight: '100vh',
+      height: isMobile ? undefined : '100vh',
+      background: colors.bgPrimary,
+      padding: isMobile ? 0 : '24px',
+      boxSizing: 'border-box',
+      overflow: isMobile ? undefined : 'hidden',
+      display: 'flex',
+      flexDirection: isMobile ? 'column' : 'row',
+      gap: isMobile ? 0 : '24px',
+    }}>
       {/* Desktop Sidebar */}
       {!isMobile && (
         <Sider
@@ -242,42 +315,19 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           collapsedWidth={80}
           style={{
             background: colors.bgSecondary,
-            borderRight: `1px solid ${colors.borderPrimary}`,
-            overflow: 'auto',
-            height: '100vh',
-            position: 'fixed',
-            left: 0,
-            top: 0,
-            bottom: 0,
-            display: 'flex',
-            flexDirection: 'column',
+            border: `1px solid ${colors.borderPrimary}`,
+            borderRadius: '8px',
+            overflow: 'hidden',
+            height: '100%',
+            flex: `0 0 ${sidebarWidth}px`,
+            minWidth: sidebarWidth,
+            maxWidth: sidebarWidth,
+            boxSizing: 'border-box',
           }}
-          trigger={
-            <div style={{
-              padding: '12px',
-              textAlign: 'center',
-              borderTop: `1px solid ${colors.borderPrimary}`,
-              cursor: 'pointer',
-              color: colors.textPrimary,
-            }}>
-              {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
-            </div>
-          }
+          trigger={null}
           theme={isDark ? 'dark' : 'light'}
         >
-          <div style={{ flex: 1, overflow: 'auto' }}>
-            {menuContent}
-          </div>
-          {/* Tenant Indicator at bottom of sidebar */}
-          {isAdmin && !sidebarCollapsed && (
-            <div style={{
-              padding: '16px',
-              borderTop: `1px solid ${colors.borderPrimary}`,
-              background: colors.bgTertiary,
-            }}>
-              <TenantIndicator />
-            </div>
-          )}
+          {menuContent}
         </Sider>
       )}
 
@@ -292,23 +342,21 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             body: {
               padding: 0,
               background: colors.bgSecondary,
+              height: '100%',
             },
           }}
         >
           {menuContent}
-          {/* TenantSwitcher in mobile drawer for non-admin staff */}
-          {hasStaffAccess && !isAdmin && (
-            <div style={{
-              padding: '16px',
-              borderTop: `1px solid ${colors.borderPrimary}`,
-            }}>
-              <TenantSwitcher />
-            </div>
-          )}
         </Drawer>
       )}
 
-      <Layout style={{ marginLeft: isMobile ? 0 : (sidebarCollapsed ? 80 : 240), background: colors.bgPrimary, transition: 'margin-left 0.2s' }}>
+      <Layout style={{
+        flex: 1,
+        minWidth: 0,
+        height: isMobile ? undefined : '100%',
+        background: colors.bgPrimary,
+        transition: 'all 0.2s',
+      }}>
         {/* Mobile Header with Hamburger */}
         {isMobile && (
           <div style={{
@@ -329,17 +377,20 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               />
               <span style={{ fontSize: '18px', fontWeight: 600 }}>TutorBase</span>
             </Space>
-            <TenantIndicator />
+            {isAdmin && <TenantIndicator />}
           </div>
         )}
 
         <Content style={{
-          margin: isMobile ? '16px' : '24px',
+          margin: isMobile ? '16px' : 0,
           padding: isMobile ? '16px' : '32px',
           background: colors.bgSecondary,
-          minHeight: isMobile ? 'calc(100vh - 120px)' : 'calc(100vh - 48px)',
+          minHeight: isMobile ? 'calc(100vh - 120px)' : 0,
+          height: isMobile ? undefined : '100%',
           borderRadius: '8px',
           border: `1px solid ${colors.borderPrimary}`,
+          overflow: isMobile ? undefined : 'auto',
+          boxSizing: 'border-box',
         }}>
           {children}
         </Content>
