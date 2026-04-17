@@ -14,6 +14,7 @@ def test_allowed_variables_have_teacher_friendly_labels():
 
     assert labels_by_key["student_name"] == "Имя ученика"
     assert labels_by_key["lesson_time"] == "Время урока"
+    assert labels_by_key["package_end"] == "Дата окончания пакета"
 
 
 def test_extract_template_variables_preserves_first_seen_order_and_dedupes():

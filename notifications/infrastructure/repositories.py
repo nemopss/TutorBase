@@ -2594,14 +2594,14 @@ def _delivery_activity_from_row(row) -> NotificationActivityRecord:
 
 def _response_activity_from_row(row) -> NotificationActivityRecord:
     response = row[0]
-    is_teacher_alert = response.response_value == "declined"
+    is_teacher_alert = response.response_value in {"declined", "needs_discussion"}
     metadata = dict(response.response_metadata or {})
     if response.response_text:
         metadata["response_text"] = response.response_text
     if is_teacher_alert:
         metadata = {
             **metadata,
-            "alert_code": "lesson_declined" if row.event_type == EventType.LESSON.value else "response_declined",
+            "alert_code": _response_alert_code(response, row),
             "source_activity_type": "response",
             "source_category": row.category_key,
         }
@@ -2622,6 +2622,16 @@ def _response_activity_from_row(row) -> NotificationActivityRecord:
         occurred_at=row.occurred_at,
         metadata=metadata,
     )
+
+
+def _response_alert_code(response: NotificationResponse, row) -> str:
+    if response.response_value == "declined" and row.event_type == EventType.LESSON.value:
+        return "lesson_declined"
+    if response.response_value == "needs_discussion" and row.category_key == CategoryKey.PACKAGE_RENEWAL.value:
+        return "package_renewal_needs_discussion"
+    if response.response_value == "needs_discussion":
+        return "response_needs_discussion"
+    return "response_declined"
 
 
 def _group_record_from_count_row(row) -> LearnerGroupRecord:

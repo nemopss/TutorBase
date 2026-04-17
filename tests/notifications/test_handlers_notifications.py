@@ -79,6 +79,26 @@ def test_build_teacher_response_message_for_confirmed_lesson():
     assert "2026-04-09 22:00:00 MSK" in message
 
 
+def test_build_teacher_response_message_for_confirmed_package_renewal():
+    context = NotificationResponseContext(
+        tenant_id=1,
+        learner_name="Testlex",
+        event_type="package",
+        package_title="Пакет апрель",
+        package_end_at=datetime(2026, 4, 30, 21, 0, tzinfo=timezone.utc),
+    )
+
+    message = _build_teacher_response_message(
+        context,
+        response_value="confirmed",
+    )
+
+    assert "Testlex" in message
+    assert "подтвердил продолжение занятий" in message
+    assert "Пакет апрель" in message
+    assert "2026-05-01 00:00:00 MSK" in message
+
+
 def test_build_response_log_message_for_declined_lesson_includes_reason():
     context = NotificationResponseContext(
         tenant_id=1,
@@ -96,6 +116,26 @@ def test_build_response_log_message_for_declined_lesson_includes_reason():
     assert "#notification_decline" in message
     assert "Testlex" in message
     assert "Не успеваю" in message
+
+
+def test_build_response_log_message_for_declined_package_renewal():
+    context = NotificationResponseContext(
+        tenant_id=1,
+        learner_name="Testlex",
+        event_type="package",
+        package_title="Пакет апрель",
+        package_end_at=datetime(2026, 4, 30, 21, 0, tzinfo=timezone.utc),
+    )
+
+    message = _build_response_log_message(
+        context,
+        response_value="needs_discussion",
+    )
+
+    assert "#notification_package_renewal_discuss" in message
+    assert "Testlex" in message
+    assert "хочет обсудить продление пакета" in message
+    assert "Пакет апрель" in message
 
 
 @pytest.mark.asyncio

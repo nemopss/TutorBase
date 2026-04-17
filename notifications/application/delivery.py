@@ -67,7 +67,6 @@ class ExecuteClaimedNotificationDeliveryUseCase:
         *,
         now: datetime | None = None,
     ) -> ExecuteNotificationDeliveryResult:
-        failed_at = now or datetime.now(timezone.utc)
         try:
             rendered = await self._renderer.render(instance)
             send_result = await self._channel_adapter.send(
@@ -75,6 +74,7 @@ class ExecuteClaimedNotificationDeliveryUseCase:
                 rendered=rendered,
             )
         except NotificationDeliveryError as exc:
+            failed_at = now or datetime.now(timezone.utc)
             await self._uow.instances.mark_delivery_failed(
                 instance_id=instance.instance_id,
                 attempt_id=instance.attempt_id,
@@ -92,6 +92,7 @@ class ExecuteClaimedNotificationDeliveryUseCase:
                 error_message=str(exc),
             )
         except Exception as exc:
+            failed_at = now or datetime.now(timezone.utc)
             error_code = exc.__class__.__name__
             await self._uow.instances.mark_delivery_failed(
                 instance_id=instance.instance_id,

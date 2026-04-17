@@ -584,7 +584,7 @@ def _seed_system_templates() -> None:
             key="lesson_confirmation_day_before_ru",
             name="Подтверждение урока за день",
             description="Системный шаблон для подтверждения урока за день.",
-            body="Привет, {student_name}! Завтра у нас урок в {lesson_time}. Всё в силе?",
+            body="Привет, {student_name}! Напоминаю, у тебя завтра занятие {lesson_datetime}. Всё в силе?",
         ),
         _template_seed(
             category_key="lesson_confirmation",
@@ -592,8 +592,8 @@ def _seed_system_templates() -> None:
             name="Подтверждение урока + домашка",
             description="Комбинированный шаблон для подтверждения урока и напоминания о домашке.",
             body=(
-                "Привет, {student_name}! Завтра у нас урок в {lesson_time}. Всё в силе?\n\n"
-                "И не забудь домашку."
+                "Привет, {student_name}! Напоминаю, у тебя завтра занятие {lesson_datetime}. Всё в силе?\n\n"
+                "И не забудь выполнить и отправить домашку как минимум за час до времени твоего урока."
             ),
         ),
         _template_seed(
@@ -601,21 +601,27 @@ def _seed_system_templates() -> None:
             key="lesson_reminder_soon_ru",
             name="Напоминание перед уроком",
             description="Системный шаблон для мягкого напоминания перед уроком.",
-            body="Привет, {student_name}! Напоминаю: урок сегодня в {lesson_time}.",
+            body="Привет, {student_name}! Напоминаю о занятии {lesson_datetime}.",
         ),
         _template_seed(
             category_key="homework",
             key="homework_before_lesson_ru",
             name="Домашка к уроку",
             description="Системный шаблон для напоминания о домашке к ближайшему уроку.",
-            body="Привет, {student_name}! Напоминаю про домашку к уроку {lesson_datetime}.",
+            body=(
+                "Привет, {student_name}! Напоминаю: урок {lesson_datetime}. "
+                "Не забудь выполнить и отправить домашку как минимум за час до времени твоего урока."
+            ),
         ),
         _template_seed(
             category_key="package_renewal",
             key="package_renewal_ru",
             name="Продление пакета",
             description="Системный шаблон для напоминания о продлении пакета.",
-            body="Привет, {student_name}! Пакет {package_title} скоро заканчивается. Обсудим продление?",
+            body=(
+                "Привет, {student_name}! Твой пакет занятий заканчивается {package_end}. "
+                "Скажи, пожалуйста, ты планируешь продолжать занятия в следующем месяце?"
+            ),
         ),
         _template_seed(
             category_key="custom",

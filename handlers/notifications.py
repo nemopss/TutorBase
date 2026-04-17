@@ -10,10 +10,10 @@ from sqlalchemy import and_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import config
-from database.models import Learner, Lesson, User
+from database.models import Learner, Lesson, LessonPackage, User
 from notifications.application.dto import NotificationResponseDraft
 from notifications.application.responses import RecordNotificationResponseUseCase
-from notifications.infrastructure.models import NotificationInstance
+from notifications.infrastructure.models import NotificationInstance, NotificationResponse
 from notifications.infrastructure.repositories import SqlAlchemySessionNotificationUnitOfWork
 from utils import texts
 from utils.formatters import escape_html_text, format_timestamp_msk
@@ -28,10 +28,16 @@ class NotificationResponseContext:
     learner_name: str
     event_type: str
     lesson_scheduled_at: datetime | None = None
+    package_title: str | None = None
+    package_end_at: datetime | None = None
 
 
 class NotificationResponseStates(StatesGroup):
     decline_reason = State()
+
+
+class NotificationResponseAlreadyRecorded(Exception):
+    pass
 
 
 @router.callback_query(F.data.startswith("notif_confirm_lesson_"))
@@ -48,6 +54,9 @@ async def cb_notification_confirm_lesson(query: CallbackQuery, session: AsyncSes
             action_key="confirm_lesson",
             response_value="confirmed",
         )
+    except NotificationResponseAlreadyRecorded:
+        await query.answer("Вы уже ответили на это напоминание", show_alert=True)
+        return
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to persist notification confirm response #%s: %s", instance_id, exc)
@@ -67,10 +76,13 @@ async def cb_notification_confirm_lesson(query: CallbackQuery, session: AsyncSes
 
 
 @router.callback_query(F.data.startswith("notif_decline_lesson_"))
-async def cb_notification_decline_lesson(query: CallbackQuery, state: FSMContext):
+async def cb_notification_decline_lesson(query: CallbackQuery, state: FSMContext, session: AsyncSession):
     instance_id = _parse_instance_id(query.data, prefix="notif_decline_lesson_")
     if instance_id is None:
         await query.answer("Неверный запрос", show_alert=True)
+        return
+    if await _has_recorded_response(session, instance_id):
+        await query.answer("Вы уже ответили на это напоминание", show_alert=True)
         return
 
     await state.set_state(NotificationResponseStates.decline_reason)
@@ -78,6 +90,81 @@ async def cb_notification_decline_lesson(query: CallbackQuery, state: FSMContext
     if query.message:
         await query.message.edit_reply_markup(None)
         await query.message.answer(texts.REMINDER_DECLINE_REASON_PROMPT)
+    await query.answer()
+
+
+@router.callback_query(F.data.startswith("notif_confirm_package_"))
+async def cb_notification_confirm_package(query: CallbackQuery, session: AsyncSession):
+    instance_id = _parse_instance_id(query.data, prefix="notif_confirm_package_")
+    if instance_id is None:
+        await query.answer("Неверный запрос", show_alert=True)
+        return
+
+    try:
+        await _record_response(
+            session,
+            instance_id=instance_id,
+            action_key="confirm_package_renewal",
+            response_value="confirmed",
+        )
+    except NotificationResponseAlreadyRecorded:
+        await query.answer("Вы уже ответили на это напоминание", show_alert=True)
+        return
+    except Exception as exc:
+        await session.rollback()
+        logging.error("Failed to persist notification package confirm response #%s: %s", instance_id, exc)
+        await query.answer(texts.DATABASE_ERROR, show_alert=True)
+        return
+
+    if query.message:
+        await query.message.edit_reply_markup(None)
+        await query.message.answer(texts.PAYMENT_CONFIRM_REPLY)
+    await _notify_about_response(
+        query.bot,
+        session,
+        instance_id=instance_id,
+        response_value="confirmed",
+    )
+    await query.answer()
+
+
+@router.callback_query(
+    F.data.startswith("notif_discuss_package_") | F.data.startswith("notif_decline_package_")
+)
+async def cb_notification_discuss_package(query: CallbackQuery, session: AsyncSession):
+    instance_id = _parse_instance_id(query.data, prefix="notif_discuss_package_")
+    if instance_id is None:
+        # Backward compatibility for already sent pilot messages.
+        instance_id = _parse_instance_id(query.data, prefix="notif_decline_package_")
+    if instance_id is None:
+        await query.answer("Неверный запрос", show_alert=True)
+        return
+
+    try:
+        await _record_response(
+            session,
+            instance_id=instance_id,
+            action_key="discuss_package_renewal",
+            response_value="needs_discussion",
+        )
+    except NotificationResponseAlreadyRecorded:
+        await query.answer("Вы уже ответили на это напоминание", show_alert=True)
+        return
+    except Exception as exc:
+        await session.rollback()
+        logging.error("Failed to persist notification package decline response #%s: %s", instance_id, exc)
+        await query.answer(texts.DATABASE_ERROR, show_alert=True)
+        return
+
+    if query.message:
+        await query.message.edit_reply_markup(None)
+        await query.message.answer(texts.PAYMENT_DECLINE_REPLY)
+    await _notify_about_response(
+        query.bot,
+        session,
+        instance_id=instance_id,
+        response_value="needs_discussion",
+    )
     await query.answer()
 
 
@@ -107,6 +194,10 @@ async def state_notification_decline_reason(
             response_value="declined",
             response_text=reason_text,
         )
+    except NotificationResponseAlreadyRecorded:
+        await state.clear()
+        await message.answer("Вы уже ответили на это напоминание")
+        return
     except Exception as exc:
         await session.rollback()
         logging.error("Failed to persist notification decline response #%s: %s", instance_id, exc)
@@ -135,6 +226,8 @@ async def _record_response(
     tenant_id = await _tenant_id_for_instance(session, instance_id)
     if tenant_id is None:
         raise ValueError(f"Notification instance {instance_id} not found")
+    if await _has_recorded_response(session, instance_id):
+        raise NotificationResponseAlreadyRecorded
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
     await RecordNotificationResponseUseCase(uow).execute(
         NotificationResponseDraft(
@@ -145,6 +238,15 @@ async def _record_response(
             response_metadata={"recorded_at": datetime.now(timezone.utc).isoformat()},
         )
     )
+
+
+async def _has_recorded_response(session: AsyncSession, instance_id: int) -> bool:
+    result = await session.execute(
+        select(NotificationResponse.id)
+        .where(NotificationResponse.notification_instance_id == instance_id)
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
 
 
 async def _tenant_id_for_instance(session: AsyncSession, instance_id: int) -> int | None:
@@ -215,6 +317,8 @@ async def _notification_response_context(
             NotificationInstance.event_type,
             Learner.display_name.label("learner_name"),
             Lesson.scheduled_at.label("lesson_scheduled_at"),
+            LessonPackage.title.label("package_title"),
+            LessonPackage.end_date.label("package_end_at"),
         )
         .select_from(NotificationInstance)
         .outerjoin(Learner, Learner.id == NotificationInstance.learner_id)
@@ -223,6 +327,15 @@ async def _notification_response_context(
             and_(
                 NotificationInstance.event_type == "lesson",
                 Lesson.id == NotificationInstance.event_id,
+                Lesson.tenant_id == NotificationInstance.tenant_id,
+            ),
+        )
+        .outerjoin(
+            LessonPackage,
+            and_(
+                NotificationInstance.event_type == "package",
+                LessonPackage.id == NotificationInstance.event_id,
+                LessonPackage.tenant_id == NotificationInstance.tenant_id,
             ),
         )
         .where(NotificationInstance.id == instance_id)
@@ -235,6 +348,8 @@ async def _notification_response_context(
         learner_name=row.learner_name or "Ученик",
         event_type=row.event_type,
         lesson_scheduled_at=row.lesson_scheduled_at,
+        package_title=row.package_title,
+        package_end_at=row.package_end_at,
     )
 
 
@@ -259,6 +374,21 @@ def _build_teacher_response_message(
     response_text: str | None = None,
 ) -> str:
     learner_name = escape_html_text(context.learner_name)
+    if context.event_type == "package":
+        if response_value in {"declined", "needs_discussion"}:
+            lines = [f"Ученик <b>{learner_name}</b> хочет обсудить продление пакета."]
+        elif response_value == "confirmed":
+            lines = [f"Ученик <b>{learner_name}</b> подтвердил продолжение занятий."]
+        else:
+            lines = [
+                f"Ученик <b>{learner_name}</b> ответил по продлению пакета: "
+                f"<b>{escape_html_text(response_value)}</b>."
+            ]
+        package_line = _package_line(context)
+        if package_line:
+            lines.append(package_line)
+        return "\n".join(lines)
+
     if response_value == "declined":
         lines = [f"Ученик <b>{learner_name}</b> отказался от урока."]
         lesson_line = _lesson_time_line(context.lesson_scheduled_at)
@@ -288,6 +418,33 @@ def _build_response_log_message(
     response_text: str | None = None,
 ) -> str:
     learner_name = escape_html_text(context.learner_name)
+    if context.event_type == "package":
+        if response_value in {"declined", "needs_discussion"}:
+            lines = [
+                "#notification_package_renewal_discuss",
+                f"Ученик: {learner_name}",
+                "Ответ: хочет обсудить продление пакета",
+            ]
+        elif response_value == "confirmed":
+            lines = [
+                "#notification_package_renewal_confirm",
+                f"Ученик: {learner_name}",
+                "Ответ: подтвердил продолжение занятий",
+            ]
+        else:
+            lines = [
+                "#notification_package_renewal_response",
+                f"Ученик: {learner_name}",
+                f"Ответ: {escape_html_text(response_value)}",
+            ]
+        package_line = _package_line(context)
+        if package_line:
+            lines.append(package_line)
+        mention = _notify_mention()
+        if mention:
+            lines.append(mention)
+        return "\n".join(lines)
+
     if response_value == "declined":
         lines = [
             "#notification_decline",
@@ -333,6 +490,18 @@ def _lesson_time_line(value: datetime | None) -> str | None:
     if value is None:
         return None
     return f"Урок: {escape_html_text(format_timestamp_msk(value))}"
+
+
+def _package_line(context: NotificationResponseContext) -> str | None:
+    title = escape_html_text(context.package_title) if context.package_title else None
+    end_at = escape_html_text(format_timestamp_msk(context.package_end_at)) if context.package_end_at else None
+    if title and end_at:
+        return f"Пакет: {title}\nЗаканчивается: {end_at}"
+    if title:
+        return f"Пакет: {title}"
+    if end_at:
+        return f"Пакет заканчивается: {end_at}"
+    return None
 
 
 def _notify_mention() -> str | None:

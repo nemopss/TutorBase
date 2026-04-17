@@ -76,6 +76,7 @@ const translations: Record<string, string> = {
   'pages.notifications.activitySections.attention': 'Needs attention',
   'pages.notifications.activitySections.recent': 'Recent activity',
   'pages.notifications.activityDetails.lessonConfirmed': 'The learner confirmed the lesson',
+  'pages.notifications.activityDetails.packageRenewalNeedsDiscussion': 'The learner wants to discuss package renewal',
   'pages.notifications.activityDetails.responseConfirmed': 'The learner confirmed the notification',
   'pages.notifications.activityDetails.responseRecorded': 'The learner response was recorded',
   'pages.notifications.activityDetails.deliverySent': 'The message was sent via Telegram',
@@ -337,6 +338,23 @@ const mockGet = jest.fn((url: string, _config?: unknown) => {
             metadata: {},
           },
           {
+            activity_type: 'teacher_alert',
+            activity_id: 302,
+            notification_instance_id: 2,
+            category: 'teacher_alert',
+            event_type: 'package',
+            event_id: 64,
+            learner_id: 10,
+            learner_display_name: 'Vika',
+            status: 'requires_attention',
+            action_key: 'discuss_package_renewal',
+            response_value: 'needs_discussion',
+            occurred_at: '2026-04-07T07:04:00+00:00',
+            metadata: {
+              alert_code: 'package_renewal_needs_discussion',
+            },
+          },
+          {
             activity_type: 'delivery_attempt',
             activity_id: 201,
             notification_instance_id: 1,
@@ -507,6 +525,7 @@ describe('Notifications', () => {
     fireEvent.click(await screen.findByText('Activity'));
 
     expect(await screen.findByText('The learner confirmed the lesson')).toBeInTheDocument();
+    expect(await screen.findByText('The learner wants to discuss package renewal')).toBeInTheDocument();
     expect(await screen.findByText('The message was sent via Telegram')).toBeInTheDocument();
     expect(screen.queryByText('confirmed')).not.toBeInTheDocument();
     expect(screen.queryByText('3106')).not.toBeInTheDocument();

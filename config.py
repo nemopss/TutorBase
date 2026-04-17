@@ -50,6 +50,7 @@ class Settings(BaseSettings):
     NOTIFICATIONS_AUTOMATION_ENABLED: bool = False
     NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS: int = 60
     NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS: int = 30
+    TELEGRAM_REQUEST_TIMEOUT_SECONDS: float = 15.0
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -89,11 +90,12 @@ class Settings(BaseSettings):
     @field_validator(
         "NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS",
         "NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS",
+        "TELEGRAM_REQUEST_TIMEOUT_SECONDS",
     )
     @classmethod
-    def validate_positive_interval(cls, value: int) -> int:
+    def validate_positive_interval(cls, value):
         if value <= 0:
-            raise ValueError("Notification automation interval must be greater than zero")
+            raise ValueError("Timeouts and intervals must be greater than zero")
         return value
 
     def build_async_database_url(self) -> str:

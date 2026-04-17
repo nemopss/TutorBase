@@ -113,9 +113,11 @@ async def test_sqlalchemy_renderer_renders_rule_template_with_lesson_context():
     assert rendered.reply_markup_snapshot == {
         "inline_keyboard": [
             [
-                {"text": "✅ Всё в силе", "callback_data": "notif_confirm_lesson_101"},
-                {"text": "❌ Не смогу", "callback_data": "notif_decline_lesson_101"},
-            ]
+                {"text": "👍 Подтверждаю", "callback_data": "notif_confirm_lesson_101"},
+            ],
+            [
+                {"text": "😔 Не смогу", "callback_data": "notif_decline_lesson_101"},
+            ],
         ]
     }
 
@@ -156,6 +158,107 @@ async def test_sqlalchemy_renderer_renders_combined_instance_from_component_rule
     )
 
     assert rendered.text == "Привет, Вика! Всё в силе?\n\nНе забудь домашку к 20:00."
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_renderer_strips_duplicate_greeting_from_combined_components():
+    confirmation = NotificationRule(
+        id=1,
+        template=NotificationTemplate(
+            key="lesson_confirmation",
+            name="Подтверждение",
+            body="Привет, {student_name}! Всё в силе?",
+        ),
+    )
+    homework = NotificationRule(
+        id=2,
+        template=NotificationTemplate(
+            key="homework",
+            name="Домашка",
+            body="Привет, {student_name}! Не забудь домашку к {lesson_time}.",
+        ),
+    )
+    instance = _instance()
+    instance.rule = None
+    instance.combination_key = "lesson_confirmation_homework"
+    instance.components = [
+        NotificationInstanceComponent(rule=confirmation),
+        NotificationInstanceComponent(rule=homework),
+    ]
+    session = FakeRenderSession(instance, _lesson_context_row())
+
+    rendered = await SqlAlchemyNotificationRenderer(session, tenant_id=1).render(
+        SimpleNamespace(
+            instance_id=101,
+            category=CategoryKey.LESSON_CONFIRMATION,
+            event_type=EventType.LESSON,
+        )
+    )
+
+    assert rendered.text == "Привет, Вика! Всё в силе?\n\nНе забудь домашку к 20:00."
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_renderer_renders_package_renewal_context_and_buttons():
+    category = NotificationCategory(key="package_renewal", display_name="Продление пакета")
+    template = NotificationTemplate(
+        key="package_renewal",
+        name="Продление пакета",
+        body=(
+            "Привет, {student_name}! Твой пакет занятий заканчивается {package_end}. "
+            "Продолжаем?"
+        ),
+    )
+    rule = NotificationRule(
+        id=3,
+        category=category,
+        template=template,
+        name="Продление пакета",
+        event_type="package",
+        trigger_type="day_offset_at_time",
+        trigger_config={"days": -14, "local_time": "10:00"},
+    )
+    instance = _instance()
+    instance.rule = rule
+    instance.category = category
+    instance.event_type = "package"
+    instance.event_id = 64
+    instance.event_key = "package:64"
+    session = FakeRenderSession(
+        instance,
+        SimpleNamespace(
+            package_title="Пакет апрель",
+            package_end=datetime(2026, 4, 30, 21, 0, tzinfo=timezone.utc),
+            timezone="Europe/Moscow",
+            learner_name="Вика",
+        ),
+    )
+
+    rendered = await SqlAlchemyNotificationRenderer(session, tenant_id=1).render(
+        SimpleNamespace(
+            instance_id=101,
+            category=CategoryKey.PACKAGE_RENEWAL,
+            event_type=EventType.PACKAGE,
+        )
+    )
+
+    assert rendered.text == "Привет, Вика! Твой пакет занятий заканчивается 01.05.2026. Продолжаем?"
+    assert rendered.reply_markup_snapshot == {
+        "inline_keyboard": [
+            [
+                {
+                    "text": "✅ Всё хорошо, продолжаем",
+                    "callback_data": "notif_confirm_package_101",
+                },
+            ],
+            [
+                {
+                    "text": "🤔 Нужно обсудить",
+                    "callback_data": "notif_discuss_package_101",
+                },
+            ],
+        ]
+    }
 
 
 @pytest.mark.asyncio

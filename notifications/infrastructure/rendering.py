@@ -87,9 +87,12 @@ class SqlAlchemyNotificationRenderer:
         row = result.one_or_none()
         if row is None:
             return {}
+        tz = _timezone(row.timezone)
+        package_end = _to_local(row.package_end, tz) if row.package_end else None
         return {
             "student_name": row.learner_name,
             "package_title": row.package_title,
+            "package_end": package_end.strftime("%d.%m.%Y") if package_end else "",
         }
 
 
@@ -131,6 +134,8 @@ def _package_render_context_stmt(tenant_id: int, package_id: int):
     return (
         select(
             LessonPackage.title.label("package_title"),
+            LessonPackage.end_date.label("package_end"),
+            LessonPackage.timezone,
             Learner.display_name.label("learner_name"),
         )
         .join(Learner, Learner.id == LessonPackage.learner_id)
@@ -149,7 +154,10 @@ def _message_body(instance: NotificationInstance) -> str:
     if instance.combination_key:
         component_bodies = tuple(
             body
-            for body in (_rule_message_body(component.rule) for component in instance.components)
+            for body in (
+                _component_message_body(component.rule, index=index)
+                for index, component in enumerate(instance.components)
+            )
             if body
         )
         if component_bodies:
@@ -181,6 +189,20 @@ def _rule_message_body(rule: NotificationRule | None) -> str | None:
     return None
 
 
+def _component_message_body(rule: NotificationRule | None, *, index: int) -> str | None:
+    body = _rule_message_body(rule)
+    if body is None or index == 0:
+        return body
+    return _strip_duplicate_greeting(body)
+
+
+def _strip_duplicate_greeting(body: str) -> str:
+    for prefix in ("Привет, {student_name}! ", "Привет, {student_name}!\n"):
+        if body.startswith(prefix):
+            return body.removeprefix(prefix)
+    return body
+
+
 def _manual_message_override(instance: NotificationInstance) -> str | None:
     overrides = instance.manual_overrides or {}
     for key in ("message_override", "body", "rendered_text"):
@@ -204,21 +226,41 @@ def _to_local(dt: datetime, tz: ZoneInfo) -> datetime:
 
 
 def _reply_markup_snapshot(claimed: ClaimedNotificationInstance) -> dict | None:
-    if claimed.event_type != EventType.LESSON:
-        return None
-    if claimed.category != CategoryKey.LESSON_CONFIRMATION:
-        return None
-    return {
-        "inline_keyboard": [
-            [
-                {
-                    "text": "✅ Всё в силе",
-                    "callback_data": f"notif_confirm_lesson_{claimed.instance_id}",
-                },
-                {
-                    "text": "❌ Не смогу",
-                    "callback_data": f"notif_decline_lesson_{claimed.instance_id}",
-                },
+    if claimed.event_type == EventType.LESSON and claimed.category in {
+        CategoryKey.LESSON_CONFIRMATION,
+        CategoryKey.LESSON_REMINDER,
+    }:
+        return {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "👍 Подтверждаю",
+                        "callback_data": f"notif_confirm_lesson_{claimed.instance_id}",
+                    },
+                ],
+                [
+                    {
+                        "text": "😔 Не смогу",
+                        "callback_data": f"notif_decline_lesson_{claimed.instance_id}",
+                    },
+                ],
             ]
-        ]
-    }
+        }
+    if claimed.event_type == EventType.PACKAGE and claimed.category == CategoryKey.PACKAGE_RENEWAL:
+        return {
+            "inline_keyboard": [
+                [
+                    {
+                        "text": "✅ Всё хорошо, продолжаем",
+                        "callback_data": f"notif_confirm_package_{claimed.instance_id}",
+                    },
+                ],
+                [
+                    {
+                        "text": "🤔 Нужно обсудить",
+                        "callback_data": f"notif_discuss_package_{claimed.instance_id}",
+                    },
+                ],
+            ]
+        }
+    return None

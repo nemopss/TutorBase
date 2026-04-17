@@ -390,12 +390,14 @@
       "activityStatuses": {
         "requiresAttention": "Requires attention",
         "confirmed": "Confirmed",
-        "declined": "Declined"
+        "declined": "Declined",
+        "needsDiscussion": "Needs discussion"
       },
       "activityDetails": {
         "lessonConfirmed": "The learner confirmed the lesson",
         "lessonDeclined": "The learner declined the lesson",
         "lessonDeclinedWithReason": "The learner declined the lesson: {{reason}}",
+        "packageRenewalNeedsDiscussion": "The learner wants to discuss package renewal",
         "responseConfirmed": "The learner confirmed the notification",
         "responseRecorded": "The learner response was recorded",
         "deliverySent": "The message was sent via Telegram",

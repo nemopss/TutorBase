@@ -389,12 +389,14 @@
       "activityStatuses": {
         "requiresAttention": "주의 필요",
         "confirmed": "확인됨",
-        "declined": "거절"
+        "declined": "거절",
+        "needsDiscussion": "논의 필요"
       },
       "activityDetails": {
         "lessonConfirmed": "학생이 수업을 확인했습니다",
         "lessonDeclined": "학생이 수업을 거절했습니다",
         "lessonDeclinedWithReason": "학생이 수업을 거절했습니다: {{reason}}",
+        "packageRenewalNeedsDiscussion": "학생이 패키지 연장을 논의하고 싶어합니다",
         "responseConfirmed": "학생이 알림을 확인했습니다",
         "responseRecorded": "학생 응답이 기록되었습니다",
         "deliverySent": "메시지가 Telegram으로 전송되었습니다",
