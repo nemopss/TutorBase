@@ -646,17 +646,35 @@ async def register_student(
             detail="Already registered as a student in this school"
         )
     
-    # Create learner record with bot_user_id
-    learner = Learner(
-        tenant_id=invite_token.tenant_id,
-        bot_user_id=bot_user.id,
-        display_name=display_name,
-        notes=f"Registered via invite on {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
-        notifications_enabled=True,
-        created_at=datetime.now(timezone.utc),
-    )
-    session.add(learner)
-    await session.flush()  # Get learner.id
+    if invite_token.learner_id:
+        learner = invite_token.learner
+        if not learner or learner.tenant_id != invite_token.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invite learner not found"
+            )
+        if learner.bot_user_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Learner is already linked to a Telegram account"
+            )
+        learner.bot_user_id = bot_user.id
+        learner.bot_user = bot_user
+        learner.notifications_enabled = True
+        session.add(learner)
+        await session.flush()
+    else:
+        # Legacy tenant-level invite: create a new learner record.
+        learner = Learner(
+            tenant_id=invite_token.tenant_id,
+            bot_user_id=bot_user.id,
+            display_name=display_name,
+            notes=f"Registered via invite on {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+            notifications_enabled=True,
+            created_at=datetime.now(timezone.utc),
+        )
+        session.add(learner)
+        await session.flush()  # Get learner.id
     
     # Create or relink user record. A reset/unlink keeps the User row for audit
     # history, so re-registration must reuse it instead of violating telegram_id.

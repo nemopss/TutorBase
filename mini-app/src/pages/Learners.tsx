@@ -38,7 +38,7 @@ const fetchLearners = async (): Promise<LearnerListResponse> => {
 
 const createLearner = async (values: any) => {
   const { data } = await api.post('/learners', {
-    chat_id: parseInt(values.chat_id),
+    chat_id: values.chat_id ? parseInt(values.chat_id) : null,
     display_name: values.display_name,
     notes: values.notes || null,
     notifications_enabled: values.notifications_enabled ?? true,

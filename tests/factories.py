@@ -277,6 +277,7 @@ async def create_invite_token(
     *,
     tenant_id: int,
     created_by_user_id: int,
+    learner_id: Optional[int] = None,
     token: Optional[str] = None,
     expires_at: Optional[datetime] = None,
     used_at: Optional[datetime] = None,
@@ -286,6 +287,7 @@ async def create_invite_token(
     
     invite_token = InviteToken(
         tenant_id=tenant_id,
+        learner_id=learner_id,
         token=token or secrets.token_urlsafe(32),
         expires_at=expires_at or (now + timedelta(days=30)),
         used_at=used_at,

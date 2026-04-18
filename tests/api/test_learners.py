@@ -70,6 +70,69 @@ async def test_create_learner_from_chat_id(client: AsyncClient, db_session: Asyn
 
 
 @pytest.mark.asyncio
+async def test_create_learner_without_chat_id(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+    payload = {
+        "display_name": "Unlinked Learner",
+        "notes": "Invite later",
+        "notifications_enabled": True,
+    }
+
+    response = await client.post("/api/v1/learners", json=payload, headers=headers)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["display_name"] == "Unlinked Learner"
+    assert body["chat_id"] is None
+    assert body["notifications_enabled"] is False
+
+    learner = await crud.get_learner(db_session, current_tenant, body["id"])
+    assert learner is not None
+    assert learner.bot_user_id is None
+
+
+@pytest.mark.asyncio
+async def test_create_personal_invite_for_unlinked_learner(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session, display_name="Linked")
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+    unlink_response = await client.post(
+        f"/api/v1/learners/{learner.id}/unlink-account",
+        json={"reason": "prepare personal invite"},
+        headers=headers,
+    )
+    assert unlink_response.status_code == 200
+
+    response = await client.post(f"/api/v1/learners/{learner.id}/invite", headers=headers)
+
+    assert response.status_code == 201
+    body = response.json()
+    assert body["learner_id"] == learner.id
+    assert body["learner_name"] == "Linked"
+    assert body["is_valid"] is True
+
+
+@pytest.mark.asyncio
+async def test_create_personal_invite_rejects_linked_learner(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session, display_name="Already Linked")
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.post(f"/api/v1/learners/{learner.id}/invite", headers=headers)
+
+    assert response.status_code == 409
+    assert response.json()["detail"] == "Learner is already linked to a Telegram account"
+
+
+@pytest.mark.asyncio
 async def test_update_learner_notifications(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session, notifications_enabled=True)
     await db_session.commit()

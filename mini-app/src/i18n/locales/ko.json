@@ -1103,7 +1103,10 @@
     "unlinkAccountAction": "연결 해제",
     "unlinkAccountTitle": "Telegram 계정 연결을 해제할까요?",
     "unlinkAccountConfirm": "학습자, 수업, 패키지, 결제 기록은 데이터베이스에 남습니다. 현재 Telegram 계정은 접근 권한을 잃고 새 초대 코드로 다시 등록할 수 있습니다.",
-    "unlinkAccountSuccess": "Telegram 계정 연결이 해제되었습니다"
+    "unlinkAccountSuccess": "Telegram 계정 연결이 해제되었습니다",
+    "createInviteAction": "초대 생성",
+    "inviteCreatedTitle": "초대 코드가 생성되었습니다",
+    "inviteCreatedDescription": "이 코드를 학습자에게 보내세요. 등록 후 Telegram 계정이 이 학습자에게 연결됩니다."
   },
   "schedule": {
     "currentSchedule": "현재 일정",

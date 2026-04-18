@@ -1104,7 +1104,10 @@
     "unlinkAccountAction": "Unlink",
     "unlinkAccountTitle": "Unlink Telegram account?",
     "unlinkAccountConfirm": "The learner, lessons, packages, and payments will stay in the database. The current Telegram account will lose access and can register again with a new invite code.",
-    "unlinkAccountSuccess": "Telegram account unlinked"
+    "unlinkAccountSuccess": "Telegram account unlinked",
+    "createInviteAction": "Create invite",
+    "inviteCreatedTitle": "Invite code created",
+    "inviteCreatedDescription": "Send this code to the learner. After registration, the Telegram account will be linked to this learner."
   },
   "schedule": {
     "currentSchedule": "Current Schedule",

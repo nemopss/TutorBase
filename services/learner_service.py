@@ -70,7 +70,7 @@ async def create_learner_from_chat_id(
     session: AsyncSession,
     current_tenant: CurrentTenant,
     *,
-    chat_id: int,
+    chat_id: int | None,
     display_name: str,
     notes: Optional[str] = None,
     notifications_enabled: bool = True,

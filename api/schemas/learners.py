@@ -152,7 +152,7 @@ class CreateLearnerFromChatIdRequest(BaseRequest):
         - notes max 5000 chars
         - lesson_rate must be positive if provided
     """
-    chat_id: int = Field(..., description="Telegram chat ID")
+    chat_id: Optional[int] = Field(None, description="Telegram chat ID")
     display_name: str = Field(..., min_length=1, max_length=255, description="Display name for learner")
     notes: Optional[str] = Field(None, max_length=5000, description="Teacher notes")
     notifications_enabled: bool = Field(

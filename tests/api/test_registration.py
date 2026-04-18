@@ -93,6 +93,62 @@ async def test_register_student_success(client: AsyncClient, db_session: AsyncSe
 
 
 @pytest.mark.asyncio
+async def test_register_student_personal_invite_links_existing_learner(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tenant_1: Tenant,
+    monkeypatch,
+):
+    monkeypatch.setattr(config, "DEV_MODE", True)
+    monkeypatch.setattr(config, "DEV_INIT_DATA", "dev")
+    monkeypatch.setattr(config, "DEV_TELEGRAM_ID", 223344)
+    monkeypatch.setattr(config, "DEV_USERNAME", "personal_student")
+    monkeypatch.setattr(config, "DEV_DISPLAY_NAME", "Telegram Student")
+
+    teacher = await factories.create_user(db_session, role="teacher", tenant_id=tenant_1.id)
+    await db_session.flush()
+    learner = Learner(
+        tenant_id=tenant_1.id,
+        bot_user_id=None,
+        display_name="Teacher Named Learner",
+        notes="Created before registration",
+        notifications_enabled=False,
+        created_at=datetime.now(timezone.utc),
+    )
+    db_session.add(learner)
+    await db_session.flush()
+    invite_token = await factories.create_invite_token(
+        db_session,
+        tenant_id=tenant_1.id,
+        learner_id=learner.id,
+        created_by_user_id=teacher.id,
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/v1/auth/register-student",
+        json={"invite_token": invite_token.token, "student_name": "Student Own Name"},
+        headers={"X-Telegram-Init-Data": "dev"},
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["user"]["display_name"] == "Student Own Name"
+
+    await db_session.refresh(learner)
+    assert learner.bot_user_id is not None
+    assert learner.display_name == "Teacher Named Learner"
+    assert learner.notifications_enabled is True
+
+    learners_count = (
+        await db_session.execute(
+            select(func.count()).select_from(Learner).where(Learner.tenant_id == tenant_1.id)
+        )
+    ).scalar_one()
+    assert learners_count == 1
+
+
+@pytest.mark.asyncio
 async def test_register_student_invalid_token(client: AsyncClient, db_session: AsyncSession):
     """Test student registration with invalid invite token."""
     registration_data = {

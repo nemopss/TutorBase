@@ -1105,7 +1105,10 @@
     "unlinkAccountAction": "Отвязать",
     "unlinkAccountTitle": "Отвязать Telegram-аккаунт?",
     "unlinkAccountConfirm": "Ученик, уроки, пакеты и платежи останутся в базе. Текущий Telegram-аккаунт потеряет доступ и сможет зарегистрироваться заново по новому инвайт-коду.",
-    "unlinkAccountSuccess": "Telegram-аккаунт отвязан"
+    "unlinkAccountSuccess": "Telegram-аккаунт отвязан",
+    "createInviteAction": "Создать инвайт",
+    "inviteCreatedTitle": "Инвайт-код создан",
+    "inviteCreatedDescription": "Отправьте этот код ученику. После регистрации Telegram-аккаунт будет привязан к этому ученику."
   },
   "schedule": {
     "currentSchedule": "Текущее расписание",

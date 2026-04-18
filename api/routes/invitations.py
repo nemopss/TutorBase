@@ -17,6 +17,22 @@ from database.models import User
 router = APIRouter(prefix="/tenants", tags=["invitations"])
 
 
+def _to_invite_response(invite_token, *, note: str | None = None) -> InviteTokenResponse:
+    learner = getattr(invite_token, "learner", None)
+    return InviteTokenResponse(
+        id=invite_token.id,
+        token=invite_token.token,
+        expires_at=invite_token.expires_at,
+        created_at=invite_token.created_at,
+        is_used=invite_token.is_used,
+        is_expired=invite_token.is_expired,
+        is_valid=invite_token.is_valid,
+        note=note,
+        learner_id=invite_token.learner_id,
+        learner_name=learner.display_name if learner else None,
+    )
+
+
 @router.post("/{tenant_id}/invitations", response_model=InviteTokenResponse)
 async def create_invite_token(
     tenant_id: int,
@@ -44,27 +60,34 @@ async def create_invite_token(
             detail="Only teachers and admins can create invite tokens"
         )
     
+    learner = None
+    if request_data.learner_id:
+        learner = await crud.get_learner(session, current_tenant, request_data.learner_id)
+        if not learner:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Learner not found"
+            )
+        if learner.bot_user_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Learner is already linked to a Telegram account"
+            )
+
     # Create the invite token
     invite_token = await crud.create_invite_token(
         session=session,
         current_tenant=current_tenant,
         created_by_user_id=current_user.id,
         expires_in_days=request_data.expires_in_days or 30,
+        learner_id=learner.id if learner else None,
     )
     
     await session.commit()
     await session.refresh(invite_token)
+    invite_token.learner = learner
     
-    return InviteTokenResponse(
-        id=invite_token.id,
-        token=invite_token.token,
-        expires_at=invite_token.expires_at,
-        created_at=invite_token.created_at,
-        is_used=invite_token.is_used,
-        is_expired=invite_token.is_expired,
-        is_valid=invite_token.is_valid,
-        note=request_data.note,
-    )
+    return _to_invite_response(invite_token, note=request_data.note)
 
 
 @router.get("/{tenant_id}/invitations", response_model=PaginatedResponse[InviteTokenResponse])
@@ -102,18 +125,7 @@ async def list_invite_tokens(
         offset=pagination.offset,
     )
     
-    items = [
-        InviteTokenResponse(
-            id=token.id,
-            token=token.token,
-            expires_at=token.expires_at,
-            created_at=token.created_at,
-            is_used=token.is_used,
-            is_expired=token.is_expired,
-            is_valid=token.is_valid,
-        )
-        for token in tokens
-    ]
+    items = [_to_invite_response(token) for token in tokens]
     
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 

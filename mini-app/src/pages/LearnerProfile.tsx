@@ -14,6 +14,7 @@ import {
   Tag,
   message,
   Dropdown,
+  Input,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -25,6 +26,7 @@ import {
   PlusOutlined,
   DollarOutlined,
   DisconnectOutlined,
+  LinkOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -202,6 +204,36 @@ const LearnerProfile: React.FC = () => {
     },
   });
 
+  const createInviteMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post(`/learners/${learnerId}/invite`);
+      return data as { token: string };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
+      Modal.success({
+        title: t('learnerProfile.inviteCreatedTitle'),
+        content: (
+          <Space direction="vertical" style={{ width: '100%' }}>
+            <Text>{t('learnerProfile.inviteCreatedDescription')}</Text>
+            <Input.TextArea value={data.token} readOnly autoSize />
+            <Button
+              onClick={() => {
+                navigator.clipboard?.writeText(data.token);
+                message.success(t('common.copied'));
+              }}
+            >
+              {t('common.copy')}
+            </Button>
+          </Space>
+        ),
+      });
+    },
+    onError: (err: Error) => {
+      message.error(t('errors.createFailed', { message: err.message }));
+    },
+  });
+
   // Delete learner mutation
   const deleteMutation = useMutation({
     mutationFn: async () => {
@@ -347,6 +379,16 @@ const LearnerProfile: React.FC = () => {
                             onClick={handleUnlinkAccount}
                           >
                             {t('learnerProfile.unlinkAccountAction')}
+                          </Button>
+                        )}
+                        {!learner.chat_id && (
+                          <Button
+                            size="small"
+                            icon={<LinkOutlined />}
+                            loading={createInviteMutation.isPending}
+                            onClick={() => createInviteMutation.mutate()}
+                          >
+                            {t('learnerProfile.createInviteAction')}
                           </Button>
                         )}
                       </div>

@@ -176,6 +176,7 @@ class InviteToken(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey('learners.id', ondelete='SET NULL'), nullable=True, index=True)
     token = Column(String, nullable=False, unique=True, index=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
@@ -184,6 +185,7 @@ class InviteToken(Base):
     
     # Relationships
     tenant = relationship('Tenant', back_populates='invite_tokens')
+    learner = relationship('Learner', back_populates='invite_tokens')
     created_by = relationship('User', back_populates='created_invite_tokens')
     
     @property
@@ -276,6 +278,7 @@ class Learner(Base):
         cascade='all, delete-orphan',
         order_by='LearnerAccountLink.linked_at.desc()',
     )
+    invite_tokens = relationship('InviteToken', back_populates='learner')
 
     __table_args__ = (
         Index('ix_learners_tenant_display_name', 'tenant_id', 'display_name'),

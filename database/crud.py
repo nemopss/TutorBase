@@ -920,7 +920,7 @@ async def create_learner_from_chat_id(
     session: AsyncSession,
     current_tenant: CurrentTenant,
     *,
-    chat_id: int,
+    chat_id: int | None,
     display_name: str,
     notes: Optional[str] = None,
     notifications_enabled: bool = True,
@@ -947,6 +947,24 @@ async def create_learner_from_chat_id(
     """
     now_utc = datetime.now(timezone.utc)
     
+    final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
+
+    if chat_id is None:
+        from decimal import Decimal
+        lesson_rate_decimal = Decimal(str(lesson_rate)) if lesson_rate is not None else None
+
+        learner = Learner(
+            bot_user_id=None,
+            display_name=display_name,
+            notes=notes,
+            notifications_enabled=False,
+            created_at=now_utc,
+            tenant_id=final_tenant_id,
+            lesson_rate=lesson_rate_decimal,
+        )
+        session.add(learner)
+        return learner
+
     # Try to get existing BotUser
     bot_user = await get_bot_user_by_chat_id(session, chat_id)
     
@@ -972,9 +990,6 @@ async def create_learner_from_chat_id(
             existing_learner.notifications_enabled = notifications_enabled
             session.add(existing_learner)
         return existing_learner
-    
-    # Create new learner
-    final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
     
     # Convert lesson_rate to Decimal if provided
     from decimal import Decimal
@@ -2397,6 +2412,7 @@ async def create_invite_token(
     current_tenant: CurrentTenant,
     created_by_user_id: int,
     expires_in_days: int = 30,
+    learner_id: int | None = None,
 ) -> InviteToken:
     """Create new invite token for tenant.
     
@@ -2430,6 +2446,7 @@ async def create_invite_token(
     
     invite_token = InviteToken(
         tenant_id=current_tenant.tenant_id,
+        learner_id=learner_id,
         token=token,
         expires_at=expires_at,
         created_by_user_id=created_by_user_id,
@@ -2460,6 +2477,7 @@ async def get_invite_token_by_token(
         select(InviteToken)
         .options(
             selectinload(InviteToken.tenant),
+            selectinload(InviteToken.learner),
             selectinload(InviteToken.created_by)
         )
         .where(InviteToken.token == token)
@@ -2499,6 +2517,7 @@ async def consume_invite_token_for_registration(
         select(InviteToken)
         .options(
             selectinload(InviteToken.tenant),
+            selectinload(InviteToken.learner),
             selectinload(InviteToken.created_by),
         )
         .where(InviteToken.id == token_id)
@@ -2568,7 +2587,8 @@ async def list_invite_tokens(
     stmt = (
         select(InviteToken)
         .options(
-            selectinload(InviteToken.created_by)
+            selectinload(InviteToken.created_by),
+            selectinload(InviteToken.learner),
         )
         .where(InviteToken.tenant_id == current_tenant.tenant_id)
         .order_by(InviteToken.created_at.desc())

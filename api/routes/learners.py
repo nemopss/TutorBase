@@ -21,6 +21,7 @@ from api.schemas.learners import (
     UpdateLearnerRequest,
     UnlinkLearnerAccountRequest,
 )
+from api.schemas.registration import InviteTokenResponse
 from api.schemas.schedule import (
     LearnerScheduleResponse,
     UpdateScheduleRequest,
@@ -258,6 +259,50 @@ async def unlink_learner_account(
         bot_user_id=None,
         lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
         next_lesson_date=next_lesson_dates.get(learner_id),
+    )
+
+
+@router.post("/{learner_id}/invite", response_model=InviteTokenResponse, status_code=201)
+async def create_learner_invite(
+    learner_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> InviteTokenResponse:
+    """Create a personal invite token for an unlinked learner."""
+    learner = await learner_service.get_learner_by_id(
+        session,
+        current_tenant,
+        learner_id,
+    )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    if learner.bot_user_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Learner is already linked to a Telegram account"
+        )
+
+    invite_token = await crud.create_invite_token(
+        session=session,
+        current_tenant=current_tenant,
+        created_by_user_id=current_user.id,
+        expires_in_days=30,
+        learner_id=learner.id,
+    )
+    await session.flush()
+    invite_token.learner = learner
+
+    return InviteTokenResponse(
+        id=invite_token.id,
+        token=invite_token.token,
+        expires_at=invite_token.expires_at,
+        created_at=invite_token.created_at,
+        is_used=invite_token.is_used,
+        is_expired=invite_token.is_expired,
+        is_valid=invite_token.is_valid,
+        learner_id=learner.id,
+        learner_name=learner.display_name,
     )
 
 
