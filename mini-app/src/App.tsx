@@ -33,6 +33,7 @@ const Lessons = lazy(() => import('./pages/Lessons'));
 const Learners = lazy(() => import('./pages/Learners'));
 const PlatformConsole = lazy(() => import('./pages/PlatformConsole'));
 const AccessDenied = lazy(() => import('./pages/AccessDenied'));
+const TenantAccessBlocked = lazy(() => import('./pages/TenantAccessBlocked'));
 const RoleSelectionScreen = lazy(() => import('./pages/RoleSelectionScreen'));
 const TutorRegistrationForm = lazy(() => import('./pages/TutorRegistrationForm'));
 const StudentRegistrationForm = lazy(() => import('./pages/StudentRegistrationForm'));
@@ -52,7 +53,7 @@ const PageLoader = () => (
 );
 
 function App() {
-  const { isLoading, isAuthenticated, user } = useAuth();
+  const { isLoading, isAuthenticated, user, tenantAccess, isTenantAccessLoading } = useAuth();
   const location = useLocation();
   const { tg, autoFullscreenEnabled, requestFullscreen } = useTelegram();
   const { resolvedTheme } = useTheme();
@@ -91,7 +92,7 @@ function App() {
 
   const antdTheme = generateAntdTheme(resolvedTheme);
 
-  if (isLoading) {
+  if (isLoading || (isAuthenticated && isTenantAccessLoading && !location.pathname.startsWith('/platform'))) {
     return <PageLoader />;
   }
 
@@ -116,6 +117,20 @@ function App() {
 
   if (!hasAccess) {
     return <AccessDenied />;
+  }
+
+  if (
+    tenantAccess?.mode === 'blocked' &&
+    !tenantAccess.bypass_access_restrictions &&
+    !location.pathname.startsWith('/platform')
+  ) {
+    return (
+      <ConfigProvider theme={antdTheme} locale={currentLocale}>
+        <Suspense fallback={<PageLoader />}>
+          <TenantAccessBlocked />
+        </Suspense>
+      </ConfigProvider>
+    );
   }
 
   if (location.pathname.startsWith('/platform')) {

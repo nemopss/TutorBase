@@ -35,6 +35,7 @@ def _access_response(
         is_lifetime=snapshot.is_lifetime,
         reason=snapshot.reason,
         notes=access.notes if access else None,
+        bypass_access_restrictions=False,
     )
 
 

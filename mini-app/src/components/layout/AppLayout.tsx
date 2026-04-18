@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Layout, Menu, Drawer, Button, Space, Tag, type MenuProps } from 'antd';
+import { Alert, Layout, Menu, Drawer, Button, Space, Tag, type MenuProps } from 'antd';
 import { Link, useLocation } from 'react-router-dom';
 import {
   HomeOutlined,
@@ -41,9 +41,27 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     return saved === 'true';
   });
-  const { user, isSuperAdmin } = useAuth();
+  const { user, isSuperAdmin, tenantAccess } = useAuth();
   const hasStaffAccess = isSuperAdmin || user?.role === 'teacher';
   const isStudent = user?.role === 'viewer';
+  const accessUntil = tenantAccess?.access_until ? new Date(tenantAccess.access_until) : null;
+  const accessDaysLeft = accessUntil
+    ? Math.ceil((accessUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+  const shouldShowAccessWarning = hasStaffAccess && !isStudent && (
+    tenantAccess?.status === 'grace' ||
+    ((tenantAccess?.status === 'trial' || tenantAccess?.status === 'active') &&
+      accessDaysLeft !== null &&
+      accessDaysLeft <= 3)
+  );
+  const accessWarningMessage = tenantAccess?.status === 'grace'
+    ? 'Идёт grace-период доступа'
+    : 'Доступ скоро закончится';
+  const accessWarningDescription = tenantAccess?.status === 'grace'
+    ? 'Можно продолжать важное обслуживание кабинета, но доступ нужно продлить.'
+    : accessDaysLeft !== null
+      ? `Осталось дней: ${Math.max(accessDaysLeft, 0)}. Продлите доступ заранее.`
+      : 'Продлите доступ заранее.';
 
   const handleSidebarCollapse = (collapsed: boolean) => {
     setSidebarCollapsed(collapsed);
@@ -380,6 +398,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           overflow: isMobile ? undefined : 'auto',
           boxSizing: 'border-box',
         }}>
+          {shouldShowAccessWarning && (
+            <Alert
+              type={tenantAccess?.status === 'grace' ? 'warning' : 'info'}
+              showIcon
+              message={accessWarningMessage}
+              description={accessWarningDescription}
+              style={{ marginBottom: 16 }}
+            />
+          )}
           {children}
         </Content>
       </Layout>

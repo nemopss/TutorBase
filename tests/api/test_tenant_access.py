@@ -69,6 +69,12 @@ async def test_expired_tenant_blocks_regular_tutor_requests(
     assert response.status_code == 402
     assert response.json()["detail"]["code"] == "TENANT_ACCESS_EXPIRED"
 
+    access_response = await client.get("/api/v1/tenant-access/current", headers=auth_headers(teacher_user))
+    assert access_response.status_code == 200
+    assert access_response.json()["status"] == "expired"
+    assert access_response.json()["mode"] == "blocked"
+    assert access_response.json()["bypass_access_restrictions"] is False
+
 
 @pytest.mark.asyncio
 async def test_suspended_tenant_blocks_regular_tutor_requests(
@@ -125,6 +131,12 @@ async def test_platform_admin_can_debug_expired_tenant_context(
     response = await client.get("/api/v1/learners", headers=switched_headers)
 
     assert response.status_code == 200
+
+    access_response = await client.get("/api/v1/tenant-access/current", headers=switched_headers)
+    assert access_response.status_code == 200
+    assert access_response.json()["status"] == "expired"
+    assert access_response.json()["mode"] == "blocked"
+    assert access_response.json()["bypass_access_restrictions"] is True
 
 
 @pytest.mark.asyncio

@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 class TenantAccessResponse(BaseModel):
-    tenant_id: int
+    tenant_id: Optional[int]
     status: str
     mode: str
     access_until: Optional[datetime] = None
@@ -15,6 +15,7 @@ class TenantAccessResponse(BaseModel):
     is_lifetime: bool
     reason: Optional[str] = None
     notes: Optional[str] = None
+    bypass_access_restrictions: bool = False
 
 
 class PlatformTenantResponse(BaseModel):

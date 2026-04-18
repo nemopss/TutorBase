@@ -290,6 +290,99 @@ def _tenant_context_from_access(
     )
 
 
+async def _build_current_tenant_context(
+    *,
+    credentials: HTTPAuthorizationCredentials | None,
+    user: User,
+    session: AsyncSession,
+    bypass_access_restrictions: bool,
+) -> CurrentTenant:
+    is_super_admin = is_platform_admin(user)
+
+    # For super-admins, check if they're switching tenant context via JWT
+    if is_super_admin and credentials:
+        try:
+            payload = decode_token(credentials.credentials, TokenType.ACCESS)
+            jwt_tenant_id = payload.get("tenant_id")
+
+            # Super-admin can switch to any active tenant or stay global (None)
+            if jwt_tenant_id is not None:
+                tenant = await session.get(Tenant, jwt_tenant_id)
+                if not tenant:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Tenant not found"
+                    )
+                if not tenant.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Tenant is inactive"
+                    )
+                snapshot = await _resolve_tenant_access(
+                    session,
+                    tenant,
+                    bypass_restrictions=True,
+                )
+                # When super-admin switches to specific tenant, treat as non-super-admin for data filtering.
+                return _tenant_context_from_access(
+                    tenant,
+                    is_super_admin=False,
+                    snapshot=snapshot,
+                    bypass_restrictions=True,
+                )
+
+            # Super-admin in global context (no tenant filter)
+            return CurrentTenant(tenant_id=None, is_super_admin=True, tenant=None, bypass_access_restrictions=True)
+
+        except TokenVerificationError:
+            # Fallback to user's default tenant
+            pass
+
+    # For regular users, ensure JWT tenant_id matches user's tenant_id
+    if not is_super_admin and credentials:
+        try:
+            payload = decode_token(credentials.credentials, TokenType.ACCESS)
+            jwt_tenant_id = payload.get("tenant_id")
+
+            if jwt_tenant_id != user.tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Token tenant mismatch - possible security violation"
+                )
+        except TokenVerificationError:
+            # Token is invalid, but get_current_user should have caught this
+            pass
+
+    # Load and validate user's tenant
+    tenant = None
+    if user.tenant_id is not None:
+        tenant = await session.get(Tenant, user.tenant_id)
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User's tenant not found"
+            )
+        if not tenant.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User's tenant is inactive"
+            )
+        snapshot = await _resolve_tenant_access(
+            session,
+            tenant,
+            bypass_restrictions=bypass_access_restrictions,
+        )
+        context_bypass = is_super_admin and bypass_access_restrictions
+        return _tenant_context_from_access(
+            tenant,
+            is_super_admin=is_super_admin,
+            snapshot=snapshot,
+            bypass_restrictions=context_bypass,
+        )
+
+    return CurrentTenant(tenant_id=user.tenant_id, is_super_admin=is_super_admin, tenant=tenant)
+
+
 async def get_current_tenant(
     credentials: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
     user: User = Depends(get_current_user),
@@ -316,79 +409,28 @@ async def get_current_tenant(
     Raises:
         HTTPException: 403 if tenant not found, inactive, or token mismatch detected
     """
-    is_super_admin = is_platform_admin(user)
-    
-    # For super-admins, check if they're switching tenant context via JWT
-    if is_super_admin and credentials:
-        try:
-            payload = decode_token(credentials.credentials, TokenType.ACCESS)
-            jwt_tenant_id = payload.get("tenant_id")
-            
-            # Super-admin can switch to any active tenant or stay global (None)
-            if jwt_tenant_id is not None:
-                tenant = await session.get(Tenant, jwt_tenant_id)
-                if not tenant:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN, 
-                        detail="Tenant not found"
-                    )
-                if not tenant.is_active:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN, 
-                        detail="Tenant is inactive"
-                    )
-                snapshot = await _resolve_tenant_access(session, tenant, bypass_restrictions=True)
-                # When super-admin switches to specific tenant, treat as non-super-admin for data filtering
-                # This ensures data is filtered by tenant_id
-                return _tenant_context_from_access(
-                    tenant,
-                    is_super_admin=False,
-                    snapshot=snapshot,
-                    bypass_restrictions=True,
-                )
-            
-            # Super-admin in global context (no tenant filter)
-            return CurrentTenant(tenant_id=None, is_super_admin=True, tenant=None, bypass_access_restrictions=True)
-            
-        except TokenVerificationError:
-            # Fallback to user's default tenant
-            pass
-    
-    # For regular users, ensure JWT tenant_id matches user's tenant_id
-    if not is_super_admin and credentials:
-        try:
-            payload = decode_token(credentials.credentials, TokenType.ACCESS)
-            jwt_tenant_id = payload.get("tenant_id")
-            
-            if jwt_tenant_id != user.tenant_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Token tenant mismatch - possible security violation"
-                )
-        except TokenVerificationError:
-            # Token is invalid, but get_current_user should have caught this
-            pass
-    
-    # Load and validate user's tenant
-    tenant = None
-    if user.tenant_id is not None:
-        tenant = await session.get(Tenant, user.tenant_id)
-        if not tenant:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User's tenant not found"
-            )
-        if not tenant.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User's tenant is inactive"
-            )
-        snapshot = await _resolve_tenant_access(session, tenant, bypass_restrictions=False)
-        return _tenant_context_from_access(
-            tenant,
-            is_super_admin=is_super_admin,
-            snapshot=snapshot,
-            bypass_restrictions=False,
-        )
-    
-    return CurrentTenant(tenant_id=user.tenant_id, is_super_admin=is_super_admin, tenant=tenant)
+    return await _build_current_tenant_context(
+        credentials=credentials,
+        user=user,
+        session=session,
+        bypass_access_restrictions=False,
+    )
+
+
+async def get_current_tenant_with_access_override(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CurrentTenant:
+    """Resolve tenant context without blocking expired/suspended access.
+
+    Use this only for endpoints that must render access-state UI or let a
+    platform operator inspect a blocked tenant. It still validates the JWT tenant
+    binding, tenant existence and tenant activity.
+    """
+    return await _build_current_tenant_context(
+        credentials=credentials,
+        user=user,
+        session=session,
+        bypass_access_restrictions=True,
+    )
