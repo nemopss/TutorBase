@@ -40,6 +40,7 @@ from api.security import (
 )
 from config import config
 from database import crud
+from services import tenant_access_service
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -127,20 +128,18 @@ async def _persist_user(session: AsyncSession, current_tenant: CurrentTenant, us
     display_name = _build_display_name(user_data)
     user = await crud.get_user_by_telegram_id(session, telegram_id)
     now = datetime.now(timezone.utc)
-    is_admin = telegram_id in config.ADMINS
 
     if user is None:
         # НОВЫЙ ПОЛЬЗОВАТЕЛЬ - требуется регистрация!
         # Возвращаем None, чтобы login endpoint мог обработать это
         return None
     else:
-        role_update = "admin" if is_admin and user.role != "admin" else None
         user = await crud.update_user_login_metadata(
             session,
             user,
             username=username,
             display_name=display_name,
-            role=role_update,
+            role=None,
             last_login_at=now,
         )
     await session.flush()
@@ -301,13 +300,12 @@ async def browser_telegram_login(
             "Browser access is currently available only for teachers and admins.",
         )
 
-    role_update = "admin" if telegram_id in config.ADMINS and user.role != "admin" else None
     user = await crud.update_user_login_metadata(
         session,
         user,
         username=telegram_user.get("username"),
         display_name=_build_display_name(telegram_user),
-        role=role_update,
+        role=None,
         last_login_at=datetime.now(timezone.utc),
     )
     await session.flush()
@@ -486,6 +484,7 @@ async def register_tutor(
     )
     session.add(tenant)
     await session.flush()  # Get tenant.id
+    await tenant_access_service.create_trial_access(session, tenant.id)
     
     # Create user with teacher role
     display_name = registration_data.tutor_name or telegram_display_name

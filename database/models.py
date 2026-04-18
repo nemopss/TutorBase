@@ -124,6 +124,45 @@ class User(Base):
         back_populates='user',
     )
 
+
+class TenantAccess(Base):
+    """SaaS access state for a tutor tenant."""
+    __tablename__ = 'tenant_access'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    status = Column(String(32), nullable=False, default='lifetime')
+    access_until = Column(DateTime(timezone=True), nullable=True)
+    grace_until = Column(DateTime(timezone=True), nullable=True)
+    notes = Column(Text, nullable=True)
+    updated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant', back_populates='access')
+    updated_by = relationship('User', foreign_keys=[updated_by_user_id])
+
+    __table_args__ = (
+        Index('ix_tenant_access_status_until', 'status', 'access_until'),
+    )
+
+
+class TenantAccessEvent(Base):
+    """Audit log for manual tenant access changes."""
+    __tablename__ = 'tenant_access_events'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False, index=True)
+    actor_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    action = Column(String(64), nullable=False)
+    previous_state = Column(JSON, nullable=True)
+    new_state = Column(JSON, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant', back_populates='access_events')
+    actor = relationship('User', foreign_keys=[actor_user_id])
+
 class Application(Base):
     """Student application model from Telegram bot.
     
@@ -694,6 +733,8 @@ class Tenant(Base):
     invite_tokens = relationship('InviteToken', back_populates='tenant')
     payments = relationship('Payment', back_populates='tenant')
     learner_account_links = relationship('LearnerAccountLink', back_populates='tenant')
+    access = relationship('TenantAccess', back_populates='tenant', uselist=False, cascade='all, delete-orphan')
+    access_events = relationship('TenantAccessEvent', back_populates='tenant', cascade='all, delete-orphan')
 
 
 # Import models from the new notification bounded context so they share the same

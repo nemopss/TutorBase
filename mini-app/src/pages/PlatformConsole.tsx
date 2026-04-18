@@ -15,6 +15,18 @@ interface Tenant {
   slug: string;
   contact_email?: string | null;
   is_active: boolean;
+  access: TenantAccess;
+}
+
+interface TenantAccess {
+  tenant_id: number;
+  status: string;
+  mode: string;
+  access_until?: string | null;
+  grace_until?: string | null;
+  is_lifetime: boolean;
+  reason?: string | null;
+  notes?: string | null;
 }
 
 interface TenantListResponse {
@@ -30,6 +42,7 @@ const PlatformConsole = () => {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
   const [switchingTenantId, setSwitchingTenantId] = useState<number | 'global' | null>(null);
+  const [accessActionKey, setAccessActionKey] = useState<string | null>(null);
 
   const activeTenant = useMemo(
     () => tenants.find((tenant) => tenant.id === tenantId) ?? null,
@@ -39,7 +52,7 @@ const PlatformConsole = () => {
   const fetchTenants = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get<TenantListResponse>('/tenants', {
+      const response = await api.get<TenantListResponse>('/platform/tenants', {
         params: { limit: 100, offset: 0 },
       });
       setTenants(response.data.items);
@@ -64,6 +77,64 @@ const PlatformConsole = () => {
     } catch (error: any) {
       message.error(error?.message ?? 'Не удалось сменить контекст');
       setSwitchingTenantId(null);
+    }
+  };
+
+  const formatAccessDate = (value?: string | null) => {
+    if (!value) return null;
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+    }).format(new Date(value));
+  };
+
+  const accessTag = (access: TenantAccess) => {
+    const statusMap: Record<string, { label: string; color: string }> = {
+      trial: { label: 'Триал', color: 'blue' },
+      active: { label: 'Оплачен', color: 'green' },
+      grace: { label: 'Grace', color: 'gold' },
+      expired: { label: 'Истёк', color: 'red' },
+      lifetime: { label: 'Вечный', color: 'purple' },
+      suspended: { label: 'Suspended', color: 'volcano' },
+    };
+    const item = statusMap[access.status] ?? { label: access.status, color: 'default' };
+    return <Tag color={item.color}>{item.label}</Tag>;
+  };
+
+  const accessText = (access: TenantAccess) => {
+    if (access.is_lifetime) return 'без срока';
+    const accessUntil = formatAccessDate(access.access_until);
+    const graceUntil = formatAccessDate(access.grace_until);
+    if (access.status === 'expired') return accessUntil ? `истёк ${accessUntil}` : 'истёк';
+    if (access.status === 'grace') return graceUntil ? `grace до ${graceUntil}` : 'grace';
+    if (access.status === 'suspended') return 'приостановлен вручную';
+    return accessUntil ? `до ${accessUntil}` : 'срок не указан';
+  };
+
+  const handleAccessAction = async (
+    tenant: Tenant,
+    action: 'grant' | 'lifetime' | 'suspend' | 'resume',
+  ) => {
+    const key = `${tenant.id}:${action}`;
+    setAccessActionKey(key);
+    try {
+      const payload = action === 'grant' || action === 'resume'
+        ? { days: 30 }
+        : {};
+      const response = await api.post<TenantAccess>(
+        `/platform/tenants/${tenant.id}/access/${action}`,
+        payload,
+      );
+      setTenants((items) => items.map((item) => (
+        item.id === tenant.id ? { ...item, access: response.data } : item
+      )));
+      message.success('Доступ обновлён');
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      message.error(typeof detail === 'string' ? detail : 'Не удалось обновить доступ');
+    } finally {
+      setAccessActionKey(null);
     }
   };
 
@@ -178,6 +249,39 @@ const PlatformConsole = () => {
                     >
                       {tenant.id === tenantId ? 'Открыт' : 'Открыть кабинет'}
                     </Button>,
+                    <Button
+                      key="grant"
+                      loading={accessActionKey === `${tenant.id}:grant`}
+                      onClick={() => handleAccessAction(tenant, 'grant')}
+                    >
+                      +30 дней
+                    </Button>,
+                    <Button
+                      key="lifetime"
+                      loading={accessActionKey === `${tenant.id}:lifetime`}
+                      disabled={tenant.access.is_lifetime}
+                      onClick={() => handleAccessAction(tenant, 'lifetime')}
+                    >
+                      Вечный
+                    </Button>,
+                    tenant.access.status === 'suspended' ? (
+                      <Button
+                        key="resume"
+                        loading={accessActionKey === `${tenant.id}:resume`}
+                        onClick={() => handleAccessAction(tenant, 'resume')}
+                      >
+                        Resume
+                      </Button>
+                    ) : (
+                      <Button
+                        key="suspend"
+                        danger
+                        loading={accessActionKey === `${tenant.id}:suspend`}
+                        onClick={() => handleAccessAction(tenant, 'suspend')}
+                      >
+                        Suspend
+                      </Button>
+                    ),
                   ]}
                 >
                   <List.Item.Meta
@@ -187,12 +291,14 @@ const PlatformConsole = () => {
                         <Tag color={tenant.is_active ? 'green' : 'default'}>
                           {tenant.is_active ? 'Активен' : 'Отключён'}
                         </Tag>
+                        {accessTag(tenant.access)}
                         {tenant.id === tenantId && <Tag color="blue">Текущий</Tag>}
                       </Space>
                     }
                     description={
                       <Space direction="vertical" size={0}>
                         <Text type="secondary">ID: {tenant.id} · {tenant.slug}</Text>
+                        <Text type="secondary">Доступ: {accessText(tenant.access)}</Text>
                         <Text type="secondary">{tenant.contact_email ?? 'Email не указан'}</Text>
                       </Space>
                     }

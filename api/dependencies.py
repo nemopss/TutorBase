@@ -37,6 +37,7 @@ Usage in endpoints:
         pass
 """
 from collections.abc import AsyncGenerator
+from datetime import datetime
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -47,6 +48,7 @@ from database.engine import async_session
 from api.security import TokenType, TokenVerificationError, decode_token
 from config import config
 from database import crud
+from services import tenant_access_service
 from utils.cache import cached
 
 _http_bearer = HTTPBearer(auto_error=False)
@@ -226,6 +228,66 @@ class CurrentTenant:
     tenant_id: int | None
     is_super_admin: bool
     tenant: Tenant | None = None
+    access_status: str | None = None
+    access_mode: str | None = None
+    access_until: datetime | None = None
+    grace_until: datetime | None = None
+    access_reason: str | None = None
+    bypass_access_restrictions: bool = False
+
+
+async def _resolve_tenant_access(
+    session: AsyncSession,
+    tenant: Tenant,
+    *,
+    bypass_restrictions: bool = False,
+) -> tenant_access_service.TenantAccessSnapshot:
+    snapshot = await tenant_access_service.get_access_snapshot(session, tenant.id)
+    if bypass_restrictions or not snapshot.is_blocked:
+        return snapshot
+
+    if snapshot.status == tenant_access_service.ACCESS_STATUS_SUSPENDED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "TENANT_ACCESS_SUSPENDED",
+                "message": "Tenant access is suspended",
+                "tenant_id": tenant.id,
+                "status": snapshot.status,
+            },
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail={
+            "code": "TENANT_ACCESS_EXPIRED",
+            "message": "Tenant access has expired",
+            "tenant_id": tenant.id,
+            "status": snapshot.status,
+            "access_until": snapshot.access_until.isoformat() if snapshot.access_until else None,
+            "grace_until": snapshot.grace_until.isoformat() if snapshot.grace_until else None,
+        },
+    )
+
+
+def _tenant_context_from_access(
+    tenant: Tenant,
+    *,
+    is_super_admin: bool,
+    snapshot: tenant_access_service.TenantAccessSnapshot,
+    bypass_restrictions: bool = False,
+) -> CurrentTenant:
+    return CurrentTenant(
+        tenant_id=tenant.id,
+        is_super_admin=is_super_admin,
+        tenant=tenant,
+        access_status=snapshot.status,
+        access_mode=snapshot.mode,
+        access_until=snapshot.access_until,
+        grace_until=snapshot.grace_until,
+        access_reason=snapshot.reason,
+        bypass_access_restrictions=bypass_restrictions,
+    )
 
 
 async def get_current_tenant(
@@ -275,12 +337,18 @@ async def get_current_tenant(
                         status_code=status.HTTP_403_FORBIDDEN, 
                         detail="Tenant is inactive"
                     )
+                snapshot = await _resolve_tenant_access(session, tenant, bypass_restrictions=True)
                 # When super-admin switches to specific tenant, treat as non-super-admin for data filtering
                 # This ensures data is filtered by tenant_id
-                return CurrentTenant(tenant_id=jwt_tenant_id, is_super_admin=False, tenant=tenant)
+                return _tenant_context_from_access(
+                    tenant,
+                    is_super_admin=False,
+                    snapshot=snapshot,
+                    bypass_restrictions=True,
+                )
             
             # Super-admin in global context (no tenant filter)
-            return CurrentTenant(tenant_id=None, is_super_admin=True, tenant=None)
+            return CurrentTenant(tenant_id=None, is_super_admin=True, tenant=None, bypass_access_restrictions=True)
             
         except TokenVerificationError:
             # Fallback to user's default tenant
@@ -315,5 +383,12 @@ async def get_current_tenant(
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail="User's tenant is inactive"
             )
+        snapshot = await _resolve_tenant_access(session, tenant, bypass_restrictions=False)
+        return _tenant_context_from_access(
+            tenant,
+            is_super_admin=is_super_admin,
+            snapshot=snapshot,
+            bypass_restrictions=False,
+        )
     
     return CurrentTenant(tenant_id=user.tenant_id, is_super_admin=is_super_admin, tenant=tenant)
