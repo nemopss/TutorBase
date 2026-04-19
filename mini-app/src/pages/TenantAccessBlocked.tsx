@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
 import type { TenantAccess } from '../auth/AuthProvider';
 import { useTheme } from '../theme/ThemeProvider';
+import { appEnv } from '../env';
 
 const { Paragraph, Text, Title } = Typography;
 
@@ -27,6 +28,14 @@ const formatDate = (value?: string | null) => {
   }).format(new Date(value));
 };
 
+const getSupportContactUrl = () => {
+  if (appEnv.supportContactUrl.trim()) {
+    return appEnv.supportContactUrl.trim();
+  }
+  const botUsername = appEnv.telegramBotUsername.trim().replace(/^@/, '');
+  return botUsername ? `https://t.me/${botUsername}` : null;
+};
+
 const TenantAccessBlocked = ({ preview, onExitPreview }: TenantAccessBlockedProps) => {
   const { user, tenantAccess, isSuperAdmin, logout, refreshTenantAccess } = useAuth();
   const { resolvedTheme } = useTheme();
@@ -38,6 +47,7 @@ const TenantAccessBlocked = ({ preview, onExitPreview }: TenantAccessBlockedProp
   const isSuspended = effectiveAccess?.status === 'suspended';
   const accessUntil = formatDate(effectiveAccess?.access_until);
   const graceUntil = formatDate(effectiveAccess?.grace_until);
+  const supportContactUrl = getSupportContactUrl();
 
   const title = isStudent
     ? 'Кабинет временно недоступен'
@@ -112,13 +122,31 @@ const TenantAccessBlocked = ({ preview, onExitPreview }: TenantAccessBlockedProp
 
         <Space direction="vertical" style={{ width: '100%' }}>
           {isPreview ? (
-            <Button type="primary" onClick={onExitPreview} block>
-              Вернуться в Консоль
-            </Button>
+            <>
+              {!isStudent && (
+                <Button type="primary" disabled block>
+                  Запросить продление или данные
+                </Button>
+              )}
+              <Button onClick={onExitPreview} block>
+                Вернуться в Консоль
+              </Button>
+            </>
           ) : (
             <>
+              {!isStudent && (
+                <Button
+                  type="primary"
+                  href={supportContactUrl ?? undefined}
+                  target={supportContactUrl ? '_blank' : undefined}
+                  rel={supportContactUrl ? 'noreferrer' : undefined}
+                  disabled={!supportContactUrl}
+                  block
+                >
+                  Запросить продление или данные
+                </Button>
+              )}
               <Button
-                type="primary"
                 icon={<ReloadOutlined />}
                 onClick={refreshTenantAccess}
                 block

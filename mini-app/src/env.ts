@@ -5,4 +5,5 @@ export const appEnv = {
   devMode: import.meta.env.VITE_DEV_MODE === 'true',
   devInitData: import.meta.env.VITE_DEV_INIT_DATA ?? 'dev',
   telegramBotUsername: import.meta.env.VITE_TELEGRAM_BOT_USERNAME ?? '',
+  supportContactUrl: import.meta.env.VITE_SUPPORT_CONTACT_URL ?? '',
 };
