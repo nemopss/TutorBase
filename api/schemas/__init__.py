@@ -138,6 +138,7 @@ from api.schemas.platform import (
     TenantAccessActionRequest,
     TenantAccessGrantRequest,
     TenantAccessResponse,
+    TenantAccessSyncResponse,
 )
 from api.schemas.metrics import (
     MetricsSummary,
@@ -251,6 +252,7 @@ __all__ = [
     'TenantAccessActionRequest',
     'TenantAccessGrantRequest',
     'TenantAccessResponse',
+    'TenantAccessSyncResponse',
     # Metrics
     'MetricsSummary',
     'DailyPoint',

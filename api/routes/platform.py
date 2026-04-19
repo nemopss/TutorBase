@@ -12,6 +12,7 @@ from api.schemas import (
     TenantAccessActionRequest,
     TenantAccessGrantRequest,
     TenantAccessResponse,
+    TenantAccessSyncResponse,
 )
 from database.models import Tenant, TenantAccess, User
 from services import tenant_access_service
@@ -100,6 +101,24 @@ async def get_platform_tenant(
         select(TenantAccess).where(TenantAccess.tenant_id == tenant_id)
     )
     return _tenant_response(tenant, access_result.scalar_one_or_none())
+
+
+@router.post("/access/sync", response_model=TenantAccessSyncResponse)
+async def sync_platform_tenant_access(
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _=Depends(admin_required),
+) -> TenantAccessSyncResponse:
+    result = await tenant_access_service.sync_expired_access_states(
+        session,
+        actor_user_id=current_user.id,
+    )
+    await session.commit()
+    return TenantAccessSyncResponse(
+        grace_started=result.grace_started,
+        expired=result.expired,
+        changed=result.changed,
+    )
 
 
 @router.post("/tenants/{tenant_id}/access/grant", response_model=TenantAccessResponse)

@@ -29,6 +29,12 @@ class PlatformTenantResponse(BaseModel):
     access: TenantAccessResponse
 
 
+class TenantAccessSyncResponse(BaseModel):
+    grace_started: int
+    expired: int
+    changed: int
+
+
 class TenantAccessGrantRequest(BaseModel):
     days: int = Field(30, ge=1, le=3650)
     notes: Optional[str] = Field(None, max_length=1000)

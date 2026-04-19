@@ -34,6 +34,12 @@ interface TenantListResponse {
   total: number;
 }
 
+interface TenantAccessSyncResponse {
+  grace_started: number;
+  expired: number;
+  changed: number;
+}
+
 const PlatformConsole = () => {
   const { tenantId, canSwitchTenant, switchTenant, logout } = useAuth();
   const { resolvedTheme } = useTheme();
@@ -43,6 +49,7 @@ const PlatformConsole = () => {
   const [loading, setLoading] = useState(false);
   const [switchingTenantId, setSwitchingTenantId] = useState<number | 'global' | null>(null);
   const [accessActionKey, setAccessActionKey] = useState<string | null>(null);
+  const [isSyncingAccess, setIsSyncingAccess] = useState(false);
 
   const activeTenant = useMemo(
     () => tenants.find((tenant) => tenant.id === tenantId) ?? null,
@@ -135,6 +142,21 @@ const PlatformConsole = () => {
       message.error(typeof detail === 'string' ? detail : 'Не удалось обновить доступ');
     } finally {
       setAccessActionKey(null);
+    }
+  };
+
+  const handleSyncAccess = async () => {
+    setIsSyncingAccess(true);
+    try {
+      const response = await api.post<TenantAccessSyncResponse>('/platform/access/sync');
+      await fetchTenants();
+      const { changed, grace_started, expired } = response.data;
+      message.success(`Синхронизация завершена: ${changed} изменений, grace: ${grace_started}, expired: ${expired}`);
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      message.error(typeof detail === 'string' ? detail : 'Не удалось синхронизировать доступы');
+    } finally {
+      setIsSyncingAccess(false);
     }
   };
 
@@ -286,9 +308,14 @@ const PlatformConsole = () => {
               <Title level={3} style={{ margin: 0 }}>Кабинеты</Title>
               <Text type="secondary">Всего: {total}</Text>
             </div>
-            <Button icon={<ReloadOutlined />} onClick={fetchTenants} loading={loading}>
-              Обновить
-            </Button>
+            <Space wrap>
+              <Button onClick={handleSyncAccess} loading={isSyncingAccess}>
+                Синхронизировать статусы
+              </Button>
+              <Button icon={<ReloadOutlined />} onClick={fetchTenants} loading={loading}>
+                Обновить
+              </Button>
+            </Space>
           </div>
 
           {loading ? (

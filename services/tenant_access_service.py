@@ -41,6 +41,16 @@ class TenantAccessSnapshot:
         return self.mode == ACCESS_MODE_BLOCKED
 
 
+@dataclass(frozen=True)
+class TenantAccessSyncResult:
+    grace_started: int = 0
+    expired: int = 0
+
+    @property
+    def changed(self) -> int:
+        return self.grace_started + self.expired
+
+
 def utc_now() -> datetime:
     return datetime.now(timezone.utc)
 
@@ -224,6 +234,81 @@ async def _record_event(
         created_at=utc_now(),
     )
     session.add(event)
+
+
+async def sync_expired_access_states(
+    session: AsyncSession,
+    *,
+    actor_user_id: int | None = None,
+    now: datetime | None = None,
+) -> TenantAccessSyncResult:
+    """Persist time-based access transitions for Console, audit and jobs."""
+    now = now or utc_now()
+    now = _as_aware(now) or utc_now()
+
+    result = await session.execute(
+        select(TenantAccess).where(
+            TenantAccess.status.in_(
+                [
+                    ACCESS_STATUS_TRIAL,
+                    ACCESS_STATUS_ACTIVE,
+                    ACCESS_STATUS_GRACE,
+                ]
+            )
+        )
+    )
+    access_rows = list(result.scalars().all())
+
+    grace_started = 0
+    expired = 0
+    for access in access_rows:
+        access_until = _as_aware(access.access_until)
+        grace_until = _as_aware(access.grace_until)
+        previous_state = _serialize_state(access)
+
+        if (
+            (grace_until and now > grace_until)
+            or (access_until and now > access_until and grace_until is None)
+        ):
+            if access.status != ACCESS_STATUS_EXPIRED:
+                access.status = ACCESS_STATUS_EXPIRED
+                access.updated_by_user_id = actor_user_id
+                access.updated_at = now
+                await _record_event(
+                    session,
+                    access=access,
+                    actor_user_id=actor_user_id,
+                    action="expired",
+                    previous_state=previous_state,
+                    notes="Access lifecycle sync",
+                )
+                expired += 1
+            continue
+
+        if (
+            access.status in {ACCESS_STATUS_TRIAL, ACCESS_STATUS_ACTIVE}
+            and access_until
+            and now > access_until
+            and grace_until
+            and now <= grace_until
+        ):
+            access.status = ACCESS_STATUS_GRACE
+            access.updated_by_user_id = actor_user_id
+            access.updated_at = now
+            await _record_event(
+                session,
+                access=access,
+                actor_user_id=actor_user_id,
+                action="grace_started",
+                previous_state=previous_state,
+                notes="Access lifecycle sync",
+            )
+            grace_started += 1
+
+    if grace_started or expired:
+        await session.flush()
+
+    return TenantAccessSyncResult(grace_started=grace_started, expired=expired)
 
 
 async def grant_access(

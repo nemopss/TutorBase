@@ -11,8 +11,11 @@ from api.security import create_access_token
 from database.models import Tenant, TenantAccess, TenantAccessEvent, User
 from services.tenant_access_service import (
     ACCESS_STATUS_ACTIVE,
+    ACCESS_STATUS_EXPIRED,
+    ACCESS_STATUS_GRACE,
     ACCESS_STATUS_LIFETIME,
     ACCESS_STATUS_SUSPENDED,
+    ACCESS_STATUS_TRIAL,
     utc_now,
 )
 from tests import factories
@@ -212,6 +215,100 @@ async def test_platform_access_actions_update_state_and_audit(
     )
     actions = [event.action for event in events_result.scalars().all()]
     assert actions == ["grant", "suspend", "grant_lifetime"]
+
+
+@pytest.mark.asyncio
+async def test_platform_access_sync_persists_lifecycle_transitions_once(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    super_admin_user: User,
+    tenant_1: Tenant,
+):
+    now = utc_now()
+    grace_tenant = await factories.create_tenant(db_session)
+    active_without_grace_tenant = await factories.create_tenant(db_session)
+    lifetime_tenant = await factories.create_tenant(db_session)
+    suspended_tenant = await factories.create_tenant(db_session)
+    await db_session.flush()
+
+    db_session.add_all(
+        [
+            TenantAccess(
+                tenant_id=tenant_1.id,
+                status=ACCESS_STATUS_TRIAL,
+                access_until=now - timedelta(days=1),
+                grace_until=now + timedelta(days=2),
+                created_at=now,
+                updated_at=now,
+            ),
+            TenantAccess(
+                tenant_id=grace_tenant.id,
+                status=ACCESS_STATUS_GRACE,
+                access_until=now - timedelta(days=8),
+                grace_until=now - timedelta(days=1),
+                created_at=now,
+                updated_at=now,
+            ),
+            TenantAccess(
+                tenant_id=active_without_grace_tenant.id,
+                status=ACCESS_STATUS_ACTIVE,
+                access_until=now - timedelta(days=1),
+                grace_until=None,
+                created_at=now,
+                updated_at=now,
+            ),
+            TenantAccess(
+                tenant_id=lifetime_tenant.id,
+                status=ACCESS_STATUS_LIFETIME,
+                created_at=now,
+                updated_at=now,
+            ),
+            TenantAccess(
+                tenant_id=suspended_tenant.id,
+                status=ACCESS_STATUS_SUSPENDED,
+                access_until=now - timedelta(days=8),
+                grace_until=now - timedelta(days=1),
+                created_at=now,
+                updated_at=now,
+            ),
+        ]
+    )
+    await db_session.commit()
+    headers = auth_headers(super_admin_user)
+
+    response = await client.post("/api/v1/platform/access/sync", headers=headers)
+
+    assert response.status_code == 200
+    assert response.json() == {"grace_started": 1, "expired": 2, "changed": 3}
+
+    access_rows = {
+        access.tenant_id: access
+        for access in (
+            await db_session.execute(select(TenantAccess))
+        ).scalars().all()
+    }
+    assert access_rows[tenant_1.id].status == ACCESS_STATUS_GRACE
+    assert access_rows[grace_tenant.id].status == ACCESS_STATUS_EXPIRED
+    assert access_rows[active_without_grace_tenant.id].status == ACCESS_STATUS_EXPIRED
+    assert access_rows[lifetime_tenant.id].status == ACCESS_STATUS_LIFETIME
+    assert access_rows[suspended_tenant.id].status == ACCESS_STATUS_SUSPENDED
+
+    events = (
+        await db_session.execute(
+            select(TenantAccessEvent).order_by(TenantAccessEvent.id)
+        )
+    ).scalars().all()
+    assert [event.action for event in events] == ["grace_started", "expired", "expired"]
+    assert {event.actor_user_id for event in events} == {super_admin_user.id}
+
+    second_response = await client.post("/api/v1/platform/access/sync", headers=headers)
+
+    assert second_response.status_code == 200
+    assert second_response.json() == {"grace_started": 0, "expired": 0, "changed": 0}
+    event_count = (
+        await db_session.execute(select(TenantAccessEvent))
+    ).scalars().all()
+    assert len(event_count) == 3
 
 
 @pytest.mark.asyncio
