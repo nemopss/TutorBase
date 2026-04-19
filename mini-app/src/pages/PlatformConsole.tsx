@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Alert, Button, Divider, List, Space, Spin, Tag, Typography, message } from 'antd';
-import { ArrowLeftOutlined, GlobalOutlined, LoginOutlined, ReloadOutlined } from '@ant-design/icons';
+import { ArrowLeftOutlined, EyeOutlined, GlobalOutlined, LoginOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../auth/AuthProvider';
@@ -138,6 +138,69 @@ const PlatformConsole = () => {
     }
   };
 
+  const renderTenantActions = (tenant: Tenant) => {
+    const actions = [];
+
+    if (tenant.access.mode === 'blocked') {
+      actions.push(
+        <Link key="preview-teacher" to={`/platform/tenants/${tenant.id}/access-preview/teacher`}>
+          <Button icon={<EyeOutlined />}>Экран репетитора</Button>
+        </Link>,
+        <Link key="preview-student" to={`/platform/tenants/${tenant.id}/access-preview/student`}>
+          <Button icon={<EyeOutlined />}>Экран ученика</Button>
+        </Link>,
+      );
+    }
+
+    actions.push(
+      <Button
+        key="open"
+        type={tenant.id === tenantId ? 'default' : 'primary'}
+        icon={<LoginOutlined />}
+        disabled={!tenant.is_active || !canSwitchTenant || tenant.id === tenantId}
+        loading={switchingTenantId === tenant.id}
+        onClick={() => handleSwitchTenant(tenant.id)}
+      >
+        {tenant.id === tenantId ? 'Открыт' : 'Открыть кабинет'}
+      </Button>,
+      <Button
+        key="grant"
+        loading={accessActionKey === `${tenant.id}:grant`}
+        onClick={() => handleAccessAction(tenant, 'grant')}
+      >
+        +30 дней
+      </Button>,
+      <Button
+        key="lifetime"
+        loading={accessActionKey === `${tenant.id}:lifetime`}
+        disabled={tenant.access.is_lifetime}
+        onClick={() => handleAccessAction(tenant, 'lifetime')}
+      >
+        Вечный
+      </Button>,
+      tenant.access.status === 'suspended' ? (
+        <Button
+          key="resume"
+          loading={accessActionKey === `${tenant.id}:resume`}
+          onClick={() => handleAccessAction(tenant, 'resume')}
+        >
+          Resume
+        </Button>
+      ) : (
+        <Button
+          key="suspend"
+          danger
+          loading={accessActionKey === `${tenant.id}:suspend`}
+          onClick={() => handleAccessAction(tenant, 'suspend')}
+        >
+          Suspend
+        </Button>
+      ),
+    );
+
+    return actions;
+  };
+
   return (
     <div style={{
       minHeight: '100vh',
@@ -238,51 +301,7 @@ const PlatformConsole = () => {
               locale={{ emptyText: 'Кабинеты не найдены' }}
               renderItem={(tenant) => (
                 <List.Item
-                  actions={[
-                    <Button
-                      key="open"
-                      type={tenant.id === tenantId ? 'default' : 'primary'}
-                      icon={<LoginOutlined />}
-                      disabled={!tenant.is_active || !canSwitchTenant || tenant.id === tenantId}
-                      loading={switchingTenantId === tenant.id}
-                      onClick={() => handleSwitchTenant(tenant.id)}
-                    >
-                      {tenant.id === tenantId ? 'Открыт' : 'Открыть кабинет'}
-                    </Button>,
-                    <Button
-                      key="grant"
-                      loading={accessActionKey === `${tenant.id}:grant`}
-                      onClick={() => handleAccessAction(tenant, 'grant')}
-                    >
-                      +30 дней
-                    </Button>,
-                    <Button
-                      key="lifetime"
-                      loading={accessActionKey === `${tenant.id}:lifetime`}
-                      disabled={tenant.access.is_lifetime}
-                      onClick={() => handleAccessAction(tenant, 'lifetime')}
-                    >
-                      Вечный
-                    </Button>,
-                    tenant.access.status === 'suspended' ? (
-                      <Button
-                        key="resume"
-                        loading={accessActionKey === `${tenant.id}:resume`}
-                        onClick={() => handleAccessAction(tenant, 'resume')}
-                      >
-                        Resume
-                      </Button>
-                    ) : (
-                      <Button
-                        key="suspend"
-                        danger
-                        loading={accessActionKey === `${tenant.id}:suspend`}
-                        onClick={() => handleAccessAction(tenant, 'suspend')}
-                      >
-                        Suspend
-                      </Button>
-                    ),
-                  ]}
+                  actions={renderTenantActions(tenant)}
                 >
                   <List.Item.Meta
                     title={

@@ -86,6 +86,22 @@ async def list_platform_tenants(
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
+@router.get("/tenants/{tenant_id}", response_model=PlatformTenantResponse)
+async def get_platform_tenant(
+    tenant_id: int,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_required),
+) -> PlatformTenantResponse:
+    tenant = await session.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    access_result = await session.execute(
+        select(TenantAccess).where(TenantAccess.tenant_id == tenant_id)
+    )
+    return _tenant_response(tenant, access_result.scalar_one_or_none())
+
+
 @router.post("/tenants/{tenant_id}/access/grant", response_model=TenantAccessResponse)
 async def grant_tenant_access(
     tenant_id: int,

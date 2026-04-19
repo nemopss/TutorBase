@@ -34,6 +34,7 @@ const Learners = lazy(() => import('./pages/Learners'));
 const PlatformConsole = lazy(() => import('./pages/PlatformConsole'));
 const AccessDenied = lazy(() => import('./pages/AccessDenied'));
 const TenantAccessBlocked = lazy(() => import('./pages/TenantAccessBlocked'));
+const TenantAccessPreview = lazy(() => import('./pages/TenantAccessPreview'));
 const RoleSelectionScreen = lazy(() => import('./pages/RoleSelectionScreen'));
 const TutorRegistrationForm = lazy(() => import('./pages/TutorRegistrationForm'));
 const StudentRegistrationForm = lazy(() => import('./pages/StudentRegistrationForm'));
@@ -139,7 +140,10 @@ function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             {isPlatformAdmin ? (
-              <Route path="/platform" element={<PlatformConsole />} />
+              <>
+                <Route path="/platform" element={<PlatformConsole />} />
+                <Route path="/platform/tenants/:tenantId/access-preview/:role" element={<TenantAccessPreview />} />
+              </>
             ) : (
               <Route path="/platform" element={<AccessDenied />} />
             )}

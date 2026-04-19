@@ -2,9 +2,21 @@ import { Alert, Button, Space, Typography } from 'antd';
 import { LockOutlined, ReloadOutlined } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import { useAuth } from '../auth/AuthProvider';
+import type { TenantAccess } from '../auth/AuthProvider';
 import { useTheme } from '../theme/ThemeProvider';
 
 const { Paragraph, Text, Title } = Typography;
+
+type PreviewRole = 'teacher' | 'viewer';
+
+interface TenantAccessBlockedProps {
+  preview?: {
+    access: TenantAccess;
+    role: PreviewRole;
+    tenantName?: string;
+  };
+  onExitPreview?: () => void;
+}
 
 const formatDate = (value?: string | null) => {
   if (!value) return null;
@@ -15,14 +27,17 @@ const formatDate = (value?: string | null) => {
   }).format(new Date(value));
 };
 
-const TenantAccessBlocked = () => {
+const TenantAccessBlocked = ({ preview, onExitPreview }: TenantAccessBlockedProps) => {
   const { user, tenantAccess, isSuperAdmin, logout, refreshTenantAccess } = useAuth();
   const { resolvedTheme } = useTheme();
   const colors = resolvedTheme.colors;
-  const isStudent = user?.role === 'viewer';
-  const isSuspended = tenantAccess?.status === 'suspended';
-  const accessUntil = formatDate(tenantAccess?.access_until);
-  const graceUntil = formatDate(tenantAccess?.grace_until);
+  const effectiveAccess = preview?.access ?? tenantAccess;
+  const effectiveRole = preview?.role ?? user?.role;
+  const isPreview = !!preview;
+  const isStudent = effectiveRole === 'viewer';
+  const isSuspended = effectiveAccess?.status === 'suspended';
+  const accessUntil = formatDate(effectiveAccess?.access_until);
+  const graceUntil = formatDate(effectiveAccess?.grace_until);
 
   const title = isStudent
     ? 'Кабинет временно недоступен'
@@ -64,6 +79,16 @@ const TenantAccessBlocked = () => {
           {description}
         </Paragraph>
 
+        {isPreview && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 20, textAlign: 'left' }}
+            message="Preview экрана доступа"
+            description={`Кабинет: ${preview.tenantName ?? `#${preview.access.tenant_id}`}. Роль: ${isStudent ? 'ученик' : 'репетитор'}. Это debug-preview, реальный owner-доступ не меняется.`}
+          />
+        )}
+
         {!isStudent && (
           <Space direction="vertical" size={8} style={{ width: '100%', marginBottom: 20 }}>
             {accessUntil && (
@@ -75,7 +100,7 @@ const TenantAccessBlocked = () => {
           </Space>
         )}
 
-        {isSuperAdmin && tenantAccess?.bypass_access_restrictions && (
+        {!isPreview && isSuperAdmin && tenantAccess?.bypass_access_restrictions && (
           <Alert
             type="warning"
             showIcon
@@ -86,22 +111,30 @@ const TenantAccessBlocked = () => {
         )}
 
         <Space direction="vertical" style={{ width: '100%' }}>
-          <Button
-            type="primary"
-            icon={<ReloadOutlined />}
-            onClick={refreshTenantAccess}
-            block
-          >
-            Проверить доступ
-          </Button>
-          {isSuperAdmin && (
-            <Link to="/platform">
-              <Button block>Открыть Консоль</Button>
-            </Link>
+          {isPreview ? (
+            <Button type="primary" onClick={onExitPreview} block>
+              Вернуться в Консоль
+            </Button>
+          ) : (
+            <>
+              <Button
+                type="primary"
+                icon={<ReloadOutlined />}
+                onClick={refreshTenantAccess}
+                block
+              >
+                Проверить доступ
+              </Button>
+              {isSuperAdmin && (
+                <Link to="/platform">
+                  <Button block>Открыть Консоль</Button>
+                </Link>
+              )}
+              <Button onClick={logout} block>
+                Выйти
+              </Button>
+            </>
           )}
-          <Button onClick={logout} block>
-            Выйти
-          </Button>
         </Space>
       </section>
     </div>

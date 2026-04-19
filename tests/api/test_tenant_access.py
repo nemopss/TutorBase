@@ -61,6 +61,24 @@ async def test_platform_tenant_list_includes_access_state(
 
 
 @pytest.mark.asyncio
+async def test_platform_tenant_detail_exposes_access_state(
+    client: AsyncClient,
+    super_admin_user: User,
+    tenant_1: Tenant,
+):
+    response = await client.get(
+        f"/api/v1/platform/tenants/{tenant_1.id}",
+        headers=auth_headers(super_admin_user),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["id"] == tenant_1.id
+    assert data["access"]["status"] == ACCESS_STATUS_LIFETIME
+    assert data["access"]["mode"] == "full"
+
+
+@pytest.mark.asyncio
 async def test_expired_tenant_blocks_regular_tutor_requests(
     client: AsyncClient,
     db_session: AsyncSession,
