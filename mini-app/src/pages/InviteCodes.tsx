@@ -8,9 +8,6 @@ import InviteCodeCard from '../components/cards/InviteCodeCard';
 import api from '../services/api';
 import { useAuth } from '../auth/AuthProvider';
 import dayjs from 'dayjs';
-import relativeTime from 'dayjs/plugin/relativeTime';
-
-dayjs.extend(relativeTime);
 
 const { Text } = Typography;
 
@@ -18,9 +15,15 @@ interface InviteToken {
     id: number;
     token: string;
     expires_at: string;
-    used_at: string | null;
     created_at: string;
+    is_used: boolean;
+    is_expired: boolean;
+    is_valid: boolean;
+    learner_id?: number | null;
+    learner_name?: string | null;
 }
+
+const formatInviteDate = (value: string): string => dayjs(value).format('D MMM YYYY HH:mm');
 
 const InviteCodes: React.FC = () => {
     const { t } = useTranslation();
@@ -69,7 +72,7 @@ const InviteCodes: React.FC = () => {
         try {
             const response = await api.post(`/tenants/${tenantId}/invitations`, {});
             message.success(t('pages.inviteCodes.inviteCodeCreated'));
-            setTokens([response.data, ...tokens]);
+            setTokens((currentTokens) => [response.data, ...currentTokens]);
         } catch (error: any) {
             message.error(error.response?.data?.detail || t('errors.createFailed', { message: '' }));
         } finally {
@@ -132,15 +135,15 @@ const InviteCodes: React.FC = () => {
             title: t('common.status'),
             key: 'status',
             render: (_: any, record: InviteToken) => {
-                if (record.used_at) {
+                if (record.is_used) {
                     return (
                         <Tag icon={<CheckCircleOutlined />} color="success">
-                            {t('pages.inviteCodes.status.used')} {dayjs(record.used_at).fromNow()}
+                            {t('pages.inviteCodes.status.used')}
                         </Tag>
                     );
                 }
 
-                const isExpired = dayjs(record.expires_at).isBefore(dayjs());
+                const isExpired = record.is_expired || dayjs(record.expires_at).isBefore(dayjs());
                 if (isExpired) {
                     return (
                         <Tag icon={<ClockCircleOutlined />} color="default">
@@ -161,8 +164,8 @@ const InviteCodes: React.FC = () => {
             dataIndex: 'expires_at',
             key: 'expires_at',
             render: (expires_at: string) => (
-                <Tooltip title={dayjs(expires_at).format('YYYY-MM-DD HH:mm')}>
-                    <Text type="secondary">{dayjs(expires_at).fromNow()}</Text>
+                <Tooltip title={formatInviteDate(expires_at)}>
+                    <Text type="secondary">{formatInviteDate(expires_at)}</Text>
                 </Tooltip>
             ),
         },
@@ -171,15 +174,15 @@ const InviteCodes: React.FC = () => {
             dataIndex: 'created_at',
             key: 'created_at',
             render: (created_at: string) => (
-                <Text type="secondary">{dayjs(created_at).format('MMM D, YYYY')}</Text>
+                <Text type="secondary">{formatInviteDate(created_at)}</Text>
             ),
         },
         {
             title: t('common.actions'),
             key: 'actions',
             render: (_: any, record: InviteToken) => {
-                const isUsed = !!record.used_at;
-                const isExpired = dayjs(record.expires_at).isBefore(dayjs());
+                const isUsed = record.is_used;
+                const isExpired = record.is_expired || dayjs(record.expires_at).isBefore(dayjs());
 
                 return (
                     <Space>

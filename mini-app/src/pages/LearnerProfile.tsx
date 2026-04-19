@@ -202,8 +202,8 @@ const LearnerProfile: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       message.success(t('learnerProfile.unlinkAccountSuccess'));
     },
-    onError: (err: Error) => {
-      message.error(t('errors.updateFailed', { message: err.message }));
+    onError: (err: any) => {
+      message.error(err.response?.data?.detail || t('errors.updateFailed', { message: err.message }));
     },
   });
 
@@ -232,8 +232,8 @@ const LearnerProfile: React.FC = () => {
         ),
       });
     },
-    onError: (err: Error) => {
-      message.error(t('errors.createFailed', { message: err.message }));
+    onError: (err: any) => {
+      message.error(err.response?.data?.detail || t('errors.createFailed', { message: err.message }));
     },
   });
 
@@ -294,6 +294,14 @@ const LearnerProfile: React.FC = () => {
       okButtonProps: { danger: true, loading: unlinkAccountMutation.isPending },
       onOk: () => unlinkAccountMutation.mutateAsync(),
     });
+  };
+
+  const handleCreateInvite = () => {
+    if (!canUseFullActions) {
+      message.warning('Создание инвайта недоступно в grace-периоде.');
+      return;
+    }
+    createInviteMutation.mutate();
   };
 
   const menuItems = canUseFullActions ? [
@@ -387,7 +395,6 @@ const LearnerProfile: React.FC = () => {
                             danger
                             icon={<DisconnectOutlined />}
                             loading={unlinkAccountMutation.isPending}
-                            disabled={!canUseFullActions}
                             onClick={handleUnlinkAccount}
                           >
                             {t('learnerProfile.unlinkAccountAction')}
@@ -398,8 +405,7 @@ const LearnerProfile: React.FC = () => {
                             size="small"
                             icon={<LinkOutlined />}
                             loading={createInviteMutation.isPending}
-                            disabled={!canUseFullActions}
-                            onClick={() => createInviteMutation.mutate()}
+                            onClick={handleCreateInvite}
                           >
                             {t('learnerProfile.createInviteAction')}
                           </Button>
