@@ -117,6 +117,7 @@ async def create_package(
     learner: Learner,
     template: Optional[LessonPackageTemplate] = None,
     title: Optional[str] = None,
+    package_type: str = "package",
     status: str = "draft",
     start_offset_days: int = 0,
     total_lessons: Optional[int] = None,
@@ -129,6 +130,7 @@ async def create_package(
     package = LessonPackage(
         learner=learner,
         template=template,
+        package_type=package_type,
         title=title or f"Package {suffix}",
         status=status,
         start_date=start_date,

@@ -16,6 +16,7 @@ from api.dependencies import (
     require_maintenance_tenant_access,
 )
 from api.schemas.packages import (
+    OneOffLessonCreateRequest,
     PackageCreateRequest,
     PackageListResponse,
     PackageResponse,
@@ -48,6 +49,7 @@ def _to_response(dto: LessonPackageDTO, *, include_private: bool = True) -> Pack
         learner_id=dto.learner_id,
         learner_name=dto.learner_name,
         template_id=dto.template_id,
+        package_type=dto.package_type,
         title=dto.title,
         status=dto.status,
         start_date=dto.start_date,
@@ -83,6 +85,7 @@ async def list_packages(
     learner_id: int | None = None,
     status_filter: str | None = None,
     search: str | None = None,
+    package_type: str | None = Query(default=package_service.PACKAGE_TYPE_PACKAGE),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
@@ -102,18 +105,48 @@ async def list_packages(
             
         learner_id = learner.id
 
-    packages, total = await package_service.list_packages(
-        session,
-        current_tenant,
-        limit=pagination.limit,
-        offset=pagination.offset,
-        learner_id=learner_id,
-        status=status_filter,
-        search=search,
-    )
+    try:
+        packages, total = await package_service.list_packages(
+            session,
+            current_tenant,
+            limit=pagination.limit,
+            offset=pagination.offset,
+            learner_id=learner_id,
+            status=status_filter,
+            search=search,
+            package_type=package_type,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     include_private = current_user.role != "viewer"
     items = [_to_response(pkg, include_private=include_private) for pkg in packages]
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
+
+
+@router.post("/one-off", response_model=PackageResponse, status_code=status.HTTP_201_CREATED)
+async def create_one_off_lesson_endpoint(
+    payload: OneOffLessonCreateRequest,
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
+) -> PackageResponse:
+    try:
+        package = await package_service.create_one_off_lesson(
+            session,
+            current_tenant,
+            learner_id=payload.learner_id,
+            scheduled_at=payload.scheduled_at,
+            duration_minutes=payload.duration_minutes,
+            title=payload.title,
+            price=payload.price,
+            notes=payload.notes,
+        )
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    return _to_response(package)
 
 
 @router.get("/{package_id}", response_model=PackageResponse)

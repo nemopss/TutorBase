@@ -434,6 +434,7 @@ async def get_learner_finance(
         .where(
             Payment.tenant_id == current_tenant.tenant_id,
             Payment.learner_id == learner_id,
+            Payment.voided_at.is_(None),
         )
     )
     total_paid = total_result.scalar() or Decimal("0")
@@ -444,6 +445,7 @@ async def get_learner_finance(
         .where(
             Payment.tenant_id == current_tenant.tenant_id,
             Payment.learner_id == learner_id,
+            Payment.voided_at.is_(None),
         )
         .order_by(Payment.paid_at.desc())
     )
@@ -467,6 +469,9 @@ async def get_learner_finance(
             currency=payment.currency,
             paid_at=payment.paid_at,
             notes=payment.notes,
+            is_voided=payment.voided_at is not None,
+            voided_at=payment.voided_at,
+            void_reason=payment.void_reason,
             created_at=payment.created_at,
             updated_at=payment.updated_at,
             tenant_id=payment.tenant_id,

@@ -1171,6 +1171,7 @@ async def create_lesson_package(
     learner: Learner,
     title: str,
     template: LessonPackageTemplate | None = None,
+    package_type: str = "package",
     status: str = "draft",
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
@@ -1211,6 +1212,7 @@ async def create_lesson_package(
         learner=learner,
         template=template,
         title=title,
+        package_type=package_type,
         status=status,
         start_date=start_date,
         end_date=end_date,
@@ -1432,6 +1434,7 @@ async def fetch_lesson_packages_paginated(
     learner_id: Optional[int] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    package_type: Optional[str] = "package",
 ) -> tuple[list[LessonPackage], int]:
     """Fetch lesson packages with pagination and filtering.
     
@@ -1446,6 +1449,7 @@ async def fetch_lesson_packages_paginated(
         learner_id: Optional learner ID filter
         status: Optional status filter
         search: Optional search string for title or learner name
+        package_type: Optional package type filter. Use None to include all types.
         
     Returns:
         Tuple of (list of LessonPackage objects, total count)
@@ -1458,6 +1462,8 @@ async def fetch_lesson_packages_paginated(
         base_query = base_query.where(LessonPackage.learner_id == learner_id)
     if status is not None:
         base_query = base_query.where(LessonPackage.status == status)
+    if package_type is not None:
+        base_query = base_query.where(LessonPackage.package_type == package_type)
     if search:
         from database.validators import escape_like_pattern
         escaped_search = escape_like_pattern(search)

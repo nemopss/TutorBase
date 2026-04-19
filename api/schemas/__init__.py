@@ -69,6 +69,7 @@ from api.schemas.learners import (
     UpdateLearnerRequest,
     UpdateLearnerNotificationsRequest,
     LearnerResponse,
+    StudentLearnerResponse,
     LearnerListResponse,
 )
 from api.schemas.groups import (
@@ -191,6 +192,7 @@ __all__ = [
     'UpdateLearnerRequest',
     'UpdateLearnerNotificationsRequest',
     'LearnerResponse',
+    'StudentLearnerResponse',
     'LearnerListResponse',
     # Groups
     'LearnerGroupCreateRequest',

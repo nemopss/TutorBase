@@ -417,6 +417,7 @@ class LessonPackage(Base):
         tenant_id: Associated tenant ID
         learner_id: Learner this package belongs to
         template_id: Template used to create this package (optional)
+        package_type: Package type (package, one_off)
         title: Package title/name
         status: Package status (draft, active, completed, cancelled)
         start_date: Package start date
@@ -443,6 +444,7 @@ class LessonPackage(Base):
     tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
     learner_id = Column(Integer, ForeignKey('learners.id', ondelete='CASCADE'), nullable=False)
     template_id = Column(Integer, ForeignKey('lesson_package_templates.id', ondelete='SET NULL'))
+    package_type = Column(String(32), nullable=False, default='package')
     title = Column(String, nullable=False)
     status = Column(String(32), nullable=False, default='draft')
     start_date = Column(DateTime(timezone=True))
@@ -468,6 +470,7 @@ class LessonPackage(Base):
 
     __table_args__ = (
         Index('ix_lesson_packages_learner_status', 'learner_id', 'status'),
+        Index('ix_lesson_packages_tenant_type_status', 'tenant_id', 'package_type', 'status'),
     )
 
 
@@ -673,6 +676,10 @@ class Payment(Base):
     currency = Column(String(3), nullable=False, default='RUB')
     paid_at = Column(DateTime(timezone=True), nullable=False)
     notes = Column(Text, nullable=True)
+    updated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    voided_at = Column(DateTime(timezone=True), nullable=True)
+    voided_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    void_reason = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
 
@@ -680,11 +687,34 @@ class Payment(Base):
     learner = relationship('Learner', back_populates='payments')
     package = relationship('LessonPackage', back_populates='payments')
     lesson = relationship('Lesson', back_populates='payments')
+    updated_by = relationship('User', foreign_keys=[updated_by_user_id])
+    voided_by = relationship('User', foreign_keys=[voided_by_user_id])
+    audit_events = relationship('PaymentAuditEvent', back_populates='payment', cascade='all, delete-orphan')
 
     __table_args__ = (
         Index('ix_payments_tenant_learner', 'tenant_id', 'learner_id'),
         Index('ix_payments_tenant_paid_at', 'tenant_id', 'paid_at'),
+        Index('ix_payments_tenant_voided', 'tenant_id', 'voided_at'),
     )
+
+
+class PaymentAuditEvent(Base):
+    """Audit log for payment lifecycle changes."""
+    __tablename__ = 'payment_audit_events'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    payment_id = Column(Integer, ForeignKey('payments.id', ondelete='CASCADE'), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False, index=True)
+    actor_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    action = Column(String(64), nullable=False)
+    previous_state = Column(JSON, nullable=True)
+    new_state = Column(JSON, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    payment = relationship('Payment', back_populates='audit_events')
+    tenant = relationship('Tenant')
+    actor = relationship('User', foreign_keys=[actor_user_id])
 
 
 class Tenant(Base):

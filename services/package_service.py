@@ -31,6 +31,7 @@ Business logic:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from decimal import Decimal
 from typing import Optional
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -56,6 +57,12 @@ except ImportError:
     # Fallback if metrics not available
     packages_created_total = None
     db_query_duration = None
+
+
+PACKAGE_TYPE_PACKAGE = "package"
+PACKAGE_TYPE_ONE_OFF = "one_off"
+PACKAGE_TYPE_ALL = "all"
+VALID_PACKAGE_TYPES = {PACKAGE_TYPE_PACKAGE, PACKAGE_TYPE_ONE_OFF}
 
 
 def _get_next_lesson_date(lessons: list) -> Optional[datetime]:
@@ -102,6 +109,7 @@ def _build_package_dto(package: LessonPackage, total_paid: float = 0.0) -> Lesso
         learner_id=package.learner_id,
         learner_name=learner_name,
         template_id=package.template_id,
+        package_type=package.package_type or PACKAGE_TYPE_PACKAGE,
         title=package.title,
         status=package.status,
         start_date=normalize_to_timezone(package.start_date),
@@ -142,7 +150,10 @@ async def get_package(session: AsyncSession, current_tenant: CurrentTenant, pack
     # Get total paid for this package
     result = await session.execute(
         select(func.coalesce(func.sum(Payment.amount), Decimal("0")))
-        .where(Payment.package_id == package_id)
+        .where(
+            Payment.package_id == package_id,
+            Payment.voided_at.is_(None),
+        )
     )
     total_paid = float(result.scalar() or 0)
     
@@ -205,6 +216,7 @@ async def list_packages(
     learner_id: Optional[int] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    package_type: Optional[str] = PACKAGE_TYPE_PACKAGE,
 ) -> tuple[list[LessonPackageDTO], int]:
     """Get list of lesson packages with filtering and pagination.
 
@@ -219,10 +231,17 @@ async def list_packages(
         learner_id: Filter by learner ID (optional)
         status: Filter by package status (draft, active, completed, cancelled)
         search: Text search by package title (optional)
+        package_type: Package type filter. Use "all" or None to include all types.
 
     Returns:
         Tuple of list of LessonPackageDTO and total package count
     """
+    package_type_filter = None if package_type in (None, PACKAGE_TYPE_ALL) else package_type
+    if package_type_filter is not None and package_type_filter not in VALID_PACKAGE_TYPES:
+        from services.exceptions import ValidationError
+
+        raise ValidationError("Invalid package_type")
+
     packages, total = await crud.fetch_lesson_packages_paginated(
         session, 
         current_tenant,
@@ -231,6 +250,7 @@ async def list_packages(
         learner_id=learner_id,
         status=status,
         search=search,
+        package_type=package_type_filter,
     )
     dtos = [_build_package_dto(pkg) for pkg in packages]
     return dtos, total
@@ -321,6 +341,70 @@ async def create_package(
         packages_created_total.labels(learner_id=learner_id).inc()
     
     # Transaction will be committed by @transactional decorator
+    return _build_package_dto(package)
+
+
+@transactional(max_retries=3, backoff_factor=0.5)
+async def create_one_off_lesson(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    learner_id: int,
+    scheduled_at: datetime,
+    duration_minutes: int = 60,
+    title: Optional[str] = None,
+    price: Optional[Decimal] = None,
+    notes: Optional[str] = None,
+) -> LessonPackageDTO:
+    """Create a package-backed one-off lesson.
+
+    One-off lessons are stored as a dedicated package type with exactly one
+    lesson. This keeps finance, reminders, and lesson lists on the existing
+    package path while allowing regular package views to hide them by default.
+    """
+    from services.package_scheduler import regenerate_package_reminders
+
+    learner = await crud.get_learner(session, current_tenant, learner_id)
+    if not learner:
+        raise NotFoundError(f"Learner {learner_id} not found")
+
+    lesson_utc = to_utc(scheduled_at, DEFAULT_TZ)
+    lesson_price = price if price is not None else learner.lesson_rate
+
+    package = await crud.create_lesson_package(
+        session,
+        current_tenant,
+        learner=learner,
+        template=None,
+        package_type=PACKAGE_TYPE_ONE_OFF,
+        title=title or "Разовый урок",
+        notes=notes,
+        status="active",
+        start_date=lesson_utc,
+        timezone_name=DEFAULT_TIMEZONE,
+        total_lessons=1,
+    )
+    package.price = lesson_price
+    package.payment_status = "unpaid"
+    session.add(package)
+    await session.flush()
+
+    await crud.create_lesson(
+        session,
+        current_tenant,
+        package,
+        scheduled_at=lesson_utc,
+        duration_minutes=duration_minutes,
+        status="scheduled",
+        sequence_index=1,
+    )
+    await session.flush()
+    await sync_package_metrics(session, current_tenant, package.id)
+    await regenerate_package_reminders(session, current_tenant, package)
+
+    if packages_created_total:
+        packages_created_total.labels(learner_id=learner_id).inc()
+
     return _build_package_dto(package)
 
 

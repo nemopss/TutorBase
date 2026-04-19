@@ -12,7 +12,7 @@ from api.dependencies import (
     is_platform_admin,
 )
 from api.schemas import UserResponse, UserRoleUpdateRequest, PaginationParams, PaginatedResponse
-from api.schemas.learners import LearnerResponse
+from api.schemas.learners import LearnerResponse, StudentLearnerResponse
 from database import crud
 from database.models import User
 from utils.cache import invalidate_cache
@@ -42,12 +42,12 @@ async def get_current_user_info(
     return _to_response(current_user)
 
 
-@router.get("/me/learner", response_model=LearnerResponse)
+@router.get("/me/learner", response_model=StudentLearnerResponse)
 async def get_current_learner_info(
     current_user: User = Depends(get_current_user),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
-) -> LearnerResponse:
+) -> StudentLearnerResponse:
     """Get learner profile for current authenticated user.
     
     Finds learner profile linked to user's Telegram ID.
@@ -72,7 +72,12 @@ async def get_current_learner_info(
             detail="Learner profile not found"
         )
         
-    return learner
+    return StudentLearnerResponse(
+        id=learner.id,
+        display_name=learner.display_name,
+        notifications_enabled=learner.notifications_enabled,
+        next_lesson_date=None,
+    )
 
 
 @router.get("", response_model=PaginatedResponse[UserResponse])

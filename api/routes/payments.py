@@ -18,12 +18,13 @@ from api.dependencies import (
     CurrentTenant,
     admin_or_teacher_required,
     get_current_tenant,
+    get_current_user,
     get_session,
     require_maintenance_tenant_access,
 )
-from api.schemas.finance import PaymentCreate, PaymentResponse
+from api.schemas.finance import PaymentCreate, PaymentResponse, PaymentUpdateRequest
 from api.schemas import PaginatedResponse, PaginationParams
-from database.models import Payment, Learner, Lesson, LessonPackage
+from database.models import Payment, Learner, Lesson, LessonPackage, User
 from services import finance_service
 
 router = APIRouter()
@@ -33,6 +34,7 @@ router = APIRouter()
 async def create_payment(
     request: PaymentCreate,
     session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     __=Depends(require_maintenance_tenant_access),
@@ -91,6 +93,7 @@ async def create_payment(
             package_id=effective_package_id,
             lesson_id=request.lesson_id,
             notes=request.notes,
+            actor_user_id=current_user.id,
         )
         await session.commit()
     except ValueError as e:
@@ -107,6 +110,64 @@ async def create_payment(
         currency=payment.currency,
         paid_at=payment.paid_at,
         notes=payment.notes,
+        is_voided=payment.voided_at is not None,
+        voided_at=payment.voided_at,
+        void_reason=payment.void_reason,
+        created_at=payment.created_at,
+        updated_at=payment.updated_at,
+        tenant_id=payment.tenant_id,
+    )
+
+
+@router.patch("/{payment_id}", response_model=PaymentResponse)
+async def update_payment(
+    payment_id: int,
+    request: PaymentUpdateRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_maintenance_tenant_access),
+) -> PaymentResponse:
+    payment = await session.get(Payment, payment_id)
+    if not payment or payment.tenant_id != current_tenant.tenant_id:
+        raise HTTPException(status_code=404, detail="Payment not found")
+    if payment.voided_at is not None:
+        raise HTTPException(status_code=409, detail="Voided payments cannot be edited")
+
+    learner = await session.get(Learner, payment.learner_id)
+    package_title = None
+    if payment.package_id:
+        package = await session.get(LessonPackage, payment.package_id)
+        package_title = package.title if package else None
+
+    try:
+        payment = await finance_service.update_payment(
+            session,
+            payment,
+            amount=request.amount,
+            paid_at=request.paid_at,
+            notes=request.notes,
+            actor_user_id=current_user.id,
+        )
+        await session.commit()
+    except ValueError as e:
+        raise HTTPException(status_code=422, detail=str(e))
+
+    return PaymentResponse(
+        id=payment.id,
+        learner_id=payment.learner_id,
+        learner_name=learner.display_name if learner else None,
+        package_id=payment.package_id,
+        package_title=package_title,
+        lesson_id=payment.lesson_id,
+        amount=payment.amount,
+        currency=payment.currency,
+        paid_at=payment.paid_at,
+        notes=payment.notes,
+        is_voided=payment.voided_at is not None,
+        voided_at=payment.voided_at,
+        void_reason=payment.void_reason,
         created_at=payment.created_at,
         updated_at=payment.updated_at,
         tenant_id=payment.tenant_id,
@@ -130,7 +191,10 @@ async def list_payments(
     # Build query
     query = (
         select(Payment)
-        .where(Payment.tenant_id == current_tenant.tenant_id)
+        .where(
+            Payment.tenant_id == current_tenant.tenant_id,
+            Payment.voided_at.is_(None),
+        )
         .order_by(Payment.paid_at.desc())
     )
     
@@ -175,6 +239,9 @@ async def list_payments(
             currency=payment.currency,
             paid_at=payment.paid_at,
             notes=payment.notes,
+            is_voided=payment.voided_at is not None,
+            voided_at=payment.voided_at,
+            void_reason=payment.void_reason,
             created_at=payment.created_at,
             updated_at=payment.updated_at,
             tenant_id=payment.tenant_id,
@@ -187,24 +254,23 @@ async def list_payments(
 async def delete_payment(
     payment_id: int,
     session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     __=Depends(require_maintenance_tenant_access),
 ):
-    """Delete a payment and recalculate package status.
+    """Void a payment and recalculate package status.
     
     **Validates: Requirements 3.2**
     """
     payment = await session.get(Payment, payment_id)
     if not payment or payment.tenant_id != current_tenant.tenant_id:
         raise HTTPException(status_code=404, detail="Payment not found")
-    
-    package_id = payment.package_id
-    
-    await session.delete(payment)
-    
-    # Recalculate package status if payment was for a package
-    if package_id:
-        await finance_service.update_payment_status(session, package_id)
-    
+
+    await finance_service.void_payment(
+        session,
+        payment,
+        actor_user_id=current_user.id,
+        reason="Voided via DELETE /payments/{payment_id}",
+    )
     await session.commit()

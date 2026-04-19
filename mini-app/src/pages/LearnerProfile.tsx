@@ -15,6 +15,9 @@ import {
   message,
   Dropdown,
   Input,
+  Form,
+  DatePicker,
+  InputNumber,
 } from 'antd';
 import {
   ArrowLeftOutlined,
@@ -35,7 +38,10 @@ import PageHeader from '../components/common/PageHeader';
 import LearnerForm from '../components/forms/LearnerForm';
 import PackageCard from '../components/cards/PackageCard';
 import PackageForm from '../components/forms/PackageForm';
+import LessonForm from '../components/forms/LessonForm';
+import RescheduleForm from '../components/forms/RescheduleForm';
 import EmptyState from '../components/common/EmptyState';
+import CalendarContainer from '../components/common/CalendarContainer';
 import ScheduleTab from '../components/learner/ScheduleTab';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
@@ -59,9 +65,13 @@ interface Package {
   id: number;
   title: string;
   learner_name: string;
+  package_type?: 'package' | 'one_off';
   status: 'active' | 'completed' | 'cancelled' | 'draft';
   progress: { total: number; completed: number; cancelled: number };
+  start_date?: string | null;
   next_lesson_date?: string | null;
+  price?: number | null;
+  total_paid?: number;
 }
 
 interface Payment {
@@ -72,8 +82,30 @@ interface Payment {
   package_title: string | null;
 }
 
+type LessonStatus = 'scheduled' | 'rescheduled' | 'completed' | 'cancelled';
+
+interface Lesson {
+  id: number;
+  package_id: number;
+  package_title?: string;
+  learner_name?: string;
+  scheduled_at: string;
+  status: LessonStatus;
+  duration_minutes?: number;
+  teacher_notes?: string;
+  sequence_index?: number;
+  timezone: string;
+}
+
+interface LessonListResponse {
+  total: number;
+  items: Lesson[];
+}
+
 interface LearnerFinance {
   total_paid: number;
+  outstanding_balance: number;
+  lesson_rate: number | null;
   payment_history: Payment[];
 }
 
@@ -103,6 +135,11 @@ const formatNextLessonDate = (dateStr: string | null, t: (key: string) => string
   return `${date.format('D MMM')}, ${date.format('HH:mm')}`;
 };
 
+const formatLessonDate = (dateStr?: string | null): string => {
+  if (!dateStr) return '';
+  return dayjs(dateStr).format('D MMMM, HH:mm');
+};
+
 // --- Component --- //
 const LearnerProfile: React.FC = () => {
   const { t } = useTranslation();
@@ -121,8 +158,15 @@ const LearnerProfile: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
+  const [isOneOffLessonModalOpen, setIsOneOffLessonModalOpen] = useState(false);
+  const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
+  const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
   const [isUnlinkModalOpen, setIsUnlinkModalOpen] = useState(false);
   const [createdInviteToken, setCreatedInviteToken] = useState<string | null>(null);
+  const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
+  const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
+  const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
+  const [oneOffLessonForm] = Form.useForm();
 
   // Fetch learner detail
   const { data: learner, isLoading, isError, error } = useQuery<LearnerDetail, Error>({
@@ -140,6 +184,50 @@ const LearnerProfile: React.FC = () => {
     queryFn: async () => {
       const { data } = await api.get('/packages', { params: { learner_id: learnerId } });
       return data;
+    },
+    enabled: !!learnerId,
+  });
+
+  const { data: oneOffPackagesData } = useQuery<{ items: Package[] }>({
+    queryKey: ['learnerOneOffPackages', learnerId],
+    queryFn: async () => {
+      const { data } = await api.get('/packages', {
+        params: { learner_id: learnerId, package_type: 'one_off', limit: 100 },
+      });
+      return data;
+    },
+    enabled: !!learnerId,
+  });
+
+  const { data: learnerLessonsData, isLoading: isLoadingLearnerLessons } = useQuery<LessonListResponse>({
+    queryKey: ['learnerLessons', learnerId],
+    queryFn: async () => {
+      const limit = 100;
+      const { data: firstPage } = await api.get('/lessons', {
+        params: {
+          learner_id: learnerId,
+          limit,
+          offset: 0,
+          sort_by: 'scheduled_at',
+          sort_order: 'asc',
+        },
+      });
+      let items = [...firstPage.items];
+      let offset = limit;
+      while (offset < firstPage.total && offset < 1000) {
+        const { data } = await api.get('/lessons', {
+          params: {
+            learner_id: learnerId,
+            limit,
+            offset,
+            sort_by: 'scheduled_at',
+            sort_order: 'asc',
+          },
+        });
+        items = [...items, ...data.items];
+        offset += limit;
+      }
+      return { items, total: firstPage.total };
     },
     enabled: !!learnerId,
   });
@@ -257,6 +345,57 @@ const LearnerProfile: React.FC = () => {
     },
   });
 
+  const updateLessonMutation = useMutation({
+    mutationFn: async ({ lessonId, values }: { lessonId: number; values: any }) => {
+      const { data } = await api.patch(`/lessons/${lessonId}`, values);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learnerLessons', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learnerPackages', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learnerOneOffPackages', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['lessons'] });
+      message.success(t('success.updated'));
+      setIsLessonModalOpen(false);
+      setEditingLesson(null);
+    },
+    onError: (err: Error) => {
+      message.error(t('errors.updateFailed', { message: err.message }));
+    },
+  });
+
+  const createOneOffLessonMutation = useMutation({
+    mutationFn: async (values: any) => {
+      const { data } = await api.post('/packages/one-off', {
+        learner_id: learnerId,
+        scheduled_at: values.scheduled_at.toISOString(),
+        duration_minutes: values.duration_minutes,
+        price: values.price || null,
+        title: values.title || null,
+        notes: values.notes || null,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learnerPackages', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learnerOneOffPackages', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learnerLessons', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learnerFinance', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learners'] });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      queryClient.invalidateQueries({ queryKey: ['lessons'] });
+      setActiveTab('packages');
+      message.success(t('learnerProfile.oneOffLessonCreatedInList'));
+      oneOffLessonForm.resetFields();
+      setIsOneOffLessonModalOpen(false);
+    },
+    onError: (err: Error) => {
+      message.error(t('errors.createFailed', { message: err.message }));
+    },
+  });
+
   const handleEditSubmit = async (values: any) => {
     if (!canUseFullActions) {
       message.warning('Редактирование ученика недоступно в grace-периоде.');
@@ -285,6 +424,73 @@ const LearnerProfile: React.FC = () => {
     createInviteMutation.mutate();
   };
 
+  const handleOpenOneOffLessonModal = () => {
+    if (!canUseFullActions) {
+      message.warning('Создание разового урока недоступно в grace-периоде.');
+      return;
+    }
+    oneOffLessonForm.setFieldsValue({
+      duration_minutes: 60,
+      price: learner?.lesson_rate ?? undefined,
+    });
+    setIsOneOffLessonModalOpen(true);
+  };
+
+  const handleCreateOneOffLesson = async () => {
+    if (!canUseFullActions) {
+      message.warning('Создание разового урока недоступно в grace-периоде.');
+      return;
+    }
+    const values = await oneOffLessonForm.validateFields();
+    await createOneOffLessonMutation.mutateAsync(values);
+  };
+
+  const handleLessonClick = (lessonId: number) => {
+    const lesson = learnerLessonsData?.items.find((item) => item.id === lessonId);
+    if (!lesson) return;
+    setEditingLesson(lesson);
+    setIsLessonModalOpen(true);
+  };
+
+  const handleRescheduleLesson = (lessonId: number, newDate?: string) => {
+    const lesson = learnerLessonsData?.items.find((item) => item.id === lessonId);
+    if (newDate && lesson) {
+      updateLessonMutation.mutate({
+        lessonId,
+        values: { scheduled_at: newDate, status: 'rescheduled' },
+      });
+      return;
+    }
+    setSelectedLesson(lesson || null);
+    setSelectedLessonId(lessonId);
+    setIsRescheduleModalOpen(true);
+  };
+
+  const handleRescheduleSubmit = (values: { date: dayjs.Dayjs; time: dayjs.Dayjs; duration_minutes?: number }) => {
+    if (!selectedLessonId) return;
+    const newDateTime = values.date
+      .hour(values.time.hour())
+      .minute(values.time.minute())
+      .second(0);
+    updateLessonMutation.mutate(
+      {
+        lessonId: selectedLessonId,
+        values: {
+          scheduled_at: newDateTime.toISOString(),
+          status: 'rescheduled',
+          duration_minutes: values.duration_minutes,
+        },
+      },
+      {
+        onSuccess: () => {
+          setIsRescheduleModalOpen(false);
+          setSelectedLessonId(null);
+          setSelectedLesson(null);
+        },
+      },
+    );
+  };
+
   const handleCopyCreatedInvite = () => {
     if (!createdInviteToken) return;
     navigator.clipboard?.writeText(createdInviteToken);
@@ -310,6 +516,8 @@ const LearnerProfile: React.FC = () => {
   }
 
   const packages = packagesData?.items || [];
+  const oneOffPackages = oneOffPackagesData?.items || [];
+  const learnerLessons = learnerLessonsData?.items || [];
   const payments = finance?.payment_history || [];
 
   const cardStyle = {
@@ -442,33 +650,127 @@ const LearnerProfile: React.FC = () => {
             label: t('learnerProfile.tabs.packages'),
             children: (
               <div>
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  disabled={!canUseFullActions}
-                  onClick={() => setIsPackageModalOpen(true)}
-                  style={{ marginBottom: spacing.md }}
-                >
-                  {t('learnerProfile.createPackage')}
-                </Button>
+                <Space wrap style={{ marginBottom: spacing.md }}>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    disabled={!canUseFullActions}
+                    onClick={() => setIsPackageModalOpen(true)}
+                  >
+                    {t('learnerProfile.createPackage')}
+                  </Button>
+                  <Button
+                    icon={<CalendarOutlined />}
+                    disabled={!canUseFullActions}
+                    onClick={handleOpenOneOffLessonModal}
+                  >
+                    {t('learnerProfile.createOneOffLesson')}
+                  </Button>
+                </Space>
 
-                {packages.length === 0 ? (
+                <Card
+                  title={t('learnerProfile.learnerCalendar')}
+                  style={cardStyle}
+                >
+                  {isLoadingLearnerLessons ? (
+                    <Spin />
+                  ) : learnerLessons.length === 0 ? (
+                    <EmptyState
+                      title={t('learnerProfile.noCalendarLessons')}
+                      description={t('learnerProfile.noCalendarLessonsDescription')}
+                    />
+                  ) : (
+                    <CalendarContainer
+                      lessons={learnerLessons}
+                      timezone="Europe/Moscow"
+                      onLessonClick={handleLessonClick}
+                      onReschedule={handleRescheduleLesson}
+                    />
+                  )}
+                </Card>
+
+                {packages.length === 0 && oneOffPackages.length === 0 ? (
                   <EmptyState
-                    title={t('pages.packages.noPackages')}
-                    description={t('pages.packages.noPackagesDescription')}
+                    title={t('learnerProfile.noLessons')}
+                    description={t('learnerProfile.noLessonsDescription')}
                     actionText={canUseFullActions ? t('learnerProfile.createPackage') : undefined}
                     onAction={canUseFullActions ? () => setIsPackageModalOpen(true) : undefined}
                   />
                 ) : (
-                  <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: spacing.md }}>
-                    {packages.map((pkg) => (
-                      <PackageCard
-                        key={pkg.id}
-                        package={pkg}
-                        onClick={() => navigate(`/packages/${pkg.id}`)}
-                      />
-                    ))}
-                  </div>
+                  <Space direction="vertical" size={spacing.lg} style={{ width: '100%' }}>
+                    <section>
+                      <Title level={5} style={{ marginTop: 0, marginBottom: spacing.md }}>
+                        {t('learnerProfile.lessonPackages')}
+                      </Title>
+                      {packages.length === 0 ? (
+                        <EmptyState
+                          title={t('pages.packages.noPackages')}
+                          description={t('pages.packages.noPackagesDescription')}
+                          actionText={canUseFullActions ? t('learnerProfile.createPackage') : undefined}
+                          onAction={canUseFullActions ? () => setIsPackageModalOpen(true) : undefined}
+                        />
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: spacing.md }}>
+                          {packages.map((pkg) => (
+                            <PackageCard
+                              key={pkg.id}
+                              package={pkg}
+                              onClick={() => navigate(`/packages/${pkg.id}`)}
+                            />
+                          ))}
+                        </div>
+                      )}
+                    </section>
+
+                    <section>
+                      <Title level={5} style={{ marginTop: 0, marginBottom: spacing.md }}>
+                        {t('learnerProfile.oneOffLessons')}
+                      </Title>
+                      {oneOffPackages.length === 0 ? (
+                        <EmptyState
+                          title={t('learnerProfile.noOneOffLessons')}
+                          description={t('learnerProfile.noOneOffLessonsDescription')}
+                          actionText={canUseFullActions ? t('learnerProfile.createOneOffLesson') : undefined}
+                          onAction={canUseFullActions ? handleOpenOneOffLessonModal : undefined}
+                        />
+                      ) : (
+                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: spacing.md }}>
+                          {oneOffPackages.map((lesson) => {
+                            const lessonDate = lesson.next_lesson_date || lesson.start_date;
+                            const price = Number(lesson.price || 0);
+                            return (
+                              <Card
+                                key={lesson.id}
+                                hoverable
+                                style={{ background: colors.bgSecondary, borderColor: colors.borderPrimary }}
+                                bodyStyle={{ padding: spacing.md }}
+                                onClick={() => navigate(`/packages/${lesson.id}`)}
+                              >
+                                <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>
+                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: spacing.sm }}>
+                                    <Text strong ellipsis style={{ fontSize: 16 }}>
+                                      {lesson.title}
+                                    </Text>
+                                  </div>
+                                  {lessonDate && (
+                                    <Text type="secondary">
+                                      <CalendarOutlined style={{ marginRight: spacing.xs }} />
+                                      {formatLessonDate(lessonDate)}
+                                    </Text>
+                                  )}
+                                  {price > 0 && (
+                                    <Text type="secondary">
+                                      {t('pages.finance.price')}: {formatCurrency(price)}
+                                    </Text>
+                                  )}
+                                </Space>
+                              </Card>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </section>
+                  </Space>
                 )}
               </div>
             ),
@@ -484,29 +786,67 @@ const LearnerProfile: React.FC = () => {
             children: (
               <div>
                 {/* Total Payments */}
-                <Card style={cardStyle}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                    <DollarOutlined style={{ fontSize: 24, color: colors.accentSuccess }} />
-                    <div>
-                      <Text type="secondary">{t('pages.finance.totalPaid')}</Text>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: spacing.md }}>
+                  <Card style={cardStyle}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                      <DollarOutlined
+                        style={{
+                          fontSize: 24,
+                          color: (finance?.outstanding_balance || 0) > 0 ? '#faad14' : colors.accentSuccess,
+                        }}
+                      />
                       <div>
-                        <Text strong style={{ fontSize: 20 }}>
-                          {formatCurrency(finance?.total_paid || 0)}
-                        </Text>
+                        <Text type="secondary">{t('pages.finance.outstanding')}</Text>
+                        <div>
+                          <Text strong style={{ fontSize: 20 }}>
+                            {formatCurrency(finance?.outstanding_balance || 0)}
+                          </Text>
+                        </div>
                       </div>
                     </div>
-                  </div>
-                </Card>
+                  </Card>
+                  <Card style={cardStyle}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                      <DollarOutlined style={{ fontSize: 24, color: colors.accentSuccess }} />
+                      <div>
+                        <Text type="secondary">{t('pages.finance.totalPaid')}</Text>
+                        <div>
+                          <Text strong style={{ fontSize: 20 }}>
+                            {formatCurrency(finance?.total_paid || 0)}
+                          </Text>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                  <Card style={cardStyle}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                      <DollarOutlined style={{ fontSize: 24, color: colors.accentPrimary }} />
+                      <div>
+                        <Text type="secondary">{t('pages.finance.lessonRate')}</Text>
+                        <div>
+                          <Text strong style={{ fontSize: 20 }}>
+                            {finance?.lesson_rate ? formatCurrency(finance.lesson_rate) : t('pages.finance.notSet')}
+                          </Text>
+                        </div>
+                      </div>
+                    </div>
+                  </Card>
+                </div>
 
-                {/* Record Payment Button */}
-                <Button
-                  type="primary"
-                  icon={<PlusOutlined />}
-                  onClick={() => navigate(`/learners/${learnerId}/finance`)}
-                  style={{ marginBottom: spacing.md }}
-                >
-                  {t('pages.finance.recordPayment')}
-                </Button>
+                <Space wrap style={{ marginBottom: spacing.md }}>
+                  <Button
+                    onClick={() => navigate(`/learners/${learnerId}/finance`)}
+                  >
+                    {t('learnerProfile.openFullFinance')}
+                  </Button>
+                  <Button
+                    type="primary"
+                    icon={<PlusOutlined />}
+                    onClick={() => navigate(`/learners/${learnerId}/finance?recordPayment=1`)}
+                  >
+                    {t('pages.finance.recordPayment')}
+                  </Button>
+                </Space>
 
                 {/* Payment History */}
                 <Card title={t('pages.finance.paymentHistory')} style={cardStyle}>
@@ -642,6 +982,81 @@ const LearnerProfile: React.FC = () => {
         loading={createPackageMutation.isPending}
         mode="create"
         preselectedLearnerId={learnerId}
+      />
+
+      <Modal
+        open={isOneOffLessonModalOpen}
+        title={t('learnerProfile.createOneOffLesson')}
+        onCancel={() => setIsOneOffLessonModalOpen(false)}
+        onOk={handleCreateOneOffLesson}
+        okText={t('common.create')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ loading: createOneOffLessonMutation.isPending }}
+      >
+        <Form
+          form={oneOffLessonForm}
+          layout="vertical"
+          initialValues={{ duration_minutes: 60 }}
+        >
+          <Form.Item
+            name="scheduled_at"
+            label={t('learnerProfile.oneOffLessonDate')}
+            rules={[{ required: true, message: t('learnerProfile.oneOffLessonDateRequired') }]}
+          >
+            <DatePicker
+              showTime={{ format: 'HH:mm', minuteStep: 5 }}
+              format="DD.MM.YYYY HH:mm"
+              style={{ width: '100%' }}
+            />
+          </Form.Item>
+          <Form.Item
+            name="duration_minutes"
+            label={t('schedule.duration')}
+            rules={[
+              { required: true, message: t('schedule.durationRequired') },
+              { type: 'number', min: 15, max: 480, message: t('schedule.durationInvalid') },
+            ]}
+          >
+            <InputNumber min={15} max={480} step={5} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="price" label={t('pages.finance.lessonRate')}>
+            <InputNumber min={0} step={100} style={{ width: '100%' }} />
+          </Form.Item>
+          <Form.Item name="title" label={t('learnerProfile.oneOffLessonTitle')}>
+            <Input maxLength={255} placeholder={t('learnerProfile.oneOffLessonTitlePlaceholder')} />
+          </Form.Item>
+          <Form.Item name="notes" label={t('forms.package.notesLabel')}>
+            <Input.TextArea rows={3} maxLength={5000} />
+          </Form.Item>
+        </Form>
+      </Modal>
+
+      <LessonForm
+        open={isLessonModalOpen}
+        onCancel={() => {
+          setIsLessonModalOpen(false);
+          setEditingLesson(null);
+        }}
+        onFinish={(values) => {
+          if (!editingLesson) return;
+          updateLessonMutation.mutate({ lessonId: editingLesson.id, values });
+        }}
+        isLoading={updateLessonMutation.isPending}
+        initialValues={editingLesson}
+        mode="edit"
+      />
+
+      <RescheduleForm
+        open={isRescheduleModalOpen}
+        onCancel={() => {
+          setIsRescheduleModalOpen(false);
+          setSelectedLessonId(null);
+          setSelectedLesson(null);
+        }}
+        onFinish={handleRescheduleSubmit}
+        isLoading={updateLessonMutation.isPending}
+        currentDateTime={selectedLesson?.scheduled_at}
+        currentDuration={selectedLesson?.duration_minutes}
       />
     </div>
   );

@@ -15,7 +15,7 @@ from datetime import datetime
 from decimal import Decimal
 from typing import Optional
 
-from pydantic import Field, field_validator
+from pydantic import Field, field_validator, model_validator
 
 from api.schemas.base import BaseRequest, BaseResponse, TimestampMixin, TenantMixin
 
@@ -46,6 +46,33 @@ class PaymentCreate(BaseRequest):
         return v
 
 
+class PaymentUpdateRequest(BaseRequest):
+    """Request schema for updating mutable payment fields."""
+
+    amount: Optional[Decimal] = Field(None, gt=0, description="Payment amount")
+    paid_at: Optional[datetime] = Field(None, description="Payment date/time")
+    notes: Optional[str] = Field(None, max_length=1000, description="Payment notes")
+
+    @field_validator('amount')
+    @classmethod
+    def validate_amount(cls, v: Optional[Decimal]) -> Optional[Decimal]:
+        if v is not None and v <= 0:
+            raise ValueError("Amount must be positive")
+        return v
+
+    @model_validator(mode='after')
+    def validate_has_changes(self) -> 'PaymentUpdateRequest':
+        if self.amount is None and self.paid_at is None and self.notes is None:
+            raise ValueError("At least one field must be provided")
+        return self
+
+
+class PaymentVoidRequest(BaseRequest):
+    """Request schema for voiding a payment."""
+
+    reason: Optional[str] = Field(None, max_length=1000, description="Reason for voiding the payment")
+
+
 class PaymentResponse(BaseResponse, TimestampMixin, TenantMixin):
     """Response schema for payment.
     
@@ -71,6 +98,9 @@ class PaymentResponse(BaseResponse, TimestampMixin, TenantMixin):
     currency: str = Field(default="RUB", description="Currency code")
     paid_at: datetime = Field(..., description="Payment date/time")
     notes: Optional[str] = Field(None, description="Payment notes")
+    is_voided: bool = Field(default=False, description="Whether payment has been voided")
+    voided_at: Optional[datetime] = Field(None, description="When payment was voided")
+    void_reason: Optional[str] = Field(None, description="Reason for voiding the payment")
 
 
 class MonthlyIncomeResponse(BaseResponse):
@@ -158,6 +188,8 @@ class DebtorResponse(BaseResponse):
 
 __all__ = [
     'PaymentCreate',
+    'PaymentUpdateRequest',
+    'PaymentVoidRequest',
     'PaymentResponse',
     'MonthlyIncomeResponse',
     'DashboardMetricsResponse',

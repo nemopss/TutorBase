@@ -154,6 +154,14 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
         />
       )}
 
+      <Alert
+        type="info"
+        showIcon
+        message={t('schedule.templateInfoTitle')}
+        description={t('schedule.templateInfoDescription')}
+        style={{ marginBottom: spacing.md }}
+      />
+
       {/* Current Schedule */}
       <Card style={cardStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>

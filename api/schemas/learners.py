@@ -55,6 +55,19 @@ class LearnerResponse(BaseResponse, TimestampMixin, TenantMixin):
     next_lesson_date: Optional[datetime] = Field(None, description="ISO datetime of the nearest scheduled lesson")
 
 
+class StudentLearnerResponse(BaseResponse):
+    """Student-safe learner response.
+
+    This DTO is intentionally narrow and excludes tutor/internal fields such as
+    notes, lesson_rate, chat IDs, tenant IDs, and other workspace metadata.
+    """
+
+    id: int = Field(..., description="Learner ID")
+    display_name: str = Field(..., min_length=1, max_length=255, description="Display name")
+    notifications_enabled: bool = Field(default=True, description="Whether notifications are enabled")
+    next_lesson_date: Optional[datetime] = Field(None, description="ISO datetime of the nearest scheduled lesson")
+
+
 class LearnerDetailResponse(BaseResponse):
     """Response schema for learner detail (profile page).
     

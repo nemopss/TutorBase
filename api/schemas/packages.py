@@ -20,6 +20,7 @@ Validation rules:
 from __future__ import annotations
 
 from datetime import datetime
+from decimal import Decimal
 from typing import Optional
 
 from pydantic import Field, field_validator, model_validator
@@ -29,6 +30,7 @@ from api.schemas.validators import validate_status, validate_timezone, validate_
 
 # Valid package statuses
 VALID_PACKAGE_STATUSES = ['draft', 'active', 'completed', 'cancelled']
+VALID_PACKAGE_TYPES = ['package', 'one_off']
 
 
 class PackageProgressModel(BaseResponse):
@@ -75,6 +77,7 @@ class PackageResponse(BaseResponse, TimestampMixin, TenantMixin):
     learner_id: int = Field(..., gt=0, description="Learner ID")
     learner_name: Optional[str] = Field(None, description="Learner display name")
     template_id: Optional[int] = Field(None, gt=0, description="Template ID if created from template")
+    package_type: str = Field(default='package', description="Package type (package, one_off)")
     title: str = Field(..., min_length=1, max_length=255, description="Package title")
     status: str = Field(..., description="Package status")
     start_date: Optional[datetime] = Field(None, description="Package start date")
@@ -196,6 +199,21 @@ class PackageCreateRequest(BaseRequest):
         return self
 
 
+class OneOffLessonCreateRequest(BaseRequest):
+    """Request schema for creating a one-off lesson.
+
+    Creates a package-backed single lesson so finance, reminders, and schedule
+    logic can reuse the normal package/lesson path without showing it in the
+    regular package list by default.
+    """
+    learner_id: int = Field(..., gt=0, description="ID of learner")
+    scheduled_at: datetime = Field(..., description="Lesson date and time")
+    duration_minutes: int = Field(default=60, gt=0, le=480, description="Lesson duration in minutes")
+    title: Optional[str] = Field(None, min_length=1, max_length=255, description="One-off lesson title")
+    price: Optional[Decimal] = Field(None, gt=0, description="Lesson price")
+    notes: Optional[str] = Field(None, max_length=5000, description="Teacher notes")
+
+
 class PackageUpdateRequest(BaseRequest):
     """Request schema for updating an existing lesson package.
     
@@ -284,4 +302,3 @@ __all__ = [
     'PackageUpdateRequest',
     'VALID_PACKAGE_STATUSES',
 ]
-

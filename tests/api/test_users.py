@@ -8,6 +8,7 @@ from api.dependencies import CurrentTenant
 from api.security import create_access_token
 from config import config
 from database import crud
+from tests import factories
 from tests.api.utils import get_auth_headers
 
 
@@ -130,3 +131,52 @@ async def test_update_user_role_not_found(client: AsyncClient, db_session: Async
         headers=headers,
     )
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_get_current_learner_info_is_student_safe(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    telegram_id = 555001
+    headers, _ = await get_auth_headers(
+        db_session,
+        current_tenant,
+        role="viewer",
+        telegram_id=telegram_id,
+        username="student_safe",
+        display_name="Student Safe User",
+    )
+
+    bot_user = await factories.create_bot_user(
+        db_session,
+        chat_id=telegram_id,
+        username="student_safe",
+        first_name="Student",
+        last_name="Safe",
+    )
+    learner = await factories.create_learner(
+        db_session,
+        display_name="Teacher Name For Student",
+        notes="internal note",
+        tenant_id=current_tenant.tenant_id or 1,
+        notifications_enabled=True,
+    )
+    learner.bot_user = bot_user
+    learner.bot_user_id = bot_user.id
+    learner.lesson_rate = 3200
+    await db_session.commit()
+
+    response = await client.get("/api/v1/users/me/learner", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["id"] == learner.id
+    assert body["display_name"] == learner.display_name
+    assert body["notifications_enabled"] is True
+    assert "notes" not in body
+    assert "lesson_rate" not in body
+    assert "chat_id" not in body
+    assert "bot_user_id" not in body
+    assert "tenant_id" not in body
