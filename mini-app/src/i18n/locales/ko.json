@@ -117,7 +117,35 @@
       "lessonsByStatus": "상태별 수업",
       "activePackages": "활성 패키지",
       "upcomingLessons": "예정된 수업",
-      "learner": "학생"
+      "learner": "학생",
+      "onboarding": {
+        "title": "공간 설정",
+        "description": "처음 필요한 항목을 완료하고 바로 학생 관리를 시작하세요.",
+        "progress": "{{completed}}/{{total}} 단계",
+        "done": "완료",
+        "steps": {
+          "learners": {
+            "title": "첫 학생 추가",
+            "description": "학생 카드에 수업, 패키지, 메모를 함께 보관하세요.",
+            "action": "학생 추가"
+          },
+          "invite": {
+            "title": "초대 코드 준비",
+            "description": "학생이 Telegram 계정을 카드에 연결하려면 코드가 필요합니다.",
+            "action": "초대 열기"
+          },
+          "packages": {
+            "title": "첫 패키지 만들기",
+            "description": "패키지는 수업, 가격, 결제 기준을 정합니다.",
+            "action": "패키지 만들기"
+          },
+          "lessons": {
+            "title": "수업 일정 확인",
+            "description": "수업은 캘린더에 표시되고 알림에 사용됩니다.",
+            "action": "수업 열기"
+          }
+        }
+      }
     },
     "learners": {
       "title": "학생",
@@ -887,25 +915,25 @@
       "codeNotWorkingQuestion": "코드가 작동하지 않나요?",
       "codeNotWorkingAnswer": "전체 코드를 복사했는지 확인하세요. 코드는 대소문자를 구분합니다.",
       "areTutorQuestion": "선생님이신가요?",
-      "areTutorAnswer": "직접 학교를 만드세요 →"
+      "areTutorAnswer": "튜터 공간 만들기 →"
     },
     "roleSelection": {
       "title": "TutorBase에 오신 것을 환영합니다!",
       "subtitle": "시작하려면 역할을 선택하세요",
       "tutorTitle": "저는 선생님입니다",
-      "tutorDescription": "학교를 만들고 학생을 관리하세요",
+      "tutorDescription": "튜터 공간을 만들고 학생을 관리하세요",
       "tutorBadge": "14일 무료 체험",
       "studentTitle": "저는 학생입니다",
-      "studentDescription": "초대 코드로 선생님의 학교에 참여하세요",
+      "studentDescription": "초대 코드로 선생님에게 참여하세요",
       "studentBadge": "항상 무료"
     },
     "tutorRegistration": {
-      "title": "학교 만들기",
+      "title": "튜터 공간 만들기",
       "subtitle": "14일 무료 체험 시작",
-      "schoolNameLabel": "학교 이름",
-      "schoolNamePlaceholder": "예: 수학 과외 by 홍길동",
-      "schoolNameRequired": "학교 이름을 입력해주세요",
-      "schoolNameMinLength": "학교 이름은 최소 2자 이상이어야 합니다",
+      "schoolNameLabel": "공간 이름",
+      "schoolNamePlaceholder": "예: 홍길동 수학 과외",
+      "schoolNameRequired": "공간 이름을 입력해주세요",
+      "schoolNameMinLength": "공간 이름은 최소 2자 이상이어야 합니다",
       "contactEmailLabel": "연락처 이메일",
       "contactEmailPlaceholder": "your@email.com (선택)",
       "contactEmailInvalid": "유효한 이메일 주소를 입력해주세요",
@@ -915,8 +943,8 @@
       "termsOfService": "서비스 약관",
       "and": "및",
       "privacyPolicy": "개인정보 처리방침",
-      "submit": "학교 만들기 및 체험 시작",
-      "submitting": "학교 생성 중...",
+      "submit": "공간 만들기 및 체험 시작",
+      "submitting": "공간 생성 중...",
       "registrationFailed": "등록 실패",
       "genericError": "등록에 실패했습니다. 다시 시도해주세요.",
       "trialBenefits": "체험에 포함된 내용:",

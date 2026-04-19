@@ -117,7 +117,35 @@
       "lessonsByStatus": "Lessons by Status",
       "activePackages": "Active Packages",
       "upcomingLessons": "Upcoming Lessons",
-      "learner": "Learner"
+      "learner": "Learner",
+      "onboarding": {
+        "title": "Set Up Your Workspace",
+        "description": "Complete the first steps to start managing learners without manual setup.",
+        "progress": "{{completed}} of {{total}} steps",
+        "done": "Done",
+        "steps": {
+          "learners": {
+            "title": "Add your first learner",
+            "description": "Create a learner profile to keep lessons, packages, and notes in one place.",
+            "action": "Add Learner"
+          },
+          "invite": {
+            "title": "Prepare an invite code",
+            "description": "The code lets a learner connect their Telegram account to the profile.",
+            "action": "Open Invites"
+          },
+          "packages": {
+            "title": "Create your first package",
+            "description": "A package defines lessons, pricing, and the basis for payments.",
+            "action": "Create Package"
+          },
+          "lessons": {
+            "title": "Check the lesson schedule",
+            "description": "Lessons appear in the calendar and are used for reminders.",
+            "action": "Open Lessons"
+          }
+        }
+      }
     },
     "learners": {
       "title": "Learners",
@@ -888,25 +916,25 @@
       "codeNotWorkingQuestion": "Code not working?",
       "codeNotWorkingAnswer": "Make sure you copied the entire code. Codes are case-sensitive.",
       "areTutorQuestion": "Are you a tutor?",
-      "areTutorAnswer": "Create your own school instead →"
+      "areTutorAnswer": "Create your tutor workspace →"
     },
     "roleSelection": {
       "title": "Welcome to TutorBase!",
       "subtitle": "Choose your role to get started",
       "tutorTitle": "I'm a Tutor",
-      "tutorDescription": "Create your school and manage students",
+      "tutorDescription": "Create your tutor workspace and manage learners",
       "tutorBadge": "14-day free trial",
       "studentTitle": "I'm a Student",
-      "studentDescription": "Join your tutor's school with an invite code",
+      "studentDescription": "Join your tutor with an invite code",
       "studentBadge": "Always free"
     },
     "tutorRegistration": {
-      "title": "Create Your School",
+      "title": "Create Your Tutor Workspace",
       "subtitle": "Start your 14-day free trial",
-      "schoolNameLabel": "School Name",
+      "schoolNameLabel": "Workspace Name",
       "schoolNamePlaceholder": "e.g., Math Tutoring by John",
-      "schoolNameRequired": "Please enter your school name",
-      "schoolNameMinLength": "School name must be at least 2 characters",
+      "schoolNameRequired": "Please enter your workspace name",
+      "schoolNameMinLength": "Workspace name must be at least 2 characters",
       "contactEmailLabel": "Contact Email",
       "contactEmailPlaceholder": "your@email.com (optional)",
       "contactEmailInvalid": "Please enter a valid email address",
@@ -916,8 +944,8 @@
       "termsOfService": "Terms of Service",
       "and": "and",
       "privacyPolicy": "Privacy Policy",
-      "submit": "Create School & Start Trial",
-      "submitting": "Creating School...",
+      "submit": "Create Workspace & Start Trial",
+      "submitting": "Creating Workspace...",
       "registrationFailed": "Registration Failed",
       "genericError": "Registration failed. Please try again.",
       "trialBenefits": "What's included in your trial:",
