@@ -52,24 +52,8 @@ const fetchDashboardMetrics = async (): Promise<DashboardMetrics> => {
 };
 
 const fetchLearnersWithBalance = async (): Promise<LearnerWithBalance[]> => {
-  const { data } = await api.get('/learners');
-  // Filter learners with outstanding balance from finance endpoint
-  const learnersWithBalance: LearnerWithBalance[] = [];
-  for (const learner of data.items.slice(0, 10)) {
-    try {
-      const financeData = await api.get(`/learners/${learner.id}/finance`);
-      if (financeData.data.outstanding_balance > 0) {
-        learnersWithBalance.push({
-          learner_id: learner.id,
-          learner_name: learner.display_name,
-          outstanding_balance: financeData.data.outstanding_balance,
-        });
-      }
-    } catch {
-      // Skip learners without finance data
-    }
-  }
-  return learnersWithBalance;
+  const { data } = await api.get('/finance/debtors', { params: { limit: 10, offset: 0 } });
+  return data.items || [];
 };
 
 // --- Helpers --- //

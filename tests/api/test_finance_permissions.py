@@ -24,12 +24,14 @@ async def test_viewer_cannot_read_finance_or_payments(
     headers, _ = await get_auth_headers(db_session, current_tenant, role="viewer")
 
     dashboard_response = await client.get("/api/v1/finance/dashboard", headers=headers)
+    debtors_response = await client.get("/api/v1/finance/debtors", headers=headers)
     report_response = await client.get("/api/v1/finance/reports/income", headers=headers)
     export_response = await client.get("/api/v1/finance/reports/income/export", headers=headers)
     payments_response = await client.get("/api/v1/payments", headers=headers)
     learner_finance_response = await client.get(f"/api/v1/learners/{learner.id}/finance", headers=headers)
 
     assert dashboard_response.status_code == 403
+    assert debtors_response.status_code == 403
     assert report_response.status_code == 403
     assert export_response.status_code == 403
     assert payments_response.status_code == 403
@@ -201,7 +203,7 @@ async def test_dashboard_unpaid_count_uses_actual_outstanding(
     current_tenant: CurrentTenant,
 ):
     learner = await factories.create_learner(db_session)
-    package = await factories.create_package(db_session, learner=learner)
+    package = await factories.create_package(db_session, learner=learner, status="active")
     package.price = Decimal("100.00")
     package.payment_status = "partial"
     await db_session.flush()
@@ -237,7 +239,7 @@ async def test_learner_finance_uses_actual_outstanding_even_when_status_is_stale
     current_tenant: CurrentTenant,
 ):
     learner = await factories.create_learner(db_session)
-    package = await factories.create_package(db_session, learner=learner)
+    package = await factories.create_package(db_session, learner=learner, status="active")
     package.price = Decimal("100.00")
     package.payment_status = "paid"
     await db_session.commit()
@@ -247,3 +249,31 @@ async def test_learner_finance_uses_actual_outstanding_even_when_status_is_stale
 
     assert response.status_code == 200
     assert Decimal(str(response.json()["outstanding_balance"])) == Decimal("100")
+
+
+@pytest.mark.asyncio
+async def test_debtors_endpoint_matches_dashboard_count(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner_1 = await factories.create_learner(db_session, display_name="A")
+    learner_2 = await factories.create_learner(db_session, display_name="B")
+    active_1 = await factories.create_package(db_session, learner=learner_1, status="active")
+    active_2 = await factories.create_package(db_session, learner=learner_2, status="active")
+    draft = await factories.create_package(db_session, learner=learner_2, status="draft")
+    active_1.price = Decimal("100.00")
+    active_2.price = Decimal("50.00")
+    draft.price = Decimal("999.00")
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    dashboard = await client.get("/api/v1/finance/dashboard", headers=headers)
+    assert dashboard.status_code == 200
+    assert dashboard.json()["unpaid_learners_count"] == 2
+
+    debtors = await client.get("/api/v1/finance/debtors?limit=10&offset=0", headers=headers)
+    assert debtors.status_code == 200
+    body = debtors.json()
+    assert body["total"] == 2
+    assert len(body["items"]) == 2

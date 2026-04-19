@@ -26,13 +26,16 @@ from datetime import datetime
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional
 
-from sqlalchemy import func, select
+from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.models import Learner, LessonPackage, Lesson, Payment
 
 if TYPE_CHECKING:
     from api.dependencies import CurrentTenant
+
+
+DEBT_PACKAGE_STATUSES: tuple[str, ...] = ("active", "completed")
 
 
 def calculate_package_price(
@@ -240,11 +243,15 @@ async def get_outstanding_balance(
     **Validates: Requirements 5.2, 5.3**
     """
     # Get all priced packages for this learner and compute the actual balance.
+    # Debt rules (docs/saas-platform-plan.md):
+    # - only active/completed packages create debt
+    # - draft/cancelled packages do not create debt
     packages_result = await session.execute(
         select(LessonPackage)
         .where(
             LessonPackage.tenant_id == current_tenant.tenant_id,
             LessonPackage.learner_id == learner_id,
+            LessonPackage.status.in_(DEBT_PACKAGE_STATUSES),
             LessonPackage.price.isnot(None),
             LessonPackage.price > Decimal("0"),
         )
@@ -345,36 +352,44 @@ async def get_dashboard_metrics(
     )
     previous_month_income = previous_result.scalar() or Decimal("0")
     
-    # Total outstanding balance. Use actual paid amounts instead of cached
-    # payment_status so the dashboard and debtor lists cannot disagree.
-    packages_result = await session.execute(
-        select(LessonPackage)
+    # Total outstanding balance.
+    # Compute from facts (price - sum(payments)) and apply package debt rules
+    # so dashboard and debtors list cannot disagree.
+    payments_by_package = (
+        select(
+            Payment.package_id.label("package_id"),
+            func.coalesce(func.sum(Payment.amount), Decimal("0")).label("total_paid"),
+        )
+        .where(
+            Payment.tenant_id == current_tenant.tenant_id,
+            Payment.package_id.isnot(None),
+        )
+        .group_by(Payment.package_id)
+        .subquery()
+    )
+
+    paid_expr = func.coalesce(payments_by_package.c.total_paid, Decimal("0"))
+    price_expr = func.coalesce(LessonPackage.price, Decimal("0"))
+    diff_expr = price_expr - paid_expr
+    outstanding_expr = case((diff_expr > Decimal("0"), diff_expr), else_=Decimal("0"))
+
+    debtors_agg = (
+        select(
+            func.coalesce(func.sum(outstanding_expr), Decimal("0")).label("total_outstanding"),
+            func.count(func.distinct(LessonPackage.learner_id)).label("unpaid_learners_count"),
+        )
+        .outerjoin(payments_by_package, payments_by_package.c.package_id == LessonPackage.id)
         .where(
             LessonPackage.tenant_id == current_tenant.tenant_id,
+            LessonPackage.status.in_(DEBT_PACKAGE_STATUSES),
             LessonPackage.price.isnot(None),
             LessonPackage.price > Decimal("0"),
+            outstanding_expr > Decimal("0"),
         )
     )
-    packages = packages_result.scalars().all()
-    
-    total_outstanding = Decimal("0")
-    learners_with_outstanding: set[int] = set()
-    for package in packages:
-        package_price = package.price or Decimal("0")
-        payments_result = await session.execute(
-            select(func.coalesce(func.sum(Payment.amount), Decimal("0")))
-            .where(
-                Payment.tenant_id == current_tenant.tenant_id,
-                Payment.package_id == package.id,
-            )
-        )
-        total_paid = payments_result.scalar() or Decimal("0")
-        outstanding = package_price - total_paid
-        if outstanding > Decimal("0"):
-            total_outstanding += outstanding
-            learners_with_outstanding.add(package.learner_id)
-
-    unpaid_learners_count = len(learners_with_outstanding)
+    debtors_row = (await session.execute(debtors_agg)).one()
+    total_outstanding = debtors_row.total_outstanding or Decimal("0")
+    unpaid_learners_count = int(debtors_row.unpaid_learners_count or 0)
     
     # 6-month income chart
     income_chart: list[MonthlyIncome] = []
@@ -403,6 +418,82 @@ async def get_dashboard_metrics(
         unpaid_learners_count=unpaid_learners_count,
         income_chart=income_chart,
     )
+
+
+@dataclass
+class Debtor:
+    learner_id: int
+    learner_name: str
+    outstanding_balance: Decimal
+
+
+async def get_debtors(
+    session: AsyncSession,
+    current_tenant: "CurrentTenant",
+    *,
+    limit: int,
+    offset: int,
+) -> tuple[list[Debtor], int]:
+    """List learners with outstanding balance.
+
+    Must match dashboard debt calculation and debt rules.
+    """
+    payments_by_package = (
+        select(
+            Payment.package_id.label("package_id"),
+            func.coalesce(func.sum(Payment.amount), Decimal("0")).label("total_paid"),
+        )
+        .where(
+            Payment.tenant_id == current_tenant.tenant_id,
+            Payment.package_id.isnot(None),
+        )
+        .group_by(Payment.package_id)
+        .subquery()
+    )
+
+    paid_expr = func.coalesce(payments_by_package.c.total_paid, Decimal("0"))
+    price_expr = func.coalesce(LessonPackage.price, Decimal("0"))
+    diff_expr = price_expr - paid_expr
+    outstanding_expr = case((diff_expr > Decimal("0"), diff_expr), else_=Decimal("0"))
+
+    base = (
+        select(
+            Learner.id.label("learner_id"),
+            Learner.display_name.label("learner_name"),
+            func.sum(outstanding_expr).label("outstanding_balance"),
+        )
+        .join(LessonPackage, LessonPackage.learner_id == Learner.id)
+        .outerjoin(payments_by_package, payments_by_package.c.package_id == LessonPackage.id)
+        .where(
+            Learner.tenant_id == current_tenant.tenant_id,
+            LessonPackage.tenant_id == current_tenant.tenant_id,
+            LessonPackage.status.in_(DEBT_PACKAGE_STATUSES),
+            LessonPackage.price.isnot(None),
+            LessonPackage.price > Decimal("0"),
+        )
+        .group_by(Learner.id, Learner.display_name)
+        .having(func.sum(outstanding_expr) > Decimal("0"))
+    )
+
+    total = (await session.execute(select(func.count()).select_from(base.subquery()))).scalar() or 0
+
+    rows = (
+        await session.execute(
+            base.order_by(func.sum(outstanding_expr).desc(), Learner.display_name.asc())
+            .offset(offset)
+            .limit(limit)
+        )
+    ).all()
+
+    items = [
+        Debtor(
+            learner_id=row.learner_id,
+            learner_name=row.learner_name or "Unknown",
+            outstanding_balance=row.outstanding_balance or Decimal("0"),
+        )
+        for row in rows
+    ]
+    return items, int(total)
 
 
 

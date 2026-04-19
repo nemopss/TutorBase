@@ -27,11 +27,13 @@ from api.dependencies import (
 )
 from api.schemas.finance import (
     DashboardMetricsResponse,
+    DebtorResponse,
     MonthlyIncomeResponse,
     IncomeReportResponse,
     LearnerIncomeResponse,
     PackageIncomeResponse,
 )
+from api.schemas import PaginatedResponse, PaginationParams
 from services import finance_service
 
 router = APIRouter()
@@ -73,6 +75,34 @@ async def get_dashboard(
             for m in metrics.income_chart
         ],
     )
+
+
+@router.get("/debtors", response_model=PaginatedResponse[DebtorResponse])
+async def list_debtors(
+    pagination: PaginationParams = Depends(),
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
+) -> PaginatedResponse[DebtorResponse]:
+    """List learners with outstanding balance.
+
+    The dashboard count and this list MUST use the same debt calculation.
+    """
+    debtors, total = await finance_service.get_debtors(
+        session,
+        current_tenant,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    items = [
+        DebtorResponse(
+            learner_id=item.learner_id,
+            learner_name=item.learner_name,
+            outstanding_balance=item.outstanding_balance,
+        )
+        for item in debtors
+    ]
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
 @router.get("/reports/income", response_model=IncomeReportResponse)

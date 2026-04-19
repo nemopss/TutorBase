@@ -148,6 +148,14 @@ class LearnerFinanceResponse(BaseResponse):
     payment_history: list[PaymentResponse] = Field(..., description="Payment history")
 
 
+class DebtorResponse(BaseResponse):
+    """Response schema for a debtor (learner with outstanding balance)."""
+
+    learner_id: int = Field(..., description="Learner ID")
+    learner_name: str = Field(..., description="Learner name")
+    outstanding_balance: Decimal = Field(..., description="Outstanding balance for learner")
+
+
 __all__ = [
     'PaymentCreate',
     'PaymentResponse',
@@ -157,4 +165,5 @@ __all__ = [
     'PackageIncomeResponse',
     'IncomeReportResponse',
     'LearnerFinanceResponse',
+    'DebtorResponse',
 ]
