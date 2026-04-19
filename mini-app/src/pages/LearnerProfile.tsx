@@ -121,6 +121,8 @@ const LearnerProfile: React.FC = () => {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
+  const [isUnlinkModalOpen, setIsUnlinkModalOpen] = useState(false);
+  const [createdInviteToken, setCreatedInviteToken] = useState<string | null>(null);
 
   // Fetch learner detail
   const { data: learner, isLoading, isError, error } = useQuery<LearnerDetail, Error>({
@@ -201,6 +203,7 @@ const LearnerProfile: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       message.success(t('learnerProfile.unlinkAccountSuccess'));
+      setIsUnlinkModalOpen(false);
     },
     onError: (err: any) => {
       message.error(err.response?.data?.detail || t('errors.updateFailed', { message: err.message }));
@@ -214,23 +217,8 @@ const LearnerProfile: React.FC = () => {
     },
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
-      Modal.success({
-        title: t('learnerProfile.inviteCreatedTitle'),
-        content: (
-          <Space direction="vertical" style={{ width: '100%' }}>
-            <Text>{t('learnerProfile.inviteCreatedDescription')}</Text>
-            <Input.TextArea value={data.token} readOnly autoSize />
-            <Button
-              onClick={() => {
-                navigator.clipboard?.writeText(data.token);
-                message.success(t('common.copied'));
-              }}
-            >
-              {t('common.copy')}
-            </Button>
-          </Space>
-        ),
-      });
+      queryClient.invalidateQueries({ queryKey: ['learners'] });
+      setCreatedInviteToken(data.token);
     },
     onError: (err: any) => {
       message.error(err.response?.data?.detail || t('errors.createFailed', { message: err.message }));
@@ -286,14 +274,7 @@ const LearnerProfile: React.FC = () => {
       message.warning('Отвязка аккаунта недоступна в grace-периоде.');
       return;
     }
-    Modal.confirm({
-      title: t('learnerProfile.unlinkAccountTitle'),
-      content: t('learnerProfile.unlinkAccountConfirm'),
-      okText: t('learnerProfile.unlinkAccountAction'),
-      cancelText: t('common.cancel'),
-      okButtonProps: { danger: true, loading: unlinkAccountMutation.isPending },
-      onOk: () => unlinkAccountMutation.mutateAsync(),
-    });
+    setIsUnlinkModalOpen(true);
   };
 
   const handleCreateInvite = () => {
@@ -302,6 +283,12 @@ const LearnerProfile: React.FC = () => {
       return;
     }
     createInviteMutation.mutate();
+  };
+
+  const handleCopyCreatedInvite = () => {
+    if (!createdInviteToken) return;
+    navigator.clipboard?.writeText(createdInviteToken);
+    message.success(t('common.copied'));
   };
 
   const menuItems = canUseFullActions ? [
@@ -605,6 +592,40 @@ const LearnerProfile: React.FC = () => {
         <p>{t('pages.learners.deleteConfirm', { name: learner.display_name })}</p>
         <p style={{ color: '#ff4d4f' }}>{t('pages.learners.deleteWarning')}</p>
         <p style={{ color: '#8c8c8c' }}>{t('pages.learners.deleteIrreversible')}</p>
+      </Modal>
+
+      {/* Unlink Telegram Account Modal */}
+      <Modal
+        open={isUnlinkModalOpen}
+        title={t('learnerProfile.unlinkAccountTitle')}
+        onCancel={() => setIsUnlinkModalOpen(false)}
+        onOk={() => unlinkAccountMutation.mutateAsync()}
+        okText={t('learnerProfile.unlinkAccountAction')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ danger: true, loading: unlinkAccountMutation.isPending }}
+        cancelButtonProps={{ disabled: unlinkAccountMutation.isPending }}
+      >
+        <p>{t('learnerProfile.unlinkAccountConfirm')}</p>
+      </Modal>
+
+      {/* Created Invite Modal */}
+      <Modal
+        open={!!createdInviteToken}
+        title={t('learnerProfile.inviteCreatedTitle')}
+        onCancel={() => setCreatedInviteToken(null)}
+        footer={[
+          <Button key="close" onClick={() => setCreatedInviteToken(null)}>
+            {t('common.close')}
+          </Button>,
+          <Button key="copy" type="primary" onClick={handleCopyCreatedInvite}>
+            {t('common.copy')}
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Text>{t('learnerProfile.inviteCreatedDescription')}</Text>
+          <Input.TextArea value={createdInviteToken || ''} readOnly autoSize />
+        </Space>
       </Modal>
 
       {/* Create Package Modal */}

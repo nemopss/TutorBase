@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Input, message, Modal, Card } from 'antd';
+import { Alert, Button, Card, Input, message, Modal, Space, Typography } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
@@ -16,6 +16,8 @@ import { useDebounce } from '../hooks/useDebounce';
 import { spacing } from '../theme/tokens';
 import { useAuth } from '../auth/AuthProvider';
 
+const { Text } = Typography;
+
 // --- Types --- //
 interface Learner {
   id: number;
@@ -29,6 +31,10 @@ interface Learner {
 
 interface LearnerListResponse {
   items: Learner[];
+}
+
+interface InviteTokenResponse {
+  token: string;
 }
 
 // --- API Fetchers --- //
@@ -64,6 +70,18 @@ const deleteLearner = async (learnerId: number) => {
   await api.delete(`/learners/${learnerId}`);
 };
 
+const unlinkLearnerAccount = async (learnerId: number) => {
+  const { data } = await api.post(`/learners/${learnerId}/unlink-account`, {
+    reason: 'manual reset from learners list',
+  });
+  return data;
+};
+
+const createLearnerInvite = async (learnerId: number): Promise<InviteTokenResponse> => {
+  const { data } = await api.post(`/learners/${learnerId}/invite`);
+  return data;
+};
+
 // --- Component --- //
 const Learners: React.FC = () => {
   const { t } = useTranslation();
@@ -80,6 +98,9 @@ const Learners: React.FC = () => {
   const [editingLearner, setEditingLearner] = useState<Learner | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
   const [learnerToDelete, setLearnerToDelete] = useState<Learner | null>(null);
+  const [unlinkModalOpen, setUnlinkModalOpen] = useState(false);
+  const [learnerToUnlink, setLearnerToUnlink] = useState<Learner | null>(null);
+  const [createdInvite, setCreatedInvite] = useState<{ learner: Learner; token: string } | null>(null);
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -147,6 +168,37 @@ const Learners: React.FC = () => {
     },
     onError: (error: Error) => {
       message.error(t('errors.deleteFailed', { message: error.message }));
+    },
+  });
+
+  const unlinkAccountMutation = useMutation({
+    mutationFn: unlinkLearnerAccount,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learners'] });
+      if (learnerToUnlink) {
+        queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerToUnlink.id] });
+      }
+      message.success(t('learnerProfile.unlinkAccountSuccess'));
+      setUnlinkModalOpen(false);
+      setLearnerToUnlink(null);
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || t('errors.updateFailed', { message: error.message }));
+    },
+  });
+
+  const createInviteMutation = useMutation({
+    mutationFn: createLearnerInvite,
+    onSuccess: (data, learnerId) => {
+      queryClient.invalidateQueries({ queryKey: ['learners'] });
+      queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
+      const learner = filteredLearners.find((item) => item.id === learnerId);
+      if (learner) {
+        setCreatedInvite({ learner, token: data.token });
+      }
+    },
+    onError: (error: any) => {
+      message.error(error.response?.data?.detail || t('errors.createFailed', { message: error.message }));
     },
   });
 
@@ -223,6 +275,34 @@ const Learners: React.FC = () => {
     if (learnerToDelete) {
       deleteMutation.mutate(learnerToDelete.id);
     }
+  };
+
+  const handleCreateInvite = (learner: Learner) => {
+    if (!canUseFullActions) {
+      message.warning('Создание инвайта недоступно в grace-периоде.');
+      return;
+    }
+    createInviteMutation.mutate(learner.id);
+  };
+
+  const handleUnlinkAccount = (learner: Learner) => {
+    if (!canUseFullActions) {
+      message.warning('Отвязка аккаунта недоступна в grace-периоде.');
+      return;
+    }
+    setLearnerToUnlink(learner);
+    setUnlinkModalOpen(true);
+  };
+
+  const confirmUnlinkAccount = () => {
+    if (!learnerToUnlink) return;
+    unlinkAccountMutation.mutate(learnerToUnlink.id);
+  };
+
+  const handleCopyCreatedInvite = () => {
+    if (!createdInvite) return;
+    navigator.clipboard?.writeText(createdInvite.token);
+    message.success(t('common.copied'));
   };
 
   const handleCardClick = (learner: Learner) => {
@@ -311,6 +391,8 @@ const Learners: React.FC = () => {
               onNotificationToggle={handleNotificationToggle}
               onEdit={handleEdit}
               onDelete={handleDelete}
+              onCreateInvite={handleCreateInvite}
+              onUnlinkAccount={handleUnlinkAccount}
               onClick={handleCardClick}
               isToggling={togglingLearnerId === learner.id && notificationsMutation.isPending}
             />
@@ -372,6 +454,38 @@ const Learners: React.FC = () => {
         <p>{t('pages.learners.deleteConfirm', { name: learnerToDelete?.display_name })}</p>
         <p style={{ color: '#ff4d4f' }}>{t('pages.learners.deleteWarning')}</p>
         <p style={{ color: '#8c8c8c' }}>{t('pages.learners.deleteIrreversible')}</p>
+      </Modal>
+
+      <Modal
+        open={unlinkModalOpen}
+        title={t('learnerProfile.unlinkAccountTitle')}
+        onCancel={() => { setUnlinkModalOpen(false); setLearnerToUnlink(null); }}
+        onOk={confirmUnlinkAccount}
+        okText={t('learnerProfile.unlinkAccountAction')}
+        cancelText={t('common.cancel')}
+        okButtonProps={{ danger: true, loading: unlinkAccountMutation.isPending }}
+        cancelButtonProps={{ disabled: unlinkAccountMutation.isPending }}
+      >
+        <p>{t('learnerProfile.unlinkAccountConfirm')}</p>
+      </Modal>
+
+      <Modal
+        open={!!createdInvite}
+        title={t('learnerProfile.inviteCreatedTitle')}
+        onCancel={() => setCreatedInvite(null)}
+        footer={[
+          <Button key="close" onClick={() => setCreatedInvite(null)}>
+            {t('common.close')}
+          </Button>,
+          <Button key="copy" type="primary" onClick={handleCopyCreatedInvite}>
+            {t('common.copy')}
+          </Button>,
+        ]}
+      >
+        <Space direction="vertical" style={{ width: '100%' }}>
+          <Text>{t('learnerProfile.inviteCreatedDescription')}</Text>
+          <Input.TextArea value={createdInvite?.token} readOnly autoSize />
+        </Space>
       </Modal>
     </div>
   );

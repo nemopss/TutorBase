@@ -130,9 +130,9 @@
             "action": "Add Learner"
           },
           "invite": {
-            "title": "Prepare an invite code",
-            "description": "The code lets a learner connect their Telegram account to the profile.",
-            "action": "Open Invites"
+            "title": "Create a personal invite",
+            "description": "Open a learner profile and create a code that links Telegram to that exact learner.",
+            "action": "Open Learners"
           },
           "packages": {
             "title": "Create your first package",

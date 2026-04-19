@@ -10,6 +10,8 @@ import {
   DeleteOutlined,
   CalendarOutlined,
   StopOutlined,
+  DisconnectOutlined,
+  LinkOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -31,6 +33,8 @@ interface LearnerCardProps {
   onNotificationToggle: (learnerId: number, currentValue: boolean) => void;
   onEdit?: (learner: Learner) => void;
   onDelete?: (learnerId: number) => void;
+  onCreateInvite?: (learner: Learner) => void;
+  onUnlinkAccount?: (learner: Learner) => void;
   onClick?: (learner: Learner) => void;
   isToggling?: boolean;
 }
@@ -40,6 +44,8 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
   onNotificationToggle,
   onEdit,
   onDelete,
+  onCreateInvite,
+  onUnlinkAccount,
   onClick,
   isToggling = false,
 }) => {
@@ -67,6 +73,17 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
       label: t('common.copyChatId'),
       disabled: !learner.chat_id,
     },
+    ...(!learner.chat_id && onCreateInvite ? [{
+      key: 'createInvite',
+      icon: <LinkOutlined />,
+      label: t('learnerProfile.createInviteAction'),
+    }] : []),
+    ...(learner.chat_id && onUnlinkAccount ? [{
+      key: 'unlinkAccount',
+      icon: <DisconnectOutlined />,
+      label: t('learnerProfile.unlinkAccountAction'),
+      danger: true,
+    }] : []),
     ...(onDelete ? [{
       key: 'delete',
       icon: <DeleteOutlined />,
@@ -86,6 +103,12 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
         break;
       case 'delete':
         if (onDelete) onDelete(learner.id);
+        break;
+      case 'createInvite':
+        if (onCreateInvite) onCreateInvite(learner);
+        break;
+      case 'unlinkAccount':
+        if (onUnlinkAccount) onUnlinkAccount(learner);
         break;
     }
   };

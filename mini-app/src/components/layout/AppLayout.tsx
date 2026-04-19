@@ -13,7 +13,6 @@ import {
   MenuUnfoldOutlined,
   TeamOutlined,
   CrownOutlined,
-  MailOutlined,
   DollarOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -153,12 +152,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     },
   ], [t]);
 
-  const inviteCodesMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
-    key: '/invite-codes',
-    icon: <MailOutlined />,
-    label: <Link to="/invite-codes">{t('navigation.inviteCodes')}</Link>,
-  }), [t]);
-
   const adminMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
     key: '/platform',
     icon: <CrownOutlined />,
@@ -176,15 +169,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       return studentMenuItems;
     }
 
-    const items = [...baseMenuItems];
-
-    // Add Invite Codes for teachers and admins
-    if (hasStaffAccess) {
-      items.push(inviteCodesMenuItem);
-    }
-
-    return items;
-  }, [hasStaffAccess, isStudent, baseMenuItems, studentMenuItems, inviteCodesMenuItem]);
+    return [...baseMenuItems];
+  }, [isStudent, baseMenuItems, studentMenuItems]);
 
   const footerMenuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
     const items: NonNullable<MenuProps['items']> = [settingsMenuItem];

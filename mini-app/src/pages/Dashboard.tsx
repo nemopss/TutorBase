@@ -255,7 +255,7 @@ const Dashboard: React.FC = () => {
       title: t('pages.dashboard.onboarding.steps.invite.title'),
       description: t('pages.dashboard.onboarding.steps.invite.description'),
       action: t('pages.dashboard.onboarding.steps.invite.action'),
-      path: '/invite-codes',
+      path: '/learners',
     },
     {
       key: 'packages',
