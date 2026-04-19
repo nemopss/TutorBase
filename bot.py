@@ -11,13 +11,8 @@ from utils.formatters import escape_html_text, format_timestamp_msk
 from utils.state import set_bot_started_at
 from utils.telegram_bot import build_telegram_bot
 from config import config
-from handlers import admin as admin_h
-from handlers import admin_packages as admin_packages_h
-from handlers import admin_test_reminders as admin_test_reminders_h
-from handlers import application as app_h
+from handlers import platform_admin as platform_admin_h
 from handlers import start as start_h
-from handlers import funnel as funnel_h
-from handlers import cases as cases_h
 from handlers import notifications as notifications_h
 from handlers import reminders as reminders_h
 from middlewares.logging import LoggingMiddleware, LoggingFilter
@@ -51,12 +46,7 @@ async def main():
         logging.error(f"Failed to set bot commands: {e}")
 
     dp.include_router(start_h.router)
-    dp.include_router(app_h.router)
-    dp.include_router(admin_h.router)
-    dp.include_router(admin_packages_h.router)
-    dp.include_router(admin_test_reminders_h.router)
-    dp.include_router(funnel_h.router)
-    dp.include_router(cases_h.router)
+    dp.include_router(platform_admin_h.router)
     dp.include_router(notifications_h.router)
     dp.include_router(reminders_h.router)
 

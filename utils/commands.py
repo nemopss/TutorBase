@@ -17,8 +17,8 @@ async def set_bot_commands(bot: Bot):
     # Команды для администраторов
     admin_commands = [
         BotCommand(command="start", description="🚀 Запуск/перезапуск бота"),
-        BotCommand(command="admin", description="👑 Панель администратора"),
-        BotCommand(command="status", description="📊 Текущий статус бота"),
+        BotCommand(command="admin", description="🛠 Сервисная панель TutorBase"),
+        BotCommand(command="status", description="📊 Статус TutorBase-бота"),
     ]
 
     # Устанавливаем персональные команды для каждого админа из конфига

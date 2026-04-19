@@ -15,14 +15,13 @@ class Settings(BaseSettings):
 
     BOT_TOKEN: str
     DB_PATH: str = "database/bot.db"
-    GOOGLE_FORM_URL: str = ""
     ADMIN_CHAT_ID: int
     LOGS_CHAT_ID: int
     CANCELLATION_IMAGE_FILE_ID: str
     START_PHOTO_FILE_ID: Optional[str] = None
     ADMINS: list[int]
-    REGULATIONS_URL: str
-    PROGRAMS_URL: str
+    REGULATIONS_URL: str = ""
+    PROGRAMS_URL: str = ""
     REDIS_URL: str
     REMINDER_NOTIFY_USERNAME: str
     JWT_SECRET: str
