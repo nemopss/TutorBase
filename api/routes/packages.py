@@ -5,7 +5,16 @@ from datetime import datetime, time, date
 from fastapi import APIRouter, Depends, HTTPException, Query, status, Response
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, admin_or_teacher_required, admin_required, get_current_tenant, CurrentTenant, get_current_user
+from api.dependencies import (
+    CurrentTenant,
+    admin_or_teacher_required,
+    admin_required,
+    get_current_tenant,
+    get_current_user,
+    get_session,
+    require_full_tenant_access,
+    require_maintenance_tenant_access,
+)
 from api.schemas.packages import (
     PackageCreateRequest,
     PackageListResponse,
@@ -127,6 +136,7 @@ async def create_package_endpoint(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> PackageResponse:
     try:
         start_local = _parse_start_date(payload.start_date)
@@ -181,6 +191,7 @@ async def update_package_endpoint(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> PackageResponse:
     try:
         package = await package_service.update_package(
@@ -207,6 +218,7 @@ async def delete_package_endpoint(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> Response:
     try:
         await package_service.delete_package(session, current_tenant, package_id)
@@ -220,6 +232,7 @@ async def regenerate_package_endpoint(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_maintenance_tenant_access),
 ) -> MessageResponse:
     """Regenerate reminders for a package in background.
     
@@ -295,6 +308,7 @@ async def preview_lesson_dates(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ):
     """Generate lesson date preview based on learner's schedule.
     

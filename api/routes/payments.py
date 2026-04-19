@@ -15,10 +15,11 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import (
-    get_session,
+    CurrentTenant,
     admin_or_teacher_required,
     get_current_tenant,
-    CurrentTenant,
+    get_session,
+    require_maintenance_tenant_access,
 )
 from api.schemas.finance import PaymentCreate, PaymentResponse
 from api.schemas import PaginatedResponse, PaginationParams
@@ -34,6 +35,7 @@ async def create_payment(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_maintenance_tenant_access),
 ) -> PaymentResponse:
     """Record a new payment.
     
@@ -187,6 +189,7 @@ async def delete_payment(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_maintenance_tenant_access),
 ):
     """Delete a payment and recalculate package status.
     

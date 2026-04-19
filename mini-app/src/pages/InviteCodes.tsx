@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Card, Button, Tag, message, Space, Typography, Tooltip, Empty, Modal } from 'antd';
+import { Alert, Card, Button, Tag, message, Space, Typography, Tooltip, Empty, Modal } from 'antd';
 import { PlusOutlined, CopyOutlined, CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import PageHeader from '../components/common/PageHeader';
@@ -24,7 +24,8 @@ interface InviteToken {
 
 const InviteCodes: React.FC = () => {
     const { t } = useTranslation();
-    const { user, tenantId, isSuperAdmin } = useAuth();
+    const { user, tenantId, isSuperAdmin, tenantAccess } = useAuth();
+    const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
     const [tokens, setTokens] = useState<InviteToken[]>([]);
     const [loading, setLoading] = useState(false);
     const [creating, setCreating] = useState(false);
@@ -55,6 +56,10 @@ const InviteCodes: React.FC = () => {
     }, [fetchTokens]);
 
     const handleCreateToken = async () => {
+        if (!canUseFullActions) {
+            message.warning('Создание инвайт-кодов недоступно в grace-периоде.');
+            return;
+        }
         if (!tenantId) {
             message.error(t('errors.serverError'));
             return;
@@ -84,6 +89,10 @@ const InviteCodes: React.FC = () => {
     };
 
     const handleDelete = (tokenId: number) => {
+        if (!canUseFullActions) {
+            message.warning('Удаление инвайт-кодов недоступно в grace-периоде.');
+            return;
+        }
         const token = tokens.find(t => t.id === tokenId);
         if (token) {
             setTokenToDelete(token);
@@ -202,6 +211,7 @@ const InviteCodes: React.FC = () => {
                                     size="small"
                                     danger
                                     icon={<DeleteOutlined />}
+                                    disabled={!canUseFullActions}
                                     onClick={() => handleDelete(record.id)}
                                 />
                             </Tooltip>
@@ -243,11 +253,22 @@ const InviteCodes: React.FC = () => {
                         icon={<PlusOutlined />}
                         onClick={handleCreateToken}
                         loading={creating}
+                        disabled={!canUseFullActions}
                     >
                         {t('pages.inviteCodes.createInviteCode')}
                     </Button>
                 }
             />
+
+            {!canUseFullActions && (
+                <Alert
+                    type="warning"
+                    showIcon
+                    message="Grace-период"
+                    description="Создание и удаление инвайт-кодов временно недоступны."
+                    style={{ marginBottom: 16 }}
+                />
+            )}
 
             <Card>
                 <ResponsiveDataView<InviteToken>
@@ -256,8 +277,8 @@ const InviteCodes: React.FC = () => {
                     columns={columns}
                     rowKey="id"
                     emptyText={t('pages.inviteCodes.noInviteCodes')}
-                    emptyActionText={t('pages.inviteCodes.createFirstInviteCode')}
-                    onEmptyAction={handleCreateToken}
+                    emptyActionText={canUseFullActions ? t('pages.inviteCodes.createFirstInviteCode') : undefined}
+                    onEmptyAction={canUseFullActions ? handleCreateToken : undefined}
                     renderCard={(inviteCode) => (
                         <InviteCodeCard
                             key={inviteCode.id}

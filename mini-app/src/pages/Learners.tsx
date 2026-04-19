@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Input, message, Modal, Card } from 'antd';
+import { Alert, Input, message, Modal, Card } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
@@ -14,6 +14,7 @@ import EmptyState from '../components/common/EmptyState';
 import { useTheme } from '../theme/ThemeProvider';
 import { useDebounce } from '../hooks/useDebounce';
 import { spacing } from '../theme/tokens';
+import { useAuth } from '../auth/AuthProvider';
 
 // --- Types --- //
 interface Learner {
@@ -69,7 +70,9 @@ const Learners: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
+  const { tenantAccess } = useAuth();
   const isDark = resolvedTheme.colorScheme === 'dark';
+  const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -176,11 +179,19 @@ const Learners: React.FC = () => {
   };
 
   const handleEdit = (learner: Learner) => {
+    if (!canUseFullActions) {
+      message.warning('В grace-периоде можно только обслуживать существующие уроки, уведомления и платежи.');
+      return;
+    }
     setEditingLearner(learner);
     setIsEditModalOpen(true);
   };
 
   const handleEditSubmit = async (values: any) => {
+    if (!canUseFullActions) {
+      message.warning('Редактирование учеников недоступно в grace-периоде.');
+      return;
+    }
     if (!editingLearner) return;
     await updateMutation.mutateAsync({
       learnerId: editingLearner.id,
@@ -193,6 +204,10 @@ const Learners: React.FC = () => {
   };
 
   const handleDelete = (learnerId: number) => {
+    if (!canUseFullActions) {
+      message.warning('Удаление учеников недоступно в grace-периоде.');
+      return;
+    }
     const learner = filteredLearners.find(l => l.id === learnerId);
     if (learner) {
       setLearnerToDelete(learner);
@@ -201,6 +216,10 @@ const Learners: React.FC = () => {
   };
 
   const confirmDelete = () => {
+    if (!canUseFullActions) {
+      message.warning('Удаление учеников недоступно в grace-периоде.');
+      return;
+    }
     if (learnerToDelete) {
       deleteMutation.mutate(learnerToDelete.id);
     }
@@ -221,6 +240,16 @@ const Learners: React.FC = () => {
         subtitle={t('pages.learners.subtitle')}
       />
 
+      {!canUseFullActions && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Grace-период"
+          description="Создание, редактирование и удаление учеников временно недоступны. Можно отключать уведомления и обслуживать уже запланированные занятия."
+          style={{ marginBottom: spacing.md }}
+        />
+      )}
+
       {/* Search input - only show when there are learners */}
       {hasLearners && (
         <Input
@@ -240,8 +269,8 @@ const Learners: React.FC = () => {
       {!isLoading && !hasLearners && (
         <LearnerGrid>
           <Card
-            hoverable
-            onClick={() => setIsCreateModalOpen(true)}
+            hoverable={canUseFullActions}
+            onClick={() => canUseFullActions && setIsCreateModalOpen(true)}
             style={{
               minHeight: 120,
               display: 'flex',
@@ -250,6 +279,7 @@ const Learners: React.FC = () => {
               border: '2px dashed',
               borderColor: isDark ? '#3a3a3a' : '#d9d9d9',
               background: 'transparent',
+              opacity: canUseFullActions ? 1 : 0.5,
             }}
             bodyStyle={{
               display: 'flex',
@@ -289,7 +319,7 @@ const Learners: React.FC = () => {
       )}
 
       {/* FAB - only show when there are learners */}
-      {hasLearners && (
+      {hasLearners && canUseFullActions && (
         <FloatingActionButton
           icon={<PlusOutlined />}
           onClick={() => setIsCreateModalOpen(true)}
@@ -299,7 +329,13 @@ const Learners: React.FC = () => {
       {/* Create Learner Modal */}
       <LearnerForm
         visible={isCreateModalOpen}
-        onSubmit={createMutation.mutateAsync}
+        onSubmit={(values) => {
+          if (!canUseFullActions) {
+            message.warning('Создание учеников недоступно в grace-периоде.');
+            return Promise.resolve();
+          }
+          return createMutation.mutateAsync(values);
+        }}
         onCancel={() => setIsCreateModalOpen(false)}
         loading={createMutation.isPending}
         mode="create"

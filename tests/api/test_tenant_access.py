@@ -15,6 +15,7 @@ from services.tenant_access_service import (
     ACCESS_STATUS_SUSPENDED,
     utc_now,
 )
+from tests import factories
 
 
 def auth_headers(user: User) -> dict[str, str]:
@@ -27,6 +28,21 @@ def auth_headers(user: User) -> dict[str, str]:
         }
     )
     return {"Authorization": f"Bearer {token}"}
+
+
+async def put_tenant_in_grace(db_session: AsyncSession, tenant: Tenant) -> None:
+    now = utc_now()
+    db_session.add(
+        TenantAccess(
+            tenant_id=tenant.id,
+            status=ACCESS_STATUS_ACTIVE,
+            access_until=now - timedelta(days=1),
+            grace_until=now + timedelta(days=2),
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.commit()
 
 
 @pytest.mark.asyncio
@@ -178,3 +194,97 @@ async def test_platform_access_actions_update_state_and_audit(
     )
     actions = [event.action for event in events_result.scalars().all()]
     assert actions == ["grant", "suspend", "grant_lifetime"]
+
+
+@pytest.mark.asyncio
+async def test_grace_mode_allows_existing_lesson_maintenance(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    teacher_user: User,
+    tenant_1: Tenant,
+):
+    learner = await factories.create_learner(db_session, tenant_id=tenant_1.id)
+    package = await factories.create_package(db_session, learner=learner, tenant_id=tenant_1.id)
+    lesson = await factories.create_lesson(db_session, package=package, tenant_id=tenant_1.id)
+    await put_tenant_in_grace(db_session, tenant_1)
+
+    new_time = (utc_now() + timedelta(days=3)).isoformat()
+    response = await client.patch(
+        f"/api/v1/lessons/{lesson.id}",
+        json={"scheduled_at": new_time, "duration_minutes": 90},
+        headers=auth_headers(teacher_user),
+    )
+
+    assert response.status_code == 200
+    assert response.json()["duration_minutes"] == 90
+
+
+@pytest.mark.asyncio
+async def test_grace_mode_allows_payment_corrections(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    teacher_user: User,
+    tenant_1: Tenant,
+):
+    learner = await factories.create_learner(db_session, tenant_id=tenant_1.id)
+    package = await factories.create_package(db_session, learner=learner, tenant_id=tenant_1.id)
+    await put_tenant_in_grace(db_session, tenant_1)
+
+    response = await client.post(
+        "/api/v1/payments",
+        json={
+            "learner_id": learner.id,
+            "package_id": package.id,
+            "amount": "1500.00",
+            "paid_at": utc_now().isoformat(),
+            "notes": "grace correction",
+        },
+        headers=auth_headers(teacher_user),
+    )
+
+    assert response.status_code == 201
+    assert response.json()["package_id"] == package.id
+
+
+@pytest.mark.asyncio
+async def test_grace_mode_blocks_new_business_usage(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    teacher_user: User,
+    tenant_1: Tenant,
+):
+    learner = await factories.create_learner(db_session, tenant_id=tenant_1.id)
+    package = await factories.create_package(db_session, learner=learner, tenant_id=tenant_1.id)
+    await put_tenant_in_grace(db_session, tenant_1)
+    headers = auth_headers(teacher_user)
+
+    create_learner_response = await client.post(
+        "/api/v1/learners",
+        json={"chat_id": None, "display_name": "New Learner"},
+        headers=headers,
+    )
+    assert create_learner_response.status_code == 403
+    assert create_learner_response.json()["detail"]["code"] == "TENANT_ACCESS_FULL_REQUIRED"
+
+    create_package_response = await client.post(
+        "/api/v1/packages",
+        json={"learner_id": learner.id, "title": "New Package", "status": "draft"},
+        headers=headers,
+    )
+    assert create_package_response.status_code == 403
+    assert create_package_response.json()["detail"]["code"] == "TENANT_ACCESS_FULL_REQUIRED"
+
+    create_lesson_response = await client.post(
+        f"/api/v1/lessons/packages/{package.id}",
+        json={"scheduled_at": (utc_now() + timedelta(days=5)).isoformat()},
+        headers=headers,
+    )
+    assert create_lesson_response.status_code == 403
+    assert create_lesson_response.json()["detail"]["code"] == "TENANT_ACCESS_FULL_REQUIRED"
+
+    invite_response = await client.post(
+        f"/api/v1/learners/{learner.id}/invite",
+        headers=headers,
+    )
+    assert invite_response.status_code == 403
+    assert invite_response.json()["detail"]["code"] == "TENANT_ACCESS_FULL_REQUIRED"

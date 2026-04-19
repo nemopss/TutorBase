@@ -7,10 +7,12 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import (
-    get_session,
+    CurrentTenant,
     admin_or_teacher_required,
     get_current_tenant,
-    CurrentTenant,
+    get_session,
+    require_full_tenant_access,
+    require_maintenance_tenant_access,
 )
 from api.schemas.learners import (
     LearnerListResponse,
@@ -128,6 +130,7 @@ async def create_learner_from_chat_id(
     # We still need role check, but get tenant context separately
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerResponse:
     """Create a new learner from Telegram chat_id."""
     learner = await learner_service.create_learner_from_chat_id(
@@ -158,6 +161,7 @@ async def update_learner(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerResponse:
     """Update a learner's details including lesson rate."""
     learner = await learner_service.update_learner(
@@ -195,6 +199,7 @@ async def update_learner_notifications(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_maintenance_tenant_access),
 ) -> LearnerResponse:
     """Enable or disable notifications for a learner."""
     learner = await learner_service.update_learner_notifications(
@@ -228,6 +233,7 @@ async def unlink_learner_account(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerResponse:
     """Unlink a learner from Telegram without deleting learner history."""
     learner = await learner_service.get_learner_by_id(
@@ -268,6 +274,7 @@ async def create_learner_invite(
     session: AsyncSession = Depends(get_session),
     current_user=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> InviteTokenResponse:
     """Create a personal invite token for an unlinked learner."""
     learner = await learner_service.get_learner_by_id(
@@ -312,6 +319,7 @@ async def delete_learner(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ):
     """Delete a learner and all associated data (packages, lessons, reminders)."""
     deleted = await learner_service.delete_learner(
@@ -511,6 +519,7 @@ async def update_learner_schedule(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerScheduleResponse:
     """Replace learner's entire schedule.
     
@@ -544,6 +553,7 @@ async def add_schedule_slots(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerScheduleResponse:
     """Add slots for multiple days with the same time.
     
@@ -577,6 +587,7 @@ async def delete_schedule_slot(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerScheduleResponse:
     """Delete a single slot by index.
     

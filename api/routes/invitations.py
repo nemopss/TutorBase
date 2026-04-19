@@ -4,7 +4,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_current_tenant, get_current_user, get_session, CurrentTenant
+from api.dependencies import (
+    CurrentTenant,
+    get_current_tenant,
+    get_current_user,
+    get_session,
+    require_full_tenant_access,
+)
 from api.schemas import (
     InviteTokenRequest,
     InviteTokenResponse,
@@ -40,6 +46,7 @@ async def create_invite_token(
     current_user: User = Depends(get_current_user),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     session: AsyncSession = Depends(get_session),
+    _=Depends(require_full_tenant_access),
 ) -> InviteTokenResponse:
     """Generate a new invite token for the tenant.
     
@@ -137,6 +144,7 @@ async def delete_invite_token(
     current_user: User = Depends(get_current_user),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     session: AsyncSession = Depends(get_session),
+    _=Depends(require_full_tenant_access),
 ):
     """Delete an invite token.
     

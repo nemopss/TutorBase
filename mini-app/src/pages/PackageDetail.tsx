@@ -38,6 +38,7 @@ import LessonForm from '../components/forms/LessonForm';
 import { formatDate } from '../utils/datetime';
 import { spacing } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
+import { useAuth } from '../auth/AuthProvider';
 
 const { Text, Title } = Typography;
 
@@ -132,7 +133,9 @@ const PackageDetail: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
+  const { tenantAccess } = useAuth();
   const isDark = resolvedTheme.colorScheme === 'dark';
+  const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   const [paymentForm] = Form.useForm();
 
   // Modal states
@@ -350,17 +353,29 @@ const PackageDetail: React.FC = () => {
   };
 
   const handleDelete = (lessonId: number) => {
+    if (!canUseFullActions) {
+      message.warning('Во время льготного периода можно вести существующие уроки и платежи, но нельзя удалять уроки.');
+      return;
+    }
     setSelectedLessonId(lessonId);
     setIsDeleteLessonModalOpen(true);
   };
 
   const confirmDeleteLesson = () => {
+    if (!canUseFullActions) {
+      message.warning('Во время льготного периода можно вести существующие уроки и платежи, но нельзя удалять уроки.');
+      return;
+    }
     if (selectedLessonId) {
       deleteLessonMutation.mutate(selectedLessonId);
     }
   };
 
   const confirmDeletePackage = () => {
+    if (!canUseFullActions) {
+      message.warning('Во время льготного периода можно вести существующие уроки и платежи, но нельзя удалять пакеты.');
+      return;
+    }
     if (id) {
       deletePackageMutation.mutate(parseInt(id));
     }
@@ -437,6 +452,7 @@ const PackageDetail: React.FC = () => {
               type="text"
               size="small"
               icon={<EditOutlined />}
+              disabled={!canUseFullActions}
               onClick={() => setIsEditModalOpen(true)}
             />
           </div>
@@ -527,6 +543,7 @@ const PackageDetail: React.FC = () => {
               type="text"
               size="small"
               icon={<EditOutlined />}
+              disabled={!canUseFullActions}
               onClick={() => setIsEditModalOpen(true)}
             />
           </div>
@@ -542,6 +559,7 @@ const PackageDetail: React.FC = () => {
           type="link"
           danger
           style={{ fontSize: 12 }}
+          disabled={!canUseFullActions}
           onClick={() => setIsDeletePackageModalOpen(true)}
         >
           {t('pages.finance.deletePackage')}
@@ -561,6 +579,10 @@ const PackageDetail: React.FC = () => {
 
   // Handle add lesson from calendar
   const handleAddLesson = (date: string) => {
+    if (!canUseFullActions) {
+      message.warning('Во время льготного периода можно вести существующие уроки и платежи, но нельзя добавлять новые уроки.');
+      return;
+    }
     setNewLessonDate(date);
     setIsAddLessonModalOpen(true);
   };
@@ -591,6 +613,16 @@ const PackageDetail: React.FC = () => {
 
   return (
     <div>
+      {!canUseFullActions && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: spacing.md }}
+          message="Доступ ограничен льготным периодом"
+          description="Можно переносить, завершать и отменять существующие уроки, а также корректировать платежи. Новые уроки, удаление и редактирование пакета доступны после продления доступа."
+        />
+      )}
+
       {/* Header */}
       <div
         style={{
@@ -666,7 +698,13 @@ const PackageDetail: React.FC = () => {
       <PackageForm
         open={isEditModalOpen}
         onCancel={() => setIsEditModalOpen(false)}
-        onFinish={(values) => updatePackageMutation.mutate(values)}
+        onFinish={(values) => {
+          if (!canUseFullActions) {
+            message.warning('Во время льготного периода можно вести существующие уроки и платежи, но нельзя редактировать пакет.');
+            return;
+          }
+          updatePackageMutation.mutate(values);
+        }}
         isLoading={updatePackageMutation.isPending}
         initialValues={{
           id: packageData?.id,
@@ -761,7 +799,13 @@ const PackageDetail: React.FC = () => {
           setIsAddLessonModalOpen(false);
           setNewLessonDate(null);
         }}
-        onFinish={(values) => createLessonMutation.mutate(values)}
+        onFinish={(values) => {
+          if (!canUseFullActions) {
+            message.warning('Во время льготного периода можно вести существующие уроки и платежи, но нельзя добавлять новые уроки.');
+            return;
+          }
+          createLessonMutation.mutate(values);
+        }}
         isLoading={createLessonMutation.isPending}
         mode="create"
         initialValues={newLessonDate ? {

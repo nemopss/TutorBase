@@ -39,6 +39,7 @@ import EmptyState from '../components/common/EmptyState';
 import ScheduleTab from '../components/learner/ScheduleTab';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
+import { useAuth } from '../auth/AuthProvider';
 
 const { Text, Title } = Typography;
 
@@ -109,7 +110,9 @@ const LearnerProfile: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
+  const { tenantAccess } = useAuth();
   const colors = resolvedTheme.colors;
+  const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   
   const learnerId = parseInt(id || '0');
   
@@ -267,6 +270,10 @@ const LearnerProfile: React.FC = () => {
   });
 
   const handleEditSubmit = async (values: any) => {
+    if (!canUseFullActions) {
+      message.warning('Редактирование ученика недоступно в grace-периоде.');
+      return;
+    }
     await updateMutation.mutateAsync({
       display_name: values.display_name,
       notes: values.notes,
@@ -275,6 +282,10 @@ const LearnerProfile: React.FC = () => {
   };
 
   const handleUnlinkAccount = () => {
+    if (!canUseFullActions) {
+      message.warning('Отвязка аккаунта недоступна в grace-периоде.');
+      return;
+    }
     Modal.confirm({
       title: t('learnerProfile.unlinkAccountTitle'),
       content: t('learnerProfile.unlinkAccountConfirm'),
@@ -285,7 +296,7 @@ const LearnerProfile: React.FC = () => {
     });
   };
 
-  const menuItems = [
+  const menuItems = canUseFullActions ? [
     {
       key: 'delete',
       label: t('common.delete'),
@@ -293,7 +304,7 @@ const LearnerProfile: React.FC = () => {
       danger: true,
       onClick: () => setIsDeleteModalOpen(true),
     },
-  ];
+  ] : [];
 
   if (isLoading) {
     return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
@@ -321,10 +332,10 @@ const LearnerProfile: React.FC = () => {
             <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/learners')}>
               {t('common.back')}
             </Button>
-            <Button icon={<EditOutlined />} onClick={() => setIsEditModalOpen(true)}>
+            <Button icon={<EditOutlined />} disabled={!canUseFullActions} onClick={() => setIsEditModalOpen(true)}>
               {t('common.edit')}
             </Button>
-            <Dropdown menu={{ items: menuItems }} trigger={['click']}>
+            <Dropdown menu={{ items: menuItems }} trigger={['click']} disabled={!canUseFullActions}>
               <Button icon={<MoreOutlined />} />
             </Dropdown>
           </Space>
@@ -376,6 +387,7 @@ const LearnerProfile: React.FC = () => {
                             danger
                             icon={<DisconnectOutlined />}
                             loading={unlinkAccountMutation.isPending}
+                            disabled={!canUseFullActions}
                             onClick={handleUnlinkAccount}
                           >
                             {t('learnerProfile.unlinkAccountAction')}
@@ -386,6 +398,7 @@ const LearnerProfile: React.FC = () => {
                             size="small"
                             icon={<LinkOutlined />}
                             loading={createInviteMutation.isPending}
+                            disabled={!canUseFullActions}
                             onClick={() => createInviteMutation.mutate()}
                           >
                             {t('learnerProfile.createInviteAction')}
@@ -439,6 +452,7 @@ const LearnerProfile: React.FC = () => {
                 <Button
                   type="primary"
                   icon={<PlusOutlined />}
+                  disabled={!canUseFullActions}
                   onClick={() => setIsPackageModalOpen(true)}
                   style={{ marginBottom: spacing.md }}
                 >
@@ -449,8 +463,8 @@ const LearnerProfile: React.FC = () => {
                   <EmptyState
                     title={t('pages.packages.noPackages')}
                     description={t('pages.packages.noPackagesDescription')}
-                    actionText={t('learnerProfile.createPackage')}
-                    onAction={() => setIsPackageModalOpen(true)}
+                    actionText={canUseFullActions ? t('learnerProfile.createPackage') : undefined}
+                    onAction={canUseFullActions ? () => setIsPackageModalOpen(true) : undefined}
                   />
                 ) : (
                   <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: spacing.md }}>
@@ -571,7 +585,13 @@ const LearnerProfile: React.FC = () => {
         open={isDeleteModalOpen}
         title={t('pages.learners.deleteTitle')}
         onCancel={() => setIsDeleteModalOpen(false)}
-        onOk={() => deleteMutation.mutate()}
+        onOk={() => {
+          if (!canUseFullActions) {
+            message.warning('Удаление ученика недоступно в grace-периоде.');
+            return;
+          }
+          deleteMutation.mutate();
+        }}
         okText={t('common.delete')}
         cancelText={t('common.cancel')}
         okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
@@ -584,7 +604,13 @@ const LearnerProfile: React.FC = () => {
       {/* Create Package Modal */}
       <PackageForm
         visible={isPackageModalOpen}
-        onSubmit={createPackageMutation.mutateAsync}
+        onSubmit={(values) => {
+          if (!canUseFullActions) {
+            message.warning('Создание пакета недоступно в grace-периоде.');
+            return Promise.resolve();
+          }
+          return createPackageMutation.mutateAsync(values);
+        }}
         onCancel={() => setIsPackageModalOpen(false)}
         loading={createPackageMutation.isPending}
         mode="create"

@@ -14,6 +14,7 @@ import {
   Checkbox,
   Row,
   Col,
+  Alert,
 } from 'antd';
 import { PlusOutlined, DeleteOutlined, ClockCircleOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -21,6 +22,7 @@ import api from '../../services/api';
 import EmptyState from '../common/EmptyState';
 import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
+import { useAuth } from '../../auth/AuthProvider';
 
 const { Text } = Typography;
 
@@ -54,7 +56,9 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
+  const { tenantAccess } = useAuth();
   const colors = resolvedTheme.colors;
+  const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   const [form] = Form.useForm();
   const [showForm, setShowForm] = useState(false);
 
@@ -100,6 +104,10 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
   });
 
   const handleAddSlots = async () => {
+    if (!canUseFullActions) {
+      message.warning('Изменение шаблона расписания недоступно в grace-периоде.');
+      return;
+    }
     try {
       const values = await form.validateFields();
       const timeStr = values.time.format('HH:mm');
@@ -136,6 +144,16 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
 
   return (
     <div>
+      {!canUseFullActions && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Grace-период"
+          description="Шаблон расписания временно нельзя менять. Переносите уже созданные уроки на странице занятий."
+          style={{ marginBottom: spacing.md }}
+        />
+      )}
+
       {/* Current Schedule */}
       <Card style={cardStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
@@ -144,6 +162,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
             <Button
               type="primary"
               icon={<PlusOutlined />}
+              disabled={!canUseFullActions}
               onClick={() => setShowForm(true)}
               size="small"
             >
@@ -156,8 +175,8 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
           <EmptyState
             title={t('schedule.noSlots')}
             description={t('schedule.noSlotsDescription')}
-            actionText={t('schedule.addSlot')}
-            onAction={() => setShowForm(true)}
+            actionText={canUseFullActions ? t('schedule.addSlot') : undefined}
+            onAction={canUseFullActions ? () => setShowForm(true) : undefined}
           />
         ) : (
           <List
@@ -176,6 +195,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
                     type="text"
                     danger
                     icon={<DeleteOutlined />}
+                    disabled={!canUseFullActions}
                     onClick={() => deleteSlotMutation.mutate(index)}
                     loading={deleteSlotMutation.isPending}
                   />,

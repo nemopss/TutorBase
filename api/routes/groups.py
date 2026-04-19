@@ -8,6 +8,7 @@ from api.dependencies import (
     admin_or_teacher_required,
     get_current_tenant,
     get_session,
+    require_full_tenant_access,
 )
 from api.schemas.groups import (
     LearnerGroupCreateRequest,
@@ -52,6 +53,7 @@ async def create_learner_group(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerGroupResponse:
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=_require_tenant_id(current_tenant))
     try:
@@ -89,6 +91,7 @@ async def update_learner_group(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerGroupResponse:
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=_require_tenant_id(current_tenant))
     group = await UpdateLearnerGroupUseCase(uow).execute(
@@ -112,6 +115,7 @@ async def add_learner_group_members(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerGroupResponse:
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=_require_tenant_id(current_tenant))
     try:
@@ -133,6 +137,7 @@ async def deactivate_learner_group_member(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerGroupResponse:
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=_require_tenant_id(current_tenant))
     group = await DeactivateLearnerGroupMemberUseCase(uow).execute(

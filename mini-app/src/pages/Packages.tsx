@@ -12,6 +12,7 @@ import PackageGrid from '../components/common/PackageGrid';
 import FloatingActionButton from '../components/common/FloatingActionButton';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
+import { useAuth } from '../auth/AuthProvider';
 
 // --- Types --- //
 interface PackageProgress {
@@ -67,7 +68,9 @@ const Packages: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
+  const { tenantAccess } = useAuth();
   const isDark = resolvedTheme.colorScheme === 'dark';
+  const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'draft' | 'cancelled'>('active');
   const [isModalOpen, setIsModalOpen] = useState(false);
 
@@ -100,6 +103,10 @@ const Packages: React.FC = () => {
   });
 
   const handleFormFinish = (values: any) => {
+    if (!canUseFullActions) {
+      message.warning('Создание пакетов недоступно в grace-периоде.');
+      return;
+    }
     createMutation.mutate(values);
   };
 
@@ -118,6 +125,16 @@ const Packages: React.FC = () => {
         title={t('pages.packages.title')}
         subtitle={t('pages.packages.subtitle')}
       />
+
+      {!canUseFullActions && (
+        <Alert
+          message="Grace-период"
+          description="Создание новых пакетов временно недоступно. Можно переносить существующие уроки и корректировать платежи."
+          type="warning"
+          showIcon
+          style={{ marginBottom: spacing.md }}
+        />
+      )}
 
       <Tabs
         activeKey={activeTab}
@@ -139,8 +156,8 @@ const Packages: React.FC = () => {
       <PackageGrid loading={isLoading}>
         {!hasPackages && !isLoading ? (
           <Card
-            hoverable
-            onClick={() => setIsModalOpen(true)}
+            hoverable={canUseFullActions}
+            onClick={() => canUseFullActions && setIsModalOpen(true)}
             style={{
               minHeight: 140,
               display: 'flex',
@@ -149,6 +166,7 @@ const Packages: React.FC = () => {
               border: '2px dashed',
               borderColor: isDark ? '#3a3a3a' : '#d9d9d9',
               background: 'transparent',
+              opacity: canUseFullActions ? 1 : 0.5,
             }}
             bodyStyle={{
               display: 'flex',
@@ -169,7 +187,7 @@ const Packages: React.FC = () => {
         )}
       </PackageGrid>
 
-      {hasPackages && (
+      {hasPackages && canUseFullActions && (
         <FloatingActionButton
           icon={<PlusOutlined />}
           onClick={() => setIsModalOpen(true)}

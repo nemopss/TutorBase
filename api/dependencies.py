@@ -434,3 +434,46 @@ async def get_current_tenant_with_access_override(
         session=session,
         bypass_access_restrictions=True,
     )
+
+
+async def require_full_tenant_access(
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> CurrentTenant:
+    """Require an active/full tenant access mode for normal product usage."""
+    if current_tenant.bypass_access_restrictions:
+        return current_tenant
+    if current_tenant.access_mode == tenant_access_service.ACCESS_MODE_FULL:
+        return current_tenant
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": "TENANT_ACCESS_FULL_REQUIRED",
+            "message": "This action requires active tenant access",
+            "tenant_id": current_tenant.tenant_id,
+            "status": current_tenant.access_status,
+            "mode": current_tenant.access_mode,
+        },
+    )
+
+
+async def require_maintenance_tenant_access(
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> CurrentTenant:
+    """Require access that can perform maintenance on existing tenant data."""
+    if current_tenant.bypass_access_restrictions:
+        return current_tenant
+    if current_tenant.access_mode in {
+        tenant_access_service.ACCESS_MODE_FULL,
+        tenant_access_service.ACCESS_MODE_GRACE,
+    }:
+        return current_tenant
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": "TENANT_ACCESS_MAINTENANCE_REQUIRED",
+            "message": "This action requires tenant maintenance access",
+            "tenant_id": current_tenant.tenant_id,
+            "status": current_tenant.access_status,
+            "mode": current_tenant.access_mode,
+        },
+    )

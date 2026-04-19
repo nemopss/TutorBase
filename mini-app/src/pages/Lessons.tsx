@@ -16,6 +16,7 @@ import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import LessonCard from '../components/cards/LessonCard';
 import CalendarContainer from '../components/common/CalendarContainer';
 import { dayjsInTimezone, formatDateTime, DEFAULT_TIMEZONE } from '../utils/datetime';
+import { useAuth } from '../auth/AuthProvider';
 
 dayjs.extend(updateLocale);
 dayjs.updateLocale('ru', { week: { dow: 1 } });
@@ -95,6 +96,8 @@ const deleteLesson = async (lessonId: number) => {
 const Lessons: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
+  const { tenantAccess } = useAuth();
+  const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
 
   // Status options with translations
   const STATUS_OPTIONS = [
@@ -170,6 +173,10 @@ const Lessons: React.FC = () => {
   };
 
   const handleDelete = (id: number) => {
+    if (!canUseFullActions) {
+      message.warning('Удаление уроков недоступно в grace-периоде. Можно отменить урок через смену статуса.');
+      return;
+    }
     setLessonToDelete(id);
     setDeleteModalOpen(true);
   };
@@ -338,7 +345,7 @@ const Lessons: React.FC = () => {
       render: (_, record) => (
         <Space size="small">
           <Button type="link" size="small" onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>{t('common.edit')}</Button>
-          <Button type="link" size="small" danger onClick={() => handleDelete(record.id)}>{t('common.delete')}</Button>
+          <Button type="link" size="small" danger disabled={!canUseFullActions} onClick={() => handleDelete(record.id)}>{t('common.delete')}</Button>
         </Space>
       ),
     },

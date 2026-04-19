@@ -5,7 +5,15 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, get_current_tenant, CurrentTenant, admin_or_teacher_required, get_current_user
+from api.dependencies import (
+    CurrentTenant,
+    admin_or_teacher_required,
+    get_current_tenant,
+    get_current_user,
+    get_session,
+    require_full_tenant_access,
+    require_maintenance_tenant_access,
+)
 from api.schemas import (
     LessonCreateRequest,
     LessonListResponse,
@@ -112,6 +120,7 @@ async def create_lesson_for_package(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> LessonResponse:
     try:
         existing = await lesson_service.list_lessons(session, current_tenant, package_id)
@@ -163,6 +172,7 @@ async def update_lesson_endpoint(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_maintenance_tenant_access),
 ) -> LessonResponse:
     try:
         lesson = await lesson_service.update_lesson(
@@ -196,6 +206,7 @@ async def delete_lesson_endpoint(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ):
     try:
         package_id = await lesson_service.delete_lesson(session, current_tenant, lesson_id)
