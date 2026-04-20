@@ -56,6 +56,7 @@ TASK_MODULES = (
     'utils.tasks.metrics',
     'utils.tasks.notifications',
     'utils.tasks.tenant_access',
+    'utils.tasks.broadcasts',
 )
 
 

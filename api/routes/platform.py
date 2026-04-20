@@ -1,11 +1,18 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import admin_required, get_current_user, get_session
 from api.schemas import (
+    BroadcastAudienceUserResponse,
+    BroadcastCampaignResponse,
+    BroadcastCreateRequest,
+    BroadcastPreviewRequest,
+    BroadcastPreviewResponse,
+    BroadcastRecipientResponse,
+    BroadcastSendRequest,
     PaginatedResponse,
     PaginationParams,
     PlatformTenantResponse,
@@ -14,9 +21,11 @@ from api.schemas import (
     TenantAccessResponse,
     TenantAccessSyncResponse,
 )
-from database.models import Tenant, TenantAccess, User
+from database.models import BroadcastCampaign, BroadcastRecipient, Tenant, TenantAccess, User
+from services import broadcast_service
 from services import tenant_access_service
-from services.exceptions import NotFoundError
+from services.exceptions import NotFoundError, ValidationError
+from utils.tasks.broadcasts import send_broadcast_campaign_task
 
 router = APIRouter()
 
@@ -53,6 +62,65 @@ def _tenant_response(tenant: Tenant, access: TenantAccess | None) -> PlatformTen
     )
 
 
+def _broadcast_campaign_response(campaign: BroadcastCampaign) -> BroadcastCampaignResponse:
+    return BroadcastCampaignResponse(
+        id=campaign.id,
+        title=campaign.title,
+        message_text=campaign.message_text,
+        audience=campaign.audience,
+        status=campaign.status,
+        recipient_count=campaign.recipient_count,
+        sent_count=campaign.sent_count,
+        failed_count=campaign.failed_count,
+        skipped_count=campaign.skipped_count,
+        rate_limit_per_second=campaign.rate_limit_per_second,
+        last_task_id=campaign.last_task_id,
+        created_by_user_id=campaign.created_by_user_id,
+        created_at=campaign.created_at,
+        updated_at=campaign.updated_at,
+        queued_at=campaign.queued_at,
+        started_at=campaign.started_at,
+        completed_at=campaign.completed_at,
+    )
+
+
+def _broadcast_recipient_response(recipient: BroadcastRecipient) -> BroadcastRecipientResponse:
+    return BroadcastRecipientResponse(
+        id=recipient.id,
+        campaign_id=recipient.campaign_id,
+        bot_user_id=recipient.bot_user_id,
+        chat_id=recipient.chat_id,
+        display_name=recipient.display_name,
+        username=recipient.username,
+        status=recipient.status,
+        provider_message_id=recipient.provider_message_id,
+        error_message=recipient.error_message,
+        created_at=recipient.created_at,
+        updated_at=recipient.updated_at,
+        sent_at=recipient.sent_at,
+    )
+
+
+def _broadcast_audience_user_response(
+    user: broadcast_service.BroadcastAudienceUser,
+) -> BroadcastAudienceUserResponse:
+    return BroadcastAudienceUserResponse(
+        bot_user_id=user.bot_user_id,
+        chat_id=user.chat_id,
+        display_name=user.display_name,
+        username=user.username,
+        is_platform_admin=user.is_platform_admin,
+    )
+
+
+def _raise_service_error(exc: Exception) -> None:
+    if isinstance(exc, NotFoundError):
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    if isinstance(exc, ValidationError):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    raise exc
+
+
 @router.get("/tenants", response_model=PaginatedResponse[PlatformTenantResponse])
 async def list_platform_tenants(
     pagination: PaginationParams = Depends(),
@@ -85,6 +153,167 @@ async def list_platform_tenants(
         for tenant in tenants
     ]
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
+
+
+@router.post("/broadcasts/preview", response_model=BroadcastPreviewResponse)
+async def preview_platform_broadcast(
+    payload: BroadcastPreviewRequest,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_required),
+) -> BroadcastPreviewResponse:
+    try:
+        preview = await broadcast_service.preview_broadcast_recipients(
+            session,
+            audience=payload.audience,
+            bot_user_ids=payload.bot_user_ids,
+            sample_limit=payload.sample_limit,
+        )
+    except (NotFoundError, ValidationError) as exc:
+        _raise_service_error(exc)
+    return BroadcastPreviewResponse(
+        audience=preview.audience,
+        total=preview.total,
+        sample=[
+            {
+                "bot_user_id": item.bot_user_id,
+                "chat_id": item.chat_id,
+                "display_name": item.display_name,
+                "username": item.username,
+            }
+            for item in preview.sample
+        ],
+    )
+
+
+@router.get("/broadcasts/audience/users", response_model=PaginatedResponse[BroadcastAudienceUserResponse])
+async def list_platform_broadcast_audience_users(
+    search: str | None = Query(None, max_length=100),
+    pagination: PaginationParams = Depends(),
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_required),
+) -> PaginatedResponse[BroadcastAudienceUserResponse]:
+    users, total = await broadcast_service.list_broadcast_audience_users(
+        session,
+        search=search,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return PaginatedResponse.create(
+        [_broadcast_audience_user_response(user) for user in users],
+        total,
+        pagination.limit,
+        pagination.offset,
+    )
+
+
+@router.get("/broadcasts", response_model=PaginatedResponse[BroadcastCampaignResponse])
+async def list_platform_broadcasts(
+    pagination: PaginationParams = Depends(),
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_required),
+) -> PaginatedResponse[BroadcastCampaignResponse]:
+    campaigns, total = await broadcast_service.list_broadcast_campaigns(
+        session,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    return PaginatedResponse.create(
+        [_broadcast_campaign_response(campaign) for campaign in campaigns],
+        total,
+        pagination.limit,
+        pagination.offset,
+    )
+
+
+@router.post(
+    "/broadcasts",
+    response_model=BroadcastCampaignResponse,
+    status_code=status.HTTP_201_CREATED,
+)
+async def create_platform_broadcast(
+    payload: BroadcastCreateRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _=Depends(admin_required),
+) -> BroadcastCampaignResponse:
+    try:
+        campaign = await broadcast_service.create_broadcast_campaign(
+            session,
+            title=payload.title,
+            message_text=payload.message_text,
+            audience=payload.audience,
+            bot_user_ids=payload.bot_user_ids,
+            rate_limit_per_second=payload.rate_limit_per_second,
+            created_by_user_id=current_user.id,
+        )
+        await session.commit()
+    except (NotFoundError, ValidationError) as exc:
+        await session.rollback()
+        _raise_service_error(exc)
+    return _broadcast_campaign_response(campaign)
+
+
+@router.get("/broadcasts/{campaign_id}", response_model=BroadcastCampaignResponse)
+async def get_platform_broadcast(
+    campaign_id: int,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_required),
+) -> BroadcastCampaignResponse:
+    try:
+        campaign = await broadcast_service.get_broadcast_campaign(session, campaign_id)
+    except (NotFoundError, ValidationError) as exc:
+        _raise_service_error(exc)
+    return _broadcast_campaign_response(campaign)
+
+
+@router.get(
+    "/broadcasts/{campaign_id}/recipients",
+    response_model=PaginatedResponse[BroadcastRecipientResponse],
+)
+async def list_platform_broadcast_recipients(
+    campaign_id: int,
+    pagination: PaginationParams = Depends(),
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_required),
+) -> PaginatedResponse[BroadcastRecipientResponse]:
+    try:
+        recipients, total = await broadcast_service.list_broadcast_recipients(
+            session,
+            campaign_id=campaign_id,
+            limit=pagination.limit,
+            offset=pagination.offset,
+        )
+    except (NotFoundError, ValidationError) as exc:
+        _raise_service_error(exc)
+    return PaginatedResponse.create(
+        [_broadcast_recipient_response(recipient) for recipient in recipients],
+        total,
+        pagination.limit,
+        pagination.offset,
+    )
+
+
+@router.post("/broadcasts/{campaign_id}/send", response_model=BroadcastCampaignResponse)
+async def send_platform_broadcast(
+    campaign_id: int,
+    payload: BroadcastSendRequest,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_required),
+) -> BroadcastCampaignResponse:
+    try:
+        campaign = await broadcast_service.queue_broadcast_campaign(
+            session,
+            campaign_id=campaign_id,
+            confirmation_text=payload.confirmation_text,
+        )
+        await session.commit()
+        task = send_broadcast_campaign_task.delay(campaign_id=campaign.id)
+        campaign.last_task_id = task.id
+        await session.commit()
+    except (NotFoundError, ValidationError) as exc:
+        await session.rollback()
+        _raise_service_error(exc)
+    return _broadcast_campaign_response(campaign)
 
 
 @router.get("/tenants/{tenant_id}", response_model=PlatformTenantResponse)

@@ -53,6 +53,9 @@ from utils.tasks.notifications import (
 from utils.tasks.tenant_access import (
     sync_tenant_access_lifecycle_task,
 )
+from utils.tasks.broadcasts import (
+    send_broadcast_campaign_task,
+)
 
 __all__ = [
     'regenerate_package_reminders_task',
@@ -61,4 +64,5 @@ __all__ = [
     'deliver_due_notifications_task',
     'process_notification_jobs_task',
     'sync_tenant_access_lifecycle_task',
+    'send_broadcast_campaign_task',
 ]

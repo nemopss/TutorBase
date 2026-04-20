@@ -135,6 +135,13 @@ from api.schemas.tenants import (
     TenantListResponse,
 )
 from api.schemas.platform import (
+    BroadcastAudienceUserResponse,
+    BroadcastCampaignResponse,
+    BroadcastCreateRequest,
+    BroadcastPreviewRequest,
+    BroadcastPreviewResponse,
+    BroadcastRecipientResponse,
+    BroadcastSendRequest,
     PlatformTenantResponse,
     TenantAccessActionRequest,
     TenantAccessGrantRequest,
@@ -255,6 +262,13 @@ __all__ = [
     'TenantAccessGrantRequest',
     'TenantAccessResponse',
     'TenantAccessSyncResponse',
+    'BroadcastCampaignResponse',
+    'BroadcastAudienceUserResponse',
+    'BroadcastCreateRequest',
+    'BroadcastPreviewRequest',
+    'BroadcastPreviewResponse',
+    'BroadcastRecipientResponse',
+    'BroadcastSendRequest',
     # Metrics
     'MetricsSummary',
     'DailyPoint',

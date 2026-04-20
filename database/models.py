@@ -31,6 +31,7 @@ from sqlalchemy import (
     JSON,
     Index,
     Numeric,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -79,6 +80,63 @@ class BotUser(Base):
 
     learner = relationship('Learner', back_populates='bot_user', uselist=False)
     learner_account_links = relationship('LearnerAccountLink', back_populates='bot_user')
+    broadcast_recipients = relationship('BroadcastRecipient', back_populates='bot_user')
+
+
+class BroadcastCampaign(Base):
+    """Platform-wide Telegram broadcast campaign."""
+    __tablename__ = 'broadcast_campaigns'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    title = Column(String, nullable=False)
+    message_text = Column(Text, nullable=False)
+    audience = Column(String(64), nullable=False, default='all_bot_users')
+    status = Column(String(32), nullable=False, default='draft')
+    recipient_count = Column(Integer, nullable=False, default=0)
+    sent_count = Column(Integer, nullable=False, default=0)
+    failed_count = Column(Integer, nullable=False, default=0)
+    skipped_count = Column(Integer, nullable=False, default=0)
+    rate_limit_per_second = Column(Integer, nullable=False, default=10)
+    last_task_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    queued_at = Column(DateTime(timezone=True), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_by = relationship('User', foreign_keys=[created_by_user_id])
+    recipients = relationship('BroadcastRecipient', back_populates='campaign', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        Index('ix_broadcast_campaigns_status_created', 'status', 'created_at'),
+    )
+
+
+class BroadcastRecipient(Base):
+    """Snapshot of a Telegram broadcast recipient and delivery state."""
+    __tablename__ = 'broadcast_recipients'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    campaign_id = Column(Integer, ForeignKey('broadcast_campaigns.id', ondelete='CASCADE'), nullable=False, index=True)
+    bot_user_id = Column(Integer, ForeignKey('bot_users.id', ondelete='SET NULL'), nullable=True, index=True)
+    chat_id = Column(BigInteger, nullable=False)
+    display_name = Column(String, nullable=True)
+    username = Column(String, nullable=True)
+    status = Column(String(32), nullable=False, default='pending')
+    provider_message_id = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+
+    campaign = relationship('BroadcastCampaign', back_populates='recipients')
+    bot_user = relationship('BotUser', back_populates='broadcast_recipients')
+
+    __table_args__ = (
+        UniqueConstraint('campaign_id', 'chat_id', name='uq_broadcast_recipients_campaign_chat'),
+        Index('ix_broadcast_recipients_campaign_status', 'campaign_id', 'status'),
+    )
 
 
 class User(Base):
