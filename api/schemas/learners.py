@@ -55,6 +55,19 @@ class LearnerResponse(BaseResponse, TimestampMixin, TenantMixin):
     next_lesson_date: Optional[datetime] = Field(None, description="ISO datetime of the nearest scheduled lesson")
 
 
+class StudentLearnerResponse(BaseResponse):
+    """Student-safe learner response.
+
+    This DTO is intentionally narrow and excludes tutor/internal fields such as
+    notes, lesson_rate, chat IDs, tenant IDs, and other workspace metadata.
+    """
+
+    id: int = Field(..., description="Learner ID")
+    display_name: str = Field(..., min_length=1, max_length=255, description="Display name")
+    notifications_enabled: bool = Field(default=True, description="Whether notifications are enabled")
+    next_lesson_date: Optional[datetime] = Field(None, description="ISO datetime of the nearest scheduled lesson")
+
+
 class LearnerDetailResponse(BaseResponse):
     """Response schema for learner detail (profile page).
     
@@ -152,7 +165,7 @@ class CreateLearnerFromChatIdRequest(BaseRequest):
         - notes max 5000 chars
         - lesson_rate must be positive if provided
     """
-    chat_id: int = Field(..., description="Telegram chat ID")
+    chat_id: Optional[int] = Field(None, description="Telegram chat ID")
     display_name: str = Field(..., min_length=1, max_length=255, description="Display name for learner")
     notes: Optional[str] = Field(None, max_length=5000, description="Teacher notes")
     notifications_enabled: bool = Field(
@@ -235,6 +248,11 @@ class UpdateLearnerNotificationsRequest(BaseRequest):
     notifications_enabled: bool = Field(..., description="Enable or disable notifications")
 
 
+class UnlinkLearnerAccountRequest(BaseRequest):
+    """Request schema for unlinking a learner from Telegram account."""
+    reason: Optional[str] = Field(None, max_length=1000, description="Optional unlink reason")
+
+
 __all__ = [
     'LearnerResponse',
     'LearnerDetailResponse',
@@ -243,4 +261,5 @@ __all__ = [
     'CreateLearnerFromChatIdRequest',
     'UpdateLearnerRequest',
     'UpdateLearnerNotificationsRequest',
+    'UnlinkLearnerAccountRequest',
 ]

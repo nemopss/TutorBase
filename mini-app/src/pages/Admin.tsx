@@ -16,6 +16,7 @@ interface UserRecord {
   username: string | null;
   telegramId: number | null;
   role: UserRole;
+  isPlatformAdmin: boolean;
   createdAt: string;
   updatedAt: string;
   lastLoginAt: string | null;
@@ -33,6 +34,7 @@ const mapUser = (user: any): UserRecord => ({
   username: user.username,
   telegramId: user.telegram_id,
   role: user.role,
+  isPlatformAdmin: !!user.is_platform_admin,
   createdAt: user.created_at,
   updatedAt: user.updated_at,
   lastLoginAt: user.last_login_at,
@@ -72,7 +74,6 @@ const Admin = () => {
   const roleOptions = [
     { value: 'viewer', label: roleLabels.viewer },
     { value: 'teacher', label: roleLabels.teacher },
-    { value: 'admin', label: roleLabels.admin },
   ];
 
   const fetchUsers = useCallback(async () => {
@@ -162,13 +163,14 @@ const Admin = () => {
         render: (role: UserRole, record) => (
           <Space wrap>
             <Tag color={roleColors[role]}>{roleLabels[role]}</Tag>
+            {record.isPlatformAdmin && <Tag color="gold">Владелец</Tag>}
             <Select<UserRole>
               value={role}
               options={roleOptions}
               onChange={(value) => handleRoleChange(record.id, value)}
               size={isMobile ? 'middle' : 'small'}
               loading={updatingUserId === record.id}
-              disabled={updatingUserId === record.id || record.id === user?.id}
+              disabled={updatingUserId === record.id || record.id === user?.id || record.isPlatformAdmin}
               style={{ minWidth: isMobile ? 140 : 160 }}
               dropdownMatchSelectWidth={false}
             />

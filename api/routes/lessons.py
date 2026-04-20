@@ -5,7 +5,15 @@ from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, get_current_tenant, CurrentTenant, admin_or_teacher_required, get_current_user
+from api.dependencies import (
+    CurrentTenant,
+    admin_or_teacher_required,
+    get_current_tenant,
+    get_current_user,
+    get_session,
+    require_full_tenant_access,
+    require_maintenance_tenant_access,
+)
 from api.schemas import (
     LessonCreateRequest,
     LessonListResponse,
@@ -64,11 +72,12 @@ async def list_all_lessons_endpoint(
         sort_by=sort_by,
         sort_order=sort_order,
     )
-    items = [_to_response(lesson) for lesson in lessons]
+    include_private = current_user.role != "viewer"
+    items = [_to_response(lesson, include_private=include_private) for lesson in lessons]
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
-def _to_response(dto: LessonDTO) -> LessonResponse:
+def _to_response(dto: LessonDTO, *, include_private: bool = True) -> LessonResponse:
     return LessonResponse(
         id=dto.id,
         package_id=dto.package_id,
@@ -78,7 +87,7 @@ def _to_response(dto: LessonDTO) -> LessonResponse:
         status=dto.status,
         duration_minutes=dto.duration_minutes,
         sequence_index=dto.sequence_index,
-        teacher_notes=dto.teacher_notes,
+        teacher_notes=dto.teacher_notes if include_private else None,
         homework_due_at=dto.homework_due_at,
         timezone="Europe/Moscow",
     )
@@ -90,6 +99,7 @@ async def list_lessons_for_package(
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> PaginatedResponse[LessonResponse]:
     try:
         lessons = await lesson_service.list_lessons(session, current_tenant, package_id)
@@ -110,6 +120,7 @@ async def create_lesson_for_package(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> LessonResponse:
     try:
         existing = await lesson_service.list_lessons(session, current_tenant, package_id)
@@ -145,6 +156,7 @@ async def get_lesson_endpoint(
     lesson_id: int,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> LessonResponse:
     try:
         lesson = await lesson_service.get_lesson(session, current_tenant, lesson_id)
@@ -160,6 +172,7 @@ async def update_lesson_endpoint(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_maintenance_tenant_access),
 ) -> LessonResponse:
     try:
         lesson = await lesson_service.update_lesson(
@@ -193,6 +206,7 @@ async def delete_lesson_endpoint(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ):
     try:
         package_id = await lesson_service.delete_lesson(session, current_tenant, lesson_id)

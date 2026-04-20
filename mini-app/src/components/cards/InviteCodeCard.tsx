@@ -2,6 +2,7 @@ import React from 'react';
 import { Card, Tag, Button, Space, Typography, Tooltip } from 'antd';
 import { CopyOutlined, CheckCircleOutlined, ClockCircleOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 
@@ -11,8 +12,12 @@ interface InviteToken {
   id: number;
   token: string;
   expires_at: string;
-  used_at: string | null;
   created_at: string;
+  is_used: boolean;
+  is_expired: boolean;
+  is_valid: boolean;
+  learner_id?: number | null;
+  learner_name?: string | null;
 }
 
 interface InviteCodeCardProps {
@@ -30,31 +35,33 @@ const InviteCodeCard: React.FC<InviteCodeCardProps> = ({
   onDelete,
   onClick,
 }) => {
+  const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
   const colors = resolvedTheme.colors;
 
-  const isUsed = !!inviteCode.used_at;
-  const isExpired = dayjs(inviteCode.expires_at).isBefore(dayjs());
+  const isUsed = inviteCode.is_used;
+  const isExpired = inviteCode.is_expired || dayjs(inviteCode.expires_at).isBefore(dayjs());
   const isActive = !isUsed && !isExpired;
+  const formatInviteDate = (value: string) => dayjs(value).format('D MMM YYYY HH:mm');
 
   const getStatusTag = () => {
     if (isUsed) {
       return (
         <Tag icon={<CheckCircleOutlined />} color="success">
-          Used {dayjs(inviteCode.used_at).fromNow()}
+          {t('pages.inviteCodes.status.used')}
         </Tag>
       );
     }
     if (isExpired) {
       return (
         <Tag icon={<ClockCircleOutlined />} color="default">
-          Expired
+          {t('pages.inviteCodes.status.expired')}
         </Tag>
       );
     }
     return (
       <Tag icon={<ClockCircleOutlined />} color="processing">
-        Active
+        {t('pages.inviteCodes.status.active')}
       </Tag>
     );
   };
@@ -71,7 +78,7 @@ const InviteCodeCard: React.FC<InviteCodeCardProps> = ({
       onClick={() => onClick?.(inviteCode)}
       actions={[
         ...(isActive ? [
-          <Tooltip key="copy" title="Copy code">
+          <Tooltip key="copy" title={t('pages.inviteCodes.copyCode')}>
             <Button
               type="text"
               icon={<CopyOutlined />}
@@ -80,7 +87,7 @@ const InviteCodeCard: React.FC<InviteCodeCardProps> = ({
                 onCopyToken(inviteCode.token);
               }}
             >
-              Copy Code
+              {t('pages.inviteCodes.copyCode')}
             </Button>
           </Tooltip>,
           <Button
@@ -91,7 +98,7 @@ const InviteCodeCard: React.FC<InviteCodeCardProps> = ({
               onCopyLink(inviteCode.token);
             }}
           >
-            Copy Link
+            {t('pages.inviteCodes.copyLink')}
           </Button>,
         ] : []),
         ...(!isUsed && onDelete ? [
@@ -105,7 +112,7 @@ const InviteCodeCard: React.FC<InviteCodeCardProps> = ({
               onDelete(inviteCode.id);
             }}
           >
-            Delete
+            {t('common.delete')}
           </Button>,
         ] : []),
       ].filter(Boolean)}
@@ -119,13 +126,13 @@ const InviteCodeCard: React.FC<InviteCodeCardProps> = ({
         </div>
         
         <Space size={spacing.md} wrap>
-          <Tooltip title={dayjs(inviteCode.expires_at).format('YYYY-MM-DD HH:mm')}>
+          <Tooltip title={formatInviteDate(inviteCode.expires_at)}>
             <Text type="secondary" style={{ fontSize: 12 }}>
-              Expires {dayjs(inviteCode.expires_at).fromNow()}
+              {t('pages.inviteCodes.expires')}: {formatInviteDate(inviteCode.expires_at)}
             </Text>
           </Tooltip>
           <Text type="secondary" style={{ fontSize: 12 }}>
-            Created {dayjs(inviteCode.created_at).format('MMM D, YYYY')}
+            {t('pages.inviteCodes.created')}: {formatInviteDate(inviteCode.created_at)}
           </Text>
         </Space>
       </Space>

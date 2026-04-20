@@ -23,9 +23,22 @@ interface User {
   id: number;
   display_name: string;
   role: string;
+  is_platform_admin?: boolean;
   telegram_id?: number;
   tenant_id?: number | null;
   last_login_at?: string;
+}
+
+export interface TenantAccess {
+  tenant_id: number | null;
+  status: string;
+  mode: 'full' | 'grace' | 'blocked' | string;
+  access_until?: string | null;
+  grace_until?: string | null;
+  is_lifetime: boolean;
+  reason?: string | null;
+  notes?: string | null;
+  bypass_access_restrictions?: boolean;
 }
 
 interface AuthResponse {
@@ -50,9 +63,12 @@ interface AuthContextType {
   isAuthenticated: boolean;
   isLoading: boolean;
   user: User | null;
+  tenantAccess: TenantAccess | null;
   tenantId: number | null;
   isSuperAdmin: boolean;
   canSwitchTenant: boolean;
+  isTenantAccessLoading: boolean;
+  refreshTenantAccess: () => Promise<void>;
   switchTenant: (tenantId: number | null) => Promise<void>;
   registerTutor: (data: TutorRegistrationData) => Promise<void>;
   registerStudent: (data: StudentRegistrationData) => Promise<void>;
@@ -73,6 +89,8 @@ export const useAuth = () => {
 export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tenantId, setTenantId] = useState<number | null>(null);
+  const [tenantAccess, setTenantAccess] = useState<TenantAccess | null>(null);
+  const [isTenantAccessLoading, setIsTenantAccessLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [browserLoginError, setBrowserLoginError] = useState<string | null>(null);
@@ -86,6 +104,31 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
     setTenantId(null);
+    setTenantAccess(null);
+    setIsTenantAccessLoading(false);
+  };
+
+  const loadTenantAccess = async (nextTenantId: number | null) => {
+    setTenantAccess(null);
+
+    if (nextTenantId === null) {
+      setIsTenantAccessLoading(false);
+      return;
+    }
+
+    setIsTenantAccessLoading(true);
+    try {
+      const response = await api.get<TenantAccess>('/tenant-access/current');
+      setTenantAccess(response.data);
+    } catch (error) {
+      console.error('[AuthProvider] Failed to load tenant access state:', error);
+    } finally {
+      setIsTenantAccessLoading(false);
+    }
+  };
+
+  const refreshTenantAccess = async () => {
+    await loadTenantAccess(tenantId);
   };
 
   const applyAuthenticatedSession = (
@@ -114,6 +157,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
     setUser(nextUser);
     setTenantId(extractedTenantId);
+    void loadTenantAccess(extractedTenantId);
     setIsLoading(false);
     setupTokenRefresh(access_token, mode);
   };
@@ -181,6 +225,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
               setUser(user);
               setTenantId(extractedTenantId);
+              void loadTenantAccess(extractedTenantId);
               setIsLoading(false);
 
               // Setup auto-refresh
@@ -252,6 +297,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
         setUser(user);
         setTenantId(extractedTenantId);
+        void loadTenantAccess(extractedTenantId);
         setIsLoading(false);
 
         // Setup auto-refresh 5 minutes before expiration
@@ -341,6 +387,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
         setUser(updatedUser);
         setTenantId(extractedTenantId);
+        void loadTenantAccess(extractedTenantId);
 
         // Schedule next refresh
         setupTokenRefresh(access_token, mode);
@@ -386,6 +433,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
       setUser(updatedUser);
       setTenantId(extractedTenantId);
+      void loadTenantAccess(extractedTenantId);
 
       // Setup new refresh timer
       setupTokenRefresh(access_token, authMode);
@@ -443,6 +491,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
       setUser(registeredUser);
       setTenantId(extractedTenantId);
+      void loadTenantAccess(extractedTenantId);
 
       // Setup auto-refresh
       setupTokenRefresh(access_token, authMode);
@@ -499,6 +548,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
       setUser(registeredUser);
       setTenantId(extractedTenantId);
+      void loadTenantAccess(extractedTenantId);
 
       // Setup auto-refresh
       setupTokenRefresh(access_token, authMode);
@@ -565,16 +615,19 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     finishLogout();
   };
 
-  const isSuperAdmin = user?.role === 'admin';
+  const isSuperAdmin = !!user?.is_platform_admin;
   const canSwitchTenant = isSuperAdmin && authMode !== 'browser';
 
   const value = {
     isAuthenticated: !!user,
     isLoading,
     user,
+    tenantAccess,
     tenantId,
     isSuperAdmin,
     canSwitchTenant,
+    isTenantAccessLoading,
+    refreshTenantAccess,
     switchTenant,
     registerTutor,
     registerStudent,

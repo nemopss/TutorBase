@@ -1,4 +1,5 @@
 import pytest
+from decimal import Decimal
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -29,6 +30,98 @@ async def test_list_packages_returns_results(client: AsyncClient, db_session: As
     data = response.json()
     assert data["total"] == 1
     assert data["items"][0]["title"] == "Demo Package"
+    assert data["items"][0]["package_type"] == "package"
+
+
+@pytest.mark.asyncio
+async def test_list_packages_hides_one_off_by_default(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    await factories.create_package(db_session, learner=learner, title="Regular Package", status="active")
+    await factories.create_package(
+        db_session,
+        learner=learner,
+        title="One-off Lesson",
+        package_type="one_off",
+        status="active",
+    )
+    await db_session.commit()
+
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    default_response = await client.get("/api/v1/packages", headers=headers)
+    assert default_response.status_code == 200
+    assert default_response.json()["total"] == 1
+    assert default_response.json()["items"][0]["title"] == "Regular Package"
+
+    all_response = await client.get("/api/v1/packages?package_type=all", headers=headers)
+    assert all_response.status_code == 200
+    assert all_response.json()["total"] == 2
+
+    one_off_response = await client.get("/api/v1/packages?package_type=one_off", headers=headers)
+    assert one_off_response.status_code == 200
+    assert one_off_response.json()["total"] == 1
+    assert one_off_response.json()["items"][0]["package_type"] == "one_off"
+
+
+@pytest.mark.asyncio
+async def test_viewer_package_list_is_own_and_hides_finance(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    telegram_id = 990001
+    own_learner = await factories.create_learner(db_session, display_name="Own", chat_id=telegram_id)
+    other_learner = await factories.create_learner(db_session, display_name="Other")
+    own_package = await factories.create_package(
+        db_session,
+        learner=own_learner,
+        title="Own Package",
+        status="active",
+        notes="Teacher-only notes",
+    )
+    own_package.price = 1000
+    own_package.payment_status = "partial"
+    await factories.create_package(db_session, learner=other_learner, title="Other Package", status="active")
+    await db_session.commit()
+
+    headers, _ = await get_auth_headers(
+        db_session,
+        current_tenant,
+        role="viewer",
+        telegram_id=telegram_id,
+    )
+
+    response = await client.get("/api/v1/packages", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    item = data["items"][0]
+    assert item["title"] == "Own Package"
+    assert item["notes"] is None
+    assert item["price"] is None
+    assert item["payment_status"] == "hidden"
+    assert item["total_paid"] == 0.0
+
+
+@pytest.mark.asyncio
+async def test_viewer_cannot_read_package_detail(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(db_session, learner=learner)
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant, role="viewer")
+
+    response = await client.get(f"/api/v1/packages/{package.id}", headers=headers)
+
+    assert response.status_code == 403
 
 
 @pytest.mark.asyncio
@@ -60,6 +153,49 @@ async def test_create_package_success(client: AsyncClient, db_session: AsyncSess
 
 
 @pytest.mark.asyncio
+async def test_create_one_off_lesson_creates_hidden_package_and_scheduled_lesson(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    learner.lesson_rate = Decimal("2500.00")
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    payload = {
+        "learner_id": learner.id,
+        "scheduled_at": "2026-04-20T15:30:00+03:00",
+        "duration_minutes": 90,
+        "title": "Consultation",
+        "notes": "One-time prep",
+    }
+
+    response = await client.post("/api/v1/packages/one-off", json=payload, headers=headers)
+    assert response.status_code == 201
+    data = response.json()
+    assert data["package_type"] == "one_off"
+    assert data["title"] == "Consultation"
+    assert data["status"] == "active"
+    assert data["total_lessons"] == 1
+    assert Decimal(str(data["price"])) == Decimal("2500.0")
+
+    package = await crud.get_lesson_package(db_session, current_tenant, data["id"])
+    assert package is not None
+    assert package.package_type == "one_off"
+    assert len(package.lessons) == 1
+    assert package.lessons[0].duration_minutes == 90
+
+    default_list = await client.get("/api/v1/packages", headers=headers)
+    assert default_list.status_code == 200
+    assert default_list.json()["total"] == 0
+
+    finance_response = await client.get(f"/api/v1/learners/{learner.id}/finance", headers=headers)
+    assert finance_response.status_code == 200
+    assert Decimal(str(finance_response.json()["outstanding_balance"])) == Decimal("2500.0")
+
+
+@pytest.mark.asyncio
 async def test_create_package_requires_start_date_for_template(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     template = await factories.create_template(db_session)
@@ -74,8 +210,8 @@ async def test_create_package_requires_start_date_for_template(client: AsyncClie
     }
 
     response = await client.post("/api/v1/packages", json=payload, headers=headers)
-    assert response.status_code == 400
-    assert response.json()["detail"] == "start_date required for template"
+    assert response.status_code == 422
+    assert "start_date is required" in str(response.json()["detail"])
 
 
 @pytest.mark.asyncio

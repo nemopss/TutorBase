@@ -11,6 +11,8 @@ from api.dependencies import (
     get_current_tenant,
     get_current_user,
     get_session,
+    require_full_tenant_access,
+    require_maintenance_tenant_access,
 )
 from api.schemas.notifications import (
     MaterializeActiveRulesRequest,
@@ -133,6 +135,7 @@ async def update_notification_settings(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_maintenance_tenant_access),
 ) -> NotificationSettingsResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -147,6 +150,7 @@ async def trigger_notification_job_processing(
     payload: NotificationTaskTriggerRequest = Body(default=NotificationTaskTriggerRequest()),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationTaskTriggerResponse:
     tenant_id = _require_tenant_id(current_tenant)
     task = process_notification_jobs_task.delay(tenant_id=tenant_id, job_type=payload.job_type, limit=payload.limit)
@@ -165,6 +169,7 @@ async def trigger_notification_delivery_tick(
     payload: NotificationTaskTriggerRequest = Body(default=NotificationTaskTriggerRequest()),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationTaskTriggerResponse:
     tenant_id = _require_tenant_id(current_tenant)
     task = deliver_due_notifications_task.delay(tenant_id=tenant_id, limit=payload.limit)
@@ -211,6 +216,7 @@ async def set_learner_notification_mode(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_maintenance_tenant_access),
 ) -> LearnerNotificationModeResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -273,6 +279,7 @@ async def cancel_notification_instance(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_maintenance_tenant_access),
 ) -> NotificationInstanceResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -296,6 +303,7 @@ async def send_notification_instance_now(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationInstanceResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -368,6 +376,7 @@ async def create_notification_rule(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationRuleResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -419,6 +428,7 @@ async def create_notification_template(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationTemplateResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -448,6 +458,7 @@ async def update_notification_template(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationTemplateResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -479,6 +490,7 @@ async def archive_notification_template(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationTemplateResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -500,6 +512,7 @@ async def preview_notification_rule(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationPreviewResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -517,6 +530,7 @@ async def preview_notification_rules(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationPreviewResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -551,6 +565,7 @@ async def update_notification_rule(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationRuleResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -574,6 +589,7 @@ async def activate_notification_rule(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationRuleResponse:
     return await _set_rule_status_response(
         rule_id,
@@ -591,6 +607,7 @@ async def pause_notification_rule(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_maintenance_tenant_access),
 ) -> NotificationRuleResponse:
     return await _set_rule_status_response(
         rule_id,
@@ -608,6 +625,7 @@ async def archive_notification_rule(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_maintenance_tenant_access),
 ) -> NotificationRuleResponse:
     return await _set_rule_status_response(
         rule_id,
@@ -625,6 +643,7 @@ async def materialize_active_notification_rules(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> MaterializeActiveRulesResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
@@ -653,6 +672,7 @@ async def queue_notification_event_reconciliation(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_full_tenant_access),
 ) -> NotificationJobResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)

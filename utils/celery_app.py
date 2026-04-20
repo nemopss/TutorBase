@@ -55,6 +55,8 @@ TASK_MODULES = (
     'utils.tasks.reminders',
     'utils.tasks.metrics',
     'utils.tasks.notifications',
+    'utils.tasks.tenant_access',
+    'utils.tasks.broadcasts',
 )
 
 
@@ -95,6 +97,26 @@ def _build_notifications_beat_schedule(
             },
         },
     }
+
+
+def _build_tenant_access_beat_schedule(
+    *,
+    tenant_access_sync_enabled: bool,
+    sync_interval_seconds: int,
+) -> dict[str, dict]:
+    if not tenant_access_sync_enabled:
+        return {}
+
+    return {
+        'tenant-access.sync-lifecycle': {
+            'task': 'utils.tasks.tenant_access.sync_lifecycle',
+            'schedule': sync_interval_seconds,
+            'options': {
+                'expires': max(sync_interval_seconds - 60, 1),
+            },
+        },
+    }
+
 
 # Initialize Celery app
 # Note: config.REDIS_URL typically ends with /0, so we replace it with /1 for tasks
@@ -156,11 +178,17 @@ celery_app.conf.update(
     # Monitoring
     worker_send_task_events=True,  # Send events for monitoring (Flower)
     task_send_sent_event=True,  # Send event when task is sent
-    beat_schedule=_build_notifications_beat_schedule(
-        notifications_automation_enabled=config.NOTIFICATIONS_AUTOMATION_ENABLED,
-        process_jobs_interval_seconds=config.NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS,
-        delivery_interval_seconds=config.NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS,
-    ),
+    beat_schedule={
+        **_build_notifications_beat_schedule(
+            notifications_automation_enabled=config.NOTIFICATIONS_AUTOMATION_ENABLED,
+            process_jobs_interval_seconds=config.NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS,
+            delivery_interval_seconds=config.NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS,
+        ),
+        **_build_tenant_access_beat_schedule(
+            tenant_access_sync_enabled=config.TENANT_ACCESS_SYNC_ENABLED,
+            sync_interval_seconds=config.TENANT_ACCESS_SYNC_INTERVAL_SECONDS,
+        ),
+    },
 )
 
 # Import task modules explicitly so the worker always registers them at startup.
@@ -242,4 +270,9 @@ def health_check():
     }
 
 
-__all__ = ['celery_app', 'health_check', '_build_notifications_beat_schedule']
+__all__ = [
+    'celery_app',
+    'health_check',
+    '_build_notifications_beat_schedule',
+    '_build_tenant_access_beat_schedule',
+]

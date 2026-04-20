@@ -22,7 +22,8 @@ from email.mime import base
 from typing import Optional, TYPE_CHECKING
 
 from aiogram.types import User as AiogramUser
-from sqlalchemy import select, func, or_, and_, cast, String
+from fastapi import HTTPException, status
+from sqlalchemy import select, func, or_, and_, cast, String, update
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload, joinedload
 
@@ -36,6 +37,7 @@ from database.models import (
     BotUser,
     InviteToken,
     Learner,
+    LearnerAccountLink,
     LessonPackageTemplate,
     LessonPackage,
     Lesson,
@@ -648,6 +650,16 @@ async def create_learner(
         tenant_id=final_tenant_id,
     )
     session.add(learner)
+    await session.flush()
+    bot_user = await session.get(BotUser, bot_user_id)
+    await create_learner_account_link(
+        session,
+        tenant_id=final_tenant_id,
+        learner_id=learner.id,
+        bot_user_id=bot_user_id,
+        telegram_id=bot_user.chat_id if bot_user else None,
+        linked_at=now_utc,
+    )
     return learner
 
 
@@ -712,6 +724,104 @@ async def get_learner_by_bot_user(session: AsyncSession, current_tenant: Current
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(Learner.tenant_id == current_tenant.tenant_id)
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def create_learner_account_link(
+    session: AsyncSession,
+    *,
+    tenant_id: int,
+    learner_id: int,
+    bot_user_id: int | None,
+    user_id: int | None = None,
+    telegram_id: int | None = None,
+    linked_at: datetime | None = None,
+) -> LearnerAccountLink:
+    """Create an active learner/account link history row."""
+    link = LearnerAccountLink(
+        tenant_id=tenant_id,
+        learner_id=learner_id,
+        bot_user_id=bot_user_id,
+        user_id=user_id,
+        telegram_id=telegram_id,
+        linked_at=linked_at or datetime.now(timezone.utc),
+        created_at=datetime.now(timezone.utc),
+    )
+    session.add(link)
+    return link
+
+
+async def get_active_learner_account_link(
+    session: AsyncSession,
+    *,
+    learner_id: int,
+    bot_user_id: int | None = None,
+) -> LearnerAccountLink | None:
+    """Return the active link row for a learner, if one exists."""
+    stmt = select(LearnerAccountLink).where(
+        LearnerAccountLink.learner_id == learner_id,
+        LearnerAccountLink.unlinked_at.is_(None),
+    )
+    if bot_user_id is not None:
+        stmt = stmt.where(LearnerAccountLink.bot_user_id == bot_user_id)
+    result = await session.execute(stmt.order_by(LearnerAccountLink.linked_at.desc()))
+    return result.scalars().first()
+
+
+async def unlink_learner_account(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    learner: Learner,
+    *,
+    unlinked_by_user_id: int | None,
+    reason: str | None = None,
+) -> Learner:
+    """Detach a learner from its Telegram account without deleting history."""
+    from utils.cache import invalidate_cache
+
+    if current_tenant.tenant_id is not None and learner.tenant_id != current_tenant.tenant_id:
+        raise ValueError("Learner not found")
+    if learner.bot_user_id is None:
+        return learner
+
+    now = datetime.now(timezone.utc)
+    bot_user_id = learner.bot_user_id
+    bot_user = learner.bot_user or await session.get(BotUser, bot_user_id)
+    telegram_id = bot_user.chat_id if bot_user else None
+    user = await get_user_by_telegram_id(session, telegram_id) if telegram_id is not None else None
+
+    active_link = await get_active_learner_account_link(
+        session,
+        learner_id=learner.id,
+        bot_user_id=bot_user_id,
+    )
+    if active_link is None:
+        active_link = await create_learner_account_link(
+            session,
+            tenant_id=learner.tenant_id,
+            learner_id=learner.id,
+            bot_user_id=bot_user_id,
+            user_id=user.id if user else None,
+            telegram_id=telegram_id,
+            linked_at=learner.created_at,
+        )
+
+    active_link.unlinked_at = now
+    active_link.unlinked_by_user_id = unlinked_by_user_id
+    active_link.unlink_reason = reason
+    session.add(active_link)
+
+    learner.bot_user_id = None
+    learner.bot_user = None
+    learner.notifications_enabled = False
+    session.add(learner)
+
+    if user and user.role == "viewer" and user.tenant_id == learner.tenant_id:
+        user.tenant_id = None
+        user.updated_at = now
+        session.add(user)
+        await invalidate_cache("users:_get_user_cached:*")
+
+    return learner
 
 
 async def update_learner(
@@ -810,7 +920,7 @@ async def create_learner_from_chat_id(
     session: AsyncSession,
     current_tenant: CurrentTenant,
     *,
-    chat_id: int,
+    chat_id: int | None,
     display_name: str,
     notes: Optional[str] = None,
     notifications_enabled: bool = True,
@@ -837,6 +947,24 @@ async def create_learner_from_chat_id(
     """
     now_utc = datetime.now(timezone.utc)
     
+    final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
+
+    if chat_id is None:
+        from decimal import Decimal
+        lesson_rate_decimal = Decimal(str(lesson_rate)) if lesson_rate is not None else None
+
+        learner = Learner(
+            bot_user_id=None,
+            display_name=display_name,
+            notes=notes,
+            notifications_enabled=False,
+            created_at=now_utc,
+            tenant_id=final_tenant_id,
+            lesson_rate=lesson_rate_decimal,
+        )
+        session.add(learner)
+        return learner
+
     # Try to get existing BotUser
     bot_user = await get_bot_user_by_chat_id(session, chat_id)
     
@@ -863,9 +991,6 @@ async def create_learner_from_chat_id(
             session.add(existing_learner)
         return existing_learner
     
-    # Create new learner
-    final_tenant_id = resolve_tenant_id(current_tenant, tenant_id)
-    
     # Convert lesson_rate to Decimal if provided
     from decimal import Decimal
     lesson_rate_decimal = Decimal(str(lesson_rate)) if lesson_rate is not None else None
@@ -881,6 +1006,15 @@ async def create_learner_from_chat_id(
     )
     learner.bot_user = bot_user
     session.add(learner)
+    await session.flush()
+    await create_learner_account_link(
+        session,
+        tenant_id=final_tenant_id,
+        learner_id=learner.id,
+        bot_user_id=bot_user.id,
+        telegram_id=bot_user.chat_id,
+        linked_at=now_utc,
+    )
     return learner
 
 
@@ -1037,6 +1171,7 @@ async def create_lesson_package(
     learner: Learner,
     title: str,
     template: LessonPackageTemplate | None = None,
+    package_type: str = "package",
     status: str = "draft",
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
@@ -1077,6 +1212,7 @@ async def create_lesson_package(
         learner=learner,
         template=template,
         title=title,
+        package_type=package_type,
         status=status,
         start_date=start_date,
         end_date=end_date,
@@ -1298,6 +1434,7 @@ async def fetch_lesson_packages_paginated(
     learner_id: Optional[int] = None,
     status: Optional[str] = None,
     search: Optional[str] = None,
+    package_type: Optional[str] = "package",
 ) -> tuple[list[LessonPackage], int]:
     """Fetch lesson packages with pagination and filtering.
     
@@ -1312,6 +1449,7 @@ async def fetch_lesson_packages_paginated(
         learner_id: Optional learner ID filter
         status: Optional status filter
         search: Optional search string for title or learner name
+        package_type: Optional package type filter. Use None to include all types.
         
     Returns:
         Tuple of (list of LessonPackage objects, total count)
@@ -1324,6 +1462,8 @@ async def fetch_lesson_packages_paginated(
         base_query = base_query.where(LessonPackage.learner_id == learner_id)
     if status is not None:
         base_query = base_query.where(LessonPackage.status == status)
+    if package_type is not None:
+        base_query = base_query.where(LessonPackage.package_type == package_type)
     if search:
         from database.validators import escape_like_pattern
         escaped_search = escape_like_pattern(search)
@@ -2278,6 +2418,7 @@ async def create_invite_token(
     current_tenant: CurrentTenant,
     created_by_user_id: int,
     expires_in_days: int = 30,
+    learner_id: int | None = None,
 ) -> InviteToken:
     """Create new invite token for tenant.
     
@@ -2311,6 +2452,7 @@ async def create_invite_token(
     
     invite_token = InviteToken(
         tenant_id=current_tenant.tenant_id,
+        learner_id=learner_id,
         token=token,
         expires_at=expires_at,
         created_by_user_id=created_by_user_id,
@@ -2341,12 +2483,53 @@ async def get_invite_token_by_token(
         select(InviteToken)
         .options(
             selectinload(InviteToken.tenant),
+            selectinload(InviteToken.learner),
             selectinload(InviteToken.created_by)
         )
         .where(InviteToken.token == token)
     )
     result = await session.execute(stmt)
     return result.scalar_one_or_none()
+
+
+async def consume_invite_token_for_registration(
+    session: AsyncSession,
+    token: str,
+) -> Optional[InviteToken]:
+    """Atomically reserve a valid invite token for student registration.
+
+    The UPDATE acquires the row lock and changes only still-unused, non-expired
+    tokens. Concurrent callers for the same token serialize at the database row:
+    one transaction updates the row, and the next one sees zero affected rows
+    after the first transaction commits.
+    """
+    now = datetime.now(timezone.utc)
+    result = await session.execute(
+        update(InviteToken)
+        .where(
+            InviteToken.token == token,
+            InviteToken.used_at.is_(None),
+            InviteToken.expires_at > now,
+        )
+        .values(used_at=now)
+        .returning(InviteToken.id)
+        .execution_options(synchronize_session=False)
+    )
+    token_id = result.scalar_one_or_none()
+    if token_id is None:
+        return None
+
+    stmt = (
+        select(InviteToken)
+        .options(
+            selectinload(InviteToken.tenant),
+            selectinload(InviteToken.learner),
+            selectinload(InviteToken.created_by),
+        )
+        .where(InviteToken.id == token_id)
+    )
+    token_result = await session.execute(stmt)
+    return token_result.scalar_one()
 
 
 async def mark_invite_token_as_used(
@@ -2410,7 +2593,8 @@ async def list_invite_tokens(
     stmt = (
         select(InviteToken)
         .options(
-            selectinload(InviteToken.created_by)
+            selectinload(InviteToken.created_by),
+            selectinload(InviteToken.learner),
         )
         .where(InviteToken.tenant_id == current_tenant.tenant_id)
         .order_by(InviteToken.created_at.desc())

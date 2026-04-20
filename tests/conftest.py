@@ -26,6 +26,7 @@ from sqlalchemy import select
 
 from api.app import create_app
 from api.dependencies import CurrentTenant, get_session
+from config import config
 from database import crud
 from database.models import Base, Tenant, User
 
@@ -187,11 +188,13 @@ async def user_tenant_2(db_session: AsyncSession, tenant_2: Tenant) -> User:
 
 
 @pytest.fixture
-async def super_admin_user(db_session: AsyncSession) -> User:
+async def super_admin_user(db_session: AsyncSession, monkeypatch) -> User:
+    telegram_id = random.randint(30001, 40000)
+    monkeypatch.setattr(config, "ADMINS", [*config.ADMINS, telegram_id])
     user = await crud.create_user(
         db_session,
         CurrentTenant(tenant_id=None, is_super_admin=True, tenant=None),
-        telegram_id=random.randint(30001, 40000),
+        telegram_id=telegram_id,
         display_name="Super Admin",
         role="admin",
         tenant_id=None,  # Global admin

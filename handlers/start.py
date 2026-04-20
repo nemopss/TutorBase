@@ -1,11 +1,22 @@
 import logging
-from aiogram import Router, types
+from aiogram import F, Router, types
 from aiogram.filters import CommandStart
+from aiogram.types import CallbackQuery
 from config import config
 from keyboards.common import start_keyboard
 from utils import texts
 
 router = Router()
+LEGACY_PUBLIC_CALLBACKS = {
+    "reglament_reply",
+    "programs_reply",
+    "get_prices",
+    "start_diagnostic",
+    "start_apply",
+    "show_cases",
+    "to_menu",
+    "back",
+}
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message):
@@ -23,3 +34,13 @@ async def cmd_start(message: types.Message):
             await message.answer(texts.START_MESSAGE, reply_markup=start_keyboard())
     else:
         await message.answer(texts.START_MESSAGE, reply_markup=start_keyboard())
+
+
+@router.callback_query(F.data.in_(LEGACY_PUBLIC_CALLBACKS) | F.data.startswith("case_"))
+async def cb_legacy_public_flow_disabled(query: CallbackQuery):
+    if query.message:
+        await query.message.answer(
+            texts.LEGACY_PUBLIC_FLOW_DISABLED,
+            reply_markup=start_keyboard(),
+        )
+    await query.answer()

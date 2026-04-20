@@ -7,10 +7,12 @@ from sqlalchemy import select, func
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import (
-    get_session,
+    CurrentTenant,
     admin_or_teacher_required,
     get_current_tenant,
-    CurrentTenant,
+    get_session,
+    require_full_tenant_access,
+    require_maintenance_tenant_access,
 )
 from api.schemas.learners import (
     LearnerListResponse,
@@ -19,7 +21,9 @@ from api.schemas.learners import (
     CreateLearnerFromChatIdRequest,
     UpdateLearnerNotificationsRequest,
     UpdateLearnerRequest,
+    UnlinkLearnerAccountRequest,
 )
+from api.schemas.registration import InviteTokenResponse
 from api.schemas.schedule import (
     LearnerScheduleResponse,
     UpdateScheduleRequest,
@@ -29,6 +33,7 @@ from api.schemas import PaginatedResponse, PaginationParams
 from database.models import Lesson, LessonPackage
 from services import learner_service
 from services import schedule_service
+from database import crud
 
 router = APIRouter()
 
@@ -87,6 +92,7 @@ async def list_all_learners(
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> PaginatedResponse[LearnerResponse]:
     """Lists all learners for the current tenant with next lesson dates."""
     learners = await learner_service.get_all_learners(session, current_tenant)
@@ -124,6 +130,7 @@ async def create_learner_from_chat_id(
     # We still need role check, but get tenant context separately
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerResponse:
     """Create a new learner from Telegram chat_id."""
     learner = await learner_service.create_learner_from_chat_id(
@@ -154,6 +161,7 @@ async def update_learner(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerResponse:
     """Update a learner's details including lesson rate."""
     learner = await learner_service.update_learner(
@@ -191,6 +199,7 @@ async def update_learner_notifications(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_maintenance_tenant_access),
 ) -> LearnerResponse:
     """Enable or disable notifications for a learner."""
     learner = await learner_service.update_learner_notifications(
@@ -217,12 +226,100 @@ async def update_learner_notifications(
     )
 
 
+@router.post("/{learner_id}/unlink-account", response_model=LearnerResponse)
+async def unlink_learner_account(
+    learner_id: int,
+    request: UnlinkLearnerAccountRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
+) -> LearnerResponse:
+    """Unlink a learner from Telegram without deleting learner history."""
+    learner = await learner_service.get_learner_by_id(
+        session,
+        current_tenant,
+        learner_id,
+    )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+
+    learner = await crud.unlink_learner_account(
+        session,
+        current_tenant,
+        learner,
+        unlinked_by_user_id=current_user.id,
+        reason=request.reason,
+    )
+    await session.flush()
+
+    next_lesson_dates = await _get_next_lesson_dates(
+        session, [learner_id], current_tenant.tenant_id
+    )
+
+    return LearnerResponse(
+        id=learner.id,
+        display_name=learner.display_name,
+        notifications_enabled=learner.notifications_enabled,
+        chat_id=None,
+        bot_user_id=None,
+        lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
+        next_lesson_date=next_lesson_dates.get(learner_id),
+    )
+
+
+@router.post("/{learner_id}/invite", response_model=InviteTokenResponse, status_code=201)
+async def create_learner_invite(
+    learner_id: int,
+    session: AsyncSession = Depends(get_session),
+    current_user=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
+) -> InviteTokenResponse:
+    """Create a personal invite token for an unlinked learner."""
+    learner = await learner_service.get_learner_by_id(
+        session,
+        current_tenant,
+        learner_id,
+    )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    if learner.bot_user_id is not None:
+        raise HTTPException(
+            status_code=409,
+            detail="Learner is already linked to a Telegram account"
+        )
+
+    invite_token = await crud.create_invite_token(
+        session=session,
+        current_tenant=current_tenant,
+        created_by_user_id=current_user.id,
+        expires_in_days=30,
+        learner_id=learner.id,
+    )
+    await session.flush()
+    invite_token.learner = learner
+
+    return InviteTokenResponse(
+        id=invite_token.id,
+        token=invite_token.token,
+        expires_at=invite_token.expires_at,
+        created_at=invite_token.created_at,
+        is_used=invite_token.is_used,
+        is_expired=invite_token.is_expired,
+        is_valid=invite_token.is_valid,
+        learner_id=learner.id,
+        learner_name=learner.display_name,
+    )
+
+
 @router.delete("/{learner_id}", status_code=204)
 async def delete_learner(
     learner_id: int,
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ):
     """Delete a learner and all associated data (packages, lessons, reminders)."""
     deleted = await learner_service.delete_learner(
@@ -266,6 +363,7 @@ async def get_learner_detail(
     learner_id: int,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> LearnerDetailResponse:
     """Get detailed learner information for profile page.
     
@@ -306,6 +404,7 @@ async def get_learner_finance(
     learner_id: int,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ):
     """Get learner's financial profile.
     
@@ -335,6 +434,7 @@ async def get_learner_finance(
         .where(
             Payment.tenant_id == current_tenant.tenant_id,
             Payment.learner_id == learner_id,
+            Payment.voided_at.is_(None),
         )
     )
     total_paid = total_result.scalar() or Decimal("0")
@@ -345,6 +445,7 @@ async def get_learner_finance(
         .where(
             Payment.tenant_id == current_tenant.tenant_id,
             Payment.learner_id == learner_id,
+            Payment.voided_at.is_(None),
         )
         .order_by(Payment.paid_at.desc())
     )
@@ -368,6 +469,9 @@ async def get_learner_finance(
             currency=payment.currency,
             paid_at=payment.paid_at,
             notes=payment.notes,
+            is_voided=payment.voided_at is not None,
+            voided_at=payment.voided_at,
+            void_reason=payment.void_reason,
             created_at=payment.created_at,
             updated_at=payment.updated_at,
             tenant_id=payment.tenant_id,
@@ -389,6 +493,7 @@ async def get_learner_schedule(
     learner_id: int,
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> LearnerScheduleResponse:
     """Get learner's weekly schedule.
     
@@ -419,6 +524,7 @@ async def update_learner_schedule(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerScheduleResponse:
     """Replace learner's entire schedule.
     
@@ -452,6 +558,7 @@ async def add_schedule_slots(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerScheduleResponse:
     """Add slots for multiple days with the same time.
     
@@ -485,6 +592,7 @@ async def delete_schedule_slot(
     session: AsyncSession = Depends(get_session),
     _=Depends(admin_or_teacher_required),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
 ) -> LearnerScheduleResponse:
     """Delete a single slot by index.
     

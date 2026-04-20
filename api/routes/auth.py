@@ -7,7 +7,13 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from slowapi import Limiter
 from slowapi.util import get_remote_address
 
-from api.dependencies import get_session, get_current_tenant, CurrentTenant, get_current_user
+from api.dependencies import (
+    CurrentTenant,
+    get_current_tenant,
+    get_current_user,
+    get_session,
+    is_platform_admin,
+)
 from database.models import Tenant, User
 from api.schemas import (
     BrowserTokenResponse,
@@ -34,6 +40,7 @@ from api.security import (
 )
 from config import config
 from database import crud
+from services import tenant_access_service
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -69,6 +76,7 @@ def _build_user_payload(user: User) -> UserPayload:
     return UserPayload(
         id=user.id,
         role=user.role,
+        is_platform_admin=is_platform_admin(user),
         display_name=user.display_name,
         username=user.username,
         telegram_id=user.telegram_id,
@@ -80,6 +88,7 @@ def _build_token_payload(user: User, *, tenant_id: int | None = None) -> dict[st
     return {
         "sub": str(user.id),
         "role": user.role,
+        "is_platform_admin": is_platform_admin(user),
         "telegram_id": user.telegram_id,
         "tenant_id": tenant_id if tenant_id is not None else user.tenant_id,
     }
@@ -119,25 +128,41 @@ async def _persist_user(session: AsyncSession, current_tenant: CurrentTenant, us
     display_name = _build_display_name(user_data)
     user = await crud.get_user_by_telegram_id(session, telegram_id)
     now = datetime.now(timezone.utc)
-    is_admin = telegram_id in config.ADMINS
-    default_role = "admin" if is_admin else "viewer"
 
     if user is None:
         # НОВЫЙ ПОЛЬЗОВАТЕЛЬ - требуется регистрация!
         # Возвращаем None, чтобы login endpoint мог обработать это
         return None
     else:
-        role_update = "admin" if is_admin and user.role != "admin" else None
         user = await crud.update_user_login_metadata(
             session,
             user,
             username=username,
             display_name=display_name,
-            role=role_update,
+            role=None,
             last_login_at=now,
         )
     await session.flush()
     return user
+
+
+async def _viewer_has_active_learner(session: AsyncSession, user: User) -> bool:
+    """Return whether a viewer user is currently linked to a learner."""
+    if user.role != "viewer":
+        return True
+    if user.tenant_id is None or user.telegram_id is None:
+        return False
+
+    bot_user = await crud.get_bot_user_by_chat_id(session, int(user.telegram_id))
+    if not bot_user:
+        return False
+
+    learner = await crud.get_learner_by_bot_user(
+        session,
+        CurrentTenant(tenant_id=user.tenant_id, is_super_admin=False),
+        bot_user.id,
+    )
+    return learner is not None
 
 
 @router.post("/login", response_model=TokenPairResponse)
@@ -187,24 +212,19 @@ async def login(
             headers={"X-Registration-Required": "true"}
         )
 
-    token_payload = {
-        "sub": str(user.id),
-        "role": user.role,
-        "telegram_id": user.telegram_id,
-        "tenant_id": user.tenant_id,
-    }
+    if user.role == "viewer" and not await _viewer_has_active_learner(session, user):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Student account is not linked. Please complete registration first.",
+            headers={"X-Registration-Required": "true"}
+        )
+
+    token_payload = _build_token_payload(user)
 
     access_token = create_access_token(token_payload)
     refresh_token = create_refresh_token(token_payload)
 
-    user_response = UserPayload(
-        id=user.id,
-        role=user.role,
-        display_name=user.display_name,
-        username=user.username,
-        telegram_id=user.telegram_id,
-        last_login_at=user.last_login_at,
-    )
+    user_response = _build_user_payload(user)
 
     return TokenPairResponse(
         access_token=access_token,
@@ -234,24 +254,12 @@ async def refresh(
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    reference_payload = {
-        "sub": str(user.id),
-        "role": user.role,
-        "telegram_id": user.telegram_id,
-        "tenant_id": user.tenant_id,
-    }
+    reference_payload = _build_token_payload(user)
 
     access_token = create_access_token(reference_payload)
     refresh_token = create_refresh_token(reference_payload)
 
-    user_response = UserPayload(
-        id=user.id,
-        role=user.role,
-        display_name=user.display_name,
-        username=user.username,
-        telegram_id=user.telegram_id,
-        last_login_at=user.last_login_at,
-    )
+    user_response = _build_user_payload(user)
 
     return TokenPairResponse(
         access_token=access_token,
@@ -286,19 +294,18 @@ async def browser_telegram_login(
             "User is not registered. Open the Telegram Mini App to complete registration first.",
         )
 
-    if user.role not in {"admin", "teacher"}:
+    if user.role != "teacher" and not is_platform_admin(user):
         raise _browser_access_denied(
             "BROWSER_ACCESS_NOT_ALLOWED",
             "Browser access is currently available only for teachers and admins.",
         )
 
-    role_update = "admin" if telegram_id in config.ADMINS and user.role != "admin" else None
     user = await crud.update_user_login_metadata(
         session,
         user,
         username=telegram_user.get("username"),
         display_name=_build_display_name(telegram_user),
-        role=role_update,
+        role=None,
         last_login_at=datetime.now(timezone.utc),
     )
     await session.flush()
@@ -342,7 +349,7 @@ async def browser_refresh(
         _clear_browser_refresh_cookie(response)
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
 
-    if user.role not in {"admin", "teacher"}:
+    if user.role != "teacher" and not is_platform_admin(user):
         _clear_browser_refresh_cookie(response)
         raise _browser_access_denied(
             "BROWSER_ACCESS_NOT_ALLOWED",
@@ -378,7 +385,7 @@ async def switch_tenant(
     Switch tenant context for super-admins.
     This is a critical security endpoint - only super-admins can use it.
     """
-    if current_user.role != 'admin':
+    if not is_platform_admin(current_user):
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Only super-admins can switch tenant context"
@@ -402,24 +409,12 @@ async def switch_tenant(
             )
     
     # Create new tokens with the target tenant context
-    token_payload = {
-        "sub": str(current_user.id),
-        "role": current_user.role,
-        "telegram_id": current_user.telegram_id,
-        "tenant_id": target_tenant_id,  # This is the key change
-    }
+    token_payload = _build_token_payload(current_user, tenant_id=target_tenant_id)
     
     access_token = create_access_token(token_payload)
     refresh_token = create_refresh_token(token_payload)
     
-    user_response = UserPayload(
-        id=current_user.id,
-        role=current_user.role,
-        display_name=current_user.display_name,
-        username=current_user.username,
-        telegram_id=current_user.telegram_id,
-        last_login_at=current_user.last_login_at,
-    )
+    user_response = _build_user_payload(current_user)
     
     return TokenPairResponse(
         access_token=access_token,
@@ -489,6 +484,7 @@ async def register_tutor(
     )
     session.add(tenant)
     await session.flush()  # Get tenant.id
+    await tenant_access_service.create_trial_access(session, tenant.id)
     
     # Create user with teacher role
     display_name = registration_data.tutor_name or telegram_display_name
@@ -535,24 +531,12 @@ async def register_tutor(
         )
     
     # Create JWT tokens
-    token_payload = {
-        "sub": str(user.id),
-        "role": user.role,
-        "telegram_id": user.telegram_id,
-        "tenant_id": user.tenant_id,
-    }
+    token_payload = _build_token_payload(user)
     
     access_token = create_access_token(token_payload)
     refresh_token = create_refresh_token(token_payload)
     
-    user_response = UserPayload(
-        id=user.id,
-        role=user.role,
-        display_name=user.display_name,
-        username=user.username,
-        telegram_id=user.telegram_id,
-        last_login_at=user.last_login_at,
-    )
+    user_response = _build_user_payload(user)
     
     tenant_response = {
         "id": tenant.id,
@@ -595,24 +579,24 @@ async def register_student(
     
     logger.info(f"[{request_id}] Student registration attempt: telegram_id={telegram_id}, invite_token_prefix={registration_data.invite_token[:8]}")
     
-    # Validate invite token
-    invite_token = await crud.get_invite_token_by_token(session, registration_data.invite_token)
+    # Atomically reserve the invite token for this transaction.
+    invite_token = await crud.consume_invite_token_for_registration(session, registration_data.invite_token)
     if not invite_token:
+        existing_token = await crud.get_invite_token_by_token(session, registration_data.invite_token)
+        if existing_token:
+            if existing_token.is_used:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="This invite code has already been used"
+                )
+            if existing_token.is_expired:
+                raise HTTPException(
+                    status_code=status.HTTP_410_GONE,
+                    detail="This invite code has expired"
+                )
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Invalid invite code"
-        )
-    
-    if invite_token.is_used:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="This invite code has already been used"
-        )
-    
-    if invite_token.is_expired:
-        raise HTTPException(
-            status_code=status.HTTP_410_GONE,
-            detail="This invite code has expired"
         )
     
     # Create bot_user and learner records
@@ -649,33 +633,87 @@ async def register_student(
         session.add(bot_user)
     
     await session.flush()  # Get bot_user.id
-    
-    # Create learner record with bot_user_id
-    learner = Learner(
-        tenant_id=invite_token.tenant_id,
-        bot_user_id=bot_user.id,
-        display_name=display_name,
-        notes=f"Registered via invite on {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
-        notifications_enabled=True,
-        created_at=datetime.now(timezone.utc),
+
+    active_learner = await crud.get_learner_by_bot_user(
+        session,
+        CurrentTenant(tenant_id=invite_token.tenant_id, is_super_admin=False),
+        bot_user.id,
     )
-    session.add(learner)
-    await session.flush()  # Get learner.id
+    if active_learner:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Already registered as a student in this school"
+        )
     
-    # Create user record
-    user = User(
-        telegram_id=telegram_id,
-        username=username,
-        display_name=display_name,
-        role="viewer",
-        tenant_id=invite_token.tenant_id,
-        last_login_at=datetime.now(timezone.utc),
-    )
-    session.add(user)
+    if invite_token.learner_id:
+        learner = invite_token.learner
+        if not learner or learner.tenant_id != invite_token.tenant_id:
+            raise HTTPException(
+                status_code=status.HTTP_404_NOT_FOUND,
+                detail="Invite learner not found"
+            )
+        if learner.bot_user_id is not None:
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Learner is already linked to a Telegram account"
+            )
+        learner.bot_user_id = bot_user.id
+        learner.bot_user = bot_user
+        learner.notifications_enabled = True
+        session.add(learner)
+        await session.flush()
+    else:
+        # Legacy tenant-level invite: create a new learner record.
+        learner = Learner(
+            tenant_id=invite_token.tenant_id,
+            bot_user_id=bot_user.id,
+            display_name=display_name,
+            notes=f"Registered via invite on {datetime.now(timezone.utc).strftime('%Y-%m-%d')}",
+            notifications_enabled=True,
+            created_at=datetime.now(timezone.utc),
+        )
+        session.add(learner)
+        await session.flush()  # Get learner.id
+    
+    # Create or relink user record. A reset/unlink keeps the User row for audit
+    # history, so re-registration must reuse it instead of violating telegram_id.
+    user = await crud.get_user_by_telegram_id(session, telegram_id)
+    if user:
+        from utils.cache import invalidate_cache
+
+        if user.role != "viewer":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="User already registered"
+            )
+        user.username = username
+        user.display_name = display_name
+        user.role = "viewer"
+        user.tenant_id = invite_token.tenant_id
+        user.last_login_at = datetime.now(timezone.utc)
+        user.updated_at = datetime.now(timezone.utc)
+        session.add(user)
+        await invalidate_cache("users:_get_user_cached:*")
+    else:
+        user = User(
+            telegram_id=telegram_id,
+            username=username,
+            display_name=display_name,
+            role="viewer",
+            tenant_id=invite_token.tenant_id,
+            last_login_at=datetime.now(timezone.utc),
+        )
+        session.add(user)
     await session.flush()
-    
-    # Mark invite token as used
-    await crud.mark_invite_token_as_used(session, invite_token)
+
+    await crud.create_learner_account_link(
+        session,
+        tenant_id=invite_token.tenant_id,
+        learner_id=learner.id,
+        bot_user_id=bot_user.id,
+        user_id=user.id,
+        telegram_id=telegram_id,
+    )
     
     try:
         await session.commit()
@@ -712,24 +750,12 @@ async def register_student(
         )
     
     # Create JWT tokens
-    token_payload = {
-        "sub": str(user.id),
-        "role": user.role,
-        "telegram_id": user.telegram_id,
-        "tenant_id": user.tenant_id,
-    }
+    token_payload = _build_token_payload(user)
     
     access_token = create_access_token(token_payload)
     refresh_token = create_refresh_token(token_payload)
     
-    user_response = UserPayload(
-        id=user.id,
-        role=user.role,
-        display_name=user.display_name,
-        username=user.username,
-        telegram_id=user.telegram_id,
-        last_login_at=user.last_login_at,
-    )
+    user_response = _build_user_payload(user)
     
     tenant_response = {
         "id": invite_token.tenant.id,

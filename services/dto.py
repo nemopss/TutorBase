@@ -94,6 +94,7 @@ class LessonPackageDTO:
         learner_id: ID of learner assigned to package
         learner_name: Learner display name
         template_id: ID of template used to create package (if any)
+        package_type: Package type (package, one_off)
         title: Package title/name
         status: Package status (active, completed, cancelled)
         start_date: Package start date in local timezone
@@ -110,6 +111,7 @@ class LessonPackageDTO:
     learner_id: int
     learner_name: Optional[str]
     template_id: Optional[int]
+    package_type: str
     title: str
     status: str
     start_date: Optional[datetime]
@@ -148,5 +150,4 @@ class TemplateDTO:
     duration_days: Optional[int]
     timezone: str
     default_config: Optional[dict]
-
 

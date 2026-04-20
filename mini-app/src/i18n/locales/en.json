@@ -60,6 +60,7 @@
     "legacyBadge": "LEGACY",
     "analytics": "Analytics",
     "admin": "Admin",
+    "console": "Console",
     "inviteCodes": "Invite Codes"
   },
   "calendar": {
@@ -116,7 +117,35 @@
       "lessonsByStatus": "Lessons by Status",
       "activePackages": "Active Packages",
       "upcomingLessons": "Upcoming Lessons",
-      "learner": "Learner"
+      "learner": "Learner",
+      "onboarding": {
+        "title": "Set Up Your Workspace",
+        "description": "Complete the first steps to start managing learners without manual setup.",
+        "progress": "{{completed}} of {{total}} steps",
+        "done": "Done",
+        "steps": {
+          "learners": {
+            "title": "Add your first learner",
+            "description": "Create a learner profile to keep lessons, packages, and notes in one place.",
+            "action": "Add Learner"
+          },
+          "invite": {
+            "title": "Create a personal invite",
+            "description": "Open a learner profile and create a code that links Telegram to that exact learner.",
+            "action": "Open Learners"
+          },
+          "packages": {
+            "title": "Create your first package",
+            "description": "A package defines lessons, pricing, and the basis for payments.",
+            "action": "Create Package"
+          },
+          "lessons": {
+            "title": "Check the lesson schedule",
+            "description": "Lessons appear in the calendar and are used for reminders.",
+            "action": "Open Lessons"
+          }
+        }
+      }
     },
     "learners": {
       "title": "Learners",
@@ -887,25 +916,25 @@
       "codeNotWorkingQuestion": "Code not working?",
       "codeNotWorkingAnswer": "Make sure you copied the entire code. Codes are case-sensitive.",
       "areTutorQuestion": "Are you a tutor?",
-      "areTutorAnswer": "Create your own school instead →"
+      "areTutorAnswer": "Create your tutor workspace →"
     },
     "roleSelection": {
       "title": "Welcome to TutorBase!",
       "subtitle": "Choose your role to get started",
       "tutorTitle": "I'm a Tutor",
-      "tutorDescription": "Create your school and manage students",
+      "tutorDescription": "Create your tutor workspace and manage learners",
       "tutorBadge": "14-day free trial",
       "studentTitle": "I'm a Student",
-      "studentDescription": "Join your tutor's school with an invite code",
+      "studentDescription": "Join your tutor with an invite code",
       "studentBadge": "Always free"
     },
     "tutorRegistration": {
-      "title": "Create Your School",
+      "title": "Create Your Tutor Workspace",
       "subtitle": "Start your 14-day free trial",
-      "schoolNameLabel": "School Name",
+      "schoolNameLabel": "Workspace Name",
       "schoolNamePlaceholder": "e.g., Math Tutoring by John",
-      "schoolNameRequired": "Please enter your school name",
-      "schoolNameMinLength": "School name must be at least 2 characters",
+      "schoolNameRequired": "Please enter your workspace name",
+      "schoolNameMinLength": "Workspace name must be at least 2 characters",
       "contactEmailLabel": "Contact Email",
       "contactEmailPlaceholder": "your@email.com (optional)",
       "contactEmailInvalid": "Please enter a valid email address",
@@ -915,8 +944,8 @@
       "termsOfService": "Terms of Service",
       "and": "and",
       "privacyPolicy": "Privacy Policy",
-      "submit": "Create School & Start Trial",
-      "submitting": "Creating School...",
+      "submit": "Create Workspace & Start Trial",
+      "submitting": "Creating Workspace...",
       "registrationFailed": "Registration Failed",
       "genericError": "Registration failed. Please try again.",
       "trialBenefits": "What's included in your trial:",
@@ -1090,17 +1119,46 @@
   "learnerProfile": {
     "tabs": {
       "overview": "Overview",
-      "packages": "Packages",
+      "packages": "Lessons",
       "schedule": "Schedule",
       "finance": "Finance"
     },
     "basicInfo": "Basic Information",
     "studiesSince": "Studies since",
     "nextLesson": "Next Lesson",
-    "createPackage": "Create Package"
+    "createPackage": "Create Package",
+    "createOneOffLesson": "Schedule one-off lesson",
+    "oneOffLessonCreated": "One-off lesson created",
+    "oneOffLessonCreatedWithFinance": "One-off lesson created. Amount due updated.",
+    "oneOffLessonCreatedInList": "One-off lesson created and added to the lessons list.",
+    "openFullFinance": "Open learner finance",
+    "oneOffLessonDate": "Lesson date and time",
+    "oneOffLessonDateRequired": "Choose lesson date and time",
+    "oneOffLessonTitle": "Title",
+    "oneOffLessonTitlePlaceholder": "For example, consultation",
+    "lessonPackages": "Packages",
+    "oneOffLessons": "One-off lessons",
+    "learnerCalendar": "Learner calendar",
+    "noCalendarLessons": "No lessons on the calendar yet",
+    "noCalendarLessonsDescription": "Create a lesson package or one-off lesson to see the learner's schedule.",
+    "noLessons": "No lessons yet",
+    "noLessonsDescription": "Create a lesson package or schedule a one-off lesson.",
+    "noOneOffLessons": "No one-off lessons yet",
+    "noOneOffLessonsDescription": "One-off lessons will appear here after creation.",
+    "telegramAccount": "Telegram account",
+    "notLinked": "Not linked",
+    "unlinkAccountAction": "Unlink",
+    "unlinkAccountTitle": "Unlink Telegram account?",
+    "unlinkAccountConfirm": "The learner, lessons, packages, and payments will stay in the database. The current Telegram account will lose access and can register again with a new invite code.",
+    "unlinkAccountSuccess": "Telegram account unlinked",
+    "createInviteAction": "Create invite",
+    "inviteCreatedTitle": "Invite code created",
+    "inviteCreatedDescription": "Send this code to the learner. After registration, the Telegram account will be linked to this learner."
   },
   "schedule": {
     "currentSchedule": "Current Schedule",
+    "templateInfoTitle": "Regular schedule template",
+    "templateInfoDescription": "This is not the list of already created lessons. Slots help create lesson packages faster from the learner's usual schedule.",
     "addSlot": "Add Slot",
     "addSlotTitle": "Add Lesson Time",
     "noSlots": "No schedule set",

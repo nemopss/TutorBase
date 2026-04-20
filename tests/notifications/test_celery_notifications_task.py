@@ -11,7 +11,8 @@ from utils.tasks.notifications import (
     deliver_due_notifications_task,
     process_notification_jobs_task,
 )
-from utils.celery_app import _build_notifications_beat_schedule
+from utils.tasks.tenant_access import sync_tenant_access_lifecycle_task
+from utils.celery_app import _build_notifications_beat_schedule, _build_tenant_access_beat_schedule
 from utils.telegram_bot import build_telegram_bot
 from config import config
 
@@ -42,12 +43,17 @@ def test_process_notification_jobs_task_is_registered_with_expected_name():
     assert process_notification_jobs_task.name == "utils.tasks.notifications.process_notification_jobs"
 
 
+def test_sync_tenant_access_lifecycle_task_is_registered_with_expected_name():
+    assert sync_tenant_access_lifecycle_task.name == "utils.tasks.tenant_access.sync_lifecycle"
+
+
 def test_celery_app_import_registers_notification_tasks():
     for module_name in (
         "utils.tasks",
         "utils.tasks.reminders",
         "utils.tasks.metrics",
         "utils.tasks.notifications",
+        "utils.tasks.tenant_access",
         "utils.celery_app",
     ):
         sys.modules.pop(module_name, None)
@@ -56,6 +62,7 @@ def test_celery_app_import_registers_notification_tasks():
 
     assert "utils.tasks.notifications.process_notification_jobs" in reloaded_celery_app.tasks
     assert "utils.tasks.notifications.deliver_due_notifications" in reloaded_celery_app.tasks
+    assert "utils.tasks.tenant_access.sync_lifecycle" in reloaded_celery_app.tasks
 
 
 def test_notifications_beat_schedule_is_empty_when_automation_is_disabled():
@@ -82,6 +89,27 @@ def test_notifications_beat_schedule_registers_process_and_delivery_tasks():
     assert schedule["notifications.deliver-due"]["task"] == "utils.tasks.notifications.deliver_due_notifications"
     assert schedule["notifications.deliver-due"]["schedule"] == 30
     assert schedule["notifications.deliver-due"]["options"]["expires"] == 25
+
+
+def test_tenant_access_beat_schedule_is_empty_when_disabled():
+    schedule = _build_tenant_access_beat_schedule(
+        tenant_access_sync_enabled=False,
+        sync_interval_seconds=3600,
+    )
+
+    assert schedule == {}
+
+
+def test_tenant_access_beat_schedule_registers_sync_task():
+    schedule = _build_tenant_access_beat_schedule(
+        tenant_access_sync_enabled=True,
+        sync_interval_seconds=3600,
+    )
+
+    assert set(schedule) == {"tenant-access.sync-lifecycle"}
+    assert schedule["tenant-access.sync-lifecycle"]["task"] == "utils.tasks.tenant_access.sync_lifecycle"
+    assert schedule["tenant-access.sync-lifecycle"]["schedule"] == 3600
+    assert schedule["tenant-access.sync-lifecycle"]["options"]["expires"] == 3540
 
 
 @pytest.mark.asyncio

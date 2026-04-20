@@ -117,6 +117,7 @@ async def create_package(
     learner: Learner,
     template: Optional[LessonPackageTemplate] = None,
     title: Optional[str] = None,
+    package_type: str = "package",
     status: str = "draft",
     start_offset_days: int = 0,
     total_lessons: Optional[int] = None,
@@ -129,6 +130,7 @@ async def create_package(
     package = LessonPackage(
         learner=learner,
         template=template,
+        package_type=package_type,
         title=title or f"Package {suffix}",
         status=status,
         start_date=start_date,
@@ -277,6 +279,7 @@ async def create_invite_token(
     *,
     tenant_id: int,
     created_by_user_id: int,
+    learner_id: Optional[int] = None,
     token: Optional[str] = None,
     expires_at: Optional[datetime] = None,
     used_at: Optional[datetime] = None,
@@ -286,6 +289,7 @@ async def create_invite_token(
     
     invite_token = InviteToken(
         tenant_id=tenant_id,
+        learner_id=learner_id,
         token=token or secrets.token_urlsafe(32),
         expires_at=expires_at or (now + timedelta(days=30)),
         used_at=used_at,

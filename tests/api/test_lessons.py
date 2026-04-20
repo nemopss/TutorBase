@@ -48,6 +48,65 @@ async def test_list_all_lessons(client: AsyncClient, db_session: AsyncSession, c
 
 
 @pytest.mark.asyncio
+async def test_viewer_lessons_list_is_own_and_hides_teacher_notes(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    telegram_id = 990002
+    own_learner = await factories.create_learner(db_session, display_name="Own", chat_id=telegram_id)
+    other_learner = await factories.create_learner(db_session, display_name="Other")
+    own_package = await factories.create_package(db_session, learner=own_learner, title="Own Course", status="active")
+    other_package = await factories.create_package(db_session, learner=other_learner, title="Other Course", status="active")
+    await factories.create_lesson(
+        db_session,
+        package=own_package,
+        scheduled_at=datetime(2024, 6, 1, 9, 0, tzinfo=timezone.utc),
+    )
+    other_lesson = await factories.create_lesson(
+        db_session,
+        package=other_package,
+        scheduled_at=datetime(2024, 6, 2, 9, 0, tzinfo=timezone.utc),
+    )
+    other_lesson.teacher_notes = "Do not leak"
+    await db_session.commit()
+
+    headers, _ = await get_auth_headers(
+        db_session,
+        current_tenant,
+        role="viewer",
+        telegram_id=telegram_id,
+    )
+
+    response = await client.get("/api/v1/lessons", headers=headers)
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert data["items"][0]["package_title"] == "Own Course"
+    assert data["items"][0]["teacher_notes"] is None
+
+
+@pytest.mark.asyncio
+async def test_viewer_cannot_read_lesson_detail_or_package_lessons(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(db_session, learner=learner)
+    lesson = await factories.create_lesson(db_session, package=package)
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant, role="viewer")
+
+    detail_response = await client.get(f"/api/v1/lessons/{lesson.id}", headers=headers)
+    package_lessons_response = await client.get(f"/api/v1/lessons/packages/{package.id}", headers=headers)
+
+    assert detail_response.status_code == 403
+    assert package_lessons_response.status_code == 403
+
+
+@pytest.mark.asyncio
 async def test_list_lessons_for_package(client: AsyncClient, db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
     package = await factories.create_package(db_session, learner=learner)

@@ -88,8 +88,8 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
             name="chat_id"
             label={t('forms.learner.chatIdLabel')}
             rules={[
-              { required: true, message: t('forms.learner.chatIdRequired') },
               { 
+                transform: (value) => value || undefined,
                 pattern: /^-?\d+$/, 
                 message: t('forms.learner.chatIdInvalid')
               },

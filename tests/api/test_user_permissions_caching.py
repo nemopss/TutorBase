@@ -120,14 +120,17 @@ class TestUserCacheInvalidation:
     """Test cache invalidation on user updates."""
 
     @pytest.mark.asyncio
-    async def test_update_user_role_invalidates_cache(self, mock_user):
+    async def test_update_user_role_invalidates_cache(self, mock_user, monkeypatch):
         """Test that updating user role invalidates cache."""
         from api.routes.users import update_user_role
         from api.schemas import UserRoleUpdateRequest
+        from config import config
         
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()
         mock_tenant = MagicMock()
-        mock_payload = UserRoleUpdateRequest(role="admin")
+        mock_payload = UserRoleUpdateRequest(role="viewer")
+        monkeypatch.setattr(config, "ADMINS", [])
         
         with patch("api.routes.users.crud.get_user") as mock_get, \
              patch("api.routes.users.invalidate_cache") as mock_invalidate:
@@ -141,9 +144,37 @@ class TestUserCacheInvalidation:
                 _=None,
             )
             
-            assert result.role == "admin"
+            assert result.role == "viewer"
             # Verify cache invalidation was called
             mock_invalidate.assert_called_once_with("users:_get_user_cached:*")
+
+    @pytest.mark.asyncio
+    async def test_update_user_role_rejects_admin_role(self, mock_user, monkeypatch):
+        """Test that platform admin access cannot be granted via role update."""
+        from fastapi import HTTPException
+        from api.routes.users import update_user_role
+        from api.schemas import UserRoleUpdateRequest
+        from config import config
+
+        mock_session = AsyncMock()
+        mock_session.add = MagicMock()
+        mock_tenant = MagicMock()
+        mock_payload = UserRoleUpdateRequest(role="admin")
+        monkeypatch.setattr(config, "ADMINS", [])
+
+        with patch("api.routes.users.crud.get_user") as mock_get:
+            mock_get.return_value = mock_user
+
+            with pytest.raises(HTTPException) as exc_info:
+                await update_user_role(
+                    user_id=1,
+                    payload=mock_payload,
+                    session=mock_session,
+                    current_tenant=mock_tenant,
+                    _=None,
+                )
+
+            assert exc_info.value.status_code == 403
 
     @pytest.mark.asyncio
     async def test_update_user_login_metadata_invalidates_cache_on_role_change(self, mock_user):
@@ -151,6 +182,7 @@ class TestUserCacheInvalidation:
         from database.crud import update_user_login_metadata
         
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()
         
         # Patch the actual invalidate_cache import location
         with patch("utils.cache.invalidate_cache") as mock_invalidate:
@@ -171,6 +203,7 @@ class TestUserCacheInvalidation:
         from database.crud import update_user_login_metadata
         
         mock_session = AsyncMock()
+        mock_session.add = MagicMock()
         
         # Patch the actual invalidate_cache import location
         with patch("utils.cache.invalidate_cache") as mock_invalidate:

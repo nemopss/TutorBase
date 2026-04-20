@@ -53,8 +53,10 @@ from api.routes import (
     notifications,
     packages,
     payments,
+    platform,
     reminders,
     templates,
+    tenant_access,
     tenants,
     users,
 )
@@ -129,10 +131,12 @@ def create_app() -> FastAPI:
     app.include_router(metrics.router, prefix=f"{API_PREFIX}/metrics", tags=["metrics"])
     app.include_router(learners.router, prefix=f"{API_PREFIX}/learners", tags=["learners"])
     app.include_router(users.router, prefix=f"{API_PREFIX}/users", tags=["users"])
+    app.include_router(tenant_access.router, prefix=f"{API_PREFIX}/tenant-access", tags=["tenant-access"])
     app.include_router(tenants.router, prefix=f"{API_PREFIX}/tenants", tags=["tenants"])
     app.include_router(invitations.router, prefix=API_PREFIX, tags=["invitations"])
     app.include_router(payments.router, prefix=f"{API_PREFIX}/payments", tags=["payments"])
     app.include_router(finance.router, prefix=f"{API_PREFIX}/finance", tags=["finance"])
+    app.include_router(platform.router, prefix=f"{API_PREFIX}/platform", tags=["platform"])
     app.include_router(groups.router, prefix=f"{API_PREFIX}/groups", tags=["groups"])
     app.include_router(notifications.router, prefix=f"{API_PREFIX}/notifications", tags=["notifications"])
 

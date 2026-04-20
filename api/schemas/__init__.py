@@ -69,6 +69,7 @@ from api.schemas.learners import (
     UpdateLearnerRequest,
     UpdateLearnerNotificationsRequest,
     LearnerResponse,
+    StudentLearnerResponse,
     LearnerListResponse,
 )
 from api.schemas.groups import (
@@ -133,6 +134,20 @@ from api.schemas.tenants import (
     TenantResponse,
     TenantListResponse,
 )
+from api.schemas.platform import (
+    BroadcastAudienceUserResponse,
+    BroadcastCampaignResponse,
+    BroadcastCreateRequest,
+    BroadcastPreviewRequest,
+    BroadcastPreviewResponse,
+    BroadcastRecipientResponse,
+    BroadcastSendRequest,
+    PlatformTenantResponse,
+    TenantAccessActionRequest,
+    TenantAccessGrantRequest,
+    TenantAccessResponse,
+    TenantAccessSyncResponse,
+)
 from api.schemas.metrics import (
     MetricsSummary,
     DailyPoint,
@@ -184,6 +199,7 @@ __all__ = [
     'UpdateLearnerRequest',
     'UpdateLearnerNotificationsRequest',
     'LearnerResponse',
+    'StudentLearnerResponse',
     'LearnerListResponse',
     # Groups
     'LearnerGroupCreateRequest',
@@ -241,6 +257,18 @@ __all__ = [
     'TenantUpdate',
     'TenantResponse',
     'TenantListResponse',
+    'PlatformTenantResponse',
+    'TenantAccessActionRequest',
+    'TenantAccessGrantRequest',
+    'TenantAccessResponse',
+    'TenantAccessSyncResponse',
+    'BroadcastCampaignResponse',
+    'BroadcastAudienceUserResponse',
+    'BroadcastCreateRequest',
+    'BroadcastPreviewRequest',
+    'BroadcastPreviewResponse',
+    'BroadcastRecipientResponse',
+    'BroadcastSendRequest',
     # Metrics
     'MetricsSummary',
     'DailyPoint',

@@ -20,17 +20,20 @@ from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import (
-    get_session,
-    get_current_tenant,
     CurrentTenant,
+    admin_or_teacher_required,
+    get_current_tenant,
+    get_session,
 )
 from api.schemas.finance import (
     DashboardMetricsResponse,
+    DebtorResponse,
     MonthlyIncomeResponse,
     IncomeReportResponse,
     LearnerIncomeResponse,
     PackageIncomeResponse,
 )
+from api.schemas import PaginatedResponse, PaginationParams
 from services import finance_service
 
 router = APIRouter()
@@ -47,6 +50,7 @@ class ReportPeriod(str, Enum):
 async def get_dashboard(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> DashboardMetricsResponse:
     """Get financial dashboard metrics.
     
@@ -73,6 +77,34 @@ async def get_dashboard(
     )
 
 
+@router.get("/debtors", response_model=PaginatedResponse[DebtorResponse])
+async def list_debtors(
+    pagination: PaginationParams = Depends(),
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
+) -> PaginatedResponse[DebtorResponse]:
+    """List learners with outstanding balance.
+
+    The dashboard count and this list MUST use the same debt calculation.
+    """
+    debtors, total = await finance_service.get_debtors(
+        session,
+        current_tenant,
+        limit=pagination.limit,
+        offset=pagination.offset,
+    )
+    items = [
+        DebtorResponse(
+            learner_id=item.learner_id,
+            learner_name=item.learner_name,
+            outstanding_balance=item.outstanding_balance,
+        )
+        for item in debtors
+    ]
+    return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
+
+
 @router.get("/reports/income", response_model=IncomeReportResponse)
 async def get_income_report(
     period: ReportPeriod = Query(ReportPeriod.MONTH, description="Report period"),
@@ -80,6 +112,7 @@ async def get_income_report(
     to_date: Optional[datetime] = Query(None, description="Custom period end"),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> IncomeReportResponse:
     """Get income report for specified period.
     
@@ -152,6 +185,7 @@ async def export_income_report(
     to_date: Optional[datetime] = Query(None, description="Custom period end"),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
 ) -> StreamingResponse:
     """Export income report as CSV file.
     

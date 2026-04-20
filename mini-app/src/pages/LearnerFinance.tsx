@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, useSearchParams } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
@@ -90,6 +90,7 @@ const LearnerFinance: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { cardStyle, textColor } = useResponsiveStyles();
   const { resolvedTheme } = useTheme();
@@ -103,6 +104,13 @@ const LearnerFinance: React.FC = () => {
   const [rateForm] = Form.useForm();
 
   const learnerId = parseInt(id || '0');
+
+  useEffect(() => {
+    if (searchParams.get('recordPayment') === '1') {
+      setIsPaymentModalOpen(true);
+      setSearchParams({}, { replace: true });
+    }
+  }, [searchParams, setSearchParams]);
 
   // Fetch learner info
   const { data: learner } = useQuery<Learner>({
@@ -134,7 +142,7 @@ const LearnerFinance: React.FC = () => {
     queryKey: ['learnerPackages', learnerId],
     queryFn: async () => {
       const { data } = await api.get('/packages', {
-        params: { learner_id: learnerId },
+        params: { learner_id: learnerId, package_type: 'all' },
       });
       return data;
     },
@@ -145,8 +153,12 @@ const LearnerFinance: React.FC = () => {
   const createPaymentMutation = useMutation({
     mutationFn: async (values: any) => {
       if (editingPayment) {
-        // Update existing payment - delete and recreate since no PATCH endpoint
-        await api.delete(`/payments/${editingPayment.id}`);
+        const { data } = await api.patch(`/payments/${editingPayment.id}`, {
+          amount: values.amount,
+          paid_at: values.paid_at.toISOString(),
+          notes: values.notes || null,
+        });
+        return data;
       }
       const { data } = await api.post('/payments', {
         learner_id: learnerId,

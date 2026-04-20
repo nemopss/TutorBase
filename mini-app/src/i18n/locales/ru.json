@@ -60,6 +60,7 @@
     "legacyBadge": "LEGACY",
     "analytics": "Аналитика",
     "admin": "Админ",
+    "console": "Консоль",
     "inviteCodes": "Инвайт-коды"
   },
   "calendar": {
@@ -116,7 +117,35 @@
       "lessonsByStatus": "Уроки по статусу",
       "activePackages": "Активные пакеты",
       "upcomingLessons": "Ближайшие уроки",
-      "learner": "Ученик"
+      "learner": "Ученик",
+      "onboarding": {
+        "title": "Настройте кабинет",
+        "description": "Пройдите первые шаги, чтобы начать вести учеников без ручной настройки.",
+        "progress": "{{completed}} из {{total}} шагов",
+        "done": "Готово",
+        "steps": {
+          "learners": {
+            "title": "Добавьте первого ученика",
+            "description": "Создайте карточку ученика, чтобы хранить занятия, пакеты и заметки.",
+            "action": "Добавить ученика"
+          },
+          "invite": {
+            "title": "Создайте персональный инвайт",
+            "description": "Откройте карточку ученика и создайте код, чтобы привязать Telegram-аккаунт к этой карточке.",
+            "action": "Открыть учеников"
+          },
+          "packages": {
+            "title": "Создайте первый пакет",
+            "description": "Пакет задаёт занятия, стоимость и основу для платежей.",
+            "action": "Создать пакет"
+          },
+          "lessons": {
+            "title": "Проверьте расписание уроков",
+            "description": "Уроки появятся в календаре и будут использоваться для напоминаний.",
+            "action": "Открыть уроки"
+          }
+        }
+      }
     },
     "learners": {
       "title": "Ученики",
@@ -888,24 +917,24 @@
       "codeNotWorkingQuestion": "Код не работает?",
       "codeNotWorkingAnswer": "Убедитесь, что вы скопировали код полностью. Коды чувствительны к регистру.",
       "areTutorQuestion": "Вы преподаватель?",
-      "areTutorAnswer": "Создайте свою школу →"
+      "areTutorAnswer": "Создайте кабинет репетитора →"
     },
     "roleSelection": {
       "title": "Добро пожаловать в TutorBase!",
       "subtitle": "Выберите свою роль для начала",
       "tutorTitle": "Я преподаватель",
-      "tutorDescription": "Создайте свою школу и управляйте учениками",
+      "tutorDescription": "Создайте кабинет репетитора и управляйте учениками",
       "tutorBadge": "14 дней бесплатно",
       "studentTitle": "Я ученик",
-      "studentDescription": "Присоединитесь к школе преподавателя по инвайт-коду",
+      "studentDescription": "Присоединитесь к преподавателю по инвайт-коду",
       "studentBadge": "Всегда бесплатно"
     },
     "tutorRegistration": {
-      "title": "Создайте свою школу",
+      "title": "Создайте кабинет репетитора",
       "subtitle": "Начните 14-дневный пробный период",
-      "schoolNameLabel": "Название школы",
+      "schoolNameLabel": "Название кабинета",
       "schoolNamePlaceholder": "Например, Репетитор по математике",
-      "schoolNameRequired": "Пожалуйста, введите название школы",
+      "schoolNameRequired": "Пожалуйста, введите название кабинета",
       "schoolNameMinLength": "Название должно быть не менее 2 символов",
       "contactEmailLabel": "Контактный email",
       "contactEmailPlaceholder": "your@email.com (необязательно)",
@@ -916,8 +945,8 @@
       "termsOfService": "Условиями использования",
       "and": "и",
       "privacyPolicy": "Политикой конфиденциальности",
-      "submit": "Создать школу и начать пробный период",
-      "submitting": "Создание школы...",
+      "submit": "Создать кабинет и начать пробный период",
+      "submitting": "Создание кабинета...",
       "registrationFailed": "Ошибка регистрации",
       "genericError": "Ошибка регистрации. Попробуйте ещё раз.",
       "trialBenefits": "Что включено в пробный период:",
@@ -1091,17 +1120,46 @@
   "learnerProfile": {
     "tabs": {
       "overview": "Обзор",
-      "packages": "Пакеты",
+      "packages": "Уроки",
       "schedule": "Расписание",
       "finance": "Финансы"
     },
     "basicInfo": "Основная информация",
     "studiesSince": "Занимается с",
     "nextLesson": "Следующий урок",
-    "createPackage": "Создать пакет"
+    "createPackage": "Создать пакет",
+    "createOneOffLesson": "Запланировать разовый урок",
+    "oneOffLessonCreated": "Разовый урок создан",
+    "oneOffLessonCreatedWithFinance": "Разовый урок создан. Сумма к оплате обновлена.",
+    "oneOffLessonCreatedInList": "Разовый урок создан и добавлен в список уроков.",
+    "openFullFinance": "Открыть финансы ученика",
+    "oneOffLessonDate": "Дата и время урока",
+    "oneOffLessonDateRequired": "Выберите дату и время урока",
+    "oneOffLessonTitle": "Название",
+    "oneOffLessonTitlePlaceholder": "Например, консультация",
+    "lessonPackages": "Пакеты",
+    "oneOffLessons": "Разовые уроки",
+    "learnerCalendar": "Календарь ученика",
+    "noCalendarLessons": "В календаре пока нет уроков",
+    "noCalendarLessonsDescription": "Создайте пакет занятий или разовый урок, чтобы увидеть расписание ученика.",
+    "noLessons": "Уроков пока нет",
+    "noLessonsDescription": "Создайте пакет занятий или запланируйте разовый урок.",
+    "noOneOffLessons": "Разовых уроков пока нет",
+    "noOneOffLessonsDescription": "Разовые уроки появятся здесь после создания.",
+    "telegramAccount": "Telegram-аккаунт",
+    "notLinked": "Не привязан",
+    "unlinkAccountAction": "Отвязать",
+    "unlinkAccountTitle": "Отвязать Telegram-аккаунт?",
+    "unlinkAccountConfirm": "Ученик, уроки, пакеты и платежи останутся в базе. Текущий Telegram-аккаунт потеряет доступ и сможет зарегистрироваться заново по новому инвайт-коду.",
+    "unlinkAccountSuccess": "Telegram-аккаунт отвязан",
+    "createInviteAction": "Создать инвайт",
+    "inviteCreatedTitle": "Инвайт-код создан",
+    "inviteCreatedDescription": "Отправьте этот код ученику. После регистрации Telegram-аккаунт будет привязан к этому ученику."
   },
   "schedule": {
     "currentSchedule": "Текущее расписание",
+    "templateInfoTitle": "Шаблон регулярного расписания",
+    "templateInfoDescription": "Это не список уже созданных уроков. Слоты используются, чтобы быстрее собирать пакеты занятий по привычному расписанию ученика.",
     "addSlot": "Добавить слот",
     "addSlotTitle": "Добавить время занятий",
     "noSlots": "Расписание не задано",

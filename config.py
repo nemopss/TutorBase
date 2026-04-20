@@ -15,14 +15,13 @@ class Settings(BaseSettings):
 
     BOT_TOKEN: str
     DB_PATH: str = "database/bot.db"
-    GOOGLE_FORM_URL: str = ""
     ADMIN_CHAT_ID: int
     LOGS_CHAT_ID: int
     CANCELLATION_IMAGE_FILE_ID: str
     START_PHOTO_FILE_ID: Optional[str] = None
     ADMINS: list[int]
-    REGULATIONS_URL: str
-    PROGRAMS_URL: str
+    REGULATIONS_URL: str = ""
+    PROGRAMS_URL: str = ""
     REDIS_URL: str
     REMINDER_NOTIFY_USERNAME: str
     JWT_SECRET: str
@@ -50,6 +49,8 @@ class Settings(BaseSettings):
     NOTIFICATIONS_AUTOMATION_ENABLED: bool = False
     NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS: int = 60
     NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS: int = 30
+    TENANT_ACCESS_SYNC_ENABLED: bool = True
+    TENANT_ACCESS_SYNC_INTERVAL_SECONDS: int = 3600
     TELEGRAM_REQUEST_TIMEOUT_SECONDS: float = 15.0
 
     @field_validator("CORS_ORIGINS", mode="before")
@@ -90,6 +91,7 @@ class Settings(BaseSettings):
     @field_validator(
         "NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS",
         "NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS",
+        "TENANT_ACCESS_SYNC_INTERVAL_SECONDS",
         "TELEGRAM_REQUEST_TIMEOUT_SECONDS",
     )
     @classmethod

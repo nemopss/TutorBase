@@ -3,7 +3,13 @@ from __future__ import annotations
 from fastapi import APIRouter, Depends, HTTPException, status as http_status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.dependencies import get_session, admin_or_teacher_required, get_current_tenant, CurrentTenant
+from api.dependencies import (
+    CurrentTenant,
+    admin_or_teacher_required,
+    get_current_tenant,
+    get_session,
+    require_maintenance_tenant_access,
+)
 from api.schemas import (
     ReminderResponse,
     ReminderUpdateRequest,
@@ -99,6 +105,7 @@ async def update_reminder(
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
+    __=Depends(require_maintenance_tenant_access),
 ) -> ReminderResponse:
     instance = await crud.get_reminder_instance(session, current_tenant, reminder_id)
     if not instance:

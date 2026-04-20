@@ -3,6 +3,7 @@
 This package contains all Celery task definitions organized by domain:
     - reminders: Reminder generation and processing tasks
     - metrics: Package metrics synchronization tasks
+    - tenant_access: SaaS access lifecycle synchronization tasks
     - maintenance: System maintenance and cleanup tasks
 
 All tasks follow best practices:
@@ -49,6 +50,12 @@ from utils.tasks.notifications import (
     deliver_due_notifications_task,
     process_notification_jobs_task,
 )
+from utils.tasks.tenant_access import (
+    sync_tenant_access_lifecycle_task,
+)
+from utils.tasks.broadcasts import (
+    send_broadcast_campaign_task,
+)
 
 __all__ = [
     'regenerate_package_reminders_task',
@@ -56,4 +63,6 @@ __all__ = [
     'bulk_sync_package_metrics_task',
     'deliver_due_notifications_task',
     'process_notification_jobs_task',
+    'sync_tenant_access_lifecycle_task',
+    'send_broadcast_campaign_task',
 ]

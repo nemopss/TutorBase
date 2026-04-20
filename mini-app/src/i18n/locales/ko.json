@@ -60,6 +60,7 @@
     "legacyBadge": "LEGACY",
     "analytics": "분석",
     "admin": "관리자",
+    "console": "콘솔",
     "inviteCodes": "초대 코드"
   },
   "calendar": {
@@ -116,7 +117,35 @@
       "lessonsByStatus": "상태별 수업",
       "activePackages": "활성 패키지",
       "upcomingLessons": "예정된 수업",
-      "learner": "학생"
+      "learner": "학생",
+      "onboarding": {
+        "title": "공간 설정",
+        "description": "처음 필요한 항목을 완료하고 바로 학생 관리를 시작하세요.",
+        "progress": "{{completed}}/{{total}} 단계",
+        "done": "완료",
+        "steps": {
+          "learners": {
+            "title": "첫 학생 추가",
+            "description": "학생 카드에 수업, 패키지, 메모를 함께 보관하세요.",
+            "action": "학생 추가"
+          },
+          "invite": {
+            "title": "개인 초대 만들기",
+            "description": "학생 프로필에서 코드를 만들어 Telegram 계정을 해당 학생에게 연결하세요.",
+            "action": "학생 열기"
+          },
+          "packages": {
+            "title": "첫 패키지 만들기",
+            "description": "패키지는 수업, 가격, 결제 기준을 정합니다.",
+            "action": "패키지 만들기"
+          },
+          "lessons": {
+            "title": "수업 일정 확인",
+            "description": "수업은 캘린더에 표시되고 알림에 사용됩니다.",
+            "action": "수업 열기"
+          }
+        }
+      }
     },
     "learners": {
       "title": "학생",
@@ -886,25 +915,25 @@
       "codeNotWorkingQuestion": "코드가 작동하지 않나요?",
       "codeNotWorkingAnswer": "전체 코드를 복사했는지 확인하세요. 코드는 대소문자를 구분합니다.",
       "areTutorQuestion": "선생님이신가요?",
-      "areTutorAnswer": "직접 학교를 만드세요 →"
+      "areTutorAnswer": "튜터 공간 만들기 →"
     },
     "roleSelection": {
       "title": "TutorBase에 오신 것을 환영합니다!",
       "subtitle": "시작하려면 역할을 선택하세요",
       "tutorTitle": "저는 선생님입니다",
-      "tutorDescription": "학교를 만들고 학생을 관리하세요",
+      "tutorDescription": "튜터 공간을 만들고 학생을 관리하세요",
       "tutorBadge": "14일 무료 체험",
       "studentTitle": "저는 학생입니다",
-      "studentDescription": "초대 코드로 선생님의 학교에 참여하세요",
+      "studentDescription": "초대 코드로 선생님에게 참여하세요",
       "studentBadge": "항상 무료"
     },
     "tutorRegistration": {
-      "title": "학교 만들기",
+      "title": "튜터 공간 만들기",
       "subtitle": "14일 무료 체험 시작",
-      "schoolNameLabel": "학교 이름",
-      "schoolNamePlaceholder": "예: 수학 과외 by 홍길동",
-      "schoolNameRequired": "학교 이름을 입력해주세요",
-      "schoolNameMinLength": "학교 이름은 최소 2자 이상이어야 합니다",
+      "schoolNameLabel": "공간 이름",
+      "schoolNamePlaceholder": "예: 홍길동 수학 과외",
+      "schoolNameRequired": "공간 이름을 입력해주세요",
+      "schoolNameMinLength": "공간 이름은 최소 2자 이상이어야 합니다",
       "contactEmailLabel": "연락처 이메일",
       "contactEmailPlaceholder": "your@email.com (선택)",
       "contactEmailInvalid": "유효한 이메일 주소를 입력해주세요",
@@ -914,8 +943,8 @@
       "termsOfService": "서비스 약관",
       "and": "및",
       "privacyPolicy": "개인정보 처리방침",
-      "submit": "학교 만들기 및 체험 시작",
-      "submitting": "학교 생성 중...",
+      "submit": "공간 만들기 및 체험 시작",
+      "submitting": "공간 생성 중...",
       "registrationFailed": "등록 실패",
       "genericError": "등록에 실패했습니다. 다시 시도해주세요.",
       "trialBenefits": "체험에 포함된 내용:",
@@ -1089,17 +1118,46 @@
   "learnerProfile": {
     "tabs": {
       "overview": "개요",
-      "packages": "패키지",
+      "packages": "수업",
       "schedule": "일정",
       "finance": "재정"
     },
     "basicInfo": "기본 정보",
     "studiesSince": "수업 시작일",
     "nextLesson": "다음 수업",
-    "createPackage": "패키지 생성"
+    "createPackage": "패키지 생성",
+    "createOneOffLesson": "일회성 수업 예약",
+    "oneOffLessonCreated": "일회성 수업이 생성되었습니다",
+    "oneOffLessonCreatedWithFinance": "일회성 수업이 생성되었습니다. 결제 예정 금액이 업데이트되었습니다.",
+    "oneOffLessonCreatedInList": "일회성 수업이 생성되어 수업 목록에 추가되었습니다.",
+    "openFullFinance": "학습자 재정 열기",
+    "oneOffLessonDate": "수업 날짜 및 시간",
+    "oneOffLessonDateRequired": "수업 날짜와 시간을 선택하세요",
+    "oneOffLessonTitle": "제목",
+    "oneOffLessonTitlePlaceholder": "예: 상담",
+    "lessonPackages": "패키지",
+    "oneOffLessons": "일회성 수업",
+    "learnerCalendar": "학습자 캘린더",
+    "noCalendarLessons": "아직 캘린더에 수업이 없습니다",
+    "noCalendarLessonsDescription": "수업 패키지나 일회성 수업을 만들면 학습자 일정이 표시됩니다.",
+    "noLessons": "아직 수업이 없습니다",
+    "noLessonsDescription": "수업 패키지를 만들거나 일회성 수업을 예약하세요.",
+    "noOneOffLessons": "아직 일회성 수업이 없습니다",
+    "noOneOffLessonsDescription": "생성된 일회성 수업이 여기에 표시됩니다.",
+    "telegramAccount": "Telegram 계정",
+    "notLinked": "연결되지 않음",
+    "unlinkAccountAction": "연결 해제",
+    "unlinkAccountTitle": "Telegram 계정 연결을 해제할까요?",
+    "unlinkAccountConfirm": "학습자, 수업, 패키지, 결제 기록은 데이터베이스에 남습니다. 현재 Telegram 계정은 접근 권한을 잃고 새 초대 코드로 다시 등록할 수 있습니다.",
+    "unlinkAccountSuccess": "Telegram 계정 연결이 해제되었습니다",
+    "createInviteAction": "초대 생성",
+    "inviteCreatedTitle": "초대 코드가 생성되었습니다",
+    "inviteCreatedDescription": "이 코드를 학습자에게 보내세요. 등록 후 Telegram 계정이 이 학습자에게 연결됩니다."
   },
   "schedule": {
     "currentSchedule": "현재 일정",
+    "templateInfoTitle": "정기 일정 템플릿",
+    "templateInfoDescription": "이미 생성된 수업 목록이 아닙니다. 슬롯은 학습자의 일반 일정으로 수업 패키지를 더 빠르게 만드는 데 사용됩니다.",
     "addSlot": "슬롯 추가",
     "addSlotTitle": "수업 시간 추가",
     "noSlots": "일정이 설정되지 않음",

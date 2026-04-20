@@ -7,7 +7,9 @@ import {
   CalendarOutlined,
   CheckCircleOutlined,
   CloseCircleOutlined,
-  ClockCircleOutlined
+  ClockCircleOutlined,
+  KeyOutlined,
+  UserAddOutlined,
 } from '@ant-design/icons';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
 import dayjs from 'dayjs';
@@ -18,6 +20,7 @@ import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 import { useResponsive } from '../hooks/useResponsive';
 import { chartHeight } from '../theme/tokens';
 import { formatDateTime } from '../utils/datetime';
+import { useAuth } from '../auth/AuthProvider';
 
 // --- Types --- //
 interface MetricsSummary {
@@ -66,6 +69,15 @@ interface PackageListResponse {
   items: Package[];
 }
 
+interface LearnerListResponse {
+  total: number;
+}
+
+interface InviteTokenListResponse {
+  total: number;
+  items: unknown[];
+}
+
 // --- API Fetchers --- //
 const fetchMetrics = async (): Promise<MetricsSummary> => {
   const startOfMonth = dayjs().startOf('month').toISOString();
@@ -111,12 +123,41 @@ const fetchActivePackages = async (): Promise<PackageListResponse> => {
   return data;
 };
 
+const fetchPackagesSummary = async (): Promise<PackageListResponse> => {
+  const { data } = await api.get('/packages', {
+    params: { limit: 1 },
+  });
+  return data;
+};
+
+const fetchLessonsSummary = async (): Promise<LessonListResponse> => {
+  const { data } = await api.get('/lessons', {
+    params: { limit: 1 },
+  });
+  return data;
+};
+
+const fetchLearnersSummary = async (): Promise<LearnerListResponse> => {
+  const { data } = await api.get('/learners', {
+    params: { limit: 1 },
+  });
+  return data;
+};
+
+const fetchInviteTokensSummary = async (tenantId: number): Promise<InviteTokenListResponse> => {
+  const { data } = await api.get(`/tenants/${tenantId}/invitations`, {
+    params: { limit: 1 },
+  });
+  return data;
+};
+
 // --- Component --- //
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const { cardStyle, textColor, subtitleColor, chartGridColor, tooltipStyle } = useResponsiveStyles();
   const { isMobile } = useResponsive();
+  const { tenantId } = useAuth();
   const currentChartHeight = isMobile ? chartHeight.mobile : chartHeight.desktop;
 
   const { 
@@ -149,6 +190,27 @@ const Dashboard: React.FC = () => {
     queryFn: fetchActivePackages,
   });
 
+  const { data: packagesSummaryData } = useQuery<PackageListResponse, Error>({
+    queryKey: ['dashboardPackagesSummary'],
+    queryFn: fetchPackagesSummary,
+  });
+
+  const { data: lessonsSummaryData } = useQuery<LessonListResponse, Error>({
+    queryKey: ['dashboardLessonsSummary'],
+    queryFn: fetchLessonsSummary,
+  });
+
+  const { data: learnersData } = useQuery<LearnerListResponse, Error>({
+    queryKey: ['dashboardLearnersSummary'],
+    queryFn: fetchLearnersSummary,
+  });
+
+  const { data: inviteTokensData } = useQuery<InviteTokenListResponse, Error>({
+    queryKey: ['dashboardInviteTokensSummary', tenantId],
+    queryFn: () => fetchInviteTokensSummary(tenantId!),
+    enabled: !!tenantId,
+  });
+
   if (isLoadingMetrics) {
     return <Spin size="large" />;
   }
@@ -171,6 +233,51 @@ const Dashboard: React.FC = () => {
     { name: t('pages.dashboard.completed'), value: metricsData?.lessons.completed || 0, color: '#52c41a' },
     { name: t('pages.dashboard.cancelled'), value: metricsData?.lessons.cancelled || 0, color: '#ff4d4f' },
   ].filter(item => item.value > 0);
+
+  const learnerCount = learnersData?.total ?? 0;
+  const inviteCount = inviteTokensData?.total ?? inviteTokensData?.items?.length ?? 0;
+  const packageCount = packagesSummaryData?.total ?? 0;
+  const lessonCount = lessonsSummaryData?.total ?? totalLessons;
+  const onboardingSteps = [
+    {
+      key: 'learners',
+      done: learnerCount > 0,
+      icon: <UserAddOutlined />,
+      title: t('pages.dashboard.onboarding.steps.learners.title'),
+      description: t('pages.dashboard.onboarding.steps.learners.description'),
+      action: t('pages.dashboard.onboarding.steps.learners.action'),
+      path: '/learners',
+    },
+    {
+      key: 'invite',
+      done: inviteCount > 0,
+      icon: <KeyOutlined />,
+      title: t('pages.dashboard.onboarding.steps.invite.title'),
+      description: t('pages.dashboard.onboarding.steps.invite.description'),
+      action: t('pages.dashboard.onboarding.steps.invite.action'),
+      path: '/learners',
+    },
+    {
+      key: 'packages',
+      done: packageCount > 0,
+      icon: <PlusOutlined />,
+      title: t('pages.dashboard.onboarding.steps.packages.title'),
+      description: t('pages.dashboard.onboarding.steps.packages.description'),
+      action: t('pages.dashboard.onboarding.steps.packages.action'),
+      path: '/packages',
+    },
+    {
+      key: 'lessons',
+      done: lessonCount > 0,
+      icon: <CalendarOutlined />,
+      title: t('pages.dashboard.onboarding.steps.lessons.title'),
+      description: t('pages.dashboard.onboarding.steps.lessons.description'),
+      action: t('pages.dashboard.onboarding.steps.lessons.action'),
+      path: '/lessons',
+    },
+  ];
+  const completedOnboardingSteps = onboardingSteps.filter((step) => step.done).length;
+  const showOnboarding = completedOnboardingSteps < onboardingSteps.length;
 
   return (
     <div>
@@ -197,6 +304,56 @@ const Dashboard: React.FC = () => {
           </Space>
         }
       />
+
+      {showOnboarding && (
+        <Card
+          title={t('pages.dashboard.onboarding.title')}
+          bordered={false}
+          style={{ ...cardStyle, marginBottom: 24 }}
+          extra={
+            <span style={{ color: subtitleColor, fontSize: 13 }}>
+              {t('pages.dashboard.onboarding.progress', {
+                completed: completedOnboardingSteps,
+                total: onboardingSteps.length,
+              })}
+            </span>
+          }
+        >
+          <div style={{ marginBottom: 16 }}>
+            <span style={{ color: subtitleColor }}>
+              {t('pages.dashboard.onboarding.description')}
+            </span>
+          </div>
+          <List
+            dataSource={onboardingSteps}
+            renderItem={(step) => (
+              <List.Item
+                actions={[
+                  step.done ? (
+                    <Button key="done" disabled>
+                      {t('pages.dashboard.onboarding.done')}
+                    </Button>
+                  ) : (
+                    <Button key="action" type="primary" onClick={() => navigate(step.path)}>
+                      {step.action}
+                    </Button>
+                  ),
+                ]}
+              >
+                <List.Item.Meta
+                  avatar={step.done ? (
+                    <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+                  ) : (
+                    <span style={{ color: '#1890ff', fontSize: 20 }}>{step.icon}</span>
+                  )}
+                  title={step.title}
+                  description={step.description}
+                />
+              </List.Item>
+            )}
+          />
+        </Card>
+      )}
 
       {/* Key Metrics - Current Month */}
       <div style={{ marginBottom: 8 }}>

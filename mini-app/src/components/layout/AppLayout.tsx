@@ -1,5 +1,5 @@
 import React, { useEffect, useState, useMemo } from 'react';
-import { Layout, Menu, Drawer, Button, Space, Tag, type MenuProps } from 'antd';
+import { Alert, Layout, Menu, Drawer, Button, Space, Tag, type MenuProps } from 'antd';
 import { Link, useLocation } from 'react-router-dom';
 import {
   HomeOutlined,
@@ -13,13 +13,11 @@ import {
   MenuUnfoldOutlined,
   TeamOutlined,
   CrownOutlined,
-  MailOutlined,
   DollarOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useAuth } from '../../auth/AuthProvider';
-import TenantSwitcher from '../common/TenantSwitcher';
 import TenantIndicator from '../common/TenantIndicator';
 
 const { Sider, Content } = Layout;
@@ -42,10 +40,27 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     return saved === 'true';
   });
-  const { user } = useAuth();
-  const isAdmin = user?.role === 'admin';
-  const hasStaffAccess = user?.role === 'admin' || user?.role === 'teacher';
+  const { user, isSuperAdmin, tenantAccess } = useAuth();
+  const hasStaffAccess = isSuperAdmin || user?.role === 'teacher';
   const isStudent = user?.role === 'viewer';
+  const accessUntil = tenantAccess?.access_until ? new Date(tenantAccess.access_until) : null;
+  const accessDaysLeft = accessUntil
+    ? Math.ceil((accessUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+    : null;
+  const shouldShowAccessWarning = hasStaffAccess && !isStudent && (
+    tenantAccess?.status === 'grace' ||
+    ((tenantAccess?.status === 'trial' || tenantAccess?.status === 'active') &&
+      accessDaysLeft !== null &&
+      accessDaysLeft <= 3)
+  );
+  const accessWarningMessage = tenantAccess?.status === 'grace'
+    ? 'Идёт grace-период доступа'
+    : 'Доступ скоро закончится';
+  const accessWarningDescription = tenantAccess?.status === 'grace'
+    ? 'Можно продолжать важное обслуживание кабинета, но доступ нужно продлить.'
+    : accessDaysLeft !== null
+      ? `Осталось дней: ${Math.max(accessDaysLeft, 0)}. Продлите доступ заранее.`
+      : 'Продлите доступ заранее.';
 
   const handleSidebarCollapse = (collapsed: boolean) => {
     setSidebarCollapsed(collapsed);
@@ -137,16 +152,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     },
   ], [t]);
 
-  const inviteCodesMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
-    key: '/invite-codes',
-    icon: <MailOutlined />,
-    label: <Link to="/invite-codes">{t('navigation.inviteCodes')}</Link>,
-  }), [t]);
-
   const adminMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
-    key: '/admin',
+    key: '/platform',
     icon: <CrownOutlined />,
-    label: <Link to="/admin">{t('navigation.admin')}</Link>,
+    label: <Link to="/platform">{t('navigation.console', 'Консоль')}</Link>,
   }), [t]);
 
   const settingsMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
@@ -160,25 +169,18 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       return studentMenuItems;
     }
 
-    const items = [...baseMenuItems];
-
-    // Add Invite Codes for teachers and admins
-    if (hasStaffAccess) {
-      items.push(inviteCodesMenuItem);
-    }
-
-    return items;
-  }, [hasStaffAccess, isStudent, baseMenuItems, studentMenuItems, inviteCodesMenuItem]);
+    return [...baseMenuItems];
+  }, [isStudent, baseMenuItems, studentMenuItems]);
 
   const footerMenuItems = useMemo<NonNullable<MenuProps['items']>>(() => {
     const items: NonNullable<MenuProps['items']> = [settingsMenuItem];
 
-    if (isAdmin) {
+    if (isSuperAdmin) {
       items.push(adminMenuItem);
     }
 
     return items;
-  }, [isAdmin, settingsMenuItem, adminMenuItem]);
+  }, [isSuperAdmin, settingsMenuItem, adminMenuItem]);
 
   useEffect(() => {
     const handleResize = () => {
@@ -234,16 +236,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         )}
       </div>
 
-      {/* Tenant Switcher for Super Admins */}
-      {isAdmin && !isSidebarCompact && (
-        <div style={{
-          padding: '16px',
-          borderBottom: `1px solid ${colors.borderPrimary}`,
-        }}>
-          <TenantSwitcher />
-        </div>
-      )}
-
       <div style={{ flex: 1, minHeight: 0, overflow: 'auto', paddingTop: '8px' }}>
         <Menu
           selectedKeys={[location.pathname]}
@@ -280,7 +272,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           }}
         />
 
-        {isAdmin && !isSidebarCompact && (
+        {isSuperAdmin && !isSidebarCompact && (
           <div style={{
             margin: '8px 16px 0',
             paddingTop: '12px',
@@ -377,7 +369,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               />
               <span style={{ fontSize: '18px', fontWeight: 600 }}>TutorBase</span>
             </Space>
-            {isAdmin && <TenantIndicator />}
+            {isSuperAdmin && <TenantIndicator />}
           </div>
         )}
 
@@ -392,6 +384,15 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           overflow: isMobile ? undefined : 'auto',
           boxSizing: 'border-box',
         }}>
+          {shouldShowAccessWarning && (
+            <Alert
+              type={tenantAccess?.status === 'grace' ? 'warning' : 'info'}
+              showIcon
+              message={accessWarningMessage}
+              description={accessWarningDescription}
+              style={{ marginBottom: 16 }}
+            />
+          )}
           {children}
         </Content>
       </Layout>

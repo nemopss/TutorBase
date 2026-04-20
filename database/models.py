@@ -31,6 +31,7 @@ from sqlalchemy import (
     JSON,
     Index,
     Numeric,
+    UniqueConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -78,6 +79,64 @@ class BotUser(Base):
     last_seen_at = Column(DateTime(timezone=True), nullable=False)
 
     learner = relationship('Learner', back_populates='bot_user', uselist=False)
+    learner_account_links = relationship('LearnerAccountLink', back_populates='bot_user')
+    broadcast_recipients = relationship('BroadcastRecipient', back_populates='bot_user')
+
+
+class BroadcastCampaign(Base):
+    """Platform-wide Telegram broadcast campaign."""
+    __tablename__ = 'broadcast_campaigns'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    created_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    title = Column(String, nullable=False)
+    message_text = Column(Text, nullable=False)
+    audience = Column(String(64), nullable=False, default='all_bot_users')
+    status = Column(String(32), nullable=False, default='draft')
+    recipient_count = Column(Integer, nullable=False, default=0)
+    sent_count = Column(Integer, nullable=False, default=0)
+    failed_count = Column(Integer, nullable=False, default=0)
+    skipped_count = Column(Integer, nullable=False, default=0)
+    rate_limit_per_second = Column(Integer, nullable=False, default=10)
+    last_task_id = Column(String, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    queued_at = Column(DateTime(timezone=True), nullable=True)
+    started_at = Column(DateTime(timezone=True), nullable=True)
+    completed_at = Column(DateTime(timezone=True), nullable=True)
+
+    created_by = relationship('User', foreign_keys=[created_by_user_id])
+    recipients = relationship('BroadcastRecipient', back_populates='campaign', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        Index('ix_broadcast_campaigns_status_created', 'status', 'created_at'),
+    )
+
+
+class BroadcastRecipient(Base):
+    """Snapshot of a Telegram broadcast recipient and delivery state."""
+    __tablename__ = 'broadcast_recipients'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    campaign_id = Column(Integer, ForeignKey('broadcast_campaigns.id', ondelete='CASCADE'), nullable=False, index=True)
+    bot_user_id = Column(Integer, ForeignKey('bot_users.id', ondelete='SET NULL'), nullable=True, index=True)
+    chat_id = Column(BigInteger, nullable=False)
+    display_name = Column(String, nullable=True)
+    username = Column(String, nullable=True)
+    status = Column(String(32), nullable=False, default='pending')
+    provider_message_id = Column(String, nullable=True)
+    error_message = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    sent_at = Column(DateTime(timezone=True), nullable=True)
+
+    campaign = relationship('BroadcastCampaign', back_populates='recipients')
+    bot_user = relationship('BotUser', back_populates='broadcast_recipients')
+
+    __table_args__ = (
+        UniqueConstraint('campaign_id', 'chat_id', name='uq_broadcast_recipients_campaign_chat'),
+        Index('ix_broadcast_recipients_campaign_status', 'campaign_id', 'status'),
+    )
 
 
 class User(Base):
@@ -117,6 +176,50 @@ class User(Base):
     updated_packages = relationship('LessonPackage', back_populates='updated_by')
     updated_lessons = relationship('Lesson', back_populates='updated_by')
     created_invite_tokens = relationship('InviteToken', back_populates='created_by')
+    learner_account_links = relationship(
+        'LearnerAccountLink',
+        foreign_keys='LearnerAccountLink.user_id',
+        back_populates='user',
+    )
+
+
+class TenantAccess(Base):
+    """SaaS access state for a tutor tenant."""
+    __tablename__ = 'tenant_access'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    status = Column(String(32), nullable=False, default='lifetime')
+    access_until = Column(DateTime(timezone=True), nullable=True)
+    grace_until = Column(DateTime(timezone=True), nullable=True)
+    notes = Column(Text, nullable=True)
+    updated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant', back_populates='access')
+    updated_by = relationship('User', foreign_keys=[updated_by_user_id])
+
+    __table_args__ = (
+        Index('ix_tenant_access_status_until', 'status', 'access_until'),
+    )
+
+
+class TenantAccessEvent(Base):
+    """Audit log for manual tenant access changes."""
+    __tablename__ = 'tenant_access_events'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False, index=True)
+    actor_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    action = Column(String(64), nullable=False)
+    previous_state = Column(JSON, nullable=True)
+    new_state = Column(JSON, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant', back_populates='access_events')
+    actor = relationship('User', foreign_keys=[actor_user_id])
 
 class Application(Base):
     """Student application model from Telegram bot.
@@ -170,6 +273,7 @@ class InviteToken(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey('learners.id', ondelete='SET NULL'), nullable=True, index=True)
     token = Column(String, nullable=False, unique=True, index=True)
     expires_at = Column(DateTime(timezone=True), nullable=False)
     used_at = Column(DateTime(timezone=True), nullable=True)
@@ -178,6 +282,7 @@ class InviteToken(Base):
     
     # Relationships
     tenant = relationship('Tenant', back_populates='invite_tokens')
+    learner = relationship('Learner', back_populates='invite_tokens')
     created_by = relationship('User', back_populates='created_invite_tokens')
     
     @property
@@ -237,7 +342,7 @@ class Learner(Base):
     Attributes:
         id: Primary key
         tenant_id: Associated tenant ID
-        bot_user_id: Linked Telegram bot user ID (unique)
+        bot_user_id: Linked Telegram bot user ID (unique among active links)
         display_name: Display name for the learner
         notes: Teacher notes about the learner
         notifications_enabled: Whether to send reminders to this learner
@@ -251,7 +356,7 @@ class Learner(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
-    bot_user_id = Column(Integer, ForeignKey('bot_users.id', ondelete='CASCADE'), nullable=False, unique=True)
+    bot_user_id = Column(Integer, ForeignKey('bot_users.id', ondelete='SET NULL'), nullable=True, unique=True)
     display_name = Column(String, nullable=False)
     notes = Column(Text)
     notifications_enabled = Column(Boolean, nullable=False, default=True)
@@ -264,10 +369,49 @@ class Learner(Base):
     payments = relationship('Payment', back_populates='learner', cascade='all, delete-orphan')
     schedule = relationship('LessonPackageTemplate', back_populates='learner', uselist=False, 
                            foreign_keys='LessonPackageTemplate.learner_id', cascade='all, delete-orphan')
+    account_links = relationship(
+        'LearnerAccountLink',
+        back_populates='learner',
+        cascade='all, delete-orphan',
+        order_by='LearnerAccountLink.linked_at.desc()',
+    )
+    invite_tokens = relationship('InviteToken', back_populates='learner')
 
     __table_args__ = (
         Index('ix_learners_tenant_display_name', 'tenant_id', 'display_name'),
         Index('ix_learners_tenant_created', 'tenant_id', 'created_at'),
+    )
+
+class LearnerAccountLink(Base):
+    """Historical link between a learner and a Telegram account.
+
+    Learners can be unlinked from Telegram accounts without deleting lesson,
+    payment, package, or reminder history. The active link is the row with
+    unlinked_at set to NULL.
+    """
+    __tablename__ = 'learner_account_links'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
+    learner_id = Column(Integer, ForeignKey('learners.id', ondelete='CASCADE'), nullable=False, index=True)
+    bot_user_id = Column(Integer, ForeignKey('bot_users.id', ondelete='SET NULL'), nullable=True, index=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    telegram_id = Column(BigInteger, nullable=True, index=True)
+    linked_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    unlinked_at = Column(DateTime(timezone=True), nullable=True)
+    unlinked_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    unlink_reason = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant', back_populates='learner_account_links')
+    learner = relationship('Learner', back_populates='account_links')
+    bot_user = relationship('BotUser', back_populates='learner_account_links')
+    user = relationship('User', foreign_keys=[user_id], back_populates='learner_account_links')
+    unlinked_by = relationship('User', foreign_keys=[unlinked_by_user_id])
+
+    __table_args__ = (
+        Index('ix_learner_account_links_active', 'tenant_id', 'learner_id', 'unlinked_at'),
+        Index('ix_learner_account_links_tenant_telegram', 'tenant_id', 'telegram_id'),
     )
 
 class LessonPackageTemplate(Base):
@@ -331,6 +475,7 @@ class LessonPackage(Base):
         tenant_id: Associated tenant ID
         learner_id: Learner this package belongs to
         template_id: Template used to create this package (optional)
+        package_type: Package type (package, one_off)
         title: Package title/name
         status: Package status (draft, active, completed, cancelled)
         start_date: Package start date
@@ -357,6 +502,7 @@ class LessonPackage(Base):
     tenant_id = Column(Integer, ForeignKey('tenants.id'), nullable=False, index=True)
     learner_id = Column(Integer, ForeignKey('learners.id', ondelete='CASCADE'), nullable=False)
     template_id = Column(Integer, ForeignKey('lesson_package_templates.id', ondelete='SET NULL'))
+    package_type = Column(String(32), nullable=False, default='package')
     title = Column(String, nullable=False)
     status = Column(String(32), nullable=False, default='draft')
     start_date = Column(DateTime(timezone=True))
@@ -382,6 +528,7 @@ class LessonPackage(Base):
 
     __table_args__ = (
         Index('ix_lesson_packages_learner_status', 'learner_id', 'status'),
+        Index('ix_lesson_packages_tenant_type_status', 'tenant_id', 'package_type', 'status'),
     )
 
 
@@ -587,6 +734,10 @@ class Payment(Base):
     currency = Column(String(3), nullable=False, default='RUB')
     paid_at = Column(DateTime(timezone=True), nullable=False)
     notes = Column(Text, nullable=True)
+    updated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    voided_at = Column(DateTime(timezone=True), nullable=True)
+    voided_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    void_reason = Column(Text, nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
 
@@ -594,11 +745,34 @@ class Payment(Base):
     learner = relationship('Learner', back_populates='payments')
     package = relationship('LessonPackage', back_populates='payments')
     lesson = relationship('Lesson', back_populates='payments')
+    updated_by = relationship('User', foreign_keys=[updated_by_user_id])
+    voided_by = relationship('User', foreign_keys=[voided_by_user_id])
+    audit_events = relationship('PaymentAuditEvent', back_populates='payment', cascade='all, delete-orphan')
 
     __table_args__ = (
         Index('ix_payments_tenant_learner', 'tenant_id', 'learner_id'),
         Index('ix_payments_tenant_paid_at', 'tenant_id', 'paid_at'),
+        Index('ix_payments_tenant_voided', 'tenant_id', 'voided_at'),
     )
+
+
+class PaymentAuditEvent(Base):
+    """Audit log for payment lifecycle changes."""
+    __tablename__ = 'payment_audit_events'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    payment_id = Column(Integer, ForeignKey('payments.id', ondelete='CASCADE'), nullable=False, index=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False, index=True)
+    actor_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    action = Column(String(64), nullable=False)
+    previous_state = Column(JSON, nullable=True)
+    new_state = Column(JSON, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    payment = relationship('Payment', back_populates='audit_events')
+    tenant = relationship('Tenant')
+    actor = relationship('User', foreign_keys=[actor_user_id])
 
 
 class Tenant(Base):
@@ -646,6 +820,9 @@ class Tenant(Base):
     applications = relationship('Application', back_populates='tenant')
     invite_tokens = relationship('InviteToken', back_populates='tenant')
     payments = relationship('Payment', back_populates='tenant')
+    learner_account_links = relationship('LearnerAccountLink', back_populates='tenant')
+    access = relationship('TenantAccess', back_populates='tenant', uselist=False, cascade='all, delete-orphan')
+    access_events = relationship('TenantAccessEvent', back_populates='tenant', cascade='all, delete-orphan')
 
 
 # Import models from the new notification bounded context so they share the same

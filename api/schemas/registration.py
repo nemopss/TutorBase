@@ -46,6 +46,7 @@ class InviteTokenRequest(BaseModel):
     """Request schema for generating invite tokens."""
     expires_in_days: Optional[int] = Field(30, ge=1, le=365, description="Number of days until token expires (default: 30)")
     note: Optional[str] = Field(None, max_length=200, description="Optional note for the invite")
+    learner_id: Optional[int] = Field(None, gt=0, description="Optional learner ID for a personal invite")
 
 
 class InviteTokenResponse(BaseModel):
@@ -58,6 +59,8 @@ class InviteTokenResponse(BaseModel):
     is_expired: bool
     is_valid: bool
     note: Optional[str] = None
+    learner_id: Optional[int] = None
+    learner_name: Optional[str] = None
     
     class Config:
         from_attributes = True

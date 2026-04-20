@@ -31,6 +31,7 @@ class TelegramLoginWidgetRequest(BaseModel):
 class UserPayload(BaseModel):
     id: int
     role: str
+    is_platform_admin: bool = False
     display_name: str
     username: Optional[str]
     telegram_id: Optional[int]

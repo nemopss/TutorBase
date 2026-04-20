@@ -37,6 +37,7 @@ Usage in endpoints:
         pass
 """
 from collections.abc import AsyncGenerator
+from datetime import datetime
 
 from fastapi import Depends, HTTPException, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
@@ -45,7 +46,9 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database.engine import async_session
 from api.security import TokenType, TokenVerificationError, decode_token
+from config import config
 from database import crud
+from services import tenant_access_service
 from utils.cache import cached
 
 _http_bearer = HTTPBearer(auto_error=False)
@@ -143,6 +146,26 @@ async def get_current_user(
     return user
 
 
+def is_platform_admin(user) -> bool:
+    """Return whether the user is an allowlisted platform operator."""
+    telegram_id = getattr(user, "telegram_id", None)
+    if telegram_id is None:
+        return False
+    try:
+        return int(telegram_id) in config.ADMINS
+    except (TypeError, ValueError):
+        return False
+
+
+def _has_required_role(user, roles: tuple[str, ...]) -> bool:
+    if not roles:
+        return True
+    if "admin" in roles and is_platform_admin(user):
+        return True
+    regular_roles = {role for role in roles if role != "admin"}
+    return getattr(user, "role", None) in regular_roles
+
+
 def require_roles(*roles: str):
     """Create role-based access control dependency.
 
@@ -175,7 +198,7 @@ def require_roles(*roles: str):
         Raises:
             HTTPException: 403 if user lacks required role
         """
-        if roles and user.role not in roles:
+        if not _has_required_role(user, roles):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Insufficient permissions")
         return user
 
@@ -205,6 +228,159 @@ class CurrentTenant:
     tenant_id: int | None
     is_super_admin: bool
     tenant: Tenant | None = None
+    access_status: str | None = None
+    access_mode: str | None = None
+    access_until: datetime | None = None
+    grace_until: datetime | None = None
+    access_reason: str | None = None
+    bypass_access_restrictions: bool = False
+
+
+async def _resolve_tenant_access(
+    session: AsyncSession,
+    tenant: Tenant,
+    *,
+    bypass_restrictions: bool = False,
+) -> tenant_access_service.TenantAccessSnapshot:
+    snapshot = await tenant_access_service.get_access_snapshot(session, tenant.id)
+    if bypass_restrictions or not snapshot.is_blocked:
+        return snapshot
+
+    if snapshot.status == tenant_access_service.ACCESS_STATUS_SUSPENDED:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail={
+                "code": "TENANT_ACCESS_SUSPENDED",
+                "message": "Tenant access is suspended",
+                "tenant_id": tenant.id,
+                "status": snapshot.status,
+            },
+        )
+
+    raise HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail={
+            "code": "TENANT_ACCESS_EXPIRED",
+            "message": "Tenant access has expired",
+            "tenant_id": tenant.id,
+            "status": snapshot.status,
+            "access_until": snapshot.access_until.isoformat() if snapshot.access_until else None,
+            "grace_until": snapshot.grace_until.isoformat() if snapshot.grace_until else None,
+        },
+    )
+
+
+def _tenant_context_from_access(
+    tenant: Tenant,
+    *,
+    is_super_admin: bool,
+    snapshot: tenant_access_service.TenantAccessSnapshot,
+    bypass_restrictions: bool = False,
+) -> CurrentTenant:
+    return CurrentTenant(
+        tenant_id=tenant.id,
+        is_super_admin=is_super_admin,
+        tenant=tenant,
+        access_status=snapshot.status,
+        access_mode=snapshot.mode,
+        access_until=snapshot.access_until,
+        grace_until=snapshot.grace_until,
+        access_reason=snapshot.reason,
+        bypass_access_restrictions=bypass_restrictions,
+    )
+
+
+async def _build_current_tenant_context(
+    *,
+    credentials: HTTPAuthorizationCredentials | None,
+    user: User,
+    session: AsyncSession,
+    bypass_access_restrictions: bool,
+) -> CurrentTenant:
+    is_super_admin = is_platform_admin(user)
+
+    # For super-admins, check if they're switching tenant context via JWT
+    if is_super_admin and credentials:
+        try:
+            payload = decode_token(credentials.credentials, TokenType.ACCESS)
+            jwt_tenant_id = payload.get("tenant_id")
+
+            # Super-admin can switch to any active tenant or stay global (None)
+            if jwt_tenant_id is not None:
+                tenant = await session.get(Tenant, jwt_tenant_id)
+                if not tenant:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Tenant not found"
+                    )
+                if not tenant.is_active:
+                    raise HTTPException(
+                        status_code=status.HTTP_403_FORBIDDEN,
+                        detail="Tenant is inactive"
+                    )
+                snapshot = await _resolve_tenant_access(
+                    session,
+                    tenant,
+                    bypass_restrictions=True,
+                )
+                # When super-admin switches to specific tenant, treat as non-super-admin for data filtering.
+                return _tenant_context_from_access(
+                    tenant,
+                    is_super_admin=False,
+                    snapshot=snapshot,
+                    bypass_restrictions=True,
+                )
+
+            # Super-admin in global context (no tenant filter)
+            return CurrentTenant(tenant_id=None, is_super_admin=True, tenant=None, bypass_access_restrictions=True)
+
+        except TokenVerificationError:
+            # Fallback to user's default tenant
+            pass
+
+    # For regular users, ensure JWT tenant_id matches user's tenant_id
+    if not is_super_admin and credentials:
+        try:
+            payload = decode_token(credentials.credentials, TokenType.ACCESS)
+            jwt_tenant_id = payload.get("tenant_id")
+
+            if jwt_tenant_id != user.tenant_id:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="Token tenant mismatch - possible security violation"
+                )
+        except TokenVerificationError:
+            # Token is invalid, but get_current_user should have caught this
+            pass
+
+    # Load and validate user's tenant
+    tenant = None
+    if user.tenant_id is not None:
+        tenant = await session.get(Tenant, user.tenant_id)
+        if not tenant:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User's tenant not found"
+            )
+        if not tenant.is_active:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="User's tenant is inactive"
+            )
+        snapshot = await _resolve_tenant_access(
+            session,
+            tenant,
+            bypass_restrictions=bypass_access_restrictions,
+        )
+        context_bypass = is_super_admin and bypass_access_restrictions
+        return _tenant_context_from_access(
+            tenant,
+            is_super_admin=is_super_admin,
+            snapshot=snapshot,
+            bypass_restrictions=context_bypass,
+        )
+
+    return CurrentTenant(tenant_id=user.tenant_id, is_super_admin=is_super_admin, tenant=tenant)
 
 
 async def get_current_tenant(
@@ -233,67 +409,71 @@ async def get_current_tenant(
     Raises:
         HTTPException: 403 if tenant not found, inactive, or token mismatch detected
     """
-    is_super_admin = user.role == 'admin'
-    
-    # For super-admins, check if they're switching tenant context via JWT
-    if is_super_admin and credentials:
-        try:
-            payload = decode_token(credentials.credentials, TokenType.ACCESS)
-            jwt_tenant_id = payload.get("tenant_id")
-            
-            # Super-admin can switch to any active tenant or stay global (None)
-            if jwt_tenant_id is not None:
-                tenant = await session.get(Tenant, jwt_tenant_id)
-                if not tenant:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN, 
-                        detail="Tenant not found"
-                    )
-                if not tenant.is_active:
-                    raise HTTPException(
-                        status_code=status.HTTP_403_FORBIDDEN, 
-                        detail="Tenant is inactive"
-                    )
-                # When super-admin switches to specific tenant, treat as non-super-admin for data filtering
-                # This ensures data is filtered by tenant_id
-                return CurrentTenant(tenant_id=jwt_tenant_id, is_super_admin=False, tenant=tenant)
-            
-            # Super-admin in global context (no tenant filter)
-            return CurrentTenant(tenant_id=None, is_super_admin=True, tenant=None)
-            
-        except TokenVerificationError:
-            # Fallback to user's default tenant
-            pass
-    
-    # For regular users, ensure JWT tenant_id matches user's tenant_id
-    if not is_super_admin and credentials:
-        try:
-            payload = decode_token(credentials.credentials, TokenType.ACCESS)
-            jwt_tenant_id = payload.get("tenant_id")
-            
-            if jwt_tenant_id != user.tenant_id:
-                raise HTTPException(
-                    status_code=status.HTTP_403_FORBIDDEN,
-                    detail="Token tenant mismatch - possible security violation"
-                )
-        except TokenVerificationError:
-            # Token is invalid, but get_current_user should have caught this
-            pass
-    
-    # Load and validate user's tenant
-    tenant = None
-    if user.tenant_id is not None:
-        tenant = await session.get(Tenant, user.tenant_id)
-        if not tenant:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User's tenant not found"
-            )
-        if not tenant.is_active:
-            raise HTTPException(
-                status_code=status.HTTP_403_FORBIDDEN,
-                detail="User's tenant is inactive"
-            )
-    
-    return CurrentTenant(tenant_id=user.tenant_id, is_super_admin=is_super_admin, tenant=tenant)
+    return await _build_current_tenant_context(
+        credentials=credentials,
+        user=user,
+        session=session,
+        bypass_access_restrictions=False,
+    )
 
+
+async def get_current_tenant_with_access_override(
+    credentials: HTTPAuthorizationCredentials | None = Depends(_http_bearer),
+    user: User = Depends(get_current_user),
+    session: AsyncSession = Depends(get_session),
+) -> CurrentTenant:
+    """Resolve tenant context without blocking expired/suspended access.
+
+    Use this only for endpoints that must render access-state UI or let a
+    platform operator inspect a blocked tenant. It still validates the JWT tenant
+    binding, tenant existence and tenant activity.
+    """
+    return await _build_current_tenant_context(
+        credentials=credentials,
+        user=user,
+        session=session,
+        bypass_access_restrictions=True,
+    )
+
+
+async def require_full_tenant_access(
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> CurrentTenant:
+    """Require an active/full tenant access mode for normal product usage."""
+    if current_tenant.bypass_access_restrictions:
+        return current_tenant
+    if current_tenant.access_mode == tenant_access_service.ACCESS_MODE_FULL:
+        return current_tenant
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": "TENANT_ACCESS_FULL_REQUIRED",
+            "message": "This action requires active tenant access",
+            "tenant_id": current_tenant.tenant_id,
+            "status": current_tenant.access_status,
+            "mode": current_tenant.access_mode,
+        },
+    )
+
+
+async def require_maintenance_tenant_access(
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+) -> CurrentTenant:
+    """Require access that can perform maintenance on existing tenant data."""
+    if current_tenant.bypass_access_restrictions:
+        return current_tenant
+    if current_tenant.access_mode in {
+        tenant_access_service.ACCESS_MODE_FULL,
+        tenant_access_service.ACCESS_MODE_GRACE,
+    }:
+        return current_tenant
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail={
+            "code": "TENANT_ACCESS_MAINTENANCE_REQUIRED",
+            "message": "This action requires tenant maintenance access",
+            "tenant_id": current_tenant.tenant_id,
+            "status": current_tenant.access_status,
+            "mode": current_tenant.access_mode,
+        },
+    )
