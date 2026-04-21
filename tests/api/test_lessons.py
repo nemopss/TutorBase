@@ -83,7 +83,7 @@ async def test_viewer_lessons_list_is_own_and_hides_teacher_notes(
     assert response.status_code == 200
     data = response.json()
     assert data["total"] == 1
-    assert data["items"][0]["package_title"] == "Own Course"
+    assert data["items"][0]["package_title"] is None
     assert data["items"][0]["teacher_notes"] is None
 
 

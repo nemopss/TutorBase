@@ -36,6 +36,25 @@ if TYPE_CHECKING:
 
 
 DEBT_PACKAGE_STATUSES: tuple[str, ...] = ("active", "completed")
+PACKAGE_TYPE_PACKAGE = "package"
+
+
+def _package_charge_expr():
+    imputed_package_price = Learner.lesson_rate * LessonPackage.total_lessons
+    return case(
+        (
+            LessonPackage.price.isnot(None) & (LessonPackage.price > Decimal("0")),
+            LessonPackage.price,
+        ),
+        (
+            (LessonPackage.package_type == PACKAGE_TYPE_PACKAGE)
+            & Learner.lesson_rate.isnot(None)
+            & LessonPackage.total_lessons.isnot(None)
+            & (LessonPackage.total_lessons > 0),
+            imputed_package_price,
+        ),
+        else_=Decimal("0"),
+    )
 
 
 def _serialize_payment(payment: Payment) -> dict[str, Any]:
@@ -369,14 +388,17 @@ async def get_outstanding_balance(
     # Debt rules (docs/saas-platform-plan.md):
     # - only active/completed packages create debt
     # - draft/cancelled packages do not create debt
+    # - legacy package rows with missing price still create debt when the price
+    #   can be derived from learner rate and lesson count.
+    charge_expr = _package_charge_expr()
     charges_result = await session.execute(
-        select(func.coalesce(func.sum(LessonPackage.price), Decimal("0")))
+        select(func.coalesce(func.sum(charge_expr), Decimal("0")))
+        .join(Learner, Learner.id == LessonPackage.learner_id)
         .where(
             LessonPackage.tenant_id == current_tenant.tenant_id,
             LessonPackage.learner_id == learner_id,
             LessonPackage.status.in_(DEBT_PACKAGE_STATUSES),
-            LessonPackage.price.isnot(None),
-            LessonPackage.price > Decimal("0"),
+            charge_expr > Decimal("0"),
         )
     )
     total_charges = charges_result.scalar() or Decimal("0")
@@ -472,16 +494,17 @@ async def get_dashboard_metrics(
     # Total outstanding balance.
     # Compute from learner-level facts: billable charges minus all non-voided
     # learner payments. This lets one unassigned payment cover several lessons.
+    charge_expr = _package_charge_expr()
     charges_by_learner = (
         select(
             LessonPackage.learner_id.label("learner_id"),
-            func.coalesce(func.sum(LessonPackage.price), Decimal("0")).label("total_charges"),
+            func.coalesce(func.sum(charge_expr), Decimal("0")).label("total_charges"),
         )
+        .join(Learner, Learner.id == LessonPackage.learner_id)
         .where(
             LessonPackage.tenant_id == current_tenant.tenant_id,
             LessonPackage.status.in_(DEBT_PACKAGE_STATUSES),
-            LessonPackage.price.isnot(None),
-            LessonPackage.price > Decimal("0"),
+            charge_expr > Decimal("0"),
         )
         .group_by(LessonPackage.learner_id)
         .subquery()
@@ -569,16 +592,17 @@ async def get_debtors(
 
     Must match dashboard debt calculation and debt rules.
     """
+    charge_expr = _package_charge_expr()
     charges_by_learner = (
         select(
             LessonPackage.learner_id.label("learner_id"),
-            func.coalesce(func.sum(LessonPackage.price), Decimal("0")).label("total_charges"),
+            func.coalesce(func.sum(charge_expr), Decimal("0")).label("total_charges"),
         )
+        .join(Learner, Learner.id == LessonPackage.learner_id)
         .where(
             LessonPackage.tenant_id == current_tenant.tenant_id,
             LessonPackage.status.in_(DEBT_PACKAGE_STATUSES),
-            LessonPackage.price.isnot(None),
-            LessonPackage.price > Decimal("0"),
+            charge_expr > Decimal("0"),
         )
         .group_by(LessonPackage.learner_id)
         .subquery()

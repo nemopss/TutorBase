@@ -24,6 +24,7 @@ from __future__ import annotations
 
 import heapq
 from datetime import datetime, timezone, timedelta
+from decimal import Decimal
 from typing import Optional, Sequence
 
 from zoneinfo import ZoneInfo
@@ -98,6 +99,7 @@ async def sync_package_metrics(
         key=lambda lesson: (normalize_to_utc(lesson.scheduled_at) or datetime.min.replace(tzinfo=timezone.utc)),
     )
 
+    previous_price = package.price
     package.total_lessons = len(lessons)
     if lessons:
         package.start_date = normalize_to_utc(lessons[0].scheduled_at)
@@ -115,6 +117,25 @@ async def sync_package_metrics(
             package.status = 'completed'
 
     await session.flush([package])
+    price_was_imputed = False
+    if (
+        package.package_type == "package"
+        and package.total_lessons
+        and package.total_lessons > 0
+        and (previous_price is None or previous_price <= Decimal("0"))
+        and package.learner is not None
+        and package.learner.lesson_rate is not None
+    ):
+        from services.finance_service import calculate_package_price, update_payment_status
+
+        calculated_price = calculate_package_price(package.learner.lesson_rate, package.total_lessons)
+        if calculated_price is not None and calculated_price > Decimal("0"):
+            package.price = calculated_price
+            price_was_imputed = True
+            await session.flush([package])
+        if price_was_imputed:
+            await update_payment_status(session, package.id)
+
     for lesson in lessons:
         lesson.package = package
     return package, lessons

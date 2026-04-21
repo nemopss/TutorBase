@@ -305,6 +305,8 @@ async def test_instance_repository_uses_postgresql_upsert_with_non_nullable_even
         in compiled
     )
     assert "event_id" not in compiled.partition("ON CONFLICT")[2].partition(")")[0]
+    assert "notification_instances.status NOT IN" in compiled
+    assert "notification_responses.notification_instance_id = notification_instances.id" in compiled
 
 
 @pytest.mark.asyncio
@@ -421,6 +423,20 @@ def test_queued_jobs_claim_statement_uses_postgresql_skip_locked():
 
     compiled = str(stmt.compile(dialect=postgresql.dialect()))
     assert "FOR UPDATE SKIP LOCKED" in compiled
+
+
+def test_due_instances_claim_statement_skips_answered_instances():
+    stmt = _due_instances_for_claim_stmt(
+        tenant_id=1,
+        now=datetime(2026, 4, 21, 18, 30, tzinfo=timezone.utc),
+        limit=10,
+    )
+
+    compiled = str(stmt.compile(dialect=postgresql.dialect()))
+
+    assert "notification_instances.status = " in compiled
+    assert "notification_instances.delivery_enabled IS true" in compiled
+    assert "notification_responses.notification_instance_id = notification_instances.id" in compiled
 
 
 @pytest.mark.asyncio

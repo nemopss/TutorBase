@@ -78,7 +78,10 @@ class MaterializeActiveRulesUseCase:
             delivery_enabled=delivery_enabled,
             shadow=shadow,
             commit=False,
-            respect_rollout_modes=True,
+            respect_rollout_modes=_should_apply_rollout_modes(
+                delivery_enabled=delivery_enabled,
+                shadow=shadow,
+            ),
         )
         job = await self._uow.jobs.mark_succeeded(
             job.job_id,
@@ -116,7 +119,10 @@ class RunMaterializeActiveRulesJobUseCase:
             delivery_enabled=bool(job.scope.get("delivery_enabled", True)),
             shadow=bool(job.scope.get("shadow", False)),
             commit=False,
-            respect_rollout_modes=True,
+            respect_rollout_modes=_should_apply_rollout_modes(
+                delivery_enabled=bool(job.scope.get("delivery_enabled", True)),
+                shadow=bool(job.scope.get("shadow", False)),
+            ),
         )
         succeeded = await self._uow.jobs.mark_succeeded(
             job.job_id,
@@ -149,6 +155,10 @@ async def _cancel_future_instances_for_all_rules(
         rule_ids=all_rule_ids,
         reason="rematerialized:all_rules",
     )
+
+
+def _should_apply_rollout_modes(*, delivery_enabled: bool, shadow: bool) -> bool:
+    return delivery_enabled and not shadow
 
 
 async def _materialize_rules(

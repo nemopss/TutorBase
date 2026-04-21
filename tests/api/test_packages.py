@@ -101,7 +101,7 @@ async def test_viewer_package_list_is_own_and_hides_finance(
     data = response.json()
     assert data["total"] == 1
     item = data["items"][0]
-    assert item["title"] == "Own Package"
+    assert item["title"] == "Пакет занятий"
     assert item["notes"] is None
     assert item["price"] is None
     assert item["payment_status"] == "hidden"

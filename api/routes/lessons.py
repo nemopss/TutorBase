@@ -81,7 +81,7 @@ def _to_response(dto: LessonDTO, *, include_private: bool = True) -> LessonRespo
     return LessonResponse(
         id=dto.id,
         package_id=dto.package_id,
-        package_title=dto.package_title,
+        package_title=dto.package_title if include_private else None,
         learner_name=dto.learner_name,
         scheduled_at=dto.scheduled_at,
         status=dto.status,

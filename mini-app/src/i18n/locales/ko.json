@@ -387,9 +387,44 @@
     },
     "notifications": {
       "title": "알림",
-      "subtitle": "알림 규칙, 템플릿, 전송을 위한 새로운 유연한 시스템",
+      "subtitle": "수업 알림과 중요한 안내를 자동으로 보냅니다",
       "pilotNoticeTitle": "테스트 모드",
       "pilotNoticeDescription": "이 페이지는 새 시스템을 관리합니다. delivery beat가 켜지기 전까지 큐 작업은 새 파이프라인용 인스턴스만 준비합니다.",
+      "tutorOverview": {
+        "introTitle": "알림이 자동으로 동작합니다",
+        "introDescription": "기본 수업 알림을 켜세요. 추가 시나리오는 필요할 때 나중에 켤 수 있습니다.",
+        "enabledCount": "켜진 시나리오",
+        "attentionCount": "주의 필요",
+        "nextStep": "다음 단계",
+        "nextStepOk": "전송 문제는 보이지 않습니다. 알림을 켠 뒤 가장 가까운 수업을 확인하세요.",
+        "nextStepCheckProblems": "실패 이벤트를 확인하고 학생이 Telegram을 연결했는지 확인하세요.",
+        "lessonRemindersTitle": "수업 알림",
+        "extraTitle": "추가 시나리오",
+        "extraDescription": "학생에게 불필요한 메시지를 보내지 않도록 기본으로 켜지지 않습니다.",
+        "noRulesTitle": "알림 규칙을 찾을 수 없습니다",
+        "noRulesDescription": "규칙을 직접 만들거나 owner에게 기본 시나리오 복구를 요청하세요.",
+        "status": {
+          "missing": "생성되지 않음"
+        },
+        "presets": {
+          "lessonConfirmation": {
+            "title": "수업 하루 전 확인",
+            "description": "학생이 수업 진행 여부를 미리 확인합니다."
+          },
+          "lessonReminder": {
+            "title": "수업 전 알림",
+            "description": "수업 시작 전 짧은 메시지입니다."
+          },
+          "packageRenewal": {
+            "title": "패키지 연장",
+            "description": "패키지 종료가 가까울 때 계속 수업할지 확인합니다."
+          },
+          "homework": {
+            "title": "숙제",
+            "description": "TutorBase에서 숙제를 관리할 때 보내는 숙제 알림입니다."
+          }
+        }
+      },
       "tabs": {
         "rules": "규칙",
         "templates": "템플릿",
