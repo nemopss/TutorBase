@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime, timezone
+from typing import Literal
 
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy import select, func
@@ -34,8 +35,30 @@ from database.models import Lesson, LessonPackage
 from services import learner_service
 from services import schedule_service
 from database import crud
+from notifications.infrastructure.repositories import SqlAlchemySessionNotificationUnitOfWork
 
 router = APIRouter()
+
+LearnerArchiveStatus = Literal["active", "archived", "all"]
+
+
+def _to_learner_response(
+    learner,
+    *,
+    next_lesson_date: datetime | None = None,
+) -> LearnerResponse:
+    chat_id = learner.bot_user.chat_id if learner.bot_user else None
+    return LearnerResponse(
+        id=learner.id,
+        display_name=learner.display_name,
+        notifications_enabled=learner.notifications_enabled,
+        chat_id=chat_id,
+        bot_user_id=learner.bot_user_id,
+        lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
+        next_lesson_date=next_lesson_date,
+        archived_at=learner.archived_at,
+        is_archived=learner.archived_at is not None,
+    )
 
 
 async def _get_next_lesson_dates(
@@ -89,13 +112,18 @@ async def _get_next_lesson_dates(
 
 @router.get("", response_model=PaginatedResponse[LearnerResponse])
 async def list_all_learners(
+    status: LearnerArchiveStatus = "active",
     pagination: PaginationParams = Depends(),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
 ) -> PaginatedResponse[LearnerResponse]:
     """Lists all learners for the current tenant with next lesson dates."""
-    learners = await learner_service.get_all_learners(session, current_tenant)
+    learners = await learner_service.get_all_learners(
+        session,
+        current_tenant,
+        archive_status=status,
+    )
     
     # Apply pagination manually since service doesn't support it yet
     total = len(learners)
@@ -109,17 +137,7 @@ async def list_all_learners(
     
     items = []
     for learner in paginated_learners:
-        chat_id = learner.bot_user.chat_id if learner.bot_user else None
-        items.append(
-            LearnerResponse(
-                id=learner.id,
-                display_name=learner.display_name,
-                notifications_enabled=learner.notifications_enabled,
-                chat_id=chat_id,
-                lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
-                next_lesson_date=next_lesson_dates.get(learner.id),
-            )
-        )
+        items.append(_to_learner_response(learner, next_lesson_date=next_lesson_dates.get(learner.id)))
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
@@ -144,14 +162,7 @@ async def create_learner_from_chat_id(
     )
     
     # New learner has no lessons yet
-    return LearnerResponse(
-        id=learner.id,
-        display_name=learner.display_name,
-        notifications_enabled=learner.notifications_enabled,
-        chat_id=learner.bot_user.chat_id if learner.bot_user else None,
-        lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
-        next_lesson_date=None,
-    )
+    return _to_learner_response(learner)
 
 
 @router.patch("/{learner_id}", response_model=LearnerResponse)
@@ -164,15 +175,18 @@ async def update_learner(
     __=Depends(require_full_tenant_access),
 ) -> LearnerResponse:
     """Update a learner's details including lesson rate."""
-    learner = await learner_service.update_learner(
-        session,
-        current_tenant,
-        learner_id=learner_id,
-        display_name=request.display_name,
-        notes=request.notes,
-        notifications_enabled=request.notifications_enabled,
-        lesson_rate=request.lesson_rate,
-    )
+    try:
+        learner = await learner_service.update_learner(
+            session,
+            current_tenant,
+            learner_id=learner_id,
+            display_name=request.display_name,
+            notes=request.notes,
+            notifications_enabled=request.notifications_enabled,
+            lesson_rate=request.lesson_rate,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not learner:
         raise HTTPException(status_code=404, detail="Learner not found")
     
@@ -181,15 +195,7 @@ async def update_learner(
         session, [learner_id], current_tenant.tenant_id
     )
     
-    chat_id = learner.bot_user.chat_id if learner.bot_user else None
-    return LearnerResponse(
-        id=learner.id,
-        display_name=learner.display_name,
-        notifications_enabled=learner.notifications_enabled,
-        chat_id=chat_id,
-        lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
-        next_lesson_date=next_lesson_dates.get(learner_id),
-    )
+    return _to_learner_response(learner, next_lesson_date=next_lesson_dates.get(learner_id))
 
 
 @router.patch("/{learner_id}/notifications", response_model=LearnerResponse)
@@ -202,12 +208,15 @@ async def update_learner_notifications(
     __=Depends(require_maintenance_tenant_access),
 ) -> LearnerResponse:
     """Enable or disable notifications for a learner."""
-    learner = await learner_service.update_learner_notifications(
-        session,
-        current_tenant,
-        learner_id=learner_id,
-        notifications_enabled=request.notifications_enabled,
-    )
+    try:
+        learner = await learner_service.update_learner_notifications(
+            session,
+            current_tenant,
+            learner_id=learner_id,
+            notifications_enabled=request.notifications_enabled,
+        )
+    except ValueError as exc:
+        raise HTTPException(status_code=409, detail=str(exc)) from exc
     if not learner:
         raise HTTPException(status_code=404, detail="Learner not found")
     
@@ -216,14 +225,59 @@ async def update_learner_notifications(
         session, [learner_id], current_tenant.tenant_id
     )
     
-    chat_id = learner.bot_user.chat_id if learner.bot_user else None
-    return LearnerResponse(
-        id=learner.id,
-        display_name=learner.display_name,
-        notifications_enabled=learner.notifications_enabled,
-        chat_id=chat_id,
-        next_lesson_date=next_lesson_dates.get(learner_id),
+    return _to_learner_response(learner, next_lesson_date=next_lesson_dates.get(learner_id))
+
+
+@router.post("/{learner_id}/archive", response_model=LearnerResponse)
+async def archive_learner(
+    learner_id: int,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
+) -> LearnerResponse:
+    """Soft-archive a learner, keep history, and disable future notifications."""
+    learner = await learner_service.archive_learner(
+        session,
+        current_tenant,
+        learner_id=learner_id,
     )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+
+    if current_tenant.tenant_id is not None:
+        uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=current_tenant.tenant_id)
+        await uow.instances.cancel_future_instances_for_learners(
+            learner_ids=(learner_id,),
+            reason="learner_archived",
+        )
+    await session.flush()
+
+    return _to_learner_response(learner)
+
+
+@router.post("/{learner_id}/restore", response_model=LearnerResponse)
+async def restore_learner(
+    learner_id: int,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_or_teacher_required),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    __=Depends(require_full_tenant_access),
+) -> LearnerResponse:
+    """Restore learner to active lists without re-enabling notifications."""
+    learner = await learner_service.restore_learner(
+        session,
+        current_tenant,
+        learner_id=learner_id,
+    )
+    if not learner:
+        raise HTTPException(status_code=404, detail="Learner not found")
+    await session.flush()
+
+    next_lesson_dates = await _get_next_lesson_dates(
+        session, [learner_id], current_tenant.tenant_id
+    )
+    return _to_learner_response(learner, next_lesson_date=next_lesson_dates.get(learner_id))
 
 
 @router.post("/{learner_id}/unlink-account", response_model=LearnerResponse)
@@ -257,15 +311,7 @@ async def unlink_learner_account(
         session, [learner_id], current_tenant.tenant_id
     )
 
-    return LearnerResponse(
-        id=learner.id,
-        display_name=learner.display_name,
-        notifications_enabled=learner.notifications_enabled,
-        chat_id=None,
-        bot_user_id=None,
-        lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
-        next_lesson_date=next_lesson_dates.get(learner_id),
-    )
+    return _to_learner_response(learner, next_lesson_date=next_lesson_dates.get(learner_id))
 
 
 @router.post("/{learner_id}/invite", response_model=InviteTokenResponse, status_code=201)
@@ -396,6 +442,8 @@ async def get_learner_detail(
         lesson_rate=float(learner.lesson_rate) if learner.lesson_rate else None,
         next_lesson_date=next_lesson_dates.get(learner_id),
         first_package_date=first_package_date,
+        archived_at=learner.archived_at,
+        is_archived=learner.archived_at is not None,
     )
 
 

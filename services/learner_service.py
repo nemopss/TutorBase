@@ -30,7 +30,12 @@ from database import crud
 from database.models import Learner
 
 
-async def get_all_learners(session: AsyncSession, current_tenant: CurrentTenant) -> list[Learner]:
+async def get_all_learners(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    archive_status: str = "active",
+) -> list[Learner]:
     """Retrieve all learners for the current tenant.
 
     Fetches all learners belonging to the current tenant, respecting multi-tenancy
@@ -43,7 +48,7 @@ async def get_all_learners(session: AsyncSession, current_tenant: CurrentTenant)
     Returns:
         List of Learner models for the current tenant
     """
-    return await crud.fetch_all_learners(session, current_tenant)
+    return await crud.fetch_all_learners(session, current_tenant, archive_status=archive_status)
 
 
 async def get_learner_by_id(
@@ -145,6 +150,8 @@ async def update_learner(
     learner = await crud.get_learner(session, current_tenant, learner_id)
     if not learner:
         return None
+    if learner.archived_at is not None and notifications_enabled:
+        raise ValueError("Cannot enable notifications for archived learner")
     
     return await crud.update_learner(
         session,
@@ -183,6 +190,8 @@ async def update_learner_notifications(
     learner = await crud.get_learner(session, current_tenant, learner_id)
     if not learner:
         return None
+    if learner.archived_at is not None and notifications_enabled:
+        raise ValueError("Cannot enable notifications for archived learner")
     
     # Then, update it.
     return await crud.update_learner(
@@ -191,6 +200,32 @@ async def update_learner_notifications(
         learner,
         notifications_enabled=notifications_enabled,
     )
+
+
+async def archive_learner(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    learner_id: int,
+) -> Learner | None:
+    """Soft-archive learner and disable notifications."""
+    learner = await crud.get_learner(session, current_tenant, learner_id)
+    if not learner:
+        return None
+    return await crud.archive_learner(session, current_tenant, learner)
+
+
+async def restore_learner(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    learner_id: int,
+) -> Learner | None:
+    """Return learner to active lists without changing notification preference."""
+    learner = await crud.get_learner(session, current_tenant, learner_id)
+    if not learner:
+        return None
+    return await crud.restore_learner(session, current_tenant, learner)
 
 
 async def delete_learner(

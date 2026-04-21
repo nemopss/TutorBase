@@ -144,6 +144,14 @@ class NotificationInstanceRepository(Protocol):
     ) -> int:
         ...
 
+    async def cancel_future_instances_for_learners(
+        self,
+        *,
+        learner_ids: tuple[int, ...],
+        reason: str,
+    ) -> int:
+        ...
+
     async def cancel_future_instances_for_rules(
         self,
         *,

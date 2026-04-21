@@ -347,6 +347,7 @@ class Learner(Base):
         notes: Teacher notes about the learner
         notifications_enabled: Whether to send reminders to this learner
         lesson_rate: Individual lesson rate for this learner (price per lesson)
+        archived_at: When the learner was softly archived, if archived
         created_at: Learner creation timestamp
         tenant: Related Tenant object
         bot_user: Related BotUser object (eager loaded)
@@ -361,6 +362,7 @@ class Learner(Base):
     notes = Column(Text)
     notifications_enabled = Column(Boolean, nullable=False, default=True)
     lesson_rate = Column(Numeric(10, 2), nullable=True)
+    archived_at = Column(DateTime(timezone=True), nullable=True)
     created_at = Column(DateTime(timezone=True), nullable=False)
 
     tenant = relationship('Tenant', back_populates='learners')
@@ -380,6 +382,7 @@ class Learner(Base):
     __table_args__ = (
         Index('ix_learners_tenant_display_name', 'tenant_id', 'display_name'),
         Index('ix_learners_tenant_created', 'tenant_id', 'created_at'),
+        Index('ix_learners_tenant_archived_display_name', 'tenant_id', 'archived_at', 'display_name'),
     )
 
 class LearnerAccountLink(Base):
