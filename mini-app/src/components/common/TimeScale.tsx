@@ -5,13 +5,14 @@ import { useTheme } from '../../theme/ThemeProvider';
 const { Text } = Typography;
 
 // Layout constants
-export const PIXELS_PER_HOUR = 60;
+export const DEFAULT_PIXELS_PER_HOUR = 60;
 export const TIME_SCALE_WIDTH = 50;
-export const TOTAL_HEIGHT = 24 * PIXELS_PER_HOUR; // 1440px for 24 hours
 
 interface TimeScaleProps {
   startHour?: number;
   endHour?: number;
+  pixelsPerHour?: number;
+  totalHeight?: number;
 }
 
 /**
@@ -21,6 +22,8 @@ interface TimeScaleProps {
 const TimeScale: React.FC<TimeScaleProps> = ({
   startHour = 0,
   endHour = 24,
+  pixelsPerHour = DEFAULT_PIXELS_PER_HOUR,
+  totalHeight = 24 * pixelsPerHour,
 }) => {
   const { resolvedTheme } = useTheme();
   const colors = resolvedTheme.colors;
@@ -34,7 +37,7 @@ const TimeScale: React.FC<TimeScaleProps> = ({
     <div
       style={{
         width: TIME_SCALE_WIDTH,
-        height: TOTAL_HEIGHT,
+        height: totalHeight,
         position: 'relative',
         flexShrink: 0,
         borderRight: `1px solid ${colors.borderPrimary}`,
@@ -46,10 +49,10 @@ const TimeScale: React.FC<TimeScaleProps> = ({
           key={hour}
           style={{
             position: 'absolute',
-            top: hour * PIXELS_PER_HOUR,
+            top: hour * pixelsPerHour,
             left: 0,
             right: 0,
-            height: PIXELS_PER_HOUR,
+            height: pixelsPerHour,
             display: 'flex',
             alignItems: 'flex-start',
             justifyContent: 'flex-end',

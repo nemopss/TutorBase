@@ -48,7 +48,7 @@
     "dashboard": "Dashboard",
     "learners": "Learners",
     "packages": "Packages",
-    "lessons": "Lessons",
+    "lessons": "Calendar",
     "schedule": "Schedule",
     "settings": "Settings",
     "finance": "Finance",
@@ -65,6 +65,8 @@
   },
   "calendar": {
     "today": "Today",
+    "now": "Now",
+    "firstLesson": "First lesson",
     "week": "Week",
     "month": "Month",
     "lessons": "lessons",

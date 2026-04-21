@@ -161,7 +161,9 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
       }}>
         {blocksToShow.map((lesson) => {
           const colors = statusColors[lesson.status];
-          const time = dayjs(lesson.scheduled_at).tz(timezone).format('HH:mm');
+          const startTime = dayjs(lesson.scheduled_at).tz(timezone);
+          const endTime = startTime.add(lesson.duration_minutes || 60, 'minute');
+          const timeRange = `${startTime.format('HH:mm')}-${endTime.format('HH:mm')}`;
           const name = lesson.learner_name;
           
           return (
@@ -179,7 +181,7 @@ const MonthDayCell: React.FC<MonthDayCellProps> = ({
                 textOverflow: 'ellipsis',
               }}
             >
-              {time}{name ? ` ${name}` : ''}
+              {timeRange}{name ? ` ${name}` : ''}
             </div>
           );
         })}

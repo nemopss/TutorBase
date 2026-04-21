@@ -48,7 +48,7 @@
     "dashboard": "대시보드",
     "learners": "학생",
     "packages": "패키지",
-    "lessons": "수업",
+    "lessons": "달력",
     "schedule": "일정",
     "settings": "설정",
     "finance": "재정",
@@ -65,6 +65,8 @@
   },
   "calendar": {
     "today": "오늘",
+    "now": "지금",
+    "firstLesson": "첫 수업",
     "week": "주",
     "month": "월",
     "lessons": "수업",
