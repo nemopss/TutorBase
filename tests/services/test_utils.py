@@ -1,5 +1,6 @@
 import pytest
 from datetime import datetime, timezone
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -7,6 +8,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import CurrentTenant
 from services import utils
 from database import crud
+from database.models import Payment
 from tests import factories
 
 
@@ -53,6 +55,46 @@ async def test_sync_package_metrics(db_session: AsyncSession, current_tenant: Cu
     assert updated_package.start_date == lesson1.scheduled_at
     assert updated_package.end_date == lesson2.scheduled_at
     assert len(lessons) == 2
+
+
+@pytest.mark.asyncio
+async def test_sync_package_metrics_imputes_missing_price_and_recalculates_status(
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    learner.lesson_rate = Decimal("2500.00")
+    package = await factories.create_package(db_session, learner=learner, status="active")
+    package.price = None
+    package.payment_status = "unpaid"
+    for index in range(6):
+        await factories.create_lesson(
+            db_session,
+            package=package,
+            scheduled_at=datetime(2026, 4, 10 + index, 10, 0, tzinfo=timezone.utc),
+            sequence_index=index + 1,
+        )
+    await db_session.flush()
+    now = datetime.now(timezone.utc)
+    db_session.add(
+        Payment(
+            tenant_id=current_tenant.tenant_id,
+            learner_id=learner.id,
+            package_id=package.id,
+            amount=Decimal("15000.00"),
+            currency="RUB",
+            paid_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+    )
+    await db_session.flush()
+
+    updated_package, lessons = await utils.sync_package_metrics(db_session, current_tenant, package.id)
+
+    assert len(lessons) == 6
+    assert updated_package.price == Decimal("15000.00")
+    assert updated_package.payment_status == "paid"
 
 
 @pytest.mark.asyncio

@@ -37,6 +37,12 @@ from database.models import User
 router = APIRouter()
 
 
+def _student_safe_package_title(dto: LessonPackageDTO) -> str:
+    if dto.package_type == package_service.PACKAGE_TYPE_ONE_OFF:
+        return "Разовое занятие"
+    return "Пакет занятий"
+
+
 def _to_response(dto: LessonPackageDTO, *, include_private: bool = True) -> PackageResponse:
     progress = PackageProgressModel(
         total=dto.progress.total,
@@ -50,7 +56,7 @@ def _to_response(dto: LessonPackageDTO, *, include_private: bool = True) -> Pack
         learner_name=dto.learner_name,
         template_id=dto.template_id,
         package_type=dto.package_type,
-        title=dto.title,
+        title=dto.title if include_private else _student_safe_package_title(dto),
         status=dto.status,
         start_date=dto.start_date,
         end_date=dto.end_date,

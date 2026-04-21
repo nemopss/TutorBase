@@ -44,6 +44,7 @@ interface NotificationAssignment {
 
 interface NotificationRule {
   id: number;
+  preset_key?: string | null;
   name: string;
   category: string;
   event_type: string;
@@ -833,6 +834,33 @@ const RULE_WIZARD_PRESETS: Record<NonNullable<RuleWizardValues['preset_key']>, P
   },
 };
 
+const TUTOR_NOTIFICATION_PRESETS = [
+  {
+    presetKey: 'lesson_confirmation_day_before',
+    titleKey: 'pages.notifications.tutorOverview.presets.lessonConfirmation.title',
+    descriptionKey: 'pages.notifications.tutorOverview.presets.lessonConfirmation.description',
+    group: 'core',
+  },
+  {
+    presetKey: 'lesson_reminder_soon',
+    titleKey: 'pages.notifications.tutorOverview.presets.lessonReminder.title',
+    descriptionKey: 'pages.notifications.tutorOverview.presets.lessonReminder.description',
+    group: 'core',
+  },
+  {
+    presetKey: 'package_renewal',
+    titleKey: 'pages.notifications.tutorOverview.presets.packageRenewal.title',
+    descriptionKey: 'pages.notifications.tutorOverview.presets.packageRenewal.description',
+    group: 'extra',
+  },
+  {
+    presetKey: 'homework_before_lesson',
+    titleKey: 'pages.notifications.tutorOverview.presets.homework.title',
+    descriptionKey: 'pages.notifications.tutorOverview.presets.homework.description',
+    group: 'extra',
+  },
+] as const;
+
 const getDefaultTemplateIdForCategory = (
   category: string,
   templates: NotificationTemplate[],
@@ -965,7 +993,7 @@ const getRuleWizardValidation = (values: RuleWizardValues): { step: number; tran
 
 const Notifications: React.FC = () => {
   const { t } = useTranslation();
-  const { tenantId } = useAuth();
+  const { tenantId, isSuperAdmin } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<NotificationsTabKey>('rules');
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
@@ -977,6 +1005,13 @@ const Notifications: React.FC = () => {
   const [ruleForm] = Form.useForm<RuleWizardValues>();
   const [settingsForm] = Form.useForm<NotificationSettingsFormValues>();
   const requiresTenantContext = tenantId === null;
+  const isOwnerDebug = isSuperAdmin;
+
+  useEffect(() => {
+    if (!isOwnerDebug && activeTab === 'settings') {
+      setActiveTab('rules');
+    }
+  }, [activeTab, isOwnerDebug]);
 
   const rulesQuery = useQuery<NotificationRule[], Error>({
     queryKey: ['notificationRules'],
@@ -993,7 +1028,7 @@ const Notifications: React.FC = () => {
   const instancesQuery = useQuery<NotificationInstance[], Error>({
     queryKey: ['notificationInstances'],
     queryFn: fetchNotificationInstances,
-    enabled: !requiresTenantContext && (activeTab === 'queue' || activeTab === 'settings'),
+    enabled: !requiresTenantContext && (!isOwnerDebug || activeTab === 'queue' || activeTab === 'settings'),
   });
 
   const instanceDetailQuery = useQuery<NotificationInstance, Error>({
@@ -1005,7 +1040,7 @@ const Notifications: React.FC = () => {
   const activityQuery = useQuery<NotificationActivity[], Error>({
     queryKey: ['notificationActivity'],
     queryFn: fetchNotificationActivity,
-    enabled: !requiresTenantContext && (activeTab === 'activity' || activeTab === 'settings'),
+    enabled: !requiresTenantContext && (!isOwnerDebug || activeTab === 'activity' || activeTab === 'settings'),
   });
 
   const settingsQuery = useQuery<NotificationSettings, Error>({
@@ -1257,6 +1292,7 @@ const Notifications: React.FC = () => {
           onMaterializeShadow={() => materializeMutation.mutate()}
           onCreateRule={openRuleWizard}
           materializing={materializeMutation.isPending}
+          showDebugControls={isOwnerDebug}
         />
       ),
     },
@@ -1329,6 +1365,7 @@ const Notifications: React.FC = () => {
       ),
     },
   ];
+  const visibleTabs = isOwnerDebug ? tabs : tabs.filter((tab) => tab.key !== 'settings');
 
   if (requiresTenantContext) {
     return (
@@ -1336,10 +1373,51 @@ const Notifications: React.FC = () => {
         <PageHeader
           title={t('pages.notifications.title')}
           subtitle={t('pages.notifications.subtitle')}
-          actions={<Tag color="green">{t('navigation.newBadge')}</Tag>}
+          actions={isOwnerDebug ? <Tag color="green">{t('navigation.newBadge')}</Tag> : undefined}
         />
 
         <TenantContextRequired sectionLabel={t('pages.notifications.title')} />
+      </div>
+    );
+  }
+
+  if (!isOwnerDebug) {
+    return (
+      <div>
+        <PageHeader
+          title={t('pages.notifications.title')}
+          subtitle={t('pages.notifications.subtitle')}
+        />
+
+        <TutorNotificationsOverview
+          rules={rulesQuery.data ?? []}
+          rulesLoading={rulesQuery.isLoading}
+          rulesError={rulesQuery.error}
+          instances={instancesQuery.data ?? []}
+          activity={activityQuery.data ?? []}
+          actionPending={ruleStatusMutation.isPending}
+          onSetStatus={(ruleId, action) => ruleStatusMutation.mutate({ ruleId, action })}
+          onCreateRule={openRuleWizard}
+        />
+
+        <RuleWizardModal
+          open={ruleWizardOpen}
+          step={ruleWizardStep}
+          form={ruleForm}
+          templates={templatesQuery.data ?? []}
+          learners={learnersQuery.data ?? []}
+          groups={groupsQuery.data ?? []}
+          packages={packagesQuery.data ?? []}
+          categoryOptions={categoryOptions}
+          preview={rulePreview}
+          loadingLookups={templatesQuery.isLoading || learnersQuery.isLoading || groupsQuery.isLoading || packagesQuery.isLoading}
+          previewing={previewRuleMutation.isPending}
+          saving={createRuleMutation.isPending}
+          onStepChange={setRuleWizardStep}
+          onCancel={closeRuleWizard}
+          onPreview={previewRuleFromWizard}
+          onSave={saveRuleFromWizard}
+        />
       </div>
     );
   }
@@ -1349,21 +1427,23 @@ const Notifications: React.FC = () => {
       <PageHeader
         title={t('pages.notifications.title')}
         subtitle={t('pages.notifications.subtitle')}
-        actions={<Tag color="green">{t('navigation.newBadge')}</Tag>}
+        actions={isOwnerDebug ? <Tag color="green">{t('navigation.newBadge')}</Tag> : undefined}
       />
 
-      <Alert
-        type="info"
-        showIcon
-        message={t('pages.notifications.pilotNoticeTitle')}
-        description={t('pages.notifications.pilotNoticeDescription')}
-        style={{ marginBottom: 16 }}
-      />
+      {isOwnerDebug && (
+        <Alert
+          type="info"
+          showIcon
+          message={t('pages.notifications.pilotNoticeTitle')}
+          description={t('pages.notifications.pilotNoticeDescription')}
+          style={{ marginBottom: 16 }}
+        />
+      )}
 
       <Tabs
         activeKey={activeTab}
         onChange={(key) => setActiveTab(key as NotificationsTabKey)}
-        items={tabs}
+        items={visibleTabs}
       />
 
       <Modal
@@ -1949,6 +2029,146 @@ const PreviewStep: React.FC<{ preview: NotificationPreviewResponse | null; loadi
   );
 };
 
+interface TutorNotificationsOverviewProps {
+  rules: NotificationRule[];
+  rulesLoading: boolean;
+  rulesError: Error | null;
+  instances: NotificationInstance[];
+  activity: NotificationActivity[];
+  actionPending: boolean;
+  onSetStatus: (ruleId: number, action: 'activate' | 'pause') => void;
+  onCreateRule: () => void;
+}
+
+const TutorNotificationsOverview: React.FC<TutorNotificationsOverviewProps> = ({
+  rules,
+  rulesLoading,
+  rulesError,
+  instances,
+  activity,
+  actionPending,
+  onSetStatus,
+  onCreateRule,
+}) => {
+  const { t } = useTranslation();
+  const rulesByPreset = useMemo(
+    () => new Map(rules.map((rule) => [rule.preset_key, rule])),
+    [rules],
+  );
+  const corePresets = TUTOR_NOTIFICATION_PRESETS.filter((preset) => preset.group === 'core');
+  const extraPresets = TUTOR_NOTIFICATION_PRESETS.filter((preset) => preset.group === 'extra');
+  const attentionCount = activity.filter((item) => (
+    item.activity_type === 'teacher_alert'
+    || item.status === 'requires_attention'
+    || item.status === 'failed'
+  )).length + instances.filter((instance) => instance.status === 'failed').length;
+  const activeCount = TUTOR_NOTIFICATION_PRESETS.filter((preset) => (
+    rulesByPreset.get(preset.presetKey)?.status === 'active'
+  )).length;
+
+  const renderPreset = (preset: typeof TUTOR_NOTIFICATION_PRESETS[number]) => {
+    const rule = rulesByPreset.get(preset.presetKey);
+    const isActive = rule?.status === 'active';
+    const isArchived = rule?.status === 'archived';
+    const isMissing = !rule;
+    const canToggle = !!rule && !isArchived;
+    const statusText = rule
+      ? t(`pages.notifications.ruleStatus.${rule.status}`)
+      : t('pages.notifications.tutorOverview.status.missing');
+
+    return (
+      <Col xs={24} md={12} key={preset.presetKey}>
+        <Card size="small">
+          <Space direction="vertical" style={{ width: '100%' }} size={8}>
+            <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
+              <Space direction="vertical" size={2}>
+                <Typography.Text strong>{t(preset.titleKey)}</Typography.Text>
+                <Typography.Text type="secondary">{t(preset.descriptionKey)}</Typography.Text>
+              </Space>
+              <Switch
+                checked={isActive}
+                disabled={!canToggle || actionPending}
+                loading={actionPending}
+                onChange={(checked) => {
+                  if (!rule) return;
+                  onSetStatus(rule.id, checked ? 'activate' : 'pause');
+                }}
+              />
+            </Space>
+            <Tag color={isActive ? 'green' : isArchived ? 'default' : isMissing ? 'orange' : 'default'} style={{ width: 'fit-content' }}>
+              {statusText}
+            </Tag>
+          </Space>
+        </Card>
+      </Col>
+    );
+  };
+
+  return (
+    <Space direction="vertical" style={{ width: '100%' }} size="middle">
+      <Alert
+        type="info"
+        showIcon
+        message={t('pages.notifications.tutorOverview.introTitle')}
+        description={t('pages.notifications.tutorOverview.introDescription')}
+      />
+      <NoticeError error={rulesError} />
+
+      <Row gutter={[16, 16]}>
+        <Col xs={24} md={8}>
+          <Card loading={rulesLoading}>
+            <Typography.Text type="secondary">{t('pages.notifications.tutorOverview.enabledCount')}</Typography.Text>
+            <Typography.Title level={3} style={{ margin: 0 }}>{activeCount}</Typography.Title>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card>
+            <Typography.Text type="secondary">{t('pages.notifications.tutorOverview.attentionCount')}</Typography.Text>
+            <Typography.Title level={3} style={{ margin: 0 }}>{attentionCount}</Typography.Title>
+          </Card>
+        </Col>
+        <Col xs={24} md={8}>
+          <Card>
+            <Typography.Text type="secondary">{t('pages.notifications.tutorOverview.nextStep')}</Typography.Text>
+            <Typography.Paragraph style={{ margin: 0 }}>
+              {attentionCount > 0
+                ? t('pages.notifications.tutorOverview.nextStepCheckProblems')
+                : t('pages.notifications.tutorOverview.nextStepOk')}
+            </Typography.Paragraph>
+          </Card>
+        </Col>
+      </Row>
+
+      <Typography.Title level={4}>{t('pages.notifications.tutorOverview.lessonRemindersTitle')}</Typography.Title>
+      <Row gutter={[16, 16]}>
+        {corePresets.map(renderPreset)}
+      </Row>
+
+      <Typography.Title level={4}>{t('pages.notifications.tutorOverview.extraTitle')}</Typography.Title>
+      <Typography.Paragraph type="secondary">
+        {t('pages.notifications.tutorOverview.extraDescription')}
+      </Typography.Paragraph>
+      <Row gutter={[16, 16]}>
+        {extraPresets.map(renderPreset)}
+      </Row>
+
+      {rules.length === 0 && !rulesLoading && (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('pages.notifications.tutorOverview.noRulesTitle')}
+          description={t('pages.notifications.tutorOverview.noRulesDescription')}
+          action={(
+            <Button size="small" onClick={onCreateRule}>
+              {t('pages.notifications.createRuleWizard')}
+            </Button>
+          )}
+        />
+      )}
+    </Space>
+  );
+};
+
 interface RulesTabProps {
   rules: NotificationRule[];
   loading: boolean;
@@ -1957,6 +2177,7 @@ interface RulesTabProps {
   onSetStatus: (ruleId: number, action: 'activate' | 'pause' | 'archive') => void;
   onMaterializeShadow: () => void;
   onCreateRule: () => void;
+  showDebugControls: boolean;
 }
 
 const RulesTab: React.FC<RulesTabProps> = ({
@@ -1967,6 +2188,7 @@ const RulesTab: React.FC<RulesTabProps> = ({
   onSetStatus,
   onMaterializeShadow,
   onCreateRule,
+  showDebugControls,
 }) => {
   const { t } = useTranslation();
   const groupedRules = useMemo(() => {
@@ -2048,19 +2270,23 @@ const RulesTab: React.FC<RulesTabProps> = ({
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <Space wrap>
-        <Button icon={<ReloadOutlined />} onClick={onMaterializeShadow} loading={materializing}>
-          {t('pages.notifications.materializeShadow')}
-        </Button>
+        {showDebugControls && (
+          <Button icon={<ReloadOutlined />} onClick={onMaterializeShadow} loading={materializing}>
+            {t('pages.notifications.materializeShadow')}
+          </Button>
+        )}
         <Button type="primary" icon={<PlusOutlined />} onClick={onCreateRule}>
           {t('pages.notifications.createRuleWizard')}
         </Button>
       </Space>
-      <Alert
-        type="info"
-        showIcon
-        message={t('pages.notifications.materializeHelpTitle')}
-        description={t('pages.notifications.materializeHelpDescription')}
-      />
+      {showDebugControls && (
+        <Alert
+          type="info"
+          showIcon
+          message={t('pages.notifications.materializeHelpTitle')}
+          description={t('pages.notifications.materializeHelpDescription')}
+        />
+      )}
       <NoticeError error={error} />
       {loading ? (
         <Card loading />

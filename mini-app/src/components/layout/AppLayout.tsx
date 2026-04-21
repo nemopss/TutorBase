@@ -107,7 +107,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         },
       ],
     },
-    {
+    ...(isSuperAdmin ? [{
       key: '/reminders',
       icon: <BellOutlined />,
       label: (
@@ -116,16 +116,16 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           <Tag color="warning" style={{ marginInlineEnd: 0 }}>{t('navigation.legacyBadge')}</Tag>
         </Space>
       ),
-    },
+    }] : []),
     {
       key: '/notifications',
       icon: <BellOutlined />,
-      label: (
+      label: isSuperAdmin ? (
         <Space size={6}>
           <Link to="/notifications">{t('navigation.notifications')}</Link>
           <Tag color="green" style={{ marginInlineEnd: 0 }}>{t('navigation.newBadge')}</Tag>
         </Space>
-      ),
+      ) : <Link to="/notifications">{t('navigation.notifications')}</Link>,
     },
     {
       key: '/groups',
@@ -137,7 +137,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       icon: <BarChartOutlined />,
       label: <Link to="/analytics">{t('navigation.analytics')}</Link>,
     },
-  ], [t]);
+  ], [isSuperAdmin, t]);
 
   const studentMenuItems: NonNullable<MenuProps['items']> = useMemo(() => [
     {

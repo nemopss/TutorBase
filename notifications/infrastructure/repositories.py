@@ -4,7 +4,7 @@ from collections.abc import Callable
 from datetime import datetime, time, timedelta, timezone
 
 from database.models import BotUser, Learner, Lesson, LessonPackage
-from sqlalchemy import delete, func, insert, or_, select, update
+from sqlalchemy import delete, exists, func, insert, or_, select, update
 from sqlalchemy.orm import aliased, joinedload, selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -736,6 +736,17 @@ class SqlAlchemyNotificationInstanceRepository:
                     "explanation": insert_stmt.excluded.explanation,
                     "updated_at": insert_stmt.excluded.updated_at,
                 },
+                where=(
+                    NotificationInstance.status.notin_(
+                        (
+                            InstanceStatus.SENT.value,
+                            InstanceStatus.PROCESSING.value,
+                        )
+                    )
+                    & ~exists().where(
+                        NotificationResponse.notification_instance_id == NotificationInstance.id
+                    )
+                ),
             )
             .returning(
                 NotificationInstance.id,
@@ -763,7 +774,11 @@ class SqlAlchemyNotificationInstanceRepository:
             category_ids=category_ids,
             now=now,
         )
-        return InstanceUpsertResult(planned_count=len(instances), upserted_count=len(instances))
+        return InstanceUpsertResult(
+            planned_count=len(instances),
+            upserted_count=len(instance_ids_by_key),
+            skipped_count=len(instances) - len(instance_ids_by_key),
+        )
 
     async def list_instances(
         self,
@@ -1218,7 +1233,7 @@ class SqlAlchemyNotificationInstanceRepository:
         for instance in instances:
             if not instance.components:
                 continue
-            instance_id = instance_ids_by_key[
+            instance_id = instance_ids_by_key.get(
                 (
                     instance.recipient_type,
                     instance.recipient_id,
@@ -1226,7 +1241,9 @@ class SqlAlchemyNotificationInstanceRepository:
                     instance.event_key,
                     instance.dedupe_key,
                 )
-            ]
+            )
+            if instance_id is None:
+                continue
             instance_ids_with_components.append(instance_id)
             component_rows.extend(
                 {
@@ -2012,6 +2029,7 @@ def _due_instances_for_claim_stmt(tenant_id: int, *, now: datetime, limit: int):
             NotificationInstance.status == "scheduled",
             NotificationInstance.delivery_enabled.is_(True),
             NotificationInstance.effective_scheduled_for <= now,
+            ~exists().where(NotificationResponse.notification_instance_id == NotificationInstance.id),
         )
         .order_by(NotificationInstance.effective_scheduled_for, NotificationInstance.id)
         .limit(limit)

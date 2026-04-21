@@ -340,6 +340,42 @@ async def test_learner_finance_uses_actual_outstanding_even_when_status_is_stale
 
 
 @pytest.mark.asyncio
+async def test_debtors_use_imputed_price_for_legacy_package_without_price(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    learner.lesson_rate = Decimal("2500.00")
+    package = await factories.create_package(
+        db_session,
+        learner=learner,
+        status="active",
+        total_lessons=8,
+    )
+    package.price = None
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    finance_response = await client.get(f"/api/v1/learners/{learner.id}/finance", headers=headers)
+    assert finance_response.status_code == 200
+    assert Decimal(str(finance_response.json()["outstanding_balance"])) == Decimal("20000.00")
+
+    dashboard = await client.get("/api/v1/finance/dashboard", headers=headers)
+    assert dashboard.status_code == 200
+    dashboard_body = dashboard.json()
+    assert Decimal(str(dashboard_body["total_outstanding"])) == Decimal("20000.00")
+    assert dashboard_body["unpaid_learners_count"] == 1
+
+    debtors = await client.get("/api/v1/finance/debtors?limit=10&offset=0", headers=headers)
+    assert debtors.status_code == 200
+    body = debtors.json()
+    assert body["total"] == 1
+    assert body["items"][0]["learner_id"] == learner.id
+    assert Decimal(str(body["items"][0]["outstanding_balance"])) == Decimal("20000.00")
+
+
+@pytest.mark.asyncio
 async def test_unassigned_payment_reduces_learner_outstanding_balance(
     client: AsyncClient,
     db_session: AsyncSession,

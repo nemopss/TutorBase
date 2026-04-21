@@ -1,12 +1,19 @@
 from dataclasses import dataclass
+from datetime import datetime, timezone
 
 import pytest
 
 from notifications.application.dto import (
+    AudienceSelector,
+    InstanceUpsertResult,
     LearnerNotificationModeRecord,
     LearnerNotificationModeUpdateDraft,
+    NotificationInstanceDraft,
+    NotificationRuleDraft,
     NotificationSettingsRecord,
     NotificationSettingsUpdateDraft,
+    PreviewEvent,
+    PreviewRecipient,
 )
 from notifications.application.settings import (
     GetLearnerNotificationModeUseCase,
@@ -15,7 +22,13 @@ from notifications.application.settings import (
     SetLearnerNotificationModeUseCase,
     UpdateNotificationSettingsUseCase,
 )
-from notifications.domain.enums import NotificationSystemMode
+from notifications.domain.enums import (
+    CategoryKey,
+    EventType,
+    NotificationSystemMode,
+    Priority,
+    TriggerType,
+)
 
 
 @dataclass
@@ -51,10 +64,84 @@ class FakeSettingsRepository:
 @dataclass
 class FakeUnitOfWork:
     settings: FakeSettingsRepository
+    rules: object = None
+    instances: object = None
+    audience_resolver: object = None
+    events: object = None
+    preferences: object = None
+    jobs: object = None
+    responses: object = None
+    groups: object = None
+    templates: object = None
     committed: bool = False
+
+    def __post_init__(self):
+        self.rules = self.rules or FakeRuleRepository()
+        self.instances = self.instances or FakeInstanceRepository()
+        self.audience_resolver = self.audience_resolver or FakeAudienceResolver()
+        self.events = self.events or FakeEventRepository()
+        self.preferences = self.preferences or FakePreferenceRepository()
 
     async def commit(self):
         self.committed = True
+
+
+@dataclass
+class FakeRuleRepository:
+    rules: tuple[NotificationRuleDraft, ...] = ()
+
+    async def list_active_rules(self):
+        return self.rules
+
+
+@dataclass
+class FakeInstanceRepository:
+    upserted: tuple[NotificationInstanceDraft, ...] = ()
+    cancel_scoped_calls: list[dict] = None
+
+    def __post_init__(self):
+        self.cancel_scoped_calls = self.cancel_scoped_calls or []
+
+    async def cancel_future_instances_for_rules_and_learners(self, *, rule_ids, learner_ids, reason):
+        self.cancel_scoped_calls.append(
+            {"rule_ids": rule_ids, "learner_ids": learner_ids, "reason": reason}
+        )
+        return 0
+
+    async def upsert_planned_instances(self, instances):
+        self.upserted = instances
+        return InstanceUpsertResult(planned_count=len(instances), upserted_count=len(instances))
+
+
+@dataclass
+class FakeAudienceResolver:
+    recipients: tuple[PreviewRecipient, ...] = ()
+
+    async def resolve_recipients(self, assignments):
+        return self.recipients
+
+
+@dataclass
+class FakeEventRepository:
+    events: tuple[PreviewEvent, ...] = ()
+
+    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit):
+        return tuple(
+            event
+            for event in self.events
+            if event.event_type == event_type and event.learner_id in learner_ids
+        )[:limit]
+
+
+class FakePreferenceRepository:
+    async def get_global_preference(self):
+        return None
+
+    async def get_group_preferences_for_learner(self, learner_id):
+        return ()
+
+    async def get_learner_preference(self, learner_id):
+        return None
 
 
 @pytest.mark.asyncio
@@ -119,4 +206,77 @@ async def test_learner_mode_use_cases():
         10,
         LearnerNotificationModeUpdateDraft(mode_override=NotificationSystemMode.NEW),
     )
+    assert uow.committed is True
+
+
+@pytest.mark.asyncio
+async def test_setting_learner_mode_to_new_rebuilds_scoped_queue():
+    rule = NotificationRuleDraft(
+        rule_id=7,
+        name="lesson_confirmation",
+        category=CategoryKey.LESSON_CONFIRMATION,
+        event_type=EventType.LESSON,
+        trigger_type=TriggerType.DAY_OFFSET_AT_TIME,
+        trigger_config={"days": -1, "local_time": "10:00"},
+        priority=Priority.NORMAL,
+        template_body="Привет, {student_name}!",
+        template_key="lesson_confirmation",
+        assignments=(AudienceSelector(scope_type="all_learners"),),
+    )
+    instances = FakeInstanceRepository()
+    repository = FakeSettingsRepository(
+        settings=NotificationSettingsRecord(tenant_id=1, mode=NotificationSystemMode.LEGACY),
+    )
+    uow = FakeUnitOfWork(
+        settings=repository,
+        rules=FakeRuleRepository(rules=(rule,)),
+        instances=instances,
+        audience_resolver=FakeAudienceResolver(
+            recipients=(
+                PreviewRecipient(learner_id=10, display_name="Вика"),
+                PreviewRecipient(learner_id=11, display_name="Ира"),
+            )
+        ),
+        events=FakeEventRepository(
+            events=(
+                PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=617,
+                    learner_id=10,
+                    starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=False,
+                ),
+                PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=618,
+                    learner_id=11,
+                    starts_at=datetime(2026, 4, 9, 20, 0, tzinfo=timezone.utc),
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=False,
+                ),
+            )
+        ),
+    )
+
+    updated = await SetLearnerNotificationModeUseCase(uow).execute(
+        learner_id=10,
+        draft=LearnerNotificationModeUpdateDraft(mode_override=NotificationSystemMode.NEW),
+    )
+
+    assert updated is not None
+    assert instances.cancel_scoped_calls == [
+        {
+            "rule_ids": (7,),
+            "learner_ids": (10,),
+            "reason": "learner_notification_mode_changed",
+        }
+    ]
+    assert len(instances.upserted) == 1
+    assert instances.upserted[0].learner_id == 10
+    assert instances.upserted[0].delivery_enabled is True
     assert uow.committed is True

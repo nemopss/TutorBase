@@ -40,7 +40,7 @@ from api.security import (
 )
 from config import config
 from database import crud
-from services import tenant_access_service
+from services import notification_bootstrap_service, tenant_access_service
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
@@ -485,6 +485,7 @@ async def register_tutor(
     session.add(tenant)
     await session.flush()  # Get tenant.id
     await tenant_access_service.create_trial_access(session, tenant.id)
+    await notification_bootstrap_service.ensure_recommended_notification_rules(session, tenant.id)
     
     # Create user with teacher role
     display_name = registration_data.tutor_name or telegram_display_name

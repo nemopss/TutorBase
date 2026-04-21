@@ -178,7 +178,7 @@ function App() {
                 <Route path="/finance/dashboard" element={<FinanceDashboard />} />
                 <Route path="/finance/reports" element={<IncomeReports />} />
                 <Route path="/notifications" element={<Notifications />} />
-                <Route path="/reminders" element={<Reminders />} />
+                <Route path="/reminders" element={isPlatformAdmin ? <Reminders /> : <AccessDenied />} />
                 <Route path="/groups" element={<Groups />} />
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/invite-codes" element={<InviteCodes />} />

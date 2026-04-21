@@ -44,6 +44,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from database import crud
 from database.models import Tenant
+from services import notification_bootstrap_service
 from services.exceptions import NotFoundError
 from utils.cache import cached, invalidate_cache
 
@@ -83,6 +84,7 @@ async def create_tenant(
         contact_email=contact_email,
         is_active=is_active,
     )
+    await notification_bootstrap_service.ensure_recommended_notification_rules(session, tenant.id)
     
     # Invalidate tenant list cache
     await invalidate_cache("tenants:list_tenants:*")

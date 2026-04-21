@@ -405,7 +405,7 @@ async def test_materialize_active_rules_records_job_summary():
 
 
 @pytest.mark.asyncio
-async def test_materialize_active_rules_respects_learner_rollout_modes():
+async def test_materialize_active_rules_shadow_rebuild_does_not_enable_rollout_delivery():
     rule = NotificationRuleDraft(
         rule_id=1,
         name="lesson_confirmation",
@@ -472,6 +472,82 @@ async def test_materialize_active_rules_respects_learner_rollout_modes():
         delivery_enabled=False,
         shadow=True,
     )
+
+    assert len(result.materialization.planned_instances) == 2
+    assert {instance.learner_id for instance in result.materialization.planned_instances} == {10, 11}
+    assert {
+        instance.status for instance in result.materialization.planned_instances
+    } == {InstanceStatus.SHADOW}
+    assert {
+        instance.delivery_enabled for instance in result.materialization.planned_instances
+    } == {False}
+
+
+@pytest.mark.asyncio
+async def test_materialize_active_rules_live_run_respects_learner_rollout_modes():
+    rule = NotificationRuleDraft(
+        rule_id=1,
+        name="lesson_confirmation",
+        category=CategoryKey.LESSON_CONFIRMATION,
+        event_type=EventType.LESSON,
+        trigger_type=TriggerType.DAY_OFFSET_AT_TIME,
+        trigger_config={"days": -1, "local_time": "10:00"},
+        template_body="Привет, {student_name}!",
+        template_key="lesson_confirmation",
+        assignments=(AudienceSelector(scope_type="all_learners", scope_id=None),),
+    )
+    uow = FakeMaterializationUnitOfWork(
+        audience_resolver=FakeAudienceResolver(
+            recipients=(
+                PreviewRecipient(learner_id=10, display_name="Вика"),
+                PreviewRecipient(learner_id=11, display_name="Ира"),
+            )
+        ),
+        events=FakeEventRepository(
+            events=(
+                PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=617,
+                    learner_id=10,
+                    starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=True,
+                ),
+                PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=618,
+                    learner_id=11,
+                    starts_at=datetime(2026, 4, 9, 20, 0, tzinfo=timezone.utc),
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=True,
+                ),
+            )
+        ),
+        settings=FakeSettingsRepository(
+            settings=NotificationSettingsRecord(tenant_id=1, mode=NotificationSystemMode.LEGACY),
+            learner_modes=(
+                LearnerNotificationModeRecord(
+                    learner_id=10,
+                    display_name="Вика",
+                    mode_override=NotificationSystemMode.NEW,
+                    effective_mode=NotificationSystemMode.NEW,
+                ),
+                LearnerNotificationModeRecord(
+                    learner_id=11,
+                    display_name="Ира",
+                    mode_override=NotificationSystemMode.INHERIT,
+                    effective_mode=NotificationSystemMode.LEGACY,
+                ),
+            ),
+        ),
+        rules=FakeRuleRepository(rules=(rule,)),
+    )
+
+    result = await MaterializeActiveRulesUseCase(uow).execute()
 
     assert len(result.materialization.planned_instances) == 1
     instance = result.materialization.planned_instances[0]

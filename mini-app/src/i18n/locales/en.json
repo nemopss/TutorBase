@@ -388,9 +388,44 @@
     },
     "notifications": {
       "title": "Notifications",
-      "subtitle": "New flexible system for notification rules, templates, and delivery",
+      "subtitle": "Automatic messages for lesson reminders and important updates",
       "pilotNoticeTitle": "Pilot mode",
       "pilotNoticeDescription": "This page controls the redesigned system. Until the delivery beat is enabled, queue actions only prepare instances for the new pipeline.",
+      "tutorOverview": {
+        "introTitle": "Notifications run automatically",
+        "introDescription": "Turn on the basic lesson reminders. Extra scenarios can be enabled later when you need them.",
+        "enabledCount": "Enabled scenarios",
+        "attentionCount": "Needs attention",
+        "nextStep": "Next step",
+        "nextStepOk": "No delivery problems are visible. Check the next lesson after enabling reminders.",
+        "nextStepCheckProblems": "Review failed events and make sure the learner has connected Telegram.",
+        "lessonRemindersTitle": "Lesson reminders",
+        "extraTitle": "Extra scenarios",
+        "extraDescription": "These scenarios are not enabled by default, so learners do not receive unnecessary messages.",
+        "noRulesTitle": "Notification rules were not found",
+        "noRulesDescription": "Create a rule manually or ask the owner to restore the standard scenarios.",
+        "status": {
+          "missing": "Not created"
+        },
+        "presets": {
+          "lessonConfirmation": {
+            "title": "Lesson confirmation one day before",
+            "description": "The learner confirms in advance that the lesson is still on."
+          },
+          "lessonReminder": {
+            "title": "Reminder before the lesson",
+            "description": "A short message before the lesson starts."
+          },
+          "packageRenewal": {
+            "title": "Package renewal",
+            "description": "A check-in about continuing lessons near the end of a package."
+          },
+          "homework": {
+            "title": "Homework",
+            "description": "A homework reminder when you track homework in TutorBase."
+          }
+        }
+      },
       "tabs": {
         "rules": "Rules",
         "templates": "Templates",
