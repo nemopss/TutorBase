@@ -1,21 +1,16 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Tag, Select, Space, Input, Button, message, Modal } from 'antd';
-import type { TableProps } from 'antd';
-import { CalendarOutlined, UnorderedListOutlined } from '@ant-design/icons';
+import { message, Modal } from 'antd';
 import dayjs from 'dayjs';
 import updateLocale from 'dayjs/plugin/updateLocale';
 import 'dayjs/locale/ru';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
-import { useDebounce } from '../hooks/useDebounce';
 import LessonForm from '../components/forms/LessonForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
 import PageHeader from '../components/common/PageHeader';
-import ResponsiveDataView from '../components/common/ResponsiveDataView';
-import LessonCard from '../components/cards/LessonCard';
 import CalendarContainer from '../components/common/CalendarContainer';
-import { dayjsInTimezone, formatDateTime, DEFAULT_TIMEZONE } from '../utils/datetime';
+import { DEFAULT_TIMEZONE } from '../utils/datetime';
 import { useAuth } from '../auth/AuthProvider';
 
 dayjs.extend(updateLocale);
@@ -42,8 +37,6 @@ interface LessonListResponse {
   total: number;
   items: Lesson[];
 }
-
-// Status options will be generated with translations in component
 
 // --- API Fetchers --- //
 const fetchLessons = async (status: string | null, search: string, limit: number, offset: number): Promise<LessonListResponse> => {
@@ -98,19 +91,6 @@ const Lessons: React.FC = () => {
   const queryClient = useQueryClient();
   const { tenantAccess } = useAuth();
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
-
-  // Status options with translations
-  const STATUS_OPTIONS = [
-    { value: 'scheduled', label: t('pages.lessons.status.scheduled') },
-    { value: 'rescheduled', label: t('pages.lessons.status.rescheduled') },
-    { value: 'completed', label: t('pages.lessons.status.completed') },
-    { value: 'cancelled', label: t('pages.lessons.status.cancelled') },
-  ];
-  const [viewMode, setViewMode] = useState<'table' | 'calendar'>('calendar');
-  const [currentPage, setCurrentPage] = useState(1);
-  const [pageSize, setPageSize] = useState(50);
-  const [statusFilter, setStatusFilter] = useState<string | null>(null);
-  const [searchTerm, setSearchTerm] = useState('');
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [deleteModalOpen, setDeleteModalOpen] = useState(false);
@@ -125,20 +105,9 @@ const Lessons: React.FC = () => {
   const [isCompleteLessonModalOpen, setIsCompleteLessonModalOpen] = useState(false);
   const [isCancelLessonModalOpen, setIsCancelLessonModalOpen] = useState(false);
 
-  const debouncedSearchTerm = useDebounce(searchTerm, 500);
-
-  // Data for table view (with pagination and filters)
-  const { data, isLoading } = useQuery<LessonListResponse, Error>({
-    queryKey: ['lessons', currentPage, pageSize, statusFilter, debouncedSearchTerm],
-    queryFn: () => fetchLessons(statusFilter, debouncedSearchTerm, pageSize, (currentPage - 1) * pageSize),
-    placeholderData: (previousData) => previousData,
-  });
-
-  // Data for calendar view (all lessons with pagination - API limit is 100)
   const { data: calendarData } = useQuery<LessonListResponse, Error>({
     queryKey: ['lessons', 'calendar', 'all'],
     queryFn: fetchAllLessons,
-    enabled: viewMode === 'calendar', // Only fetch when calendar is visible
   });
 
   const updateMutation = useMutation({
@@ -170,15 +139,6 @@ const Lessons: React.FC = () => {
     if (editingLesson) {
       updateMutation.mutate({ lessonId: editingLesson.id, values });
     }
-  };
-
-  const handleDelete = (id: number) => {
-    if (!canUseFullActions) {
-      message.warning('Удаление уроков недоступно в grace-периоде. Можно отменить урок через смену статуса.');
-      return;
-    }
-    setLessonToDelete(id);
-    setDeleteModalOpen(true);
   };
 
   const confirmDelete = () => {
@@ -279,81 +239,12 @@ const Lessons: React.FC = () => {
   };
 
   const handleDeleteFromCalendar = (lessonId: number) => {
+    if (!canUseFullActions) {
+      message.warning('Удаление уроков недоступно в grace-периоде. Можно отменить урок через смену статуса.');
+      return;
+    }
     setLessonToDelete(lessonId);
     setDeleteModalOpen(true);
-  }
-
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case 'scheduled': return 'blue';
-      case 'rescheduled': return 'gold';
-      case 'completed': return 'green';
-      case 'cancelled': return 'red';
-      default: return 'default';
-    }
-  };
-
-  const columns: TableProps<Lesson>['columns'] = [
-    {
-      title: t('pages.lessons.scheduledAt'),
-      dataIndex: 'scheduled_at',
-      key: 'scheduled_at',
-      render: (_: string, record) => formatDateTime(record.scheduled_at, { timezone: record.timezone }),
-      sorter: (a, b) => dayjsInTimezone(a.scheduled_at, a.timezone).valueOf() - dayjsInTimezone(b.scheduled_at, b.timezone).valueOf(),
-      width: 180,
-    },
-    {
-      title: t('pages.lessons.package'),
-      dataIndex: 'package_title',
-      key: 'package_title',
-      render: (title: string) => title || '-',
-      ellipsis: true,
-    },
-    {
-      title: t('pages.lessons.learner'),
-      dataIndex: 'learner_name',
-      key: 'learner_name',
-      render: (name: string) => name || '-',
-    },
-    {
-      title: t('common.status'),
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => <Tag color={getStatusColor(status)}>{t(`pages.lessons.status.${status}`)}</Tag>,
-      filters: STATUS_OPTIONS.map(option => ({ text: option.label, value: option.value })),
-      onFilter: (value, record) => record.status === value,
-      width: 120,
-    },
-    {
-      title: t('pages.lessons.duration'),
-      dataIndex: 'duration_minutes',
-      key: 'duration_minutes',
-      render: (duration: number) => duration ? `${duration} ${t('pages.lessons.minutes')}` : '-',
-      width: 100,
-    },
-    {
-      title: t('pages.lessons.notes'),
-      dataIndex: 'teacher_notes',
-      key: 'teacher_notes',
-      render: (notes: string) => notes ? notes.substring(0, 40) + (notes.length > 40 ? '...' : '') : '-',
-      ellipsis: true,
-    },
-    {
-      title: t('common.actions'),
-      key: 'actions',
-      width: 150,
-      render: (_, record) => (
-        <Space size="small">
-          <Button type="link" size="small" onClick={() => { setEditingLesson(record); setIsModalOpen(true); }}>{t('common.edit')}</Button>
-          <Button type="link" size="small" danger disabled={!canUseFullActions} onClick={() => handleDelete(record.id)}>{t('common.delete')}</Button>
-        </Space>
-      ),
-    },
-  ];
-
-  const handleTableChange = (pagination: any) => {
-    setCurrentPage(pagination.current || 1);
-    setPageSize(pagination.pageSize || 10);
   };
 
   return (
@@ -361,112 +252,17 @@ const Lessons: React.FC = () => {
       <PageHeader 
         title={t('pages.lessons.title')}
         subtitle={t('pages.lessons.subtitle')}
-        actions={
-          <Space>
-            <Button 
-              icon={<UnorderedListOutlined />} 
-              type={viewMode === 'table' ? 'primary' : 'default'}
-              onClick={() => setViewMode('table')}
-            >
-              {t('pages.lessons.table')}
-            </Button>
-            <Button 
-              icon={<CalendarOutlined />} 
-              type={viewMode === 'calendar' ? 'primary' : 'default'}
-              onClick={() => setViewMode('calendar')}
-            >
-              {t('pages.lessons.calendar')}
-            </Button>
-          </Space>
-        }
       />
 
-      {viewMode === 'table' ? (
-        <>
-          <Space style={{ marginBottom: 16 }} wrap>
-            <Input.Search
-              placeholder={t('pages.lessons.searchPlaceholder')}
-              allowClear
-              onSearch={(value) => {
-                setSearchTerm(value);
-                setCurrentPage(1);
-              }}
-              onChange={(e) => {
-                setSearchTerm(e.target.value);
-                setCurrentPage(1);
-              }}
-              style={{ width: 300 }}
-            />
-            <Select
-              placeholder={t('pages.lessons.filterByStatus')}
-              allowClear
-              style={{ width: 200 }}
-              options={STATUS_OPTIONS}
-              onChange={(value) => {
-                setStatusFilter(value);
-                setCurrentPage(1);
-              }}
-            />
-          </Space>
-
-          <ResponsiveDataView<Lesson>
-            data={data?.items || []}
-            loading={isLoading}
-            columns={columns}
-            rowKey="id"
-            emptyText={t('pages.lessons.noLessons')}
-            emptyDescription={t('pages.lessons.noLessonsDescription')}
-            renderCard={(lesson) => (
-              <LessonCard
-                key={lesson.id}
-                lesson={lesson}
-                timezone={lesson.timezone || DEFAULT_TIMEZONE}
-                onReschedule={(id) => {
-                  const l = data?.items.find((item: Lesson) => item.id === id);
-                  if (l) {
-                    setSelectedLesson(l);
-                    setSelectedLessonId(id);
-                    setIsRescheduleModalOpen(true);
-                  }
-                }}
-                onComplete={handleComplete}
-                onCancel={handleCancel}
-                onDelete={handleDelete}
-                onClick={(id) => {
-                  const l = data?.items.find((item: Lesson) => item.id === id);
-                  if (l) {
-                    setEditingLesson(l);
-                    setIsModalOpen(true);
-                  }
-                }}
-              />
-            )}
-            tableProps={{
-              scroll: { x: 900 },
-              onChange: handleTableChange,
-              bordered: true,
-            }}
-            pagination={{
-              current: currentPage,
-              pageSize: pageSize,
-              total: data?.total,
-              showSizeChanger: true,
-              showQuickJumper: true,
-              showTotal: (total, range) => t('pages.lessons.showTotal', { start: range[0], end: range[1], total }),
-            }}
-          />
-        </>
-      ) : (
-        <CalendarContainer
-          lessons={calendarData?.items || []}
-          timezone={DEFAULT_TIMEZONE}
-          onLessonClick={handleLessonClick}
-          onReschedule={handleReschedule}
-          onComplete={handleComplete}
-          onCancel={handleCancel}
-          onDelete={handleDeleteFromCalendar}
-        />
-      )}
+      <CalendarContainer
+        lessons={calendarData?.items || []}
+        timezone={DEFAULT_TIMEZONE}
+        onLessonClick={handleLessonClick}
+        onReschedule={handleReschedule}
+        onComplete={handleComplete}
+        onCancel={handleCancel}
+        onDelete={handleDeleteFromCalendar}
+      />
 
       <LessonForm
         open={isModalOpen}

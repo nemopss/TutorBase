@@ -15,7 +15,7 @@ import { useResponsive } from '../../hooks/useResponsive';
 import { useLongPress } from '../../hooks/useLongPress';
 import { useCarouselSwipe } from '../../hooks/useCarouselSwipe';
 import { useDragAndDrop } from '../../hooks/useDragAndDrop';
-import TimeScale, { PIXELS_PER_HOUR, TIME_SCALE_WIDTH, TOTAL_HEIGHT } from './TimeScale';
+import TimeScale, { TIME_SCALE_WIDTH } from './TimeScale';
 import LessonContextMenu from './LessonContextMenu';
 import CurrentTimeIndicator from './CurrentTimeIndicator';
 import type { Lesson } from './calendar-types';
@@ -44,29 +44,48 @@ interface WeekCalendarProps {
 // Responsive constants
 const MOBILE_DAY_COUNT = 3;
 const DESKTOP_DAY_COUNT = 7;
+const MOBILE_PIXELS_PER_HOUR = 48;
+const DESKTOP_PIXELS_PER_HOUR = 52;
 
 // Time-based positioning constants
 const MIN_LESSON_HEIGHT = 30; // Minimum height for very short lessons
-const DEFAULT_SCROLL_HOUR = 8; // Default scroll to 08:00
+const DEFAULT_SCROLL_HOUR = 9; // Default scroll to 09:00
+const SCROLL_TOP_PADDING_MINUTES = 45; // Keep some context above the anchor lesson
 
 /**
  * Calculate lesson height based on duration.
  * Height = (duration_minutes / 60) * PIXELS_PER_HOUR
  */
-const getLessonHeight = (duration?: number): number => {
+const getLessonHeight = (duration: number | undefined, pixelsPerHour: number): number => {
   const mins = duration || DEFAULT_DURATION;
-  return Math.max(MIN_LESSON_HEIGHT, (mins / 60) * PIXELS_PER_HOUR);
+  return Math.max(MIN_LESSON_HEIGHT, (mins / 60) * pixelsPerHour);
 };
 
 /**
  * Calculate lesson top position based on scheduled time.
  * Top = (hour * PIXELS_PER_HOUR) + (minutes / 60 * PIXELS_PER_HOUR)
  */
-const getLessonTop = (scheduledAt: string, tz: string): number => {
+const getLessonTop = (scheduledAt: string, tz: string, pixelsPerHour: number): number => {
   const time = dayjs(scheduledAt).tz(tz);
   const hour = time.hour();
   const minutes = time.minute();
-  return (hour * PIXELS_PER_HOUR) + (minutes / 60 * PIXELS_PER_HOUR);
+  return (hour * pixelsPerHour) + (minutes / 60 * pixelsPerHour);
+};
+
+const getTimeTop = (time: Dayjs, pixelsPerHour: number): number => {
+  return (time.hour() * pixelsPerHour) + (time.minute() / 60 * pixelsPerHour);
+};
+
+const getPixelsForMinutes = (minutes: number, pixelsPerHour: number): number => {
+  return (minutes / 60) * pixelsPerHour;
+};
+
+const getScrollTopWithPadding = (
+  top: number,
+  pixelsPerHour: number,
+  paddingMinutes: number = SCROLL_TOP_PADDING_MINUTES,
+): number => {
+  return Math.max(0, top - getPixelsForMinutes(paddingMinutes, pixelsPerHour));
 };
 
 /**
@@ -77,6 +96,8 @@ interface DayColumnProps {
   lessons: Lesson[];
   isToday: boolean;
   isDark: boolean;
+  pixelsPerHour: number;
+  totalHeight: number;
   timezone: string;
   onLessonClick: (lessonId: number) => void;
   onAddLesson?: (date: string) => void;
@@ -108,6 +129,8 @@ const DayColumn: React.FC<DayColumnProps> = ({
   lessons,
   isToday,
   isDark,
+  pixelsPerHour,
+  totalHeight,
   timezone: tz,
   onLessonClick,
   onAddLesson,
@@ -174,7 +197,7 @@ const DayColumn: React.FC<DayColumnProps> = ({
       style={{
         background: getBackground(),
         position: 'relative',
-        height: TOTAL_HEIGHT,
+        height: totalHeight,
         cursor: onAddLesson ? 'pointer' : 'default',
         transition: 'background 0.15s ease',
         border: isDropTarget ? `2px dashed ${themeColors.accentPrimary}` : '2px solid transparent',
@@ -186,7 +209,7 @@ const DayColumn: React.FC<DayColumnProps> = ({
           key={`grid-${hour}`}
           style={{
             position: 'absolute',
-            top: hour * PIXELS_PER_HOUR,
+            top: hour * pixelsPerHour,
             left: 0,
             right: 0,
             borderTop: `1px solid ${themeColors.borderPrimary}`,
@@ -198,6 +221,7 @@ const DayColumn: React.FC<DayColumnProps> = ({
       <CurrentTimeIndicator
         timezone={tz}
         visible={isToday}
+        pixelsPerHour={pixelsPerHour}
       />
 
       {/* Add lesson button - shows on hover */}
@@ -225,10 +249,10 @@ const DayColumn: React.FC<DayColumnProps> = ({
         <div
           style={{
             position: 'absolute',
-            top: (dragPreview.hour * PIXELS_PER_HOUR) + (dragPreview.minute / 60 * PIXELS_PER_HOUR),
+            top: (dragPreview.hour * pixelsPerHour) + (dragPreview.minute / 60 * pixelsPerHour),
             left: 4,
             right: 4,
-            height: Math.max(MIN_LESSON_HEIGHT, (dragPreview.duration / 60) * PIXELS_PER_HOUR),
+            height: Math.max(MIN_LESSON_HEIGHT, (dragPreview.duration / 60) * pixelsPerHour),
             background: `${themeColors.accentPrimary}33`,
             border: `2px dashed ${themeColors.accentPrimary}`,
             borderRadius: 6,
@@ -256,6 +280,7 @@ const DayColumn: React.FC<DayColumnProps> = ({
             key={lesson.id}
             lesson={lesson}
             isDark={isDark}
+            pixelsPerHour={pixelsPerHour}
             timezone={tz}
             onLessonClick={onLessonClick}
             onContextMenu={onContextMenu}
@@ -275,6 +300,7 @@ const DayColumn: React.FC<DayColumnProps> = ({
 interface LessonBlockProps {
   lesson: Lesson;
   isDark: boolean;
+  pixelsPerHour: number;
   timezone: string;
   onLessonClick: (lessonId: number) => void;
   onContextMenu: (lessonId: number, position: { x: number; y: number }) => void;
@@ -289,6 +315,7 @@ interface LessonBlockProps {
 const LessonBlock: React.FC<LessonBlockProps> = ({
   lesson,
   isDark,
+  pixelsPerHour,
   timezone: tz,
   onLessonClick,
   onContextMenu,
@@ -296,7 +323,6 @@ const LessonBlock: React.FC<LessonBlockProps> = ({
   dragHandlers,
   wasDragPerformedRef,
 }) => {
-  const { t } = useTranslation();
   // Track if we're dragging to prevent click
   const isDraggingRef = useRef(false);
   const mouseDownPosRef = useRef<{ x: number; y: number } | null>(null);
@@ -305,9 +331,11 @@ const LessonBlock: React.FC<LessonBlockProps> = ({
   const duration = lesson.duration_minutes || DEFAULT_DURATION;
   const endTime = lessonTime.add(duration, 'minute');
   const colors = statusColors[lesson.status];
-  const statusLabel = t(`calendar.status.${lesson.status}`);
-  const top = getLessonTop(lesson.scheduled_at, tz);
-  const height = getLessonHeight(lesson.duration_minutes);
+  const top = getLessonTop(lesson.scheduled_at, tz, pixelsPerHour);
+  const height = getLessonHeight(lesson.duration_minutes, pixelsPerHour);
+  const learnerName = lesson.learner_name?.trim();
+  const showLearnerName = Boolean(learnerName);
+  const showTimeRow = !showLearnerName || height > 42;
 
   // Track if context menu was opened (to prevent click after right-click)
   const contextMenuOpenedRef = useRef(false);
@@ -466,27 +494,12 @@ const LessonBlock: React.FC<LessonBlockProps> = ({
         }
       }}
     >
-      {/* Time range */}
-      <Text 
-        strong 
-        style={{ 
-          fontSize: 11, 
-          color: isDark ? '#fff' : colors.text,
-          display: 'block',
-          lineHeight: 1.2,
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}
-      >
-        {lessonTime.format('HH:mm')}–{endTime.format('HH:mm')}
-      </Text>
-      {/* Duration - only show if enough space */}
-      {height > 40 && (
-        <Text 
-          style={{ 
-            fontSize: 9, 
-            color: isDark ? 'rgba(255,255,255,0.65)' : 'rgba(0,0,0,0.55)',
+      {showLearnerName && (
+        <Text
+          strong
+          style={{
+            fontSize: 11,
+            color: isDark ? '#fff' : colors.text,
             display: 'block',
             lineHeight: 1.2,
             whiteSpace: 'nowrap',
@@ -494,28 +507,26 @@ const LessonBlock: React.FC<LessonBlockProps> = ({
             textOverflow: 'ellipsis',
           }}
         >
-          {duration} min
+          {learnerName}
         </Text>
       )}
-      {/* Status badge - only show if enough space */}
-      {height > 55 && (
-        <div
+
+      {showTimeRow && (
+        <Text
+          strong={!showLearnerName}
           style={{
-            fontSize: 8,
-            color: isDark ? 'rgba(255,255,255,0.85)' : colors.text,
-            background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(0,0,0,0.05)',
-            padding: '1px 3px',
-            borderRadius: 3,
-            display: 'inline-block',
-            marginTop: 2,
+            fontSize: showLearnerName ? 10 : 11,
+            color: isDark ? (showLearnerName ? 'rgba(255,255,255,0.75)' : '#fff') : colors.text,
+            display: 'block',
+            lineHeight: 1.2,
             whiteSpace: 'nowrap',
             overflow: 'hidden',
             textOverflow: 'ellipsis',
-            maxWidth: '100%',
+            marginTop: showLearnerName ? 1 : 0,
           }}
         >
-          {statusLabel}
-        </div>
+          {lessonTime.format('HH:mm')}–{endTime.format('HH:mm')}
+        </Text>
       )}
     </div>
   );
@@ -539,6 +550,9 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
   const isDark = resolvedTheme.colorScheme === 'dark';
   const colors = resolvedTheme.colors;
   const { isMobile } = useResponsive();
+  const dayCount = isMobile ? MOBILE_DAY_COUNT : DESKTOP_DAY_COUNT;
+  const pixelsPerHour = isMobile ? MOBILE_PIXELS_PER_HOUR : DESKTOP_PIXELS_PER_HOUR;
+  const totalHeight = 24 * pixelsPerHour;
   
   // Translated days of week
   const daysFull = [
@@ -629,11 +643,11 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     const relativeY = y - containerRect.top + scrollTop;
     
     // Adjust for half the lesson height (so we position from center, not top)
-    const halfLessonHeight = (durationMinutes / 60 * PIXELS_PER_HOUR) / 2;
+    const halfLessonHeight = getPixelsForMinutes(durationMinutes, pixelsPerHour) / 2;
     const adjustedY = relativeY - halfLessonHeight;
     
-    // Convert Y to minutes (PIXELS_PER_HOUR = 60px per hour = 1px per minute)
-    const totalMinutes = Math.max(0, Math.min(24 * 60 - 1, adjustedY));
+    // Convert Y to minutes using the current hour scale
+    const totalMinutes = Math.max(0, Math.min(24 * 60 - 1, (adjustedY / pixelsPerHour) * 60));
     
     // Snap to 30-minute intervals
     const snappedMinutes = Math.round(totalMinutes / 30) * 30;
@@ -641,7 +655,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     const minute = snappedMinutes % 60;
     
     return { hour: Math.min(23, hour), minute };
-  }, []);
+  }, [pixelsPerHour]);
 
   // Track original lesson date for same-column detection
   const originalLessonDateRef = useRef<string | null>(null);
@@ -715,9 +729,6 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     return () => document.removeEventListener('mousemove', handleMouseMove);
   }, [dragState.isDragging, dragState.draggedId, calculateTimeFromY, lessons]);
   
-  // Number of days to show based on viewport
-  const dayCount = isMobile ? MOBILE_DAY_COUNT : DESKTOP_DAY_COUNT;
-
   // View start date - for mobile, center on today; for desktop, start of week
   const [viewStart, setViewStart] = useState<Dayjs>(() => {
     const today = dayjs().tz(tz);
@@ -837,43 +848,90 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     return { totalLessons, totalHours: Math.round(totalMinutes / 60 * 10) / 10 };
   }, [lessonsByDay, weekDays]);
 
-  // Calculate initial scroll position (earliest lesson or 08:00)
-  const initialScrollTop = useMemo(() => {
-    let earliestHour = DEFAULT_SCROLL_HOUR;
-    
-    // Find earliest lesson time across all visible days
-    Object.values(lessonsByDay).forEach(dayLessons => {
-      dayLessons.forEach(lesson => {
-        const lessonHour = dayjs(lesson.scheduled_at).tz(tz).hour();
-        if (lessonHour < earliestHour) {
-          earliestHour = lessonHour;
-        }
+  const visibleLessons = useMemo(() => {
+    return weekDays
+      .flatMap(day => lessonsByDay[day.format('YYYY-MM-DD')] || [])
+      .sort((a, b) => dayjs(a.scheduled_at).valueOf() - dayjs(b.scheduled_at).valueOf());
+  }, [lessonsByDay, weekDays]);
+
+  const firstRelevantLesson = useMemo(() => {
+    if (visibleLessons.length === 0) {
+      return null;
+    }
+
+    const now = dayjs().tz(tz);
+    const upcomingVisibleLesson = visibleLessons.find((lesson) =>
+      dayjs(lesson.scheduled_at).tz(tz).isSameOrAfter(now),
+    );
+
+    return upcomingVisibleLesson || visibleLessons[0];
+  }, [visibleLessons, tz]);
+
+  const firstRelevantLessonScrollTop = useMemo(() => {
+    if (!firstRelevantLesson) {
+      return DEFAULT_SCROLL_HOUR * pixelsPerHour;
+    }
+
+    return getScrollTopWithPadding(
+      getLessonTop(firstRelevantLesson.scheduled_at, tz, pixelsPerHour),
+      pixelsPerHour,
+    );
+  }, [firstRelevantLesson, pixelsPerHour, tz]);
+
+  const currentTimeScrollTop = useMemo(() => {
+    return getScrollTopWithPadding(getTimeTop(dayjs().tz(tz), pixelsPerHour), pixelsPerHour);
+  }, [pixelsPerHour, tz]);
+
+  const initialScrollTop = firstRelevantLessonScrollTop;
+
+  const initialScrollKey = useMemo(() => {
+    const rangeKey = `${weekDays[0]?.format('YYYY-MM-DD')}-${weekDays[weekDays.length - 1]?.format('YYYY-MM-DD')}`;
+    const anchorKey = firstRelevantLesson
+      ? `${firstRelevantLesson.id}-${dayjs(firstRelevantLesson.scheduled_at).tz(tz).format()}`
+      : 'default';
+
+    return `${rangeKey}|${anchorKey}`;
+  }, [firstRelevantLesson, tz, weekDays]);
+
+  const autoScrollKeyRef = useRef<string | null>(null);
+
+  const scrollToPosition = useCallback((top: number) => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollTo({
+        top,
+        behavior: 'smooth',
       });
-    });
-    
-    // Scroll to 30 minutes before the earliest hour for padding
-    return Math.max(0, (earliestHour * PIXELS_PER_HOUR) - 30);
-  }, [lessonsByDay, tz]);
+    }
+  }, []);
 
   // Auto-scroll to initial position on mount and when lessons change
   useEffect(() => {
-    if (scrollContainerRef.current) {
+    if (scrollContainerRef.current && autoScrollKeyRef.current !== initialScrollKey) {
       scrollContainerRef.current.scrollTop = initialScrollTop;
+      autoScrollKeyRef.current = initialScrollKey;
     }
-  }, [initialScrollTop]);
+  }, [initialScrollKey, initialScrollTop]);
+
+  const jumpToFirstRelevantLesson = useCallback(() => {
+    scrollToPosition(firstRelevantLessonScrollTop);
+  }, [firstRelevantLessonScrollTop, scrollToPosition]);
+
+  const jumpToCurrentTime = useCallback(() => {
+    scrollToPosition(currentTimeScrollTop);
+  }, [currentTimeScrollTop, scrollToPosition]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 280px)', minHeight: 400 }}>
       {/* Header with navigation */}
       <div style={{
         display: 'flex',
-        alignItems: 'center',
+        alignItems: 'flex-start',
         justifyContent: 'space-between',
         marginBottom: spacing.md,
         flexWrap: 'wrap',
         gap: spacing.sm,
       }}>
-        <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap' }}>
           <Button 
             icon={<LeftOutlined />} 
             onClick={goToPrev}
@@ -894,16 +952,38 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
           >
             {t('calendar.today')}
           </Button>
+          <Button
+            size="small"
+            onClick={jumpToFirstRelevantLesson}
+            disabled={!firstRelevantLesson}
+          >
+            {t('calendar.firstLesson')}
+          </Button>
+          <Button
+            size="small"
+            onClick={jumpToCurrentTime}
+            disabled={!isTodayVisible}
+          >
+            {t('calendar.now')}
+          </Button>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: spacing.md }}>
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            alignItems: 'flex-end',
+            gap: 2,
+            marginLeft: 'auto',
+          }}
+        >
+          <Text strong style={{ fontSize: 14, lineHeight: 1.2 }}>
+            {viewStart.format('MMM D')} – {viewEnd.format('MMM D, YYYY')}
+          </Text>
           {weekStats.totalLessons > 0 && (
-            <Text type="secondary" style={{ fontSize: 12 }}>
+            <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.2 }}>
               {weekStats.totalLessons} {t('calendar.lessons')} • {weekStats.totalHours}{t('calendar.hours')}
             </Text>
           )}
-          <Text strong style={{ fontSize: 14 }}>
-            {viewStart.format('MMM D')} – {viewEnd.format('MMM D, YYYY')}
-          </Text>
         </div>
       </div>
 
@@ -973,7 +1053,10 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
         }}
       >
         {/* Time scale on the left - fixed */}
-        <TimeScale />
+        <TimeScale
+          pixelsPerHour={pixelsPerHour}
+          totalHeight={totalHeight}
+        />
 
         {/* Carousel container for swipe */}
         <div
@@ -985,7 +1068,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
             flex: 1,
             position: 'relative',
             overflow: 'hidden',
-            height: TOTAL_HEIGHT,
+            height: totalHeight,
           }}
         >
           {/* Carousel track with 3 panels */}
@@ -993,7 +1076,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
             style={{
               display: 'flex',
               width: isMobile ? '300%' : '100%',
-              height: TOTAL_HEIGHT,
+              height: totalHeight,
               transform: isMobile 
                 ? swipeHandlers.isAnimating
                   ? `translateX(calc(-33.333% + ${swipeHandlers.animatingTo * -33.333}%))`
@@ -1009,7 +1092,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
                   display: 'grid',
                   gridTemplateColumns: `repeat(${dayCount}, 1fr)`,
                   gap: 1,
-                  height: TOTAL_HEIGHT,
+                  height: totalHeight,
                 }}>
                   {prevWeekDays.map((day, index) => {
                     const dateKey = day.format('YYYY-MM-DD');
@@ -1022,6 +1105,8 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
                         lessons={dayLessons}
                         isToday={isToday}
                         isDark={isDark}
+                        pixelsPerHour={pixelsPerHour}
+                        totalHeight={totalHeight}
                         timezone={tz}
                         onLessonClick={onLessonClick}
                         onAddLesson={onAddLesson}
@@ -1040,7 +1125,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
                 display: 'grid',
                 gridTemplateColumns: `repeat(${dayCount}, 1fr)`,
                 gap: 1,
-                height: TOTAL_HEIGHT,
+                height: totalHeight,
               }}>
                 {weekDays.map((day, index) => {
                   const dateKey = day.format('YYYY-MM-DD');
@@ -1055,6 +1140,8 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
                       lessons={dayLessons}
                       isToday={isToday}
                       isDark={isDark}
+                      pixelsPerHour={pixelsPerHour}
+                      totalHeight={totalHeight}
                       timezone={tz}
                       onLessonClick={onLessonClick}
                       onAddLesson={onAddLesson}
@@ -1078,7 +1165,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
                   display: 'grid',
                   gridTemplateColumns: `repeat(${dayCount}, 1fr)`,
                   gap: 1,
-                  height: TOTAL_HEIGHT,
+                  height: totalHeight,
                 }}>
                   {nextWeekDays.map((day, index) => {
                     const dateKey = day.format('YYYY-MM-DD');
@@ -1091,6 +1178,8 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
                         lessons={dayLessons}
                         isToday={isToday}
                         isDark={isDark}
+                        pixelsPerHour={pixelsPerHour}
+                        totalHeight={totalHeight}
                         timezone={tz}
                         onLessonClick={onLessonClick}
                         onAddLesson={onAddLesson}

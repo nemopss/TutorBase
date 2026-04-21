@@ -48,7 +48,7 @@
     "dashboard": "Главная",
     "learners": "Ученики",
     "packages": "Пакеты",
-    "lessons": "Уроки",
+    "lessons": "Календарь",
     "schedule": "Расписание",
     "settings": "Настройки",
     "finance": "Финансы",
@@ -65,6 +65,8 @@
   },
   "calendar": {
     "today": "Сегодня",
+    "now": "Сейчас",
+    "firstLesson": "Первый урок",
     "week": "Неделя",
     "month": "Месяц",
     "lessons": "уроков",

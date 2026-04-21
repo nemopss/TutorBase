@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import dayjs from 'dayjs';
 import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
-import { PIXELS_PER_HOUR } from './TimeScale';
+import { DEFAULT_PIXELS_PER_HOUR } from './TimeScale';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -12,17 +12,18 @@ interface CurrentTimeIndicatorProps {
   visible: boolean;
   /** Left offset in pixels (for positioning within day column) */
   leftOffset?: number;
+  pixelsPerHour?: number;
 }
 
 /**
  * Calculate indicator top position based on current time.
  * Top = (hour * PIXELS_PER_HOUR) + (minutes / 60 * PIXELS_PER_HOUR)
  */
-const getTimePosition = (tz: string): number => {
+const getTimePosition = (tz: string, pixelsPerHour: number): number => {
   const now = dayjs().tz(tz);
   const hour = now.hour();
   const minutes = now.minute();
-  return (hour * PIXELS_PER_HOUR) + (minutes / 60 * PIXELS_PER_HOUR);
+  return (hour * pixelsPerHour) + (minutes / 60 * pixelsPerHour);
 };
 
 /**
@@ -33,23 +34,24 @@ const CurrentTimeIndicator: React.FC<CurrentTimeIndicatorProps> = ({
   timezone: tz,
   visible,
   leftOffset = 0,
+  pixelsPerHour = DEFAULT_PIXELS_PER_HOUR,
 }) => {
-  const [position, setPosition] = useState(() => getTimePosition(tz));
+  const [position, setPosition] = useState(() => getTimePosition(tz, pixelsPerHour));
 
   // Update position every minute
   useEffect(() => {
     if (!visible) return;
 
     // Update immediately
-    setPosition(getTimePosition(tz));
+    setPosition(getTimePosition(tz, pixelsPerHour));
 
     // Set up interval to update every minute
     const interval = setInterval(() => {
-      setPosition(getTimePosition(tz));
+      setPosition(getTimePosition(tz, pixelsPerHour));
     }, 60000); // 60 seconds
 
     return () => clearInterval(interval);
-  }, [visible, tz]);
+  }, [visible, tz, pixelsPerHour]);
 
   if (!visible) return null;
 
