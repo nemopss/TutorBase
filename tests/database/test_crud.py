@@ -125,6 +125,15 @@ async def test_learners_crud(db_session: AsyncSession, current_tenant: CurrentTe
     assert total == 1
     assert paginated[0].display_name == "Learner One"
 
+    await crud.archive_learner(db_session, current_tenant, learner)
+    archived_only = await crud.fetch_all_learners(db_session, current_tenant, archive_status="archived")
+    active_only = await crud.fetch_all_learners(db_session, current_tenant)
+    all_statuses = await crud.fetch_all_learners(db_session, current_tenant, archive_status="all")
+
+    assert archived_only == [learner]
+    assert active_only == []
+    assert all_statuses == [learner]
+
 
 @pytest.mark.asyncio
 async def test_template_crud(db_session: AsyncSession, current_tenant: CurrentTenant):

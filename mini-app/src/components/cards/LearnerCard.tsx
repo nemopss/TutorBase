@@ -12,6 +12,8 @@ import {
   StopOutlined,
   DisconnectOutlined,
   LinkOutlined,
+  InboxOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
@@ -26,6 +28,7 @@ interface Learner {
   notifications_enabled: boolean;
   chat_id: number | null;
   next_lesson_date?: string | null;
+  is_archived?: boolean;
 }
 
 interface LearnerCardProps {
@@ -35,6 +38,8 @@ interface LearnerCardProps {
   onDelete?: (learnerId: number) => void;
   onCreateInvite?: (learner: Learner) => void;
   onUnlinkAccount?: (learner: Learner) => void;
+  onArchive?: (learner: Learner) => void;
+  onRestore?: (learner: Learner) => void;
   onClick?: (learner: Learner) => void;
   isToggling?: boolean;
 }
@@ -46,6 +51,8 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
   onDelete,
   onCreateInvite,
   onUnlinkAccount,
+  onArchive,
+  onRestore,
   onClick,
   isToggling = false,
 }) => {
@@ -73,16 +80,27 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
       label: t('common.copyChatId'),
       disabled: !learner.chat_id,
     },
-    ...(!learner.chat_id && onCreateInvite ? [{
+    ...(!learner.is_archived && !learner.chat_id && onCreateInvite ? [{
       key: 'createInvite',
       icon: <LinkOutlined />,
       label: t('learnerProfile.createInviteAction'),
     }] : []),
-    ...(learner.chat_id && onUnlinkAccount ? [{
+    ...(!learner.is_archived && learner.chat_id && onUnlinkAccount ? [{
       key: 'unlinkAccount',
       icon: <DisconnectOutlined />,
       label: t('learnerProfile.unlinkAccountAction'),
       danger: true,
+    }] : []),
+    ...(!learner.is_archived && onArchive ? [{
+      key: 'archive',
+      icon: <InboxOutlined />,
+      label: t('pages.learners.archiveAction', { defaultValue: 'Архивировать' }),
+      danger: true,
+    }] : []),
+    ...(learner.is_archived && onRestore ? [{
+      key: 'restore',
+      icon: <RollbackOutlined />,
+      label: t('pages.learners.restoreAction', { defaultValue: 'Вернуть из архива' }),
     }] : []),
     ...(onDelete ? [{
       key: 'delete',
@@ -110,6 +128,12 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
       case 'unlinkAccount':
         if (onUnlinkAccount) onUnlinkAccount(learner);
         break;
+      case 'archive':
+        if (onArchive) onArchive(learner);
+        break;
+      case 'restore':
+        if (onRestore) onRestore(learner);
+        break;
     }
   };
 
@@ -121,7 +145,7 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
 
   const handleNotificationClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isToggling) {
+    if (!isToggling && !learner.is_archived) {
       onNotificationToggle(learner.id, learner.notifications_enabled);
     }
   };
@@ -207,7 +231,9 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
         alignItems: 'center',
       }}>
         <Tooltip 
-          title={learner.notifications_enabled 
+          title={learner.is_archived
+            ? t('pages.learners.archivedNotificationsOff', { defaultValue: 'У архивного ученика уведомления отключены' })
+            : learner.notifications_enabled
             ? t('pages.learners.notificationsOn') 
             : t('pages.learners.notificationsOff')
           }
@@ -216,7 +242,7 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
             onClick={handleNotificationClick}
             style={{
               padding: 6,
-              cursor: isToggling ? 'wait' : 'pointer',
+              cursor: isToggling ? 'wait' : learner.is_archived ? 'not-allowed' : 'pointer',
               borderRadius: 4,
               display: 'flex',
               alignItems: 'center',

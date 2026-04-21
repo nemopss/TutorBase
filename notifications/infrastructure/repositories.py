@@ -212,16 +212,22 @@ class SqlAlchemyAudienceResolver:
 
     async def _learner_ids_for_all(self) -> set[int]:
         result = await self._session.execute(
-            select(Learner.id).where(Learner.tenant_id == self._tenant_id)
+            select(Learner.id).where(
+                Learner.tenant_id == self._tenant_id,
+                Learner.archived_at.is_(None),
+            )
         )
         return set(result.scalars())
 
     async def _learner_ids_for_group(self, group_id: int) -> set[int]:
         result = await self._session.execute(
-            select(GroupMember.learner_id).where(
+            select(GroupMember.learner_id)
+            .join(Learner, Learner.id == GroupMember.learner_id)
+            .where(
                 GroupMember.tenant_id == self._tenant_id,
                 GroupMember.group_id == group_id,
                 GroupMember.status == "active",
+                Learner.archived_at.is_(None),
             )
         )
         return set(result.scalars())
@@ -973,6 +979,42 @@ class SqlAlchemyNotificationInstanceRepository:
         )
         return int(result.rowcount or 0)
 
+    async def cancel_future_instances_for_learners(
+        self,
+        *,
+        learner_ids: tuple[int, ...],
+        reason: str,
+    ) -> int:
+        unique_learner_ids = tuple(sorted(set(learner_ids)))
+        if not unique_learner_ids:
+            return 0
+
+        now = self._now_factory()
+        result = await self._session.execute(
+            update(NotificationInstance)
+            .where(
+                NotificationInstance.tenant_id == self._tenant_id,
+                NotificationInstance.learner_id.in_(unique_learner_ids),
+                NotificationInstance.status.in_(
+                    (
+                        InstanceStatus.SHADOW.value,
+                        InstanceStatus.SCHEDULED.value,
+                        InstanceStatus.SKIPPED.value,
+                        InstanceStatus.SUPPRESSED.value,
+                    )
+                ),
+            )
+            .values(
+                status=InstanceStatus.CANCELLED.value,
+                status_reason=reason,
+                delivery_enabled=False,
+                processing_started_at=None,
+                processing_expires_at=None,
+                updated_at=now,
+            )
+        )
+        return int(result.rowcount or 0)
+
     async def cancel_future_instances_for_rules(
         self,
         *,
@@ -1170,6 +1212,7 @@ class SqlAlchemyNotificationInstanceRepository:
             .where(
                 Learner.tenant_id == self._tenant_id,
                 Learner.id.in_(learner_ids),
+                Learner.archived_at.is_(None),
                 BotUser.chat_id.is_not(None),
             )
         )
@@ -1767,6 +1810,7 @@ class SqlAlchemyNotificationSettingsRepository:
             )
             .where(
                 Learner.tenant_id == self._tenant_id,
+                Learner.archived_at.is_(None),
             )
             .order_by(Learner.display_name, Learner.id)
         )
@@ -2030,6 +2074,11 @@ def _due_instances_for_claim_stmt(tenant_id: int, *, now: datetime, limit: int):
             NotificationInstance.delivery_enabled.is_(True),
             NotificationInstance.effective_scheduled_for <= now,
             ~exists().where(NotificationResponse.notification_instance_id == NotificationInstance.id),
+            exists().where(
+                Learner.id == NotificationInstance.learner_id,
+                Learner.tenant_id == tenant_id,
+                Learner.archived_at.is_(None),
+            ),
         )
         .order_by(NotificationInstance.effective_scheduled_for, NotificationInstance.id)
         .limit(limit)
@@ -2244,6 +2293,7 @@ def _learner_recipients_stmt(tenant_id: int, learner_ids: tuple[int, ...]):
         .where(
             Learner.tenant_id == tenant_id,
             Learner.id.in_(learner_ids),
+            Learner.archived_at.is_(None),
         )
         .order_by(Learner.display_name, Learner.id)
     )

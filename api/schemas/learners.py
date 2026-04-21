@@ -53,6 +53,8 @@ class LearnerResponse(BaseResponse, TimestampMixin, TenantMixin):
     notes: Optional[str] = Field(None, max_length=5000, description="Teacher notes")
     lesson_rate: Optional[float] = Field(None, description="Individual lesson rate")
     next_lesson_date: Optional[datetime] = Field(None, description="ISO datetime of the nearest scheduled lesson")
+    archived_at: Optional[datetime] = Field(None, description="When the learner was archived")
+    is_archived: bool = Field(default=False, description="Whether the learner is archived")
 
 
 class StudentLearnerResponse(BaseResponse):
@@ -91,6 +93,8 @@ class LearnerDetailResponse(BaseResponse):
     lesson_rate: Optional[float] = Field(None, description="Individual lesson rate")
     next_lesson_date: Optional[datetime] = Field(None, description="ISO datetime of the nearest scheduled lesson")
     first_package_date: Optional[datetime] = Field(None, description="Date when the first package was created")
+    archived_at: Optional[datetime] = Field(None, description="When the learner was archived")
+    is_archived: bool = Field(default=False, description="Whether the learner is archived")
 
 
 class LearnerListResponse(BaseResponse):

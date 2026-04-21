@@ -63,6 +63,7 @@ async def create_learner(
     notes: Optional[str] = None,
     chat_id: Optional[int] = None,
     notifications_enabled: bool = True,
+    archived_at: Optional[datetime] = None,
     tenant_id: int = 1,
 ) -> Learner:
     bot_user = await create_bot_user(session, chat_id=chat_id)
@@ -73,6 +74,7 @@ async def create_learner(
         display_name=display_name or f"Learner {suffix}",
         notes=notes,
         notifications_enabled=notifications_enabled,
+        archived_at=archived_at,
         created_at=now,
         tenant_id=tenant_id,
     )

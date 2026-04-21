@@ -27,6 +27,8 @@ interface Learner {
   notes?: string;
   lesson_rate?: number;
   next_lesson_date?: string | null;
+  archived_at?: string | null;
+  is_archived?: boolean;
 }
 
 interface LearnerListResponse {
@@ -38,8 +40,10 @@ interface InviteTokenResponse {
 }
 
 // --- API Fetchers --- //
-const fetchLearners = async (): Promise<LearnerListResponse> => {
-  const { data } = await api.get('/learners');
+type LearnerStatusView = 'active' | 'archived';
+
+const fetchLearners = async (status: LearnerStatusView): Promise<LearnerListResponse> => {
+  const { data } = await api.get('/learners', { params: { status } });
   return data;
 };
 
@@ -66,8 +70,14 @@ const updateNotifications = async ({ learnerId, enabled }: { learnerId: number; 
   return data;
 };
 
-const deleteLearner = async (learnerId: number) => {
-  await api.delete(`/learners/${learnerId}`);
+const archiveLearner = async (learnerId: number) => {
+  const { data } = await api.post(`/learners/${learnerId}/archive`);
+  return data;
+};
+
+const restoreLearner = async (learnerId: number) => {
+  const { data } = await api.post(`/learners/${learnerId}/restore`);
+  return data;
 };
 
 const unlinkLearnerAccount = async (learnerId: number) => {
@@ -96,11 +106,10 @@ const Learners: React.FC = () => {
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [editingLearner, setEditingLearner] = useState<Learner | null>(null);
-  const [deleteModalOpen, setDeleteModalOpen] = useState(false);
-  const [learnerToDelete, setLearnerToDelete] = useState<Learner | null>(null);
   const [unlinkModalOpen, setUnlinkModalOpen] = useState(false);
   const [learnerToUnlink, setLearnerToUnlink] = useState<Learner | null>(null);
   const [createdInvite, setCreatedInvite] = useState<{ learner: Learner; token: string } | null>(null);
+  const [statusView, setStatusView] = useState<LearnerStatusView>('active');
   
   // Search state
   const [searchQuery, setSearchQuery] = useState('');
@@ -110,8 +119,8 @@ const Learners: React.FC = () => {
   const [togglingLearnerId, setTogglingLearnerId] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery<LearnerListResponse, Error>({
-    queryKey: ['learners'],
-    queryFn: fetchLearners,
+    queryKey: ['learners', statusView],
+    queryFn: () => fetchLearners(statusView),
   });
 
   const createMutation = useMutation({
@@ -157,17 +166,27 @@ const Learners: React.FC = () => {
     },
   });
 
-  const deleteMutation = useMutation({
-    mutationFn: deleteLearner,
+  const archiveMutation = useMutation({
+    mutationFn: archiveLearner,
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
-      message.success(t('pages.learners.deleteSuccess'));
-      setDeleteModalOpen(false);
-      setLearnerToDelete(null);
+      message.success(t('pages.learners.archiveSuccess', { defaultValue: 'Ученик перемещён в архив' }));
     },
     onError: (error: Error) => {
-      message.error(t('errors.deleteFailed', { message: error.message }));
+      message.error(t('errors.updateFailed', { message: error.message }));
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: restoreLearner,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learners'] });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      message.success(t('pages.learners.restoreSuccess', { defaultValue: 'Ученик возвращён в активные' }));
+    },
+    onError: (error: Error) => {
+      message.error(t('errors.updateFailed', { message: error.message }));
     },
   });
 
@@ -205,9 +224,12 @@ const Learners: React.FC = () => {
   // Filter and sort learners
   const filteredLearners = useMemo(() => {
     const learners = data?.items || [];
+    const scopedLearners = learners.filter((learner) =>
+      statusView === 'archived' ? learner.is_archived === true : learner.is_archived !== true
+    );
     
     // Sort alphabetically by display_name
-    const sorted = [...learners].sort((a, b) => 
+    const sorted = [...scopedLearners].sort((a, b) =>
       a.display_name.localeCompare(b.display_name, undefined, { sensitivity: 'base' })
     );
     
@@ -220,7 +242,7 @@ const Learners: React.FC = () => {
     return sorted.filter(learner => 
       learner.display_name.toLowerCase().includes(query)
     );
-  }, [data?.items, debouncedSearch]);
+  }, [data?.items, debouncedSearch, statusView]);
 
   const handleNotificationToggle = (learnerId: number, currentValue: boolean) => {
     setTogglingLearnerId(learnerId);
@@ -255,28 +277,6 @@ const Learners: React.FC = () => {
     });
   };
 
-  const handleDelete = (learnerId: number) => {
-    if (!canUseFullActions) {
-      message.warning('Удаление учеников недоступно в grace-периоде.');
-      return;
-    }
-    const learner = filteredLearners.find(l => l.id === learnerId);
-    if (learner) {
-      setLearnerToDelete(learner);
-      setDeleteModalOpen(true);
-    }
-  };
-
-  const confirmDelete = () => {
-    if (!canUseFullActions) {
-      message.warning('Удаление учеников недоступно в grace-периоде.');
-      return;
-    }
-    if (learnerToDelete) {
-      deleteMutation.mutate(learnerToDelete.id);
-    }
-  };
-
   const handleCreateInvite = (learner: Learner) => {
     if (!canUseFullActions) {
       message.warning('Создание инвайта недоступно в grace-периоде.');
@@ -292,6 +292,22 @@ const Learners: React.FC = () => {
     }
     setLearnerToUnlink(learner);
     setUnlinkModalOpen(true);
+  };
+
+  const handleArchive = (learner: Learner) => {
+    if (!canUseFullActions) {
+      message.warning('Архивация учеников недоступна в grace-периоде.');
+      return;
+    }
+    archiveMutation.mutate(learner.id);
+  };
+
+  const handleRestore = (learner: Learner) => {
+    if (!canUseFullActions) {
+      message.warning('Возврат учеников из архива недоступен в grace-периоде.');
+      return;
+    }
+    restoreMutation.mutate(learner.id);
   };
 
   const confirmUnlinkAccount = () => {
@@ -312,6 +328,7 @@ const Learners: React.FC = () => {
   const hasLearners = (data?.items?.length || 0) > 0;
   const hasFilteredResults = filteredLearners.length > 0;
   const isSearching = debouncedSearch.trim().length > 0;
+  const isArchiveView = statusView === 'archived';
 
   return (
     <div>
@@ -330,6 +347,75 @@ const Learners: React.FC = () => {
         />
       )}
 
+      <div
+        role="tablist"
+        aria-label={t('pages.learners.title')}
+        style={{
+          position: 'relative',
+          display: 'inline-grid',
+          gridTemplateColumns: '1fr 1fr',
+          minWidth: 220,
+          height: 40,
+          padding: 4,
+          marginBottom: spacing.md,
+          borderRadius: 8,
+          border: `1px solid ${resolvedTheme.colors.borderPrimary}`,
+          background: resolvedTheme.colors.bgSecondary,
+          overflow: 'hidden',
+        }}
+      >
+        <span
+          aria-hidden="true"
+          style={{
+            position: 'absolute',
+            top: 4,
+            bottom: 4,
+            left: 4,
+            width: 'calc(50% - 4px)',
+            borderRadius: 6,
+            background: resolvedTheme.colors.bgPrimary,
+            boxShadow: isDark ? '0 1px 4px rgba(0,0,0,0.28)' : '0 1px 4px rgba(0,0,0,0.12)',
+            transform: statusView === 'archived' ? 'translateX(100%)' : 'translateX(0)',
+            transition: 'transform 180ms ease',
+          }}
+        />
+        {[
+          { label: t('pages.learners.activeTab', { defaultValue: 'Активные' }), value: 'active' as const },
+          { label: t('pages.learners.archivedTab', { defaultValue: 'Архив' }), value: 'archived' as const },
+        ].map((option) => {
+          const selected = statusView === option.value;
+          return (
+            <button
+              key={option.value}
+              type="button"
+              role="tab"
+              aria-selected={selected}
+              onClick={() => setStatusView(option.value)}
+              style={{
+                position: 'relative',
+                zIndex: 1,
+                minWidth: 0,
+                height: 32,
+                padding: `0 ${spacing.sm}`,
+                border: 0,
+                borderRadius: 6,
+                background: 'transparent',
+                color: selected ? resolvedTheme.colors.textPrimary : resolvedTheme.colors.textSecondary,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                font: 'inherit',
+                fontWeight: selected ? 600 : 400,
+                lineHeight: 1,
+                cursor: 'pointer',
+              }}
+            >
+              {option.label}
+            </button>
+          );
+        })}
+      </div>
+
       {/* Search input - only show when there are learners */}
       {hasLearners && (
         <Input
@@ -346,7 +432,7 @@ const Learners: React.FC = () => {
       {isLoading && <LearnerGrid loading />}
 
       {/* Empty state - no learners at all */}
-      {!isLoading && !hasLearners && (
+      {!isLoading && !hasLearners && !isArchiveView && (
         <LearnerGrid>
           <Card
             hoverable={canUseFullActions}
@@ -372,6 +458,10 @@ const Learners: React.FC = () => {
         </LearnerGrid>
       )}
 
+      {!isLoading && !hasLearners && isArchiveView && (
+        <EmptyState title={t('pages.learners.noArchivedLearners', { defaultValue: 'В архиве пока нет учеников' })} />
+      )}
+
       {/* Empty search results */}
       {!isLoading && hasLearners && isSearching && !hasFilteredResults && (
         <EmptyState
@@ -390,9 +480,10 @@ const Learners: React.FC = () => {
               learner={learner}
               onNotificationToggle={handleNotificationToggle}
               onEdit={handleEdit}
-              onDelete={handleDelete}
               onCreateInvite={handleCreateInvite}
               onUnlinkAccount={handleUnlinkAccount}
+              onArchive={handleArchive}
+              onRestore={handleRestore}
               onClick={handleCardClick}
               isToggling={togglingLearnerId === learner.id && notificationsMutation.isPending}
             />
@@ -401,7 +492,7 @@ const Learners: React.FC = () => {
       )}
 
       {/* FAB - only show when there are learners */}
-      {hasLearners && canUseFullActions && (
+      {hasLearners && !isArchiveView && canUseFullActions && (
         <FloatingActionButton
           icon={<PlusOutlined />}
           onClick={() => setIsCreateModalOpen(true)}
@@ -439,22 +530,6 @@ const Learners: React.FC = () => {
           lesson_rate: editingLearner.lesson_rate,
         } : undefined}
       />
-
-      {/* Delete Confirmation Modal */}
-      <Modal
-        open={deleteModalOpen}
-        title={t('pages.learners.deleteTitle')}
-        onCancel={() => { setDeleteModalOpen(false); setLearnerToDelete(null); }}
-        onOk={confirmDelete}
-        okText={t('common.delete')}
-        cancelText={t('common.cancel')}
-        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
-        cancelButtonProps={{ disabled: deleteMutation.isPending }}
-      >
-        <p>{t('pages.learners.deleteConfirm', { name: learnerToDelete?.display_name })}</p>
-        <p style={{ color: '#ff4d4f' }}>{t('pages.learners.deleteWarning')}</p>
-        <p style={{ color: '#8c8c8c' }}>{t('pages.learners.deleteIrreversible')}</p>
-      </Modal>
 
       <Modal
         open={unlinkModalOpen}

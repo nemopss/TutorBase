@@ -22,7 +22,6 @@ import {
 import {
   ArrowLeftOutlined,
   EditOutlined,
-  DeleteOutlined,
   MoreOutlined,
   BellOutlined,
   CalendarOutlined,
@@ -30,6 +29,8 @@ import {
   DollarOutlined,
   DisconnectOutlined,
   LinkOutlined,
+  InboxOutlined,
+  RollbackOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
@@ -59,6 +60,8 @@ interface LearnerDetail {
   lesson_rate: number | null;
   next_lesson_date: string | null;
   first_package_date: string | null;
+  archived_at?: string | null;
+  is_archived?: boolean;
 }
 
 interface Package {
@@ -156,7 +159,7 @@ const LearnerProfile: React.FC = () => {
   // State
   const [activeTab, setActiveTab] = useState('overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
-  const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
+  const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
   const [isOneOffLessonModalOpen, setIsOneOffLessonModalOpen] = useState(false);
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
@@ -313,18 +316,36 @@ const LearnerProfile: React.FC = () => {
     },
   });
 
-  // Delete learner mutation
-  const deleteMutation = useMutation({
+  const archiveMutation = useMutation({
     mutationFn: async () => {
-      await api.delete(`/learners/${learnerId}`);
+      const { data } = await api.post(`/learners/${learnerId}/archive`);
+      return data;
     },
     onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
       queryClient.invalidateQueries({ queryKey: ['learners'] });
-      message.success(t('pages.learners.deleteSuccess'));
-      navigate('/learners');
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      message.success(t('pages.learners.archiveSuccess', { defaultValue: 'Ученик перемещён в архив' }));
+      setIsArchiveModalOpen(false);
     },
     onError: (err: Error) => {
-      message.error(t('errors.deleteFailed', { message: err.message }));
+      message.error(t('errors.updateFailed', { message: err.message }));
+    },
+  });
+
+  const restoreMutation = useMutation({
+    mutationFn: async () => {
+      const { data } = await api.post(`/learners/${learnerId}/restore`);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learners'] });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      message.success(t('pages.learners.restoreSuccess', { defaultValue: 'Ученик возвращён в активные' }));
+    },
+    onError: (err: Error) => {
+      message.error(t('errors.updateFailed', { message: err.message }));
     },
   });
 
@@ -498,13 +519,20 @@ const LearnerProfile: React.FC = () => {
   };
 
   const menuItems = canUseFullActions ? [
-    {
-      key: 'delete',
-      label: t('common.delete'),
-      icon: <DeleteOutlined />,
-      danger: true,
-      onClick: () => setIsDeleteModalOpen(true),
-    },
+    learner?.is_archived
+      ? {
+          key: 'restore',
+          label: t('pages.learners.restoreAction', { defaultValue: 'Вернуть из архива' }),
+          icon: <RollbackOutlined />,
+          onClick: () => restoreMutation.mutate(),
+        }
+      : {
+          key: 'archive',
+          label: t('pages.learners.archiveAction', { defaultValue: 'Архивировать' }),
+          icon: <InboxOutlined />,
+          danger: true,
+          onClick: () => setIsArchiveModalOpen(true),
+        },
   ] : [];
 
   if (isLoading) {
@@ -628,6 +656,7 @@ const LearnerProfile: React.FC = () => {
                       checked={learner.notifications_enabled}
                       onChange={(checked) => notificationsMutation.mutate(checked)}
                       loading={notificationsMutation.isPending}
+                      disabled={learner.is_archived}
                     />
                   </div>
                 </Card>
@@ -913,25 +942,38 @@ const LearnerProfile: React.FC = () => {
         }}
       />
 
-      {/* Delete Confirmation Modal */}
+      {/* Archive Confirmation Modal */}
       <Modal
-        open={isDeleteModalOpen}
-        title={t('pages.learners.deleteTitle')}
-        onCancel={() => setIsDeleteModalOpen(false)}
+        open={isArchiveModalOpen}
+        title={t('pages.learners.archiveTitle', { defaultValue: 'Архивировать ученика' })}
+        onCancel={() => setIsArchiveModalOpen(false)}
         onOk={() => {
           if (!canUseFullActions) {
-            message.warning('Удаление ученика недоступно в grace-периоде.');
+            message.warning('Архивация ученика недоступна в grace-периоде.');
             return;
           }
-          deleteMutation.mutate();
+          archiveMutation.mutate();
         }}
-        okText={t('common.delete')}
+        okText={t('pages.learners.archiveAction', { defaultValue: 'Архивировать' })}
         cancelText={t('common.cancel')}
-        okButtonProps={{ danger: true, loading: deleteMutation.isPending }}
+        okButtonProps={{ danger: true, loading: archiveMutation.isPending }}
       >
-        <p>{t('pages.learners.deleteConfirm', { name: learner.display_name })}</p>
-        <p style={{ color: '#ff4d4f' }}>{t('pages.learners.deleteWarning')}</p>
-        <p style={{ color: '#8c8c8c' }}>{t('pages.learners.deleteIrreversible')}</p>
+        <p>
+          {t('pages.learners.archiveConfirm', {
+            name: learner.display_name,
+            defaultValue: `Архивировать ученика ${learner.display_name}?`,
+          })}
+        </p>
+        <p style={{ color: '#ff4d4f' }}>
+          {t('pages.learners.archiveWarning', {
+            defaultValue: 'Ученик будет скрыт из активных списков, а уведомления отключатся.',
+          })}
+        </p>
+        <p style={{ color: '#8c8c8c' }}>
+          {t('pages.learners.archiveKeepsHistory', {
+            defaultValue: 'История уроков, пакетов и финансов сохранится.',
+          })}
+        </p>
       </Modal>
 
       {/* Unlink Telegram Account Modal */}

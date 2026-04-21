@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -27,6 +29,36 @@ async def test_list_learners(client: AsyncClient, db_session: AsyncSession, curr
     data = response.json()
     assert data["items"][0]["display_name"] == learner.display_name
     assert data["items"][0]["chat_id"] == learner.bot_user.chat_id
+    assert data["items"][0]["is_archived"] is False
+
+
+@pytest.mark.asyncio
+async def test_list_learners_defaults_to_active_and_can_show_archive(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    active = await factories.create_learner(db_session, display_name="Active Student")
+    archived = await factories.create_learner(
+        db_session,
+        display_name="Archived Student",
+        archived_at=datetime.now(timezone.utc),
+        notifications_enabled=False,
+    )
+    await db_session.commit()
+
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+    active_response = await client.get("/api/v1/learners", headers=headers)
+    archived_response = await client.get("/api/v1/learners", params={"status": "archived"}, headers=headers)
+    all_response = await client.get("/api/v1/learners", params={"status": "all"}, headers=headers)
+
+    assert active_response.status_code == 200
+    assert [item["id"] for item in active_response.json()["items"]] == [active.id]
+    assert archived_response.status_code == 200
+    assert [item["id"] for item in archived_response.json()["items"]] == [archived.id]
+    assert archived_response.json()["items"][0]["is_archived"] is True
+    assert all_response.status_code == 200
+    assert {item["id"] for item in all_response.json()["items"]} == {active.id, archived.id}
 
 
 @pytest.mark.asyncio
@@ -161,3 +193,37 @@ async def test_update_learner_notifications_not_found(client: AsyncClient, db_se
         headers=headers,
     )
     assert response.status_code == 404
+
+
+@pytest.mark.asyncio
+async def test_archive_learner_disables_notifications_and_restore_keeps_them_disabled(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session, notifications_enabled=True)
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    archive_response = await client.post(f"/api/v1/learners/{learner.id}/archive", headers=headers)
+
+    assert archive_response.status_code == 200
+    archive_body = archive_response.json()
+    assert archive_body["is_archived"] is True
+    assert archive_body["archived_at"] is not None
+    assert archive_body["notifications_enabled"] is False
+
+    enable_response = await client.patch(
+        f"/api/v1/learners/{learner.id}/notifications",
+        json={"notifications_enabled": True},
+        headers=headers,
+    )
+    assert enable_response.status_code == 409
+
+    restore_response = await client.post(f"/api/v1/learners/{learner.id}/restore", headers=headers)
+
+    assert restore_response.status_code == 200
+    restore_body = restore_response.json()
+    assert restore_body["is_archived"] is False
+    assert restore_body["archived_at"] is None
+    assert restore_body["notifications_enabled"] is False

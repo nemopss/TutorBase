@@ -570,6 +570,7 @@ async def fetch_learners_paginated(
     *,
     limit: int,
     offset: int,
+    archive_status: str = "active",
 ) -> tuple[list[Learner], int]:
     """Fetch learners with pagination and tenant filtering.
     
@@ -593,11 +594,13 @@ async def fetch_learners_paginated(
     # - Super-admins in switched context (tenant_id=X): filter by that tenant
     if current_tenant.tenant_id is not None:
         base_query = base_query.where(Learner.tenant_id == current_tenant.tenant_id)
+    base_query = _apply_learner_archive_filter(base_query, archive_status)
 
     # Count query - use select(func.count()) for correct counting
     count_query = select(func.count()).select_from(Learner)
     if current_tenant.tenant_id is not None:
         count_query = count_query.where(Learner.tenant_id == current_tenant.tenant_id)
+    count_query = _apply_learner_archive_filter(count_query, archive_status)
     
     total = (await session.execute(count_query)).scalar_one()
 
@@ -871,6 +874,37 @@ async def update_learner(
     return learner
 
 
+async def archive_learner(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    learner: Learner,
+    *,
+    archived_at: datetime | None = None,
+) -> Learner:
+    """Soft-archive learner without deleting packages, lessons, or payments."""
+    if not current_tenant.is_super_admin and learner.tenant_id != current_tenant.tenant_id:
+        raise ValueError(f"Learner {learner.id} does not belong to tenant {current_tenant.tenant_id}")
+
+    learner.archived_at = archived_at or datetime.now(timezone.utc)
+    learner.notifications_enabled = False
+    session.add(learner)
+    return learner
+
+
+async def restore_learner(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    learner: Learner,
+) -> Learner:
+    """Restore a softly archived learner to active lists."""
+    if not current_tenant.is_super_admin and learner.tenant_id != current_tenant.tenant_id:
+        raise ValueError(f"Learner {learner.id} does not belong to tenant {current_tenant.tenant_id}")
+
+    learner.archived_at = None
+    session.add(learner)
+    return learner
+
+
 async def delete_learner(session: AsyncSession, current_tenant: CurrentTenant, learner: Learner) -> None:
     """Delete learner with tenant validation.
     
@@ -892,7 +926,12 @@ async def delete_learner(session: AsyncSession, current_tenant: CurrentTenant, l
     await session.delete(learner)
 
 
-async def fetch_all_learners(session: AsyncSession, current_tenant: CurrentTenant) -> list[Learner]:
+async def fetch_all_learners(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    archive_status: str = "active",
+) -> list[Learner]:
     """Fetch all learners with tenant filtering.
     
     Eager loads bot_user relationship and orders by display name.
@@ -911,9 +950,20 @@ async def fetch_all_learners(session: AsyncSession, current_tenant: CurrentTenan
     )
     if current_tenant.tenant_id is not None:
         stmt = stmt.where(Learner.tenant_id == current_tenant.tenant_id)
+    stmt = _apply_learner_archive_filter(stmt, archive_status)
 
     result = await session.execute(stmt)
     return result.scalars().all()
+
+
+def _apply_learner_archive_filter(stmt, archive_status: str):
+    if archive_status == "active":
+        return stmt.where(Learner.archived_at.is_(None))
+    if archive_status == "archived":
+        return stmt.where(Learner.archived_at.is_not(None))
+    if archive_status == "all":
+        return stmt
+    raise ValueError(f"Unsupported learner archive status: {archive_status}")
 
 
 async def create_learner_from_chat_id(
