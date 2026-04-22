@@ -149,6 +149,20 @@
           "lessons": "Lessons"
         }
       },
+      "level3": {
+        "historyUnavailable": "Historical load is unavailable right now",
+        "heatmap": {
+          "title": "Lesson load heatmap",
+          "empty": "There are no lessons in this period yet",
+          "tooltipHours": "{{hours}} h · {{lessons}} lessons"
+        },
+        "weeklyLoad": {
+          "title": "Weekly load",
+          "empty": "There are no lessons in the recent weeks yet",
+          "hoursLabel": "{{hours}} h",
+          "lessonsLabel": "{{count}} lessons"
+        }
+      },
       "onboarding": {
         "title": "Set Up Your Workspace",
         "description": "Complete the first steps to start managing learners without manual setup.",

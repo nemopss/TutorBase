@@ -26,6 +26,8 @@ import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import DashboardMiniWeekCalendar from '../components/dashboard/DashboardMiniWeekCalendar';
+import DashboardLessonLoadHeatmap from '../components/dashboard/DashboardLessonLoadHeatmap';
+import DashboardWeeklyLoad from '../components/dashboard/DashboardWeeklyLoad';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 import { useResponsive } from '../hooks/useResponsive';
 import { useTheme } from '../theme/ThemeProvider';
@@ -111,6 +113,31 @@ interface DashboardAttentionDismissal {
   dismissed_until: string;
   created_at: string;
   updated_at: string;
+}
+
+interface DashboardHistoryDayPoint {
+  date: string;
+  hours: number;
+  lessons_count: number;
+}
+
+interface DashboardHistoryWeekPoint {
+  week_start: string;
+  hours: number;
+  lessons_count: number;
+}
+
+interface DashboardHistoryResponse {
+  heatmap: {
+    from_date: string;
+    to_date: string;
+    days: DashboardHistoryDayPoint[];
+  };
+  weekly_load: {
+    from_date: string;
+    to_date: string;
+    weeks: DashboardHistoryWeekPoint[];
+  };
 }
 
 interface LearnerListResponse {
@@ -230,6 +257,11 @@ const dismissDashboardAttentionItem = async (payload: {
   return data;
 };
 
+const fetchDashboardHistory = async (): Promise<DashboardHistoryResponse> => {
+  const { data } = await api.get('/metrics/dashboard-history');
+  return data;
+};
+
 const fetchLessonsSummary = async (): Promise<LessonListResponse> => {
   const { data } = await api.get('/lessons', {
     params: { limit: 1 },
@@ -317,6 +349,16 @@ const Dashboard: React.FC = () => {
   const { data: attentionDismissalsData, isLoading: isLoadingAttentionDismissals } = useQuery<DashboardAttentionDismissal[], Error>({
     queryKey: ['dashboardAttentionDismissals'],
     queryFn: fetchDashboardAttentionDismissals,
+  });
+
+  const {
+    data: dashboardHistoryData,
+    isLoading: isLoadingDashboardHistory,
+    isError: isErrorDashboardHistory,
+    error: dashboardHistoryError,
+  } = useQuery<DashboardHistoryResponse, Error>({
+    queryKey: ['dashboardHistory'],
+    queryFn: fetchDashboardHistory,
   });
 
   const { data: lessonsSummaryData } = useQuery<LessonListResponse, Error>({
@@ -666,6 +708,7 @@ const Dashboard: React.FC = () => {
     borderRadius: tileRadius,
     boxShadow: 'none',
   };
+  const historyTileStyle = attentionTileStyle;
 
   const formatAttentionDateTime = (value: string | dayjs.Dayjs) =>
     (dayjs.isDayjs(value) ? value : dayjs(value).tz(DEFAULT_TIMEZONE)).format('D MMM, HH:mm');
@@ -926,6 +969,58 @@ const Dashboard: React.FC = () => {
     </Card>
   );
 
+  const heatmapTile = (
+    <Card
+      title={t('pages.dashboard.level3.heatmap.title')}
+      variant="borderless"
+      style={historyTileStyle}
+      styles={{ body: { padding: isMobile ? 12 : 16 } }}
+    >
+      {isLoadingDashboardHistory ? (
+        <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: spacing.lg }}>
+          <Spin size="small" />
+        </div>
+      ) : isErrorDashboardHistory || !dashboardHistoryData ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('pages.dashboard.level3.historyUnavailable')}
+          description={dashboardHistoryError?.message}
+        />
+      ) : (
+        <DashboardLessonLoadHeatmap
+          days={dashboardHistoryData.heatmap.days}
+          fromDate={dashboardHistoryData.heatmap.from_date}
+          toDate={dashboardHistoryData.heatmap.to_date}
+        />
+      )}
+    </Card>
+  );
+
+  const weeklyLoadTile = (
+    <Card
+      title={t('pages.dashboard.level3.weeklyLoad.title')}
+      variant="borderless"
+      style={historyTileStyle}
+      styles={{ body: { padding: isMobile ? 12 : 16 } }}
+    >
+      {isLoadingDashboardHistory ? (
+        <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: spacing.lg }}>
+          <Spin size="small" />
+        </div>
+      ) : isErrorDashboardHistory || !dashboardHistoryData ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('pages.dashboard.level3.historyUnavailable')}
+          description={dashboardHistoryError?.message}
+        />
+      ) : (
+        <DashboardWeeklyLoad weeks={dashboardHistoryData.weekly_load.weeks} />
+      )}
+    </Card>
+  );
+
   if (isLoadingLessons) {
     return <Spin size="large" />;
   }
@@ -1009,6 +1104,8 @@ const Dashboard: React.FC = () => {
           {attentionTile}
           {miniCalendarTile}
           {kpiTile}
+          {heatmapTile}
+          {weeklyLoadTile}
         </div>
       ) : (
         <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
@@ -1024,6 +1121,16 @@ const Dashboard: React.FC = () => {
             </Col>
           </Row>
           {attentionTile}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} style={{ display: 'flex' }}>
+              {heatmapTile}
+            </Col>
+          </Row>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} style={{ display: 'flex' }}>
+              {weeklyLoadTile}
+            </Col>
+          </Row>
         </div>
       )}
     </div>

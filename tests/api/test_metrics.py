@@ -134,3 +134,69 @@ async def test_dashboard_attention_dismissals_hide_expired_items(
     )
     assert list_response.status_code == 200
     assert list_response.json() == []
+
+
+@pytest.mark.asyncio
+async def test_dashboard_history_metrics_aggregates_lesson_load(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session, display_name="Heatmap Student")
+    package = await factories.create_package(db_session, learner=learner)
+    now = datetime.now(timezone.utc).replace(hour=12, minute=0, second=0, microsecond=0)
+    today_at_nine = now.replace(hour=9)
+    last_week_at_ten = (today_at_nine - timedelta(days=7)).replace(hour=10)
+
+    await factories.create_lesson(
+        db_session,
+        package=package,
+        scheduled_at=today_at_nine,
+        status="scheduled",
+        duration_minutes=90,
+    )
+    await factories.create_lesson(
+        db_session,
+        package=package,
+        scheduled_at=today_at_nine.replace(hour=12),
+        status="rescheduled",
+        duration_minutes=30,
+    )
+    await factories.create_lesson(
+        db_session,
+        package=package,
+        scheduled_at=today_at_nine.replace(hour=15),
+        status="cancelled",
+        duration_minutes=120,
+    )
+    await factories.create_lesson(
+        db_session,
+        package=package,
+        scheduled_at=last_week_at_ten,
+        status="completed",
+        duration_minutes=60,
+    )
+    await db_session.commit()
+
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+    response = await client.get("/api/v1/metrics/dashboard-history", headers=headers)
+    assert response.status_code == 200
+
+    payload = response.json()
+    heatmap_days = {item["date"]: item for item in payload["heatmap"]["days"]}
+    weekly_load = {item["week_start"]: item for item in payload["weekly_load"]["weeks"]}
+
+    today_key = today_at_nine.date().isoformat()
+    last_week_day_key = last_week_at_ten.date().isoformat()
+    current_week_start = (today_at_nine.date() - timedelta(days=today_at_nine.weekday())).isoformat()
+    previous_week_start = (last_week_at_ten.date() - timedelta(days=last_week_at_ten.weekday())).isoformat()
+
+    assert heatmap_days[today_key]["hours"] == 2.0
+    assert heatmap_days[today_key]["lessons_count"] == 2
+    assert heatmap_days[last_week_day_key]["hours"] == 1.0
+    assert heatmap_days[last_week_day_key]["lessons_count"] == 1
+
+    assert weekly_load[current_week_start]["hours"] == 2.0
+    assert weekly_load[current_week_start]["lessons_count"] == 2
+    assert weekly_load[previous_week_start]["hours"] == 1.0
+    assert weekly_load[previous_week_start]["lessons_count"] == 1

@@ -17,7 +17,9 @@ Function groups:
     - InviteTokens: create_invite_token, get_invite_token, validate_and_use_token
 """
 from __future__ import annotations
-from datetime import datetime, timezone, date
+from calendar import monthrange
+from collections import defaultdict
+from datetime import datetime, timezone, date, time, timedelta
 from email.mime import base
 from typing import Optional, TYPE_CHECKING
 
@@ -2322,6 +2324,110 @@ async def reminders_daily_stats(
         stmt = stmt.where(ReminderInstance.scheduled_for <= to_date)
     result = await session.execute(stmt)
     return [(row[0], row[1]) for row in result.all() if row[0] is not None]
+
+
+DASHBOARD_HISTORY_INCLUDED_LESSON_STATUSES = ("scheduled", "rescheduled", "completed")
+DEFAULT_DASHBOARD_LESSON_DURATION_MINUTES = 60
+
+
+def _subtract_months(source: date, months: int) -> date:
+    year = source.year
+    month = source.month - months
+    while month <= 0:
+        month += 12
+        year -= 1
+    day = min(source.day, monthrange(year, month)[1])
+    return date(year, month, day)
+
+
+def _date_range(start: date, end: date) -> list[date]:
+    if start > end:
+        return []
+    days = (end - start).days
+    return [start + timedelta(days=offset) for offset in range(days + 1)]
+
+
+async def fetch_dashboard_history_metrics(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    reference_time: datetime | None = None,
+    heatmap_months: int = 6,
+    weekly_weeks: int = 12,
+) -> dict[str, object]:
+    """Build historical dashboard aggregates for heatmap and weekly load tiles."""
+    tenant_id = resolve_tenant_id(current_tenant)
+    now = reference_time or datetime.now(timezone.utc)
+    today = now.date()
+    heatmap_from = _subtract_months(today, heatmap_months)
+    current_week_start = today - timedelta(days=today.weekday())
+    weekly_from = current_week_start - timedelta(weeks=max(weekly_weeks - 1, 0))
+
+    stmt = (
+        select(Lesson.scheduled_at, Lesson.duration_minutes)
+        .where(
+            Lesson.tenant_id == tenant_id,
+            Lesson.status.in_(DASHBOARD_HISTORY_INCLUDED_LESSON_STATUSES),
+            Lesson.scheduled_at >= datetime.combine(heatmap_from, time.min, tzinfo=timezone.utc),
+            Lesson.scheduled_at < datetime.combine(today + timedelta(days=1), time.min, tzinfo=timezone.utc),
+        )
+        .order_by(Lesson.scheduled_at.asc(), Lesson.id.asc())
+    )
+    rows = (await session.execute(stmt)).all()
+
+    daily_totals: dict[date, dict[str, float | int]] = defaultdict(
+        lambda: {"hours": 0.0, "lessons_count": 0}
+    )
+    weekly_totals: dict[date, dict[str, float | int]] = defaultdict(
+        lambda: {"hours": 0.0, "lessons_count": 0}
+    )
+
+    for scheduled_at, duration_minutes in rows:
+        if scheduled_at is None:
+            continue
+
+        lesson_day = scheduled_at.date()
+        duration_hours = round((duration_minutes or DEFAULT_DASHBOARD_LESSON_DURATION_MINUTES) / 60, 2)
+        if heatmap_from <= lesson_day <= today:
+            daily_totals[lesson_day]["hours"] = round(float(daily_totals[lesson_day]["hours"]) + duration_hours, 2)
+            daily_totals[lesson_day]["lessons_count"] = int(daily_totals[lesson_day]["lessons_count"]) + 1
+
+        if weekly_from <= lesson_day <= today:
+            week_start = lesson_day - timedelta(days=lesson_day.weekday())
+            weekly_totals[week_start]["hours"] = round(float(weekly_totals[week_start]["hours"]) + duration_hours, 2)
+            weekly_totals[week_start]["lessons_count"] = int(weekly_totals[week_start]["lessons_count"]) + 1
+
+    heatmap_days = [
+        {
+            "date": day,
+            "hours": round(float(daily_totals[day]["hours"]), 2),
+            "lessons_count": int(daily_totals[day]["lessons_count"]),
+        }
+        for day in _date_range(heatmap_from, today)
+    ]
+
+    weekly_starts = [weekly_from + timedelta(weeks=offset) for offset in range(weekly_weeks)]
+    weekly_load = [
+        {
+            "week_start": week_start,
+            "hours": round(float(weekly_totals[week_start]["hours"]), 2),
+            "lessons_count": int(weekly_totals[week_start]["lessons_count"]),
+        }
+        for week_start in weekly_starts
+    ]
+
+    return {
+        "heatmap": {
+            "from_date": heatmap_from,
+            "to_date": today,
+            "days": heatmap_days,
+        },
+        "weekly_load": {
+            "from_date": weekly_from,
+            "to_date": today,
+            "weeks": weekly_load,
+        },
+    }
 
 
 async def fetch_active_dashboard_attention_dismissals(

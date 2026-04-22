@@ -151,6 +151,11 @@ from api.schemas.platform import (
 from api.schemas.metrics import (
     DashboardAttentionDismissalRequest,
     DashboardAttentionDismissalResponse,
+    DashboardHistoryDayPoint,
+    DashboardHistoryHeatmapResponse,
+    DashboardHistoryResponse,
+    DashboardHistoryWeekPoint,
+    DashboardWeeklyLoadResponse,
     MetricsSummary,
     DailyPoint,
     DailyMetricsResponse,
@@ -277,4 +282,9 @@ __all__ = [
     'DailyMetricsResponse',
     'DashboardAttentionDismissalRequest',
     'DashboardAttentionDismissalResponse',
+    'DashboardHistoryDayPoint',
+    'DashboardHistoryWeekPoint',
+    'DashboardHistoryHeatmapResponse',
+    'DashboardWeeklyLoadResponse',
+    'DashboardHistoryResponse',
 ]

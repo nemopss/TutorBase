@@ -15,6 +15,7 @@ from api.dependencies import (
 from api.schemas import (
     DashboardAttentionDismissalRequest,
     DashboardAttentionDismissalResponse,
+    DashboardHistoryResponse,
     DailyMetricsResponse,
     MetricsSummary,
     DailyPoint,
@@ -84,6 +85,16 @@ async def reminders_daily_metrics(
     rows = await crud.reminders_daily_stats(session, current_tenant, from_date=from_date, to_date=to_date)
     points = [DailyPoint(date=_coerce_row_to_date(row[0]), value=row[1]) for row in rows if row[0] is not None]
     return DailyMetricsResponse(items=points)
+
+
+@router.get("/dashboard-history", response_model=DashboardHistoryResponse)
+async def dashboard_history_metrics(
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
+) -> DashboardHistoryResponse:
+    history = await crud.fetch_dashboard_history_metrics(session, current_tenant)
+    return DashboardHistoryResponse.model_validate(history)
 
 
 @router.get(

@@ -15,6 +15,39 @@ jest.mock('../../auth/AuthProvider', () => ({
 
 jest.mock('../../services/api', () => ({
   get: jest.fn((url: string) => {
+    if (url === '/metrics/dashboard-history') {
+      const today = new Date();
+      const fromDate = new Date(today);
+      fromDate.setMonth(today.getMonth() - 6);
+      const weekStart = new Date(today);
+      weekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+      return Promise.resolve({
+        data: {
+          heatmap: {
+            from_date: fromDate.toISOString().slice(0, 10),
+            to_date: today.toISOString().slice(0, 10),
+            days: [
+              {
+                date: today.toISOString().slice(0, 10),
+                hours: 2.5,
+                lessons_count: 3,
+              },
+            ],
+          },
+          weekly_load: {
+            from_date: weekStart.toISOString().slice(0, 10),
+            to_date: today.toISOString().slice(0, 10),
+            weeks: [
+              {
+                week_start: weekStart.toISOString().slice(0, 10),
+                hours: 2.5,
+                lessons_count: 3,
+              },
+            ],
+          },
+        },
+      });
+    }
     if (url === '/metrics/dashboard-attention-dismissals') {
       return Promise.resolve({ data: [] });
     }
@@ -91,6 +124,39 @@ describe('Dashboard', () => {
   it('treats missing dashboard attention dismissals endpoint as non-blocking', async () => {
     const mockedApi = api as jest.Mocked<typeof api>;
     mockedApi.get.mockImplementation((url: string) => {
+      if (url === '/metrics/dashboard-history') {
+        const today = new Date();
+        const fromDate = new Date(today);
+        fromDate.setMonth(today.getMonth() - 6);
+        const weekStart = new Date(today);
+        weekStart.setDate(today.getDate() - ((today.getDay() + 6) % 7));
+        return Promise.resolve({
+          data: {
+            heatmap: {
+              from_date: fromDate.toISOString().slice(0, 10),
+              to_date: today.toISOString().slice(0, 10),
+              days: [
+                {
+                  date: today.toISOString().slice(0, 10),
+                  hours: 2.5,
+                  lessons_count: 3,
+                },
+              ],
+            },
+            weekly_load: {
+              from_date: weekStart.toISOString().slice(0, 10),
+              to_date: today.toISOString().slice(0, 10),
+              weeks: [
+                {
+                  week_start: weekStart.toISOString().slice(0, 10),
+                  hours: 2.5,
+                  lessons_count: 3,
+                },
+              ],
+            },
+          },
+        });
+      }
       if (url === '/metrics/dashboard-attention-dismissals') {
         return Promise.reject(new AxiosError('Not Found', 'ERR_BAD_REQUEST', undefined, undefined, {
           status: 404,
@@ -155,5 +221,27 @@ describe('Dashboard', () => {
     );
 
     expect(await screen.findByText(/Active Package/i)).toBeInTheDocument();
+  });
+
+  it('renders level 3 historical load tiles', async () => {
+    const queryClient = createQueryClient();
+    render(
+      <BrowserRouter>
+        <QueryClientProvider client={queryClient}>
+          <Dashboard />
+        </QueryClientProvider>
+      </BrowserRouter>
+    );
+
+    expect(
+      await screen.findByText((content) =>
+        /Lesson load heatmap/i.test(content) || content.includes('pages.dashboard.level3.heatmap.title'),
+      ),
+    ).toBeInTheDocument();
+    expect(
+      screen.getByText((content) =>
+        /Weekly load/i.test(content) || content.includes('pages.dashboard.level3.weeklyLoad.title'),
+      ),
+    ).toBeInTheDocument();
   });
 });
