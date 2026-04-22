@@ -35,6 +35,7 @@ from database.models import (
     Application,
     Student,
     BotUser,
+    DashboardAttentionDismissal,
     InviteToken,
     Learner,
     LearnerAccountLink,
@@ -2321,6 +2322,65 @@ async def reminders_daily_stats(
         stmt = stmt.where(ReminderInstance.scheduled_for <= to_date)
     result = await session.execute(stmt)
     return [(row[0], row[1]) for row in result.all() if row[0] is not None]
+
+
+async def fetch_active_dashboard_attention_dismissals(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    reference_time: datetime | None = None,
+    item_type: str | None = None,
+) -> list[DashboardAttentionDismissal]:
+    """Fetch currently active dashboard attention dismissals for a tenant."""
+    tenant_id = resolve_tenant_id(current_tenant)
+    now = reference_time or datetime.now(timezone.utc)
+    stmt = (
+        select(DashboardAttentionDismissal)
+        .where(DashboardAttentionDismissal.tenant_id == tenant_id)
+        .where(DashboardAttentionDismissal.dismissed_until > now)
+        .order_by(
+            DashboardAttentionDismissal.item_type.asc(),
+            DashboardAttentionDismissal.item_key.asc(),
+        )
+    )
+    if item_type is not None:
+        stmt = stmt.where(DashboardAttentionDismissal.item_type == item_type)
+    result = await session.execute(stmt)
+    return result.scalars().all()
+
+
+async def upsert_dashboard_attention_dismissal(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    item_type: str,
+    item_key: str,
+    dismissed_until: datetime,
+) -> DashboardAttentionDismissal:
+    """Create or update a dashboard attention dismissal for the tenant."""
+    tenant_id = resolve_tenant_id(current_tenant)
+    now = datetime.now(timezone.utc)
+    stmt = select(DashboardAttentionDismissal).where(
+        DashboardAttentionDismissal.tenant_id == tenant_id,
+        DashboardAttentionDismissal.item_type == item_type,
+        DashboardAttentionDismissal.item_key == item_key,
+    )
+    existing = (await session.execute(stmt)).scalar_one_or_none()
+    if existing is None:
+        existing = DashboardAttentionDismissal(
+            tenant_id=tenant_id,
+            item_type=item_type,
+            item_key=item_key,
+            dismissed_until=dismissed_until,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(existing)
+    else:
+        existing.dismissed_until = dismissed_until
+        existing.updated_at = now
+    await session.flush()
+    return existing
 
 
 # ============================================================================

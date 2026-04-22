@@ -149,6 +149,8 @@ from api.schemas.platform import (
     TenantAccessSyncResponse,
 )
 from api.schemas.metrics import (
+    DashboardAttentionDismissalRequest,
+    DashboardAttentionDismissalResponse,
     MetricsSummary,
     DailyPoint,
     DailyMetricsResponse,
@@ -273,4 +275,6 @@ __all__ = [
     'MetricsSummary',
     'DailyPoint',
     'DailyMetricsResponse',
+    'DashboardAttentionDismissalRequest',
+    'DashboardAttentionDismissalResponse',
 ]

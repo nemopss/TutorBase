@@ -43,6 +43,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { user, isSuperAdmin, tenantAccess } = useAuth();
   const hasStaffAccess = isSuperAdmin || user?.role === 'teacher';
   const isStudent = user?.role === 'viewer';
+  const isTutorDashboardRoute = hasStaffAccess && !isStudent && location.pathname === '/';
+  const shellRadius = '10px';
   const accessUntil = tenantAccess?.access_until ? new Date(tenantAccess.access_until) : null;
   const accessDaysLeft = accessUntil
     ? Math.ceil((accessUntil.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
@@ -308,7 +310,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           style={{
             background: colors.bgSecondary,
             border: `1px solid ${colors.borderPrimary}`,
-            borderRadius: '8px',
+            borderRadius: shellRadius,
             overflow: 'hidden',
             height: '100%',
             flex: `0 0 ${sidebarWidth}px`,
@@ -375,12 +377,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
         <Content style={{
           margin: isMobile ? '16px' : 0,
-          padding: isMobile ? '16px' : '32px',
-          background: colors.bgSecondary,
+          padding: isTutorDashboardRoute ? 0 : (isMobile ? '16px' : '32px'),
+          background: isTutorDashboardRoute ? 'transparent' : colors.bgSecondary,
           minHeight: isMobile ? 'calc(100vh - 120px)' : 0,
           height: isMobile ? undefined : '100%',
-          borderRadius: '8px',
-          border: `1px solid ${colors.borderPrimary}`,
+          borderRadius: isTutorDashboardRoute ? 0 : shellRadius,
+          border: isTutorDashboardRoute ? 'none' : `1px solid ${colors.borderPrimary}`,
           overflow: isMobile ? undefined : 'auto',
           boxSizing: 'border-box',
         }}>

@@ -1,40 +1,53 @@
-import React from 'react';
+import React, { useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Row, Statistic, Spin, Alert, List, Button, Progress, Space } from 'antd';
-import { 
-  PlusOutlined, 
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Alert, Button, Card, Col, List, Row, Spin, Space, Typography } from 'antd';
+import {
+  CloseOutlined,
   CalendarOutlined,
   CheckCircleOutlined,
-  CloseCircleOutlined,
-  ClockCircleOutlined,
+  TeamOutlined,
   KeyOutlined,
+  PlusOutlined,
   UserAddOutlined,
+  FieldTimeOutlined,
+  ScheduleOutlined,
+  BellOutlined,
+  AppstoreOutlined,
 } from '@ant-design/icons';
-import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer, PieChart, Pie, Cell } from 'recharts';
+import { AxiosError } from 'axios';
 import dayjs from 'dayjs';
+import updateLocale from 'dayjs/plugin/updateLocale';
+import utc from 'dayjs/plugin/utc';
+import timezonePlugin from 'dayjs/plugin/timezone';
+import isoWeek from 'dayjs/plugin/isoWeek';
+import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import DashboardMiniWeekCalendar from '../components/dashboard/DashboardMiniWeekCalendar';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 import { useResponsive } from '../hooks/useResponsive';
-import { chartHeight } from '../theme/tokens';
-import { formatDateTime } from '../utils/datetime';
+import { useTheme } from '../theme/ThemeProvider';
+import { spacing } from '../theme/tokens';
+import { DEFAULT_TIMEZONE } from '../utils/datetime';
 import { useAuth } from '../auth/AuthProvider';
+import type { Lesson as CalendarLesson } from '../components/common/calendar-types';
+import { statusColors } from '../components/common/calendar-types';
 
-// --- Types --- //
-interface MetricsSummary {
-  lessons: Record<string, number>;
-  reminders: Record<string, number>;
-}
+dayjs.extend(updateLocale);
+dayjs.extend(utc);
+dayjs.extend(timezonePlugin);
+dayjs.extend(isoWeek);
+dayjs.extend(isSameOrAfter);
+dayjs.updateLocale('ru', { week: { dow: 1 } });
+dayjs.locale('ru');
 
-interface Lesson {
-  id: number;
+const { Text } = Typography;
+
+interface Lesson extends CalendarLesson {
   package_id: number;
   package_title?: string;
-  learner_name?: string;
-  scheduled_at: string;
-  status: string;
   timezone: string;
 }
 
@@ -43,30 +56,61 @@ interface LessonListResponse {
   items: Lesson[];
 }
 
-interface DailyPoint {
-  date: string;
-  value: number;
-}
-
-interface DailyMetricsResponse {
-  items: DailyPoint[];
-}
-
-interface Package {
-  id: number;
-  title: string;
-  learner_name: string;
-  status: string;
-  progress: {
-    total: number;
-    completed: number;
-    cancelled: number;
-  };
-}
-
 interface PackageListResponse {
   total: number;
-  items: Package[];
+  items: unknown[];
+}
+
+interface ActivePackage {
+  id: number;
+  learner_id: number;
+  learner_name?: string;
+  title: string;
+  status: 'active' | 'completed' | 'cancelled' | 'draft';
+  next_lesson_date?: string | null;
+}
+
+interface ActivePackageListResponse {
+  total: number;
+  items: ActivePackage[];
+}
+
+interface NotificationDeliveryAttempt {
+  status: string;
+  error_code?: string | null;
+  error_message?: string | null;
+  finished_at?: string | null;
+  created_at?: string | null;
+}
+
+interface NotificationInstance {
+  id: number;
+  category: string;
+  learner_display_name?: string | null;
+  effective_scheduled_for: string;
+  status: string;
+  latest_attempt?: NotificationDeliveryAttempt | null;
+}
+
+interface NotificationActivity {
+  activity_type: string;
+  activity_id: number;
+  event_type: string;
+  event_id?: number | null;
+  learner_display_name?: string | null;
+  status: string;
+  response_value?: string | null;
+  occurred_at?: string | null;
+  metadata: Record<string, unknown>;
+}
+
+interface DashboardAttentionDismissal {
+  id: number;
+  item_type: 'package_ending_soon' | 'lesson_declined';
+  item_key: string;
+  dismissed_until: string;
+  created_at: string;
+  updated_at: string;
 }
 
 interface LearnerListResponse {
@@ -78,55 +122,111 @@ interface InviteTokenListResponse {
   items: unknown[];
 }
 
-// --- API Fetchers --- //
-const fetchMetrics = async (): Promise<MetricsSummary> => {
-  const startOfMonth = dayjs().startOf('month').toISOString();
-  const endOfMonth = dayjs().endOf('month').toISOString();
-  const { data } = await api.get('/metrics/summary', {
-    params: {
-      from_date: startOfMonth,
-      to_date: endOfMonth,
-    },
-  });
-  return data;
-};
-
-const fetchUpcomingLessons = async (): Promise<LessonListResponse> => {
+const fetchLessonsPage = async (limit: number, offset: number): Promise<LessonListResponse> => {
   const { data } = await api.get('/lessons', {
     params: {
-      status: 'scheduled',
       sort_by: 'scheduled_at',
       sort_order: 'asc',
-      limit: 10,
+      limit,
+      offset,
     },
   });
   return data;
 };
 
-const fetchDailyLessons = async (): Promise<DailyMetricsResponse> => {
-  const { data } = await api.get('/metrics/lessons/daily', {
-    params: {
-      from_date: dayjs().subtract(30, 'days').toISOString(),
-      to_date: dayjs().toISOString(),
-    },
-  });
-  return data;
-};
+const fetchDashboardLessons = async (): Promise<LessonListResponse> => {
+  const limit = 100;
+  const firstPage = await fetchLessonsPage(limit, 0);
+  let allItems = [...firstPage.items];
+  let offset = limit;
 
-const fetchActivePackages = async (): Promise<PackageListResponse> => {
-  const { data } = await api.get('/packages', {
-    params: {
-      status_filter: 'active',
-      limit: 5,
-    },
-  });
-  return data;
+  while (offset < firstPage.total && offset < 1000) {
+    const page = await fetchLessonsPage(limit, offset);
+    allItems = [...allItems, ...page.items];
+    offset += limit;
+  }
+
+  return {
+    total: firstPage.total,
+    items: allItems,
+  };
 };
 
 const fetchPackagesSummary = async (): Promise<PackageListResponse> => {
   const { data } = await api.get('/packages', {
     params: { limit: 1 },
   });
+  return data;
+};
+
+const fetchActivePackagesPage = async (limit: number, offset: number): Promise<ActivePackageListResponse> => {
+  const { data } = await api.get('/packages', {
+    params: {
+      status_filter: 'active',
+      limit,
+      offset,
+    },
+  });
+  return data;
+};
+
+const fetchActivePackages = async (): Promise<ActivePackageListResponse> => {
+  const limit = 100;
+  const firstPage = await fetchActivePackagesPage(limit, 0);
+  let allItems = [...firstPage.items];
+  let offset = limit;
+
+  while (offset < firstPage.total && offset < 1000) {
+    const page = await fetchActivePackagesPage(limit, offset);
+    allItems = [...allItems, ...page.items];
+    offset += limit;
+  }
+
+  return {
+    total: firstPage.total,
+    items: allItems,
+  };
+};
+
+const fetchNotificationActivity = async (): Promise<NotificationActivity[]> => {
+  const { data } = await api.get('/notifications/activity', {
+    params: { limit: 200 },
+  });
+  return data;
+};
+
+const fetchNotificationInstancesByStatus = async (status: string): Promise<NotificationInstance[]> => {
+  const { data } = await api.get('/notifications/instances', {
+    params: { status, limit: 200 },
+  });
+  return data;
+};
+
+const fetchNotificationQueueInstances = async (): Promise<NotificationInstance[]> => {
+  const { data } = await api.get('/notifications/instances', {
+    params: { queue_only: true, limit: 200 },
+  });
+  return data;
+};
+
+const fetchDashboardAttentionDismissals = async (): Promise<DashboardAttentionDismissal[]> => {
+  try {
+    const { data } = await api.get('/metrics/dashboard-attention-dismissals');
+    return data;
+  } catch (error) {
+    if (error instanceof AxiosError && error.response?.status === 404) {
+      return [];
+    }
+    throw error;
+  }
+};
+
+const dismissDashboardAttentionItem = async (payload: {
+  item_type: 'package_ending_soon' | 'lesson_declined';
+  item_key: string;
+  dismissed_until: string;
+}): Promise<DashboardAttentionDismissal> => {
+  const { data } = await api.post('/metrics/dashboard-attention-dismissals', payload);
   return data;
 };
 
@@ -151,48 +251,72 @@ const fetchInviteTokensSummary = async (tenantId: number): Promise<InviteTokenLi
   return data;
 };
 
-// --- Component --- //
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
-  const { cardStyle, textColor, subtitleColor, chartGridColor, tooltipStyle } = useResponsiveStyles();
+  const queryClient = useQueryClient();
+  const { cardStyle, subtitleColor, borderColor, textColor } = useResponsiveStyles();
   const { isMobile } = useResponsive();
+  const { resolvedTheme } = useTheme();
   const { tenantId } = useAuth();
-  const currentChartHeight = isMobile ? chartHeight.mobile : chartHeight.desktop;
+  const colors = resolvedTheme.colors;
+  const topRowHeight = isMobile ? undefined : 432;
+  const tileRadius = 10;
+  const kpiPalette = {
+    blue: '#1677ff',
+    green: '#52c41a',
+    amber: '#faad14',
+    violet: '#722ed1',
+  };
+  const dashboardTileStyle = {
+    ...cardStyle,
+    width: '100%',
+    height: topRowHeight ?? '100%',
+    border: `1px solid ${colors.borderPrimary}`,
+    borderRadius: tileRadius,
+    boxShadow: 'none',
+    display: 'flex',
+    flexDirection: 'column' as const,
+  };
 
-  const { 
-    data: metricsData, 
-    isLoading: isLoadingMetrics, 
-    isError: isErrorMetrics, 
-    error: errorMetrics 
-  } = useQuery<MetricsSummary, Error>({ 
-    queryKey: ['metricsSummary'], 
-    queryFn: fetchMetrics 
-  });
-
-  const { 
-    data: lessonsData, 
-    isLoading: isLoadingLessons, 
-    isError: isErrorLessons, 
-    error: errorLessons 
-  } = useQuery<LessonListResponse, Error>({ 
-    queryKey: ['upcomingLessons'], 
-    queryFn: fetchUpcomingLessons 
-  });
-
-  const { data: dailyData } = useQuery<DailyMetricsResponse, Error>({
-    queryKey: ['dailyLessons'],
-    queryFn: fetchDailyLessons,
-  });
-
-  const { data: packagesData } = useQuery<PackageListResponse, Error>({
-    queryKey: ['activePackages'],
-    queryFn: fetchActivePackages,
+  const {
+    data: lessonsData,
+    isLoading: isLoadingLessons,
+    isError: isErrorLessons,
+    error: errorLessons,
+  } = useQuery<LessonListResponse, Error>({
+    queryKey: ['dashboardLessons'],
+    queryFn: fetchDashboardLessons,
   });
 
   const { data: packagesSummaryData } = useQuery<PackageListResponse, Error>({
     queryKey: ['dashboardPackagesSummary'],
     queryFn: fetchPackagesSummary,
+  });
+
+  const { data: activePackagesData, isLoading: isLoadingActivePackages } = useQuery<ActivePackageListResponse, Error>({
+    queryKey: ['dashboardActivePackages'],
+    queryFn: fetchActivePackages,
+  });
+
+  const { data: notificationActivityData, isLoading: isLoadingNotificationActivity } = useQuery<NotificationActivity[], Error>({
+    queryKey: ['dashboardNotificationActivity'],
+    queryFn: fetchNotificationActivity,
+  });
+
+  const { data: failedNotificationInstancesData, isLoading: isLoadingFailedNotificationInstances } = useQuery<NotificationInstance[], Error>({
+    queryKey: ['dashboardFailedNotificationInstances'],
+    queryFn: () => fetchNotificationInstancesByStatus('failed'),
+  });
+
+  const { data: queuedNotificationInstancesData, isLoading: isLoadingQueuedNotificationInstances } = useQuery<NotificationInstance[], Error>({
+    queryKey: ['dashboardQueuedNotificationInstances'],
+    queryFn: fetchNotificationQueueInstances,
+  });
+
+  const { data: attentionDismissalsData, isLoading: isLoadingAttentionDismissals } = useQuery<DashboardAttentionDismissal[], Error>({
+    queryKey: ['dashboardAttentionDismissals'],
+    queryFn: fetchDashboardAttentionDismissals,
   });
 
   const { data: lessonsSummaryData } = useQuery<LessonListResponse, Error>({
@@ -211,33 +335,190 @@ const Dashboard: React.FC = () => {
     enabled: !!tenantId,
   });
 
-  if (isLoadingMetrics) {
-    return <Spin size="large" />;
-  }
+  const dismissAttentionMutation = useMutation({
+    mutationFn: dismissDashboardAttentionItem,
+    onSuccess: (dismissal) => {
+      queryClient.setQueryData<DashboardAttentionDismissal[]>(
+        ['dashboardAttentionDismissals'],
+        (current) => {
+          const existing = current || [];
+          if (existing.some((item) => item.item_key === dismissal.item_key)) {
+            return existing;
+          }
+          return [...existing, dismissal];
+        },
+      );
+    },
+    onError: (error: Error) => {
+      // Keep the dismiss action quiet but not silent.
+      // The dashboard should stay usable even if the acknowledge call fails.
+      // eslint-disable-next-line no-console
+      console.error('Dismiss dashboard attention item failed:', error);
+    },
+  });
 
-  if (isErrorMetrics) {
-    return <Alert message={t('errors.fetchMetrics')} description={errorMetrics.message} type="error" />;
-  }
+  const allLessons = lessonsData?.items || [];
+  const activePackages = activePackagesData?.items || [];
+  const notificationActivity = notificationActivityData || [];
+  const failedNotificationInstances = failedNotificationInstancesData || [];
+  const queuedNotificationInstances = queuedNotificationInstancesData || [];
+  const attentionDismissals = attentionDismissalsData || [];
+  const nonCancelledLessons = useMemo(
+    () => allLessons.filter((lesson) => lesson.status !== 'cancelled'),
+    [allLessons],
+  );
 
-  // Prepare chart data
-  const chartData = dailyData?.items.map(item => ({
-    date: dayjs(item.date).format('MMM DD'),
-    lessons: item.value,
-  })) || [];
+  const todayKey = dayjs().tz(DEFAULT_TIMEZONE).format('YYYY-MM-DD');
+  const tomorrowKey = dayjs().tz(DEFAULT_TIMEZONE).add(1, 'day').format('YYYY-MM-DD');
+  const weekStart = dayjs().tz(DEFAULT_TIMEZONE).startOf('isoWeek');
+  const weekEnd = weekStart.add(7, 'day');
 
-  // Prepare pie chart data with translated names
-  const totalLessons = Object.values(metricsData?.lessons || {}).reduce((a, b) => a + b, 0);
-  const pieData = [
-    { name: t('pages.dashboard.scheduled'), value: metricsData?.lessons.scheduled || 0, color: '#1890ff' },
-    { name: t('pages.dashboard.rescheduled'), value: metricsData?.lessons.rescheduled || 0, color: '#faad14' },
-    { name: t('pages.dashboard.completed'), value: metricsData?.lessons.completed || 0, color: '#52c41a' },
-    { name: t('pages.dashboard.cancelled'), value: metricsData?.lessons.cancelled || 0, color: '#ff4d4f' },
-  ].filter(item => item.value > 0);
+  const todayLessons = useMemo(
+    () =>
+      allLessons.filter(
+        (lesson) => dayjs(lesson.scheduled_at).tz(lesson.timezone || DEFAULT_TIMEZONE).format('YYYY-MM-DD') === todayKey,
+      ).sort((a, b) => dayjs(a.scheduled_at).valueOf() - dayjs(b.scheduled_at).valueOf()),
+    [allLessons, todayKey],
+  );
+
+  const tomorrowLessons = useMemo(
+    () =>
+      allLessons.filter(
+        (lesson) => dayjs(lesson.scheduled_at).tz(lesson.timezone || DEFAULT_TIMEZONE).format('YYYY-MM-DD') === tomorrowKey,
+      ).sort((a, b) => dayjs(a.scheduled_at).valueOf() - dayjs(b.scheduled_at).valueOf()),
+    [allLessons, tomorrowKey],
+  );
+
+  const weekLessons = useMemo(
+    () =>
+      nonCancelledLessons.filter((lesson) => {
+        const lessonTime = dayjs(lesson.scheduled_at).tz(lesson.timezone || DEFAULT_TIMEZONE);
+        return lessonTime.isSameOrAfter(weekStart) && lessonTime.isBefore(weekEnd);
+      }),
+    [nonCancelledLessons, weekEnd, weekStart],
+  );
 
   const learnerCount = learnersData?.total ?? 0;
   const inviteCount = inviteTokensData?.total ?? inviteTokensData?.items?.length ?? 0;
   const packageCount = packagesSummaryData?.total ?? 0;
-  const lessonCount = lessonsSummaryData?.total ?? totalLessons;
+  const lessonCount = lessonsSummaryData?.total ?? 0;
+  const lessonById = useMemo(
+    () => new Map(allLessons.map((lesson) => [lesson.id, lesson])),
+    [allLessons],
+  );
+  const activeDismissalKeys = useMemo(
+    () => new Set(attentionDismissals.map((item) => item.item_key)),
+    [attentionDismissals],
+  );
+  const attentionNow = dayjs().tz(DEFAULT_TIMEZONE);
+  const attentionCutoff = attentionNow.add(3, 'day');
+
+  const packageAttentionItems = useMemo(() => (
+    activePackages
+      .flatMap((pkg) => {
+        const futureLessons = allLessons
+          .filter((lesson) => {
+            if (lesson.package_id !== pkg.id || lesson.status === 'cancelled') {
+              return false;
+            }
+            const lessonTime = dayjs(lesson.scheduled_at).tz(lesson.timezone || DEFAULT_TIMEZONE);
+            return lessonTime.isSameOrAfter(attentionNow);
+          })
+          .sort((a, b) => dayjs(a.scheduled_at).valueOf() - dayjs(b.scheduled_at).valueOf());
+
+        if (futureLessons.length === 0) {
+          return [];
+        }
+
+        const lastLesson = futureLessons[futureLessons.length - 1];
+        const lastLessonTime = dayjs(lastLesson.scheduled_at).tz(lastLesson.timezone || DEFAULT_TIMEZONE);
+        if (lastLessonTime.isAfter(attentionCutoff)) {
+          return [];
+        }
+
+        const itemKey = `package_ending_soon:${pkg.id}:${lastLessonTime.toISOString()}`;
+        if (activeDismissalKeys.has(itemKey)) {
+          return [];
+        }
+
+        return [{
+          key: itemKey,
+          learnerName: pkg.learner_name || t('pages.dashboard.learner'),
+          packageTitle: pkg.title,
+          lastLessonTime,
+          dismissedUntil: lastLessonTime.toISOString(),
+        }];
+      })
+      .sort((a, b) => a.lastLessonTime.valueOf() - b.lastLessonTime.valueOf())
+  ), [activeDismissalKeys, activePackages, allLessons, attentionCutoff, attentionNow, t]);
+
+  const lessonAttentionItems = useMemo(() => (
+    notificationActivity
+      .flatMap((activity) => {
+        if (
+          activity.activity_type !== 'teacher_alert'
+          || activity.event_type !== 'lesson'
+          || activity.metadata?.alert_code !== 'lesson_declined'
+          || !activity.event_id
+        ) {
+          return [];
+        }
+
+        const lesson = lessonById.get(activity.event_id);
+        if (!lesson) {
+          return [];
+        }
+
+        const lessonTime = dayjs(lesson.scheduled_at).tz(lesson.timezone || DEFAULT_TIMEZONE);
+        if (!lessonTime.isAfter(attentionNow)) {
+          return [];
+        }
+
+        const itemKey = `lesson_declined:${activity.activity_id}:${lesson.id}`;
+        if (activeDismissalKeys.has(itemKey)) {
+          return [];
+        }
+
+        return [{
+          key: itemKey,
+          learnerName: activity.learner_display_name || lesson.learner_name || t('pages.dashboard.learner'),
+          lessonTime,
+          dismissedUntil: lessonTime.toISOString(),
+        }];
+      })
+      .sort((a, b) => a.lessonTime.valueOf() - b.lessonTime.valueOf())
+  ), [activeDismissalKeys, attentionNow, lessonById, notificationActivity, t]);
+
+  const notificationIssueItems = useMemo(() => {
+    const issueMap = new Map<number, NotificationInstance>();
+
+    failedNotificationInstances.forEach((instance) => {
+      issueMap.set(instance.id, instance);
+    });
+
+    queuedNotificationInstances.forEach((instance) => {
+      const latestAttemptStatus = instance.latest_attempt?.status;
+      if (latestAttemptStatus === 'failed' || latestAttemptStatus === 'failed_retryable') {
+        issueMap.set(instance.id, instance);
+      }
+    });
+
+    return Array.from(issueMap.values()).sort(
+      (a, b) => dayjs(a.effective_scheduled_for).valueOf() - dayjs(b.effective_scheduled_for).valueOf(),
+    );
+  }, [failedNotificationInstances, queuedNotificationInstances]);
+
+  const isLoadingAttention =
+    isLoadingActivePackages
+    || isLoadingNotificationActivity
+    || isLoadingFailedNotificationInstances
+    || isLoadingQueuedNotificationInstances
+    || isLoadingAttentionDismissals;
+  const hasAttentionItems =
+    packageAttentionItems.length > 0
+    || lessonAttentionItems.length > 0
+    || notificationIssueItems.length > 0;
+
   const onboardingSteps = [
     {
       key: 'learners',
@@ -276,30 +557,395 @@ const Dashboard: React.FC = () => {
       path: '/lessons',
     },
   ];
+
   const completedOnboardingSteps = onboardingSteps.filter((step) => step.done).length;
   const showOnboarding = completedOnboardingSteps < onboardingSteps.length;
 
+  const upcomingSections = [
+    {
+      key: 'today',
+      title: t('pages.dashboard.todayLabel'),
+      lessons: todayLessons,
+      emptyText: t('pages.dashboard.noLessonsToday'),
+    },
+    {
+      key: 'tomorrow',
+      title: t('pages.dashboard.tomorrowLabel'),
+      lessons: tomorrowLessons,
+      emptyText: t('pages.dashboard.noLessonsTomorrow'),
+    },
+  ];
+
+  const renderLessonRow = (lesson: Lesson) => {
+    const palette = statusColors[lesson.status];
+    return (
+      <div
+        key={lesson.id}
+        style={{
+          display: 'flex',
+          justifyContent: 'space-between',
+          alignItems: 'center',
+          gap: spacing.sm,
+          width: '100%',
+          padding: '8px 10px',
+          borderRadius: tileRadius,
+          background: colors.bgTertiary,
+        }}
+      >
+        <div style={{ display: 'flex', alignItems: 'center', gap: 8, minWidth: 84 }}>
+          <span
+            style={{
+              width: 8,
+              height: 8,
+              borderRadius: '50%',
+              background: palette.border,
+              flex: '0 0 auto',
+            }}
+          />
+          <div>
+          <Text strong style={{ display: 'block', lineHeight: 1.1 }}>
+            {dayjs(lesson.scheduled_at).tz(lesson.timezone || DEFAULT_TIMEZONE).format('HH:mm')}
+          </Text>
+          <Text type="secondary" style={{ fontSize: 11, lineHeight: 1.2 }}>
+            {t(`calendar.status.${lesson.status}`)}
+          </Text>
+          </div>
+        </div>
+        <Text
+          style={{
+            flex: 1,
+            minWidth: 0,
+            textAlign: 'right',
+            color: textColor,
+            whiteSpace: 'nowrap',
+            overflow: 'hidden',
+            textOverflow: 'ellipsis',
+          }}
+        >
+          {lesson.learner_name || t('pages.dashboard.learner')}
+        </Text>
+      </div>
+    );
+  };
+
+  const kpiItems = [
+    {
+      label: t('pages.dashboard.todayKpi'),
+      value: todayLessons.length,
+      icon: <FieldTimeOutlined />,
+      tint: `${colors.accentPrimary}14`,
+      iconColor: colors.accentPrimary,
+    },
+    {
+      label: t('pages.dashboard.tomorrowKpi'),
+      value: tomorrowLessons.length,
+      icon: <CalendarOutlined />,
+      tint: `${kpiPalette.green}14`,
+      iconColor: kpiPalette.green,
+    },
+    {
+      label: t('pages.dashboard.weekKpi'),
+      value: weekLessons.length,
+      icon: <ScheduleOutlined />,
+      tint: `${kpiPalette.amber}14`,
+      iconColor: kpiPalette.amber,
+    },
+    {
+      label: t('pages.dashboard.learnersKpi'),
+      value: learnerCount,
+      icon: <TeamOutlined />,
+      tint: `${kpiPalette.violet}14`,
+      iconColor: kpiPalette.violet,
+    },
+  ];
+
+  const attentionTileStyle = {
+    ...cardStyle,
+    width: '100%',
+    border: `1px solid ${colors.borderPrimary}`,
+    borderRadius: tileRadius,
+    boxShadow: 'none',
+  };
+
+  const formatAttentionDateTime = (value: string | dayjs.Dayjs) =>
+    (dayjs.isDayjs(value) ? value : dayjs(value).tz(DEFAULT_TIMEZONE)).format('D MMM, HH:mm');
+
+  const renderAttentionRow = ({
+    key,
+    primary,
+    secondary,
+    dismissible = false,
+    onDismiss,
+  }: {
+    key: string;
+    primary: string;
+    secondary: string;
+    dismissible?: boolean;
+    onDismiss?: () => void;
+  }) => (
+    <div
+      key={key}
+      style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        gap: spacing.sm,
+        padding: '10px 12px',
+        borderRadius: tileRadius,
+        background: colors.bgTertiary,
+      }}
+    >
+      <div style={{ minWidth: 0, flex: 1 }}>
+        <Text strong style={{ display: 'block', lineHeight: 1.2 }}>
+          {primary}
+        </Text>
+        <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.3 }}>
+          {secondary}
+        </Text>
+      </div>
+      {dismissible && onDismiss ? (
+        <Button
+          type="text"
+          size="small"
+          icon={<CloseOutlined />}
+          aria-label={t('pages.dashboard.attention.dismiss')}
+          onClick={onDismiss}
+          disabled={dismissAttentionMutation.isPending && dismissAttentionMutation.variables?.item_key === key}
+          style={{ flex: '0 0 auto', color: colors.textSecondary }}
+        />
+      ) : null}
+    </div>
+  );
+
+  const upcomingTile = (
+    <Card
+      title={t('pages.dashboard.upcomingLessons')}
+      variant="borderless"
+      style={dashboardTileStyle}
+      styles={{ body: { height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 } }}
+    >
+      <div
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          gap: spacing.md,
+          height: '100%',
+          minHeight: 0,
+          overflowY: 'auto',
+          paddingRight: 2,
+        }}
+      >
+        {upcomingSections.map((section) => (
+          <div
+            key={section.key}
+            style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+          >
+            <Text type="secondary" style={{ fontSize: 12 }}>
+              {section.title}
+            </Text>
+            {section.lessons.length > 0 ? (
+              section.lessons.map((lesson) => renderLessonRow(lesson))
+            ) : (
+              <div
+                style={{
+                  minHeight: 44,
+                  display: 'flex',
+                  alignItems: 'center',
+                  paddingInline: spacing.sm,
+                  borderRadius: tileRadius,
+                  background: colors.bgTertiary,
+                }}
+              >
+                <Text type="secondary">{section.emptyText}</Text>
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+
+  const miniCalendarTile = (
+    <Card
+      variant="borderless"
+      style={dashboardTileStyle}
+      styles={{ body: { padding: isMobile ? 12 : 16, height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 } }}
+    >
+      <DashboardMiniWeekCalendar
+        lessons={allLessons}
+        timezone={DEFAULT_TIMEZONE}
+        onOpenCalendar={() => navigate('/lessons')}
+      />
+    </Card>
+  );
+
+  const kpiTile = (
+    <Card
+      title={t('pages.dashboard.kpiTitle')}
+      variant="borderless"
+      style={dashboardTileStyle}
+      styles={{ body: { height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 } }}
+    >
+      <div style={{ display: 'grid', gridTemplateRows: 'repeat(4, minmax(0, 1fr))', gap: 6, height: '100%', minHeight: 0 }}>
+        {kpiItems.map((item) => (
+          <div
+            key={item.label}
+            style={{
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'space-between',
+              gap: 10,
+              padding: isMobile ? 10 : 10,
+              borderRadius: tileRadius,
+              background: colors.bgTertiary,
+              border: `1px solid ${borderColor}`,
+              minHeight: 0,
+            }}
+          >
+            <div
+              style={{
+                width: isMobile ? 32 : 34,
+                height: isMobile ? 32 : 34,
+                borderRadius: tileRadius,
+                background: item.tint,
+                color: item.iconColor,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                flex: '0 0 auto',
+                fontSize: isMobile ? 15 : 16,
+              }}
+            >
+              {item.icon}
+            </div>
+            <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 8 }}>
+              <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.2, minWidth: 0 }}>
+                {item.label}
+              </Text>
+              <Text strong style={{ fontSize: isMobile ? 18 : 22, lineHeight: 1, flex: '0 0 auto' }}>
+                {item.value}
+              </Text>
+            </div>
+          </div>
+        ))}
+      </div>
+    </Card>
+  );
+
+  const attentionSections = [
+    {
+      key: 'packages',
+      icon: <AppstoreOutlined />,
+      title: t('pages.dashboard.attention.sections.packages'),
+      items: packageAttentionItems.map((item) => renderAttentionRow({
+        key: item.key,
+        primary: `${item.learnerName} · ${item.packageTitle}`,
+        secondary: t('pages.dashboard.attention.packageEndingSoonLine', {
+          date: formatAttentionDateTime(item.lastLessonTime),
+        }),
+        dismissible: true,
+        onDismiss: () => dismissAttentionMutation.mutate({
+          item_type: 'package_ending_soon',
+          item_key: item.key,
+          dismissed_until: item.dismissedUntil,
+        }),
+      })),
+    },
+    {
+      key: 'notifications',
+      icon: <BellOutlined />,
+      title: t('pages.dashboard.attention.sections.notifications'),
+      items: notificationIssueItems.map((item) => renderAttentionRow({
+        key: `notification_issue:${item.id}`,
+        primary: item.learner_display_name || t('pages.dashboard.learner'),
+        secondary: [
+          t(`pages.notifications.categories.${item.category}`, { defaultValue: item.category }),
+          formatAttentionDateTime(item.effective_scheduled_for),
+          item.latest_attempt?.error_message || t('pages.dashboard.attention.notificationIssueFallback'),
+        ].join(' · '),
+      })),
+    },
+    {
+      key: 'lessons',
+      icon: <CalendarOutlined />,
+      title: t('pages.dashboard.attention.sections.lessons'),
+      items: lessonAttentionItems.map((item) => renderAttentionRow({
+        key: item.key,
+        primary: item.learnerName,
+        secondary: t('pages.dashboard.attention.lessonDeclinedLine', {
+          date: formatAttentionDateTime(item.lessonTime),
+        }),
+        dismissible: true,
+        onDismiss: () => dismissAttentionMutation.mutate({
+          item_type: 'lesson_declined',
+          item_key: item.key,
+          dismissed_until: item.dismissedUntil,
+        }),
+      })),
+    },
+  ].filter((section) => section.items.length > 0);
+
+  const attentionTile = (
+    <Card
+      title={t('pages.dashboard.attention.title')}
+      variant="borderless"
+      style={attentionTileStyle}
+      styles={{
+        body: {
+          padding: isLoadingAttention || hasAttentionItems ? (isMobile ? 12 : 16) : 12,
+        },
+      }}
+    >
+      {isLoadingAttention ? (
+        <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: spacing.md }}>
+          <Spin size="small" />
+        </div>
+      ) : !hasAttentionItems ? (
+        <div
+          style={{
+            padding: '8px 12px',
+            borderRadius: tileRadius,
+            background: colors.bgTertiary,
+          }}
+        >
+          <Text type="secondary">{t('pages.dashboard.attention.empty')}</Text>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
+          {attentionSections.map((section) => (
+            <div key={section.key} style={{ display: 'flex', flexDirection: 'column', gap: 6 }}>
+              <Text type="secondary" style={{ display: 'inline-flex', alignItems: 'center', gap: 6, fontSize: 12 }}>
+                {section.icon}
+                {section.title}
+              </Text>
+              {section.items}
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+
+  if (isLoadingLessons) {
+    return <Spin size="large" />;
+  }
+
+  if (isErrorLessons) {
+    return <Alert message={t('errors.fetchLessons')} description={errorLessons?.message} type="error" />;
+  }
+
   return (
-    <div>
-      <PageHeader 
+    <div style={{ padding: isMobile ? 0 : spacing.lg }}>
+      <PageHeader
         title={t('pages.dashboard.title')}
         subtitle={t('pages.dashboard.subtitle')}
         actions={
           <Space wrap size="small" style={{ display: 'flex', flexWrap: 'wrap' }}>
-            <Button 
-              type="primary" 
-              icon={<PlusOutlined />} 
-              onClick={() => navigate('/packages')}
-              size="middle"
-            >
+            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/packages')} size="middle">
               {t('pages.dashboard.newPackage')}
             </Button>
-            <Button 
-              icon={<CalendarOutlined />} 
-              onClick={() => navigate('/lessons')}
-              size="middle"
-            >
-              {t('pages.dashboard.viewLessons')}
+            <Button icon={<CalendarOutlined />} onClick={() => navigate('/lessons')} size="middle">
+              {t('pages.dashboard.openCalendar')}
             </Button>
           </Space>
         }
@@ -308,7 +954,7 @@ const Dashboard: React.FC = () => {
       {showOnboarding && (
         <Card
           title={t('pages.dashboard.onboarding.title')}
-          bordered={false}
+          variant="borderless"
           style={{ ...cardStyle, marginBottom: 24 }}
           extra={
             <span style={{ color: subtitleColor, fontSize: 13 }}>
@@ -341,11 +987,13 @@ const Dashboard: React.FC = () => {
                 ]}
               >
                 <List.Item.Meta
-                  avatar={step.done ? (
-                    <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 20 }} />
-                  ) : (
-                    <span style={{ color: '#1890ff', fontSize: 20 }}>{step.icon}</span>
-                  )}
+                  avatar={
+                    step.done ? (
+                      <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 20 }} />
+                    ) : (
+                      <span style={{ color: '#1890ff', fontSize: 20 }}>{step.icon}</span>
+                    )
+                  }
                   title={step.title}
                   description={step.description}
                 />
@@ -355,163 +1003,29 @@ const Dashboard: React.FC = () => {
         </Card>
       )}
 
-      {/* Key Metrics - Current Month */}
-      <div style={{ marginBottom: 8 }}>
-        <span style={{ color: subtitleColor, fontSize: 12 }}>
-          {t('pages.dashboard.statistics', { month: dayjs().format('MMMM YYYY') })}
-        </span>
-      </div>
-      <Row gutter={[12, 12]}>
-        <Col xs={12} sm={12} lg={6}>
-          <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
-            <Statistic
-              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>{t('pages.dashboard.total')}</span>}
-              value={totalLessons}
-              prefix={<ClockCircleOutlined />}
-              valueStyle={{ color: textColor, fontSize: isMobile ? 20 : 24 }}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} lg={6}>
-          <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
-            <Statistic
-              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>{t('pages.dashboard.completed')}</span>}
-              value={metricsData?.lessons.completed || 0}
-              valueStyle={{ color: '#52c41a', fontSize: isMobile ? 20 : 24 }}
-              prefix={<CheckCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} lg={6}>
-          <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
-            <Statistic
-              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>{t('pages.dashboard.scheduled')}</span>}
-              value={metricsData?.lessons.scheduled || 0}
-              valueStyle={{ color: '#1890ff', fontSize: isMobile ? 20 : 24 }}
-              prefix={<ClockCircleOutlined />}
-            />
-          </Card>
-        </Col>
-        <Col xs={12} sm={12} lg={6}>
-          <Card style={cardStyle} bodyStyle={{ padding: isMobile ? 12 : 24 }}>
-            <Statistic
-              title={<span style={{ fontSize: isMobile ? 12 : 14 }}>{t('pages.dashboard.cancelled')}</span>}
-              value={metricsData?.lessons.cancelled || 0}
-              valueStyle={{ color: '#ff4d4f', fontSize: isMobile ? 20 : 24 }}
-              prefix={<CloseCircleOutlined />}
-            />
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Charts Row */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        <Col xs={24} lg={16}>
-          <Card title={t('pages.dashboard.lessonsOverTime')} bordered={false} style={cardStyle}>
-            <ResponsiveContainer width="100%" height={currentChartHeight}>
-              <LineChart data={chartData}>
-                <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
-                <XAxis dataKey="date" stroke={textColor} tick={{ fontSize: isMobile ? 10 : 12 }} />
-                <YAxis stroke={textColor} tick={{ fontSize: isMobile ? 10 : 12 }} />
-                <Tooltip contentStyle={tooltipStyle} />
-                <Legend wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} />
-                <Line type="monotone" dataKey="lessons" stroke="#1890ff" strokeWidth={2} name={t('navigation.lessons')} />
-              </LineChart>
-            </ResponsiveContainer>
-          </Card>
-        </Col>
-        <Col xs={24} lg={8}>
-          <Card title={t('pages.dashboard.lessonsByStatus')} bordered={false} style={cardStyle}>
-            <ResponsiveContainer width="100%" height={currentChartHeight}>
-              <PieChart>
-                <Pie
-                  data={pieData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={isMobile ? false : (props: any) => `${(props.percent * 100).toFixed(0)}%`}
-                  outerRadius={isMobile ? 50 : 80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {pieData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-                <Legend 
-                  wrapperStyle={{ fontSize: isMobile ? 10 : 12 }} 
-                  layout={isMobile ? 'horizontal' : 'vertical'}
-                  align={isMobile ? 'center' : 'right'}
-                  verticalAlign={isMobile ? 'bottom' : 'middle'}
-                />
-              </PieChart>
-            </ResponsiveContainer>
-          </Card>
-        </Col>
-      </Row>
-
-      {/* Active Packages & Upcoming Lessons */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
-        <Col xs={24} lg={12}>
-          <Card 
-            title={t('pages.dashboard.activePackages')} 
-            bordered={false}
-            style={cardStyle}
-            extra={<Button type="link" onClick={() => navigate('/packages')}>{t('common.viewAll')}</Button>}
-          >
-            <List
-              dataSource={packagesData?.items || []}
-              loading={!packagesData}
-              renderItem={(pkg) => (
-                <List.Item 
-                  key={pkg.id}
-                  style={{ cursor: 'pointer' }}
-                  onClick={() => navigate(`/packages/${pkg.id}`)}
-                >
-                  <List.Item.Meta
-                    title={pkg.title}
-                    description={`${t('pages.dashboard.learner')}: ${pkg.learner_name}`}
-                  />
-                  <div style={{ textAlign: 'right' }}>
-                    <Progress 
-                      type="circle" 
-                      percent={pkg.progress.total > 0 ? Math.round(((pkg.progress.completed + pkg.progress.cancelled) / pkg.progress.total) * 100) : 0} 
-                      width={50}
-                      strokeColor="#52c41a"
-                    />
-                    <div style={{ marginTop: 8, fontSize: 12, color: subtitleColor }}>
-                      {pkg.progress.completed}+{pkg.progress.cancelled}/{pkg.progress.total}
-                    </div>
-                  </div>
-                </List.Item>
-              )}
-            />
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card title={t('pages.dashboard.upcomingLessons')} bordered={false} style={cardStyle}>
-            {isLoadingLessons ? (
-              <Spin />
-            ) : isErrorLessons ? (
-              <Alert message={t('errors.fetchLessons')} description={errorLessons.message} type="error" />
-            ) : (
-              <List
-                dataSource={lessonsData?.items}
-                renderItem={(item) => (
-                  <List.Item key={item.id}>
-                    <List.Item.Meta
-                      avatar={<CalendarOutlined style={{ fontSize: 20, color: '#1890ff' }} />}
-                      title={formatDateTime(item.scheduled_at, { timezone: item.timezone, format: 'MMM DD, YYYY HH:mm' })}
-                      description={item.learner_name || item.package_title || `${t('common.status')}: ${item.status}`}
-                    />
-                  </List.Item>
-                )}
-              />
-            )}
-          </Card>
-        </Col>
-      </Row>
+      {isMobile ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
+          {upcomingTile}
+          {attentionTile}
+          {miniCalendarTile}
+          {kpiTile}
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={9} xl={7} style={{ display: 'flex' }}>
+              {upcomingTile}
+            </Col>
+            <Col xs={24} lg={15} xl={13} style={{ display: 'flex' }}>
+              {miniCalendarTile}
+            </Col>
+            <Col xs={24} lg={24} xl={4} style={{ display: 'flex' }}>
+              {kpiTile}
+            </Col>
+          </Row>
+          {attentionTile}
+        </div>
+      )}
     </div>
   );
 };

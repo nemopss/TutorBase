@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 from httpx import AsyncClient
@@ -75,3 +75,62 @@ async def test_reminders_daily_metrics(client: AsyncClient, db_session: AsyncSes
     assert response.status_code == 200
     items = response.json()["items"]
     assert len(items) >= 1
+
+
+@pytest.mark.asyncio
+async def test_dashboard_attention_dismissals_roundtrip(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+    dismissed_until = datetime.now(timezone.utc) + timedelta(days=2)
+
+    create_response = await client.post(
+        "/api/v1/metrics/dashboard-attention-dismissals",
+        headers=headers,
+        json={
+            "item_type": "package_ending_soon",
+            "item_key": "package_ending_soon:10:2026-04-25T18:00:00+00:00",
+            "dismissed_until": dismissed_until.isoformat(),
+        },
+    )
+    assert create_response.status_code == 200
+    created = create_response.json()
+    assert created["item_type"] == "package_ending_soon"
+
+    list_response = await client.get(
+        "/api/v1/metrics/dashboard-attention-dismissals",
+        headers=headers,
+    )
+    assert list_response.status_code == 200
+    items = list_response.json()
+    assert len(items) == 1
+    assert items[0]["item_key"] == "package_ending_soon:10:2026-04-25T18:00:00+00:00"
+
+
+@pytest.mark.asyncio
+async def test_dashboard_attention_dismissals_hide_expired_items(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.post(
+        "/api/v1/metrics/dashboard-attention-dismissals",
+        headers=headers,
+        json={
+            "item_type": "lesson_declined",
+            "item_key": "lesson_declined:77:88",
+            "dismissed_until": (datetime.now(timezone.utc) - timedelta(minutes=5)).isoformat(),
+        },
+    )
+    assert response.status_code == 200
+
+    list_response = await client.get(
+        "/api/v1/metrics/dashboard-attention-dismissals",
+        headers=headers,
+    )
+    assert list_response.status_code == 200
+    assert list_response.json() == []

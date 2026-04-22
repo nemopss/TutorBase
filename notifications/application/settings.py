@@ -97,6 +97,7 @@ async def _rebuild_queue_for_learner_mode(
         shadow=mode.effective_mode == NotificationSystemMode.SHADOW,
         commit=False,
         respect_rollout_modes=False,
+        skip_past_due=True,
     )
 
 
