@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+from datetime import datetime, timezone
+
 from notifications.application.dto import (
     CombinedPreviewInstance,
     InstanceUpsertResult,
@@ -171,12 +173,21 @@ async def _materialize_rules(
     shadow: bool,
     commit: bool,
     respect_rollout_modes: bool = False,
+    skip_past_due: bool = False,
 ) -> MaterializeRulesResult:
     preview = await PreviewRulesUseCase(uow).execute(
         drafts,
         horizon_days=horizon_days,
         limit=limit,
     )
+    preview_instances = preview.instances
+    if skip_past_due:
+        reference_time = datetime.now(timezone.utc)
+        preview_instances = tuple(
+            instance
+            for instance in preview.instances
+            if instance.effective_scheduled_for >= reference_time
+        )
     learner_modes = (
         await uow.settings.list_learner_modes()
         if respect_rollout_modes
@@ -194,7 +205,7 @@ async def _materialize_rules(
             delivery_enabled=rollout_delivery_enabled,
             shadow=rollout_shadow,
         )
-        for instance in preview.instances
+        for instance in preview_instances
         for rollout_delivery_enabled, rollout_shadow in [_resolve_rollout_behavior(
             instance.learner_id,
             effective_mode_by_learner=effective_mode_by_learner,
@@ -205,7 +216,7 @@ async def _materialize_rules(
     )
     warnings = _materialization_warnings(
         preview_warnings=preview.warnings,
-        preview_instances=preview.instances,
+        preview_instances=preview_instances,
         planned_instances=planned,
         respect_rollout_modes=respect_rollout_modes,
     )

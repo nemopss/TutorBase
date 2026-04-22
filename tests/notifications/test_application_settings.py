@@ -1,5 +1,5 @@
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -211,6 +211,7 @@ async def test_learner_mode_use_cases():
 
 @pytest.mark.asyncio
 async def test_setting_learner_mode_to_new_rebuilds_scoped_queue():
+    future_start = datetime.now(timezone.utc) + timedelta(days=7)
     rule = NotificationRuleDraft(
         rule_id=7,
         name="lesson_confirmation",
@@ -243,7 +244,7 @@ async def test_setting_learner_mode_to_new_rebuilds_scoped_queue():
                     event_type=EventType.LESSON,
                     event_id=617,
                     learner_id=10,
-                    starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+                    starts_at=future_start,
                     timezone="UTC",
                     package_status="active",
                     lesson_status="scheduled",
@@ -253,7 +254,7 @@ async def test_setting_learner_mode_to_new_rebuilds_scoped_queue():
                     event_type=EventType.LESSON,
                     event_id=618,
                     learner_id=11,
-                    starts_at=datetime(2026, 4, 9, 20, 0, tzinfo=timezone.utc),
+                    starts_at=future_start + timedelta(days=1),
                     timezone="UTC",
                     package_status="active",
                     lesson_status="scheduled",
@@ -279,4 +280,60 @@ async def test_setting_learner_mode_to_new_rebuilds_scoped_queue():
     assert len(instances.upserted) == 1
     assert instances.upserted[0].learner_id == 10
     assert instances.upserted[0].delivery_enabled is True
+    assert uow.committed is True
+
+
+@pytest.mark.asyncio
+async def test_setting_learner_mode_to_new_skips_past_due_package_renewal_instances():
+    rule = NotificationRuleDraft(
+        rule_id=8,
+        name="package_renewal",
+        category=CategoryKey.PACKAGE_RENEWAL,
+        event_type=EventType.PACKAGE,
+        trigger_type=TriggerType.DAY_OFFSET_AT_TIME,
+        trigger_config={"days": 0, "local_time": "10:00"},
+        priority=Priority.NORMAL,
+        template_body="Продлим пакет?",
+        template_key="package_renewal",
+        assignments=(AudienceSelector(scope_type="all_learners"),),
+    )
+    instances = FakeInstanceRepository()
+    repository = FakeSettingsRepository(
+        settings=NotificationSettingsRecord(tenant_id=1, mode=NotificationSystemMode.LEGACY),
+    )
+    uow = FakeUnitOfWork(
+        settings=repository,
+        rules=FakeRuleRepository(rules=(rule,)),
+        instances=instances,
+        audience_resolver=FakeAudienceResolver(
+            recipients=(PreviewRecipient(learner_id=10, display_name="Вика"),)
+        ),
+        events=FakeEventRepository(
+            events=(
+                PreviewEvent(
+                    event_type=EventType.PACKAGE,
+                    event_id=85,
+                    learner_id=10,
+                    starts_at=datetime.now(timezone.utc) - timedelta(days=1),
+                    timezone="UTC",
+                    package_status="active",
+                ),
+            )
+        ),
+    )
+
+    updated = await SetLearnerNotificationModeUseCase(uow).execute(
+        learner_id=10,
+        draft=LearnerNotificationModeUpdateDraft(mode_override=NotificationSystemMode.NEW),
+    )
+
+    assert updated is not None
+    assert instances.cancel_scoped_calls == [
+        {
+            "rule_ids": (8,),
+            "learner_ids": (10,),
+            "reason": "learner_notification_mode_changed",
+        }
+    ]
+    assert instances.upserted == ()
     assert uow.committed is True

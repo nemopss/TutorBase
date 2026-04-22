@@ -108,7 +108,23 @@
       "title": "Dashboard",
       "subtitle": "Overview of your lessons and packages",
       "newPackage": "New Package",
+      "openCalendar": "Calendar",
       "viewLessons": "View Lessons",
+      "miniCalendar": "Mini calendar",
+      "kpiTitle": "KPIs",
+      "todayLabel": "Today",
+      "tomorrowLabel": "Tomorrow",
+      "todayShort": "Today",
+      "tomorrowShort": "Tomorrow",
+      "weekShort": "Week",
+      "learnersShort": "Learners",
+      "todayKpi": "Lessons today",
+      "tomorrowKpi": "Lessons tomorrow",
+      "weekKpi": "Lessons this week",
+      "learnersKpi": "Active learners",
+      "noLessonsToday": "No lessons today",
+      "noLessonsTomorrow": "No lessons tomorrow",
+      "noLessonsThisWeek": "No lessons this week",
       "statistics": "Statistics for {{month}}",
       "total": "Total",
       "completed": "Completed",
@@ -120,6 +136,33 @@
       "activePackages": "Active Packages",
       "upcomingLessons": "Upcoming Lessons",
       "learner": "Learner",
+      "attention": {
+        "title": "Needs attention",
+        "empty": "There are no critical tasks right now",
+        "dismiss": "Dismiss",
+        "packageEndingSoonLine": "Package is ending soon: last lesson {{date}}",
+        "lessonDeclinedLine": "The learner declined the lesson at {{date}}",
+        "notificationIssueFallback": "Delivery issue",
+        "sections": {
+          "packages": "Packages",
+          "notifications": "Notifications",
+          "lessons": "Lessons"
+        }
+      },
+      "level3": {
+        "historyUnavailable": "Historical load is unavailable right now",
+        "heatmap": {
+          "title": "Lesson load heatmap",
+          "empty": "There are no lessons in this period yet",
+          "tooltipHours": "{{hours}} h · {{lessons}} lessons"
+        },
+        "weeklyLoad": {
+          "title": "Weekly load",
+          "empty": "There are no lessons in the recent weeks yet",
+          "hoursLabel": "{{hours}} h",
+          "lessonsLabel": "{{count}} lessons"
+        }
+      },
       "onboarding": {
         "title": "Set Up Your Workspace",
         "description": "Complete the first steps to start managing learners without manual setup.",

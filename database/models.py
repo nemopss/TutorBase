@@ -594,6 +594,31 @@ class Lesson(Base):
     )
 
 
+class DashboardAttentionDismissal(Base):
+    """Persist dismissed dashboard attention items for the current tenant.
+
+    Stores acknowledgement state for dismissible dashboard notices such as
+    package-ending warnings and learner lesson-decline notices. Dismissals are
+    scoped to a tenant and expire automatically after ``dismissed_until``.
+    """
+    __tablename__ = 'dashboard_attention_dismissals'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False, index=True)
+    item_type = Column(String(64), nullable=False)
+    item_key = Column(String(255), nullable=False)
+    dismissed_until = Column(DateTime(timezone=True), nullable=False)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant')
+
+    __table_args__ = (
+        UniqueConstraint('tenant_id', 'item_type', 'item_key', name='uq_dashboard_attention_dismissals_item'),
+        Index('ix_dashboard_attention_dismissals_active', 'tenant_id', 'item_type', 'dismissed_until'),
+    )
+
+
 class ReminderRule(Base):
     """Reminder rule model for automated notifications.
     

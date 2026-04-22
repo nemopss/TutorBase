@@ -108,7 +108,23 @@
       "title": "대시보드",
       "subtitle": "수업 및 패키지 개요",
       "newPackage": "새 패키지",
+      "openCalendar": "캘린더",
       "viewLessons": "수업 보기",
+      "miniCalendar": "미니 캘린더",
+      "kpiTitle": "지표",
+      "todayLabel": "오늘",
+      "tomorrowLabel": "내일",
+      "todayShort": "오늘",
+      "tomorrowShort": "내일",
+      "weekShort": "이번 주",
+      "learnersShort": "학생",
+      "todayKpi": "오늘 수업",
+      "tomorrowKpi": "내일 수업",
+      "weekKpi": "이번 주 수업",
+      "learnersKpi": "활성 학생",
+      "noLessonsToday": "오늘 수업이 없습니다",
+      "noLessonsTomorrow": "내일 수업이 없습니다",
+      "noLessonsThisWeek": "이번 주 수업이 없습니다",
       "statistics": "{{month}} 통계",
       "total": "총",
       "completed": "완료",
@@ -120,6 +136,33 @@
       "activePackages": "활성 패키지",
       "upcomingLessons": "예정된 수업",
       "learner": "학생",
+      "attention": {
+        "title": "주의가 필요함",
+        "empty": "지금은 긴급한 작업이 없습니다",
+        "dismiss": "숨기기",
+        "packageEndingSoonLine": "패키지가 곧 끝납니다: 마지막 수업 {{date}}",
+        "lessonDeclinedLine": "학생이 {{date}} 수업을 거절했습니다",
+        "notificationIssueFallback": "전송 문제",
+        "sections": {
+          "packages": "패키지",
+          "notifications": "알림",
+          "lessons": "수업"
+        }
+      },
+      "level3": {
+        "historyUnavailable": "과거 수업 부하를 지금은 불러올 수 없습니다",
+        "heatmap": {
+          "title": "수업 부하 히트맵",
+          "empty": "선택한 기간에는 아직 수업이 없습니다",
+          "tooltipHours": "{{hours}}시간 · {{lessons}}개 수업"
+        },
+        "weeklyLoad": {
+          "title": "주간 부하",
+          "empty": "최근 몇 주 동안의 수업이 아직 없습니다",
+          "hoursLabel": "{{hours}}시간",
+          "lessonsLabel": "{{count}}개 수업"
+        }
+      },
       "onboarding": {
         "title": "공간 설정",
         "description": "처음 필요한 항목을 완료하고 바로 학생 관리를 시작하세요.",

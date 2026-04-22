@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from datetime import date
-from typing import Optional
+from datetime import date, datetime
+from typing import Literal
 
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 
 
 class MetricsSummary(BaseModel):
@@ -19,3 +19,49 @@ class DailyPoint(BaseModel):
 class DailyMetricsResponse(BaseModel):
     items: list[DailyPoint]
 
+
+DashboardAttentionItemType = Literal["package_ending_soon", "lesson_declined"]
+
+
+class DashboardHistoryDayPoint(BaseModel):
+    date: date
+    hours: float
+    lessons_count: int
+
+
+class DashboardHistoryWeekPoint(BaseModel):
+    week_start: date
+    hours: float
+    lessons_count: int
+
+
+class DashboardHistoryHeatmapResponse(BaseModel):
+    from_date: date
+    to_date: date
+    days: list[DashboardHistoryDayPoint]
+
+
+class DashboardWeeklyLoadResponse(BaseModel):
+    from_date: date
+    to_date: date
+    weeks: list[DashboardHistoryWeekPoint]
+
+
+class DashboardHistoryResponse(BaseModel):
+    heatmap: DashboardHistoryHeatmapResponse
+    weekly_load: DashboardWeeklyLoadResponse
+
+
+class DashboardAttentionDismissalRequest(BaseModel):
+    item_type: DashboardAttentionItemType
+    item_key: str = Field(..., min_length=1, max_length=255)
+    dismissed_until: datetime
+
+
+class DashboardAttentionDismissalResponse(BaseModel):
+    id: int
+    item_type: DashboardAttentionItemType
+    item_key: str
+    dismissed_until: datetime
+    created_at: datetime
+    updated_at: datetime
