@@ -42,10 +42,12 @@ class FakeAudienceResolver:
 class FakeEventRepository:
     event: PreviewEvent | None
 
-    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit):
+    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit, offset=0):
         if self.event is None:
             return ()
         if self.event.event_type != event_type or self.event.learner_id not in set(learner_ids):
+            return ()
+        if offset > 0:
             return ()
         return (self.event,)
 

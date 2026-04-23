@@ -222,10 +222,10 @@ async def _materialize_rules(
     respect_rollout_modes: bool = False,
     skip_past_due: bool = False,
 ) -> MaterializeRulesResult:
-    preview = await PreviewRulesUseCase(uow).execute(
+    preview = await PreviewRulesUseCase(uow).execute_all(
         drafts,
         horizon_days=horizon_days,
-        limit=limit,
+        page_size=max(1, limit),
     )
     preview_instances = preview.instances
     if skip_past_due:

@@ -276,6 +276,7 @@ class SqlAlchemyEventRepository:
         learner_ids: tuple[int, ...],
         horizon_days: int,
         limit: int,
+        offset: int = 0,
     ) -> tuple[PreviewEvent, ...]:
         if not learner_ids:
             return ()
@@ -289,6 +290,7 @@ class SqlAlchemyEventRepository:
                     starts_at=starts_at,
                     ends_at=ends_at,
                     limit=limit,
+                    offset=offset,
                 )
             )
             return tuple(_lesson_event_from_row(row) for row in result)
@@ -300,6 +302,7 @@ class SqlAlchemyEventRepository:
                     starts_at=starts_at,
                     ends_at=ends_at,
                     limit=limit,
+                    offset=offset,
                 )
             )
             return tuple(_package_event_from_row(row) for row in result)
@@ -2349,6 +2352,7 @@ def _lesson_events_stmt(
     starts_at: datetime,
     ends_at: datetime,
     limit: int,
+    offset: int = 0,
 ):
     conflict_count, conflict_lesson_ids, conflict_package_ids = _lesson_slot_conflict_columns(tenant_id)
     return (
@@ -2377,6 +2381,7 @@ def _lesson_events_stmt(
             Lesson.scheduled_at < ends_at,
         )
         .order_by(Lesson.scheduled_at, Lesson.id)
+        .offset(offset)
         .limit(limit)
     )
 
@@ -2457,6 +2462,7 @@ def _package_events_stmt(
     starts_at: datetime,
     ends_at: datetime,
     limit: int,
+    offset: int = 0,
 ):
     return (
         select(
@@ -2475,6 +2481,7 @@ def _package_events_stmt(
             LessonPackage.end_date < ends_at,
         )
         .order_by(LessonPackage.end_date, LessonPackage.id)
+        .offset(offset)
         .limit(limit)
     )
 

@@ -26,6 +26,7 @@ class PreviewRuleUseCase:
         *,
         horizon_days: int = 30,
         limit: int = 20,
+        event_offset: int = 0,
     ) -> RulePreviewResult:
         warnings: list[str] = []
         if draft.template_body:
@@ -43,9 +44,11 @@ class PreviewRuleUseCase:
             learner_ids=tuple(recipient_by_id),
             horizon_days=horizon_days,
             limit=limit,
+            offset=event_offset,
         )
         if not events:
             return RulePreviewResult(instances=(), warnings=("no_matching_events", *warnings))
+        has_more = len(events) == limit
 
         global_preference = await self._uow.preferences.get_global_preference()
         preview_instances: list[PreviewInstance] = []
@@ -190,6 +193,7 @@ class PreviewRuleUseCase:
         return RulePreviewResult(
             instances=tuple([*scheduled_results, *skipped_results][:limit]),
             warnings=tuple(warnings),
+            has_more=has_more,
         )
 
 
@@ -204,71 +208,123 @@ class PreviewRulesUseCase:
         horizon_days: int = 30,
         limit: int = 20,
     ) -> RulePreviewResult:
-        warnings: list[str] = []
-        scheduled: list[PreviewInstance] = []
-        passthrough: list[PreviewInstance | CombinedPreviewInstance] = []
-        template_key_by_rule: dict[int | str, str | None] = {
-            draft.rule_id: draft.template_key for draft in drafts
-        }
-
         single_rule_use_case = PreviewRuleUseCase(self._uow)
+        rule_results: list[RulePreviewResult] = []
         for draft in drafts:
-            result = await single_rule_use_case.execute(draft, horizon_days=horizon_days, limit=limit)
-            warnings.extend(result.warnings)
-            for instance in result.instances:
-                if isinstance(instance, PreviewInstance) and instance.status == "scheduled":
-                    scheduled.append(instance)
-                else:
-                    passthrough.append(instance)
-
-        candidate_by_key: dict[tuple[object, ...], NotificationCandidate] = {}
-        instance_by_key: dict[tuple[object, ...], PreviewInstance] = {}
-        for instance in scheduled:
-            candidate = NotificationCandidate(
-                rule_id=instance.rule_id,
-                category=instance.category,
-                event_type=instance.event_type,
-                event_id=instance.event_id,
-                learner_id=instance.learner_id,
-                scheduled_for=instance.effective_scheduled_for,
-                priority=instance.priority,
-                template_key=template_key_by_rule.get(instance.rule_id),
+            rule_results.append(
+                await single_rule_use_case.execute(draft, horizon_days=horizon_days, limit=limit)
             )
-            candidate_by_key.setdefault(candidate.exact_dedupe_key, candidate)
-            instance_by_key.setdefault(candidate.exact_dedupe_key, instance)
-
-        combined_candidates = combine_lesson_confirmation_and_homework(list(candidate_by_key.values()))
-        combined_results: list[PreviewInstance | CombinedPreviewInstance] = []
-        consumed_keys: set[tuple[object, ...]] = set()
-        for candidate in combined_candidates:
-            if isinstance(candidate, NotificationCandidate):
-                combined_results.append(instance_by_key[candidate.exact_dedupe_key])
-                consumed_keys.add(candidate.exact_dedupe_key)
-                continue
-
-            component_previews = tuple(
-                instance_by_key[component.exact_dedupe_key]
-                for component in candidate.components
-            )
-            combined_results.append(
-                CombinedPreviewInstance(
-                    combination_key=candidate.combination_key,
-                    learner_id=int(candidate.learner_id),
-                    event_type=candidate.event_type,
-                    event_id=int(candidate.event_id) if candidate.event_id is not None else None,
-                    scheduled_for=component_previews[0].scheduled_for,
-                    effective_scheduled_for=candidate.scheduled_for,
-                    priority=candidate.priority,
-                    components=component_previews,
-                    warnings=tuple(dict.fromkeys(("combined", *_component_warnings(component_previews)))),
-                )
-            )
-            consumed_keys.update(component.exact_dedupe_key for component in candidate.components)
-
-        return RulePreviewResult(
-            instances=tuple([*combined_results, *passthrough][:limit]),
-            warnings=tuple(dict.fromkeys(warnings)),
+        return _combine_rule_results(
+            rule_results=tuple(rule_results),
+            template_key_by_rule={
+                draft.rule_id: draft.template_key for draft in drafts
+            },
+            limit=limit,
         )
+
+    async def execute_all(
+        self,
+        drafts: tuple[NotificationRuleDraft, ...],
+        *,
+        horizon_days: int = 30,
+        page_size: int = 100,
+    ) -> RulePreviewResult:
+        single_rule_use_case = PreviewRuleUseCase(self._uow)
+        rule_results: list[RulePreviewResult] = []
+        for draft in drafts:
+            event_offset = 0
+            while True:
+                result = await single_rule_use_case.execute(
+                    draft,
+                    horizon_days=horizon_days,
+                    limit=page_size,
+                    event_offset=event_offset,
+                )
+                if not result.instances and event_offset > 0:
+                    break
+                if not result.instances and not result.has_more:
+                    rule_results.append(result)
+                    break
+                rule_results.append(result)
+                if not result.has_more:
+                    break
+                event_offset += page_size
+
+        return _combine_rule_results(
+            rule_results=tuple(rule_results),
+            template_key_by_rule={
+                draft.rule_id: draft.template_key for draft in drafts
+            },
+            limit=None,
+        )
+
+
+def _combine_rule_results(
+    *,
+    rule_results: tuple[RulePreviewResult, ...],
+    template_key_by_rule: dict[int | str, str | None],
+    limit: int | None,
+) -> RulePreviewResult:
+    warnings: list[str] = []
+    scheduled: list[PreviewInstance] = []
+    passthrough: list[PreviewInstance | CombinedPreviewInstance] = []
+    for result in rule_results:
+        warnings.extend(result.warnings)
+        for instance in result.instances:
+            if isinstance(instance, PreviewInstance) and instance.status == "scheduled":
+                scheduled.append(instance)
+            else:
+                passthrough.append(instance)
+
+    candidate_by_key: dict[tuple[object, ...], NotificationCandidate] = {}
+    instance_by_key: dict[tuple[object, ...], PreviewInstance] = {}
+    for instance in scheduled:
+        candidate = NotificationCandidate(
+            rule_id=instance.rule_id,
+            category=instance.category,
+            event_type=instance.event_type,
+            event_id=instance.event_id,
+            learner_id=instance.learner_id,
+            scheduled_for=instance.effective_scheduled_for,
+            priority=instance.priority,
+            template_key=template_key_by_rule.get(instance.rule_id),
+        )
+        candidate_by_key.setdefault(candidate.exact_dedupe_key, candidate)
+        instance_by_key.setdefault(candidate.exact_dedupe_key, instance)
+
+    combined_candidates = combine_lesson_confirmation_and_homework(list(candidate_by_key.values()))
+    combined_results: list[PreviewInstance | CombinedPreviewInstance] = []
+    consumed_keys: set[tuple[object, ...]] = set()
+    for candidate in combined_candidates:
+        if isinstance(candidate, NotificationCandidate):
+            combined_results.append(instance_by_key[candidate.exact_dedupe_key])
+            consumed_keys.add(candidate.exact_dedupe_key)
+            continue
+
+        component_previews = tuple(
+            instance_by_key[component.exact_dedupe_key]
+            for component in candidate.components
+        )
+        combined_results.append(
+            CombinedPreviewInstance(
+                combination_key=candidate.combination_key,
+                learner_id=int(candidate.learner_id),
+                event_type=candidate.event_type,
+                event_id=int(candidate.event_id) if candidate.event_id is not None else None,
+                scheduled_for=component_previews[0].scheduled_for,
+                effective_scheduled_for=candidate.scheduled_for,
+                priority=candidate.priority,
+                components=component_previews,
+                warnings=tuple(dict.fromkeys(("combined", *_component_warnings(component_previews)))),
+            )
+        )
+        consumed_keys.update(component.exact_dedupe_key for component in candidate.components)
+
+    instances = tuple([*combined_results, *passthrough]) if limit is None else tuple([*combined_results, *passthrough][:limit])
+    return RulePreviewResult(
+        instances=instances,
+        warnings=tuple(dict.fromkeys(warnings)),
+    )
 
 
 def _explanation(draft, event, recipient, reason: str) -> dict:

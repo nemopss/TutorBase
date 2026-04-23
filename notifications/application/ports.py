@@ -55,6 +55,7 @@ class EventRepository(Protocol):
         learner_ids: tuple[int, ...],
         horizon_days: int,
         limit: int,
+        offset: int = 0,
     ) -> tuple[PreviewEvent, ...]:
         ...
 
