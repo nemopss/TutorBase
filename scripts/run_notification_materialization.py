@@ -15,19 +15,23 @@ if str(ROOT) not in sys.path:
 
 from config import config
 from notifications.application.materialization import MaterializeActiveRulesUseCase
-from notifications.infrastructure.repositories import SqlAlchemySessionNotificationUnitOfWork
+from notifications.infrastructure.repositories import (
+    SqlAlchemySessionNotificationUnitOfWork,
+)
 
 
 def _parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Run notification materialization directly against the database."
     )
-    parser.add_argument("--tenant-id", type=int, required=True, help="Tenant id to rebuild")
+    parser.add_argument(
+        "--tenant-id", type=int, required=True, help="Tenant id to rebuild"
+    )
     parser.add_argument(
         "--mode",
         choices=("live", "shadow"),
         default="live",
-        help="Materialization mode, use live for production delivery rebuilds.",
+        help="Materialization mode. Use live for production delivery rebuilds.",
     )
     parser.add_argument(
         "--horizon-days",
@@ -60,7 +64,9 @@ async def _run(args: argparse.Namespace) -> dict:
 
     try:
         async with session_factory() as session:
-            uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=args.tenant_id)
+            uow = SqlAlchemySessionNotificationUnitOfWork(
+                session, tenant_id=args.tenant_id
+            )
             live = args.mode == "live"
             result = await MaterializeActiveRulesUseCase(uow).execute(
                 horizon_days=args.horizon_days,
@@ -87,7 +93,9 @@ async def _run(args: argparse.Namespace) -> dict:
 
 def main() -> None:
     args = _parser().parse_args()
-    print(json.dumps(asyncio.run(_run(args)), ensure_ascii=False, indent=2, default=str))
+    print(
+        json.dumps(asyncio.run(_run(args)), ensure_ascii=False, indent=2, default=str)
+    )
 
 
 if __name__ == "__main__":
