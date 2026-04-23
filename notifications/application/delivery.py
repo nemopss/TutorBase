@@ -38,12 +38,14 @@ class ClaimDueNotificationsUseCase:
         now: datetime | None = None,
         limit: int = 100,
         lease_seconds: int = 300,
+        delivery_grace_seconds: int = 0,
     ) -> ClaimDueNotificationsResult:
         claim_time = now or datetime.now(timezone.utc)
         result = await self._uow.instances.claim_due_instances(
             now=claim_time,
             limit=limit,
             lease_seconds=lease_seconds,
+            delivery_grace_seconds=delivery_grace_seconds,
         )
         await self._uow.commit()
         return result
