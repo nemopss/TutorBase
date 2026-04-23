@@ -73,7 +73,7 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
       onCancel={handleCancel}
       confirmLoading={loading}
       okText={mode === 'create' ? t('forms.learner.createButton') : t('common.save')}
-      destroyOnClose
+      destroyOnHidden
       cancelText={t('common.cancel')}
       width={500}
     >

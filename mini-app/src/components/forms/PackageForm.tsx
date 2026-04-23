@@ -247,7 +247,7 @@ const PackageForm: React.FC<PackageFormProps> = ({
           });
       }}
       confirmLoading={isSubmitting}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" name="package_form">
         <Form.Item

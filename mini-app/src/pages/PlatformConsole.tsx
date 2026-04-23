@@ -1,10 +1,38 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Alert, Button, Divider, Form, Input, InputNumber, List, Modal, Select, Space, Spin, Tag, Typography, message } from 'antd';
-import { ArrowLeftOutlined, EyeOutlined, GlobalOutlined, LoginOutlined, ReloadOutlined, SendOutlined } from '@ant-design/icons';
+import {
+  Alert,
+  Button,
+  Card,
+  Collapse,
+  Divider,
+  Form,
+  Input,
+  InputNumber,
+  List,
+  Segmented,
+  Select,
+  Space,
+  Spin,
+  Tag,
+  Typography,
+  message,
+} from 'antd';
+import {
+  ArrowLeftOutlined,
+  EyeOutlined,
+  GlobalOutlined,
+  LoginOutlined,
+  PlusOutlined,
+  ReloadOutlined,
+  SendOutlined,
+} from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
 import { useAuth } from '../auth/AuthProvider';
 import { useTheme } from '../theme/ThemeProvider';
+import { useResponsive } from '../hooks/useResponsive';
+import PageHeader from '../components/common/PageHeader';
+import ResponsiveModal from '../components/common/ResponsiveModal';
 import Admin from './Admin';
 
 const { Text, Title } = Typography;
@@ -112,12 +140,30 @@ interface BroadcastFormValues {
   rate_limit_per_second: number;
 }
 
+interface TenantActionConfig {
+  key: string;
+  label: string;
+  icon?: React.ReactNode;
+  type?: 'primary' | 'default';
+  danger?: boolean;
+  disabled?: boolean;
+  loading?: boolean;
+  href?: string;
+  onClick?: () => void;
+}
+
+type ConsoleSection = 'broadcasts' | 'tenants' | 'users';
+
 const PlatformConsole = () => {
   const { tenantId, canSwitchTenant, switchTenant, logout } = useAuth();
   const { resolvedTheme } = useTheme();
+  const { isMobile } = useResponsive();
   const colors = resolvedTheme.colors;
+  const isDark = resolvedTheme.colorScheme === 'dark';
   const [broadcastForm] = Form.useForm<BroadcastFormValues>();
   const selectedBroadcastAudience = Form.useWatch('audience', broadcastForm) ?? 'platform_admins';
+  const [activeSection, setActiveSection] = useState<ConsoleSection>('broadcasts');
+  const [isBroadcastComposerOpen, setIsBroadcastComposerOpen] = useState(false);
   const [tenants, setTenants] = useState<Tenant[]>([]);
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(false);
@@ -143,6 +189,25 @@ const PlatformConsole = () => {
     () => tenants.find((tenant) => tenant.id === tenantId) ?? null,
     [tenantId, tenants],
   );
+
+  const surfaceStyle = {
+    background: colors.bgSecondary,
+    borderRadius: isMobile ? 24 : 16,
+    padding: isMobile ? 18 : 24,
+    marginBottom: 24,
+    boxShadow: isDark
+      ? '0 18px 40px rgba(0, 0, 0, 0.2)'
+      : '0 18px 40px rgba(20, 26, 40, 0.06)',
+  } as const;
+
+  const itemCardStyle = {
+    borderRadius: 20,
+    border: 'none',
+    background: isDark ? 'rgba(255,255,255,0.04)' : '#ffffff',
+    boxShadow: isDark
+      ? '0 12px 28px rgba(0, 0, 0, 0.16)'
+      : '0 12px 28px rgba(20, 26, 40, 0.05)',
+  } as const;
 
   const fetchTenants = useCallback(async () => {
     setLoading(true);
@@ -214,6 +279,17 @@ const PlatformConsole = () => {
       day: '2-digit',
       month: '2-digit',
       year: 'numeric',
+    }).format(new Date(value));
+  };
+
+  const formatDateTime = (value?: string | null) => {
+    if (!value) return '—';
+    return new Intl.DateTimeFormat('ru-RU', {
+      day: '2-digit',
+      month: '2-digit',
+      year: 'numeric',
+      hour: '2-digit',
+      minute: '2-digit',
     }).format(new Date(value));
   };
 
@@ -358,6 +434,7 @@ const PlatformConsole = () => {
       setBroadcastTotal((value) => value + 1);
       broadcastForm.resetFields();
       setBroadcastPreview(null);
+      setIsBroadcastComposerOpen(false);
       message.success('Черновик рассылки создан');
     } catch (error: any) {
       const detail = error?.response?.data?.detail;
@@ -406,99 +483,517 @@ const PlatformConsole = () => {
     }
   };
 
-  const renderTenantActions = (tenant: Tenant) => {
-    const actions = [];
+  const tenantActions = useCallback((tenant: Tenant): TenantActionConfig[] => {
+    const actions: TenantActionConfig[] = [];
 
     if (tenant.access.mode === 'blocked') {
       actions.push(
-        <Link key="preview-teacher" to={`/platform/tenants/${tenant.id}/access-preview/teacher`}>
-          <Button icon={<EyeOutlined />}>Экран репетитора</Button>
-        </Link>,
-        <Link key="preview-student" to={`/platform/tenants/${tenant.id}/access-preview/student`}>
-          <Button icon={<EyeOutlined />}>Экран ученика</Button>
-        </Link>,
+        {
+          key: 'preview-teacher',
+          label: 'Экран репетитора',
+          icon: <EyeOutlined />,
+          href: `/platform/tenants/${tenant.id}/access-preview/teacher`,
+        },
+        {
+          key: 'preview-student',
+          label: 'Экран ученика',
+          icon: <EyeOutlined />,
+          href: `/platform/tenants/${tenant.id}/access-preview/student`,
+        },
       );
     }
 
     actions.push(
-      <Button
-        key="open"
-        type={tenant.id === tenantId ? 'default' : 'primary'}
-        icon={<LoginOutlined />}
-        disabled={!tenant.is_active || !canSwitchTenant || tenant.id === tenantId}
-        loading={switchingTenantId === tenant.id}
-        onClick={() => handleSwitchTenant(tenant.id)}
-      >
-        {tenant.id === tenantId ? 'Открыт' : 'Открыть кабинет'}
-      </Button>,
-      <Button
-        key="grant"
-        loading={accessActionKey === `${tenant.id}:grant`}
-        onClick={() => handleAccessAction(tenant, 'grant')}
-      >
-        +30 дней
-      </Button>,
-      <Button
-        key="lifetime"
-        loading={accessActionKey === `${tenant.id}:lifetime`}
-        disabled={tenant.access.is_lifetime}
-        onClick={() => handleAccessAction(tenant, 'lifetime')}
-      >
-        Вечный
-      </Button>,
-      tenant.access.status === 'suspended' ? (
-        <Button
-          key="resume"
-          loading={accessActionKey === `${tenant.id}:resume`}
-          onClick={() => handleAccessAction(tenant, 'resume')}
-        >
-          Resume
-        </Button>
-      ) : (
-        <Button
-          key="suspend"
-          danger
-          loading={accessActionKey === `${tenant.id}:suspend`}
-          onClick={() => handleAccessAction(tenant, 'suspend')}
-        >
-          Suspend
-        </Button>
-      ),
+      {
+        key: 'open',
+        label: tenant.id === tenantId ? 'Открыт' : 'Открыть кабинет',
+        icon: <LoginOutlined />,
+        type: tenant.id === tenantId ? 'default' : 'primary',
+        disabled: !tenant.is_active || !canSwitchTenant || tenant.id === tenantId,
+        loading: switchingTenantId === tenant.id,
+        onClick: () => handleSwitchTenant(tenant.id),
+      },
+      {
+        key: 'grant',
+        label: '+30 дней',
+        loading: accessActionKey === `${tenant.id}:grant`,
+        onClick: () => handleAccessAction(tenant, 'grant'),
+      },
+      {
+        key: 'lifetime',
+        label: 'Вечный',
+        disabled: tenant.access.is_lifetime,
+        loading: accessActionKey === `${tenant.id}:lifetime`,
+        onClick: () => handleAccessAction(tenant, 'lifetime'),
+      },
+      tenant.access.status === 'suspended' ? {
+        key: 'resume',
+        label: 'Resume',
+        loading: accessActionKey === `${tenant.id}:resume`,
+        onClick: () => handleAccessAction(tenant, 'resume'),
+      } : {
+        key: 'suspend',
+        label: 'Suspend',
+        danger: true,
+        loading: accessActionKey === `${tenant.id}:suspend`,
+        onClick: () => handleAccessAction(tenant, 'suspend'),
+      },
     );
 
     return actions;
+  }, [accessActionKey, canSwitchTenant, switchingTenantId, tenantId]);
+
+  const activeBroadcasts = useMemo(
+    () => broadcasts.filter((campaign) => campaign.status !== 'completed'),
+    [broadcasts],
+  );
+  const completedBroadcasts = useMemo(
+    () => broadcasts.filter((campaign) => campaign.status === 'completed'),
+    [broadcasts],
+  );
+
+  const broadcastComposer = (
+    <>
+      <Alert
+        type="warning"
+        showIcon
+        style={{ marginBottom: 16 }}
+        message="Отправка только после подтверждения"
+        description="Создание черновика не отправляет сообщение. Для запуска нужно открыть черновик и ввести SEND."
+      />
+
+      <Form<BroadcastFormValues>
+        form={broadcastForm}
+        layout="vertical"
+        initialValues={{ audience: 'platform_admins', rate_limit_per_second: 10 }}
+      >
+        <Form.Item
+          name="audience"
+          label="Кому отправить"
+          rules={[{ required: true, message: 'Выберите аудиторию' }]}
+        >
+          <Select
+            options={[
+              { value: 'platform_admins', label: 'Тест: platform admins' },
+              { value: 'selected_bot_users', label: 'Выбранные люди' },
+              { value: 'all_bot_users', label: 'Все пользователи бота' },
+            ]}
+            onChange={() => {
+              broadcastForm.setFieldValue('bot_user_ids', []);
+              setBroadcastPreview(null);
+            }}
+          />
+        </Form.Item>
+        {selectedBroadcastAudience === 'selected_bot_users' && (
+          <Form.Item
+            name="bot_user_ids"
+            label="Получатели"
+            rules={[{ required: true, message: 'Выберите хотя бы одного получателя' }]}
+          >
+            <Select
+              mode="multiple"
+              loading={isLoadingAudienceUsers}
+              placeholder="Выберите пользователей Telegram"
+              optionFilterProp="label"
+              options={broadcastAudienceUsers.map((user) => ({
+                value: user.bot_user_id,
+                label: audienceUserLabel(user),
+              }))}
+            />
+          </Form.Item>
+        )}
+        {selectedBroadcastAudience === 'platform_admins' && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="Тестовая аудитория"
+            description="Получателями будут только BotUser, чей chat_id есть в allowlist platform admins."
+          />
+        )}
+        {selectedBroadcastAudience === 'all_bot_users' && (
+          <Alert
+            type="warning"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="Массовая аудитория"
+            description="Эта аудитория собирает всех не-bot пользователей текущего Telegram-бота."
+          />
+        )}
+        <Form.Item
+          name="title"
+          label="Название"
+          rules={[{ required: true, message: 'Введите название рассылки' }]}
+        >
+          <Input placeholder="Например: Переименование бота" />
+        </Form.Item>
+        <Form.Item
+          name="message_text"
+          label="Текст сообщения"
+          rules={[{ required: true, message: 'Введите текст сообщения' }]}
+        >
+          <Input.TextArea rows={5} maxLength={4000} showCount />
+        </Form.Item>
+        <Form.Item name="rate_limit_per_second" label="Скорость отправки">
+          <InputNumber min={1} max={20} addonAfter="сообщ./сек" style={{ width: '100%' }} />
+        </Form.Item>
+        <Space wrap style={{ marginBottom: 16 }}>
+          <Button onClick={handlePreviewBroadcast} loading={isPreviewingBroadcast}>
+            Проверить аудиторию
+          </Button>
+          <Button type="primary" onClick={handleCreateBroadcast} loading={isCreatingBroadcast}>
+            Создать черновик
+          </Button>
+        </Space>
+      </Form>
+
+      {broadcastPreview && (
+        <Alert
+          type="info"
+          showIcon
+          style={{ marginBottom: 16 }}
+          message={`Получателей: ${broadcastPreview.total}`}
+          description={
+            broadcastPreview.sample.length > 0
+              ? `Пример: ${broadcastPreview.sample.map(recipientLabel).join(', ')}`
+              : 'Подходящих пользователей пока нет.'
+          }
+        />
+      )}
+    </>
+  );
+
+  const renderBroadcastList = (items: BroadcastCampaign[]) => {
+    if (isLoadingBroadcasts) {
+      return (
+        <div style={{ padding: 32, textAlign: 'center' }}>
+          <Spin />
+        </div>
+      );
+    }
+
+    if (items.length === 0) {
+      return <Text type="secondary">Рассылок пока нет</Text>;
+    }
+
+    if (isMobile) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {items.map((campaign) => (
+            <Card key={campaign.id} style={itemCardStyle} styles={{ body: { padding: 18 } }}>
+              <Space direction="vertical" size={10} style={{ width: '100%' }}>
+                <div>
+                  <Space wrap size={8}>
+                    <Text strong style={{ fontSize: 16 }}>{campaign.title}</Text>
+                    {broadcastStatusTag(campaign.status)}
+                  </Space>
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <Text type="secondary">Аудитория: {audienceText(campaign.audience)}</Text>
+                    <Text type="secondary">
+                      Получателей: {campaign.recipient_count} · отправлено: {campaign.sent_count} · ошибок: {campaign.failed_count}
+                    </Text>
+                    <Text type="secondary">Создано: {formatDateTime(campaign.created_at)}</Text>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                  <Button onClick={() => handleOpenRecipients(campaign)}>
+                    Получатели
+                  </Button>
+                  <Button
+                    type="primary"
+                    danger
+                    icon={<SendOutlined />}
+                    disabled={campaign.status !== 'draft'}
+                    onClick={() => setSendingBroadcastId(campaign.id)}
+                  >
+                    Отправить
+                  </Button>
+                </div>
+              </Space>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <List
+        dataSource={items}
+        locale={{ emptyText: 'Рассылок пока нет' }}
+        renderItem={(campaign) => (
+          <List.Item
+            actions={[
+              <Button key="recipients" onClick={() => handleOpenRecipients(campaign)}>
+                Получатели
+              </Button>,
+              <Button
+                key="send"
+                type="primary"
+                danger
+                icon={<SendOutlined />}
+                disabled={campaign.status !== 'draft'}
+                onClick={() => setSendingBroadcastId(campaign.id)}
+              >
+                Отправить
+              </Button>,
+            ]}
+          >
+            <List.Item.Meta
+              title={(
+                <Space wrap>
+                  <Text strong>{campaign.title}</Text>
+                  {broadcastStatusTag(campaign.status)}
+                </Space>
+              )}
+              description={(
+                <Space direction="vertical" size={2}>
+                  <Text type="secondary">Аудитория: {audienceText(campaign.audience)}</Text>
+                  <Text type="secondary">
+                    Получателей: {campaign.recipient_count} · отправлено: {campaign.sent_count} · ошибок: {campaign.failed_count}
+                  </Text>
+                  <Text type="secondary">Создано: {formatDateTime(campaign.created_at)}</Text>
+                </Space>
+              )}
+            />
+          </List.Item>
+        )}
+      />
+    );
   };
+
+  const renderTenantList = () => {
+    if (loading) {
+      return (
+        <div style={{ padding: 48, textAlign: 'center' }}>
+          <Spin />
+        </div>
+      );
+    }
+
+    if (isMobile) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+          {tenants.map((tenant) => (
+            <Card key={tenant.id} style={itemCardStyle} styles={{ body: { padding: 18 } }}>
+              <Space direction="vertical" size={14} style={{ width: '100%' }}>
+                <div>
+                  <Space wrap size={8}>
+                    <Text strong style={{ fontSize: 16 }}>{tenant.name}</Text>
+                    <Tag color={tenant.is_active ? 'green' : 'default'}>
+                      {tenant.is_active ? 'Активен' : 'Отключён'}
+                    </Tag>
+                    {accessTag(tenant.access)}
+                    {tenant.id === tenantId && <Tag color="blue">Текущий</Tag>}
+                  </Space>
+                  <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
+                    <Text type="secondary">ID: {tenant.id} · {tenant.slug}</Text>
+                    <Text type="secondary">Доступ: {accessText(tenant.access)}</Text>
+                    <Text type="secondary">{tenant.contact_email ?? 'Email не указан'}</Text>
+                  </div>
+                </div>
+                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(2, minmax(0, 1fr))', gap: 10 }}>
+                  {tenantActions(tenant).map((action) => (
+                    action.href ? (
+                      <Link key={action.key} to={action.href} style={{ display: 'block' }}>
+                        <Button icon={action.icon} style={{ width: '100%' }}>
+                          {action.label}
+                        </Button>
+                      </Link>
+                    ) : (
+                      <Button
+                        key={action.key}
+                        type={action.type}
+                        danger={action.danger}
+                        icon={action.icon}
+                        disabled={action.disabled}
+                        loading={action.loading}
+                        onClick={action.onClick}
+                        style={{ width: '100%' }}
+                      >
+                        {action.label}
+                      </Button>
+                    )
+                  ))}
+                </div>
+              </Space>
+            </Card>
+          ))}
+        </div>
+      );
+    }
+
+    return (
+      <List
+        dataSource={tenants}
+        locale={{ emptyText: 'Кабинеты не найдены' }}
+        renderItem={(tenant) => (
+          <List.Item
+            actions={tenantActions(tenant).map((action) => (
+              action.href ? (
+                <Link key={action.key} to={action.href}>
+                  <Button icon={action.icon}>{action.label}</Button>
+                </Link>
+              ) : (
+                <Button
+                  key={action.key}
+                  type={action.type}
+                  danger={action.danger}
+                  icon={action.icon}
+                  disabled={action.disabled}
+                  loading={action.loading}
+                  onClick={action.onClick}
+                >
+                  {action.label}
+                </Button>
+              )
+            ))}
+          >
+            <List.Item.Meta
+              title={(
+                <Space wrap>
+                  <Text strong>{tenant.name}</Text>
+                  <Tag color={tenant.is_active ? 'green' : 'default'}>
+                    {tenant.is_active ? 'Активен' : 'Отключён'}
+                  </Tag>
+                  {accessTag(tenant.access)}
+                  {tenant.id === tenantId && <Tag color="blue">Текущий</Tag>}
+                </Space>
+              )}
+              description={(
+                <Space direction="vertical" size={0}>
+                  <Text type="secondary">ID: {tenant.id} · {tenant.slug}</Text>
+                  <Text type="secondary">Доступ: {accessText(tenant.access)}</Text>
+                  <Text type="secondary">{tenant.contact_email ?? 'Email не указан'}</Text>
+                </Space>
+              )}
+            />
+          </List.Item>
+        )}
+      />
+    );
+  };
+
+  const broadcastsSection = (
+    <section style={surfaceStyle}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 12,
+        alignItems: 'center',
+        marginBottom: 16,
+        flexWrap: 'wrap',
+      }}>
+        <div>
+          <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>Рассылки</Title>
+          <Text type="secondary">Системные сообщения всем пользователям текущего Telegram-бота.</Text>
+        </div>
+        <Space wrap>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            onClick={() => setIsBroadcastComposerOpen((open) => (isMobile ? true : !open))}
+          >
+            {isMobile ? 'Новая рассылка' : (isBroadcastComposerOpen ? 'Скрыть форму' : 'Новая рассылка')}
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={fetchBroadcasts} loading={isLoadingBroadcasts}>
+            Обновить
+          </Button>
+        </Space>
+      </div>
+
+      {!isMobile && isBroadcastComposerOpen && (
+        <>
+          {broadcastComposer}
+          <Divider />
+        </>
+      )}
+
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 12,
+        alignItems: 'center',
+        marginBottom: 12,
+        flexWrap: 'wrap',
+      }}>
+        <Text strong>Последние кампании</Text>
+        <Text type="secondary">Всего: {broadcastTotal}</Text>
+      </div>
+
+      {renderBroadcastList(activeBroadcasts)}
+
+      {completedBroadcasts.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <Collapse
+            ghost
+            items={[
+              {
+                key: 'completed',
+                label: `Завершённые (${completedBroadcasts.length})`,
+                children: <div style={{ paddingTop: 8 }}>{renderBroadcastList(completedBroadcasts)}</div>,
+              },
+            ]}
+          />
+        </div>
+      )}
+    </section>
+  );
+
+  const tenantsSection = (
+    <section style={surfaceStyle}>
+      <div style={{
+        display: 'flex',
+        justifyContent: 'space-between',
+        gap: 12,
+        alignItems: 'center',
+        marginBottom: 16,
+        flexWrap: 'wrap',
+      }}>
+        <div>
+          <Title level={isMobile ? 4 : 3} style={{ margin: 0 }}>Кабинеты</Title>
+          <Text type="secondary">Всего: {total}</Text>
+        </div>
+        <Space wrap>
+          <Button onClick={handleSyncAccess} loading={isSyncingAccess}>
+            Синхронизировать статусы
+          </Button>
+          <Button icon={<ReloadOutlined />} onClick={fetchTenants} loading={loading}>
+            Обновить
+          </Button>
+        </Space>
+      </div>
+
+      {renderTenantList()}
+    </section>
+  );
+
+  const usersSection = (
+    <section style={{ marginBottom: 24 }}>
+      <Admin />
+    </section>
+  );
 
   return (
     <div style={{
       minHeight: '100vh',
       background: colors.bgPrimary,
       color: colors.textPrimary,
-      padding: '24px',
+      padding: isMobile ? '16px 16px 32px' : '24px',
       boxSizing: 'border-box',
     }}>
       <div style={{ maxWidth: 1180, margin: '0 auto' }}>
-        <div style={{
-          display: 'flex',
-          alignItems: 'flex-start',
-          justifyContent: 'space-between',
-          gap: 16,
-          marginBottom: 24,
-          flexWrap: 'wrap',
-        }}>
-          <div>
-            <Title level={2} style={{ margin: 0 }}>Консоль</Title>
-            <Text type="secondary">
-              Глобальное управление кабинетами репетиторов и доступами.
-            </Text>
-          </div>
-          <Space wrap>
-            <Link to="/">
-              <Button icon={<ArrowLeftOutlined />}>В приложение</Button>
-            </Link>
-            <Button onClick={logout}>Выйти</Button>
-          </Space>
-        </div>
+        <PageHeader
+          title="Консоль"
+          subtitle="Глобальное управление кабинетами репетиторов и доступами."
+          actions={(
+            <Space wrap>
+              <Link to="/">
+                <Button icon={<ArrowLeftOutlined />}>В приложение</Button>
+              </Link>
+              <Button onClick={logout}>Выйти</Button>
+            </Space>
+          )}
+        />
 
         <Alert
           type={tenantId === null ? 'info' : 'warning'}
@@ -535,284 +1030,38 @@ const PlatformConsole = () => {
           />
         )}
 
-        <section style={{
-          background: colors.bgSecondary,
-          border: `1px solid ${colors.borderPrimary}`,
-          borderRadius: 8,
-          padding: 24,
-          marginBottom: 24,
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 12,
-            alignItems: 'center',
-            marginBottom: 16,
-            flexWrap: 'wrap',
-          }}>
-            <div>
-              <Title level={3} style={{ margin: 0 }}>Рассылки</Title>
-              <Text type="secondary">Системные сообщения всем пользователям текущего Telegram-бота.</Text>
-            </div>
-            <Button icon={<ReloadOutlined />} onClick={fetchBroadcasts} loading={isLoadingBroadcasts}>
-              Обновить
-            </Button>
-          </div>
-
-          <Alert
-            type="warning"
-            showIcon
-            style={{ marginBottom: 16 }}
-            message="Отправка только после подтверждения"
-            description="Создание черновика не отправляет сообщение. Для запуска нужно открыть черновик и ввести SEND."
-          />
-
-          <Form<BroadcastFormValues>
-            form={broadcastForm}
-            layout="vertical"
-            initialValues={{ audience: 'platform_admins', rate_limit_per_second: 10 }}
-          >
-            <Form.Item
-              name="audience"
-              label="Кому отправить"
-              rules={[{ required: true, message: 'Выберите аудиторию' }]}
-            >
-              <Select
-                options={[
-                  { value: 'platform_admins', label: 'Тест: platform admins' },
-                  { value: 'selected_bot_users', label: 'Выбранные люди' },
-                  { value: 'all_bot_users', label: 'Все пользователи бота' },
-                ]}
-                onChange={() => {
-                  broadcastForm.setFieldValue('bot_user_ids', []);
-                  setBroadcastPreview(null);
-                }}
-              />
-            </Form.Item>
-            {selectedBroadcastAudience === 'selected_bot_users' && (
-              <Form.Item
-                name="bot_user_ids"
-                label="Получатели"
-                rules={[{ required: true, message: 'Выберите хотя бы одного получателя' }]}
-              >
-                <Select
-                  mode="multiple"
-                  loading={isLoadingAudienceUsers}
-                  placeholder="Выберите пользователей Telegram"
-                  optionFilterProp="label"
-                  options={broadcastAudienceUsers.map((user) => ({
-                    value: user.bot_user_id,
-                    label: audienceUserLabel(user),
-                  }))}
-                />
-              </Form.Item>
-            )}
-            {selectedBroadcastAudience === 'platform_admins' && (
-              <Alert
-                type="info"
-                showIcon
-                style={{ marginBottom: 16 }}
-                message="Тестовая аудитория"
-                description="Получателями будут только BotUser, чей chat_id есть в allowlist platform admins."
-              />
-            )}
-            {selectedBroadcastAudience === 'all_bot_users' && (
-              <Alert
-                type="warning"
-                showIcon
-                style={{ marginBottom: 16 }}
-                message="Массовая аудитория"
-                description="Эта аудитория собирает всех не-bot пользователей текущего Telegram-бота."
-              />
-            )}
-            <Form.Item
-              name="title"
-              label="Название"
-              rules={[{ required: true, message: 'Введите название рассылки' }]}
-            >
-              <Input placeholder="Например: Переименование бота" />
-            </Form.Item>
-            <Form.Item
-              name="message_text"
-              label="Текст сообщения"
-              rules={[{ required: true, message: 'Введите текст сообщения' }]}
-            >
-              <Input.TextArea rows={5} maxLength={4000} showCount />
-            </Form.Item>
-            <Form.Item name="rate_limit_per_second" label="Скорость отправки">
-              <InputNumber min={1} max={20} addonAfter="сообщ./сек" style={{ width: '100%' }} />
-            </Form.Item>
-            <Space wrap style={{ marginBottom: 16 }}>
-              <Button onClick={handlePreviewBroadcast} loading={isPreviewingBroadcast}>
-                Проверить аудиторию
-              </Button>
-              <Button type="primary" onClick={handleCreateBroadcast} loading={isCreatingBroadcast}>
-                Создать черновик
-              </Button>
-            </Space>
-          </Form>
-
-          {broadcastPreview && (
-            <Alert
-              type="info"
-              showIcon
-              style={{ marginBottom: 16 }}
-              message={`Получателей: ${broadcastPreview.total}`}
-              description={
-                broadcastPreview.sample.length > 0
-                  ? `Пример: ${broadcastPreview.sample.map(recipientLabel).join(', ')}`
-                  : 'Подходящих пользователей пока нет.'
-              }
+        {isMobile && (
+          <div style={{ ...surfaceStyle, padding: 8, marginBottom: 20 }}>
+            <Segmented
+              block
+              value={activeSection}
+              onChange={(value) => setActiveSection(value as ConsoleSection)}
+              options={[
+                { value: 'broadcasts', label: 'Рассылки' },
+                { value: 'tenants', label: 'Кабинеты' },
+                { value: 'users', label: 'Пользователи' },
+              ]}
             />
-          )}
-
-          <Divider />
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 12,
-            alignItems: 'center',
-            marginBottom: 12,
-            flexWrap: 'wrap',
-          }}>
-            <Text strong>Последние кампании</Text>
-            <Text type="secondary">Всего: {broadcastTotal}</Text>
           </div>
-          {isLoadingBroadcasts ? (
-            <div style={{ padding: 32, textAlign: 'center' }}>
-              <Spin />
-            </div>
-          ) : (
-            <List
-              dataSource={broadcasts}
-              locale={{ emptyText: 'Рассылок пока нет' }}
-              renderItem={(campaign) => (
-                <List.Item
-                  actions={[
-                    <Button key="recipients" onClick={() => handleOpenRecipients(campaign)}>
-                      Получатели
-                    </Button>,
-                    <Button
-                      key="send"
-                      type="primary"
-                      danger
-                      icon={<SendOutlined />}
-                      disabled={campaign.status !== 'draft'}
-                      onClick={() => setSendingBroadcastId(campaign.id)}
-                    >
-                      Отправить
-                    </Button>,
-                  ]}
-                >
-                  <List.Item.Meta
-                    title={
-                      <Space wrap>
-                        <Text strong>{campaign.title}</Text>
-                        {broadcastStatusTag(campaign.status)}
-                      </Space>
-                    }
-                    description={
-                      <Space direction="vertical" size={2}>
-                        <Text type="secondary">
-                          Аудитория: {audienceText(campaign.audience)}
-                        </Text>
-                        <Text type="secondary">
-                          Получателей: {campaign.recipient_count} · отправлено: {campaign.sent_count} · ошибок: {campaign.failed_count}
-                        </Text>
-                        <Text type="secondary">
-                          Создано: {formatAccessDate(campaign.created_at) ?? campaign.created_at}
-                        </Text>
-                      </Space>
-                    }
-                  />
-                </List.Item>
-              )}
-            />
-          )}
-        </section>
+        )}
 
-        <section style={{
-          background: colors.bgSecondary,
-          border: `1px solid ${colors.borderPrimary}`,
-          borderRadius: 8,
-          padding: 24,
-          marginBottom: 24,
-        }}>
-          <div style={{
-            display: 'flex',
-            justifyContent: 'space-between',
-            gap: 12,
-            alignItems: 'center',
-            marginBottom: 16,
-            flexWrap: 'wrap',
-          }}>
-            <div>
-              <Title level={3} style={{ margin: 0 }}>Кабинеты</Title>
-              <Text type="secondary">Всего: {total}</Text>
-            </div>
-            <Space wrap>
-              <Button onClick={handleSyncAccess} loading={isSyncingAccess}>
-                Синхронизировать статусы
-              </Button>
-              <Button icon={<ReloadOutlined />} onClick={fetchTenants} loading={loading}>
-                Обновить
-              </Button>
-            </Space>
-          </div>
-
-          {loading ? (
-            <div style={{ padding: 48, textAlign: 'center' }}>
-              <Spin />
-            </div>
-          ) : (
-            <List
-              dataSource={tenants}
-              locale={{ emptyText: 'Кабинеты не найдены' }}
-              renderItem={(tenant) => (
-                <List.Item
-                  actions={renderTenantActions(tenant)}
-                >
-                  <List.Item.Meta
-                    title={
-                      <Space wrap>
-                        <Text strong>{tenant.name}</Text>
-                        <Tag color={tenant.is_active ? 'green' : 'default'}>
-                          {tenant.is_active ? 'Активен' : 'Отключён'}
-                        </Tag>
-                        {accessTag(tenant.access)}
-                        {tenant.id === tenantId && <Tag color="blue">Текущий</Tag>}
-                      </Space>
-                    }
-                    description={
-                      <Space direction="vertical" size={0}>
-                        <Text type="secondary">ID: {tenant.id} · {tenant.slug}</Text>
-                        <Text type="secondary">Доступ: {accessText(tenant.access)}</Text>
-                        <Text type="secondary">{tenant.contact_email ?? 'Email не указан'}</Text>
-                      </Space>
-                    }
-                  />
-                </List.Item>
-              )}
-            />
-          )}
-        </section>
-
-        <section style={{
-          background: colors.bgSecondary,
-          border: `1px solid ${colors.borderPrimary}`,
-          borderRadius: 8,
-          padding: 24,
-        }}>
-          <Title level={3} style={{ marginTop: 0 }}>Пользователи</Title>
-          <Text type="secondary">
-            Доступ владельца платформы выдаётся только через allowlist в конфигурации. Здесь можно менять только роли репетитора и ученика.
-          </Text>
-          <Divider />
-          <Admin />
-        </section>
+        {(!isMobile || activeSection === 'broadcasts') && broadcastsSection}
+        {(!isMobile || activeSection === 'tenants') && tenantsSection}
+        {(!isMobile || activeSection === 'users') && usersSection}
       </div>
 
-      <Modal
+      {isMobile && (
+        <ResponsiveModal
+          title="Новая рассылка"
+          open={isBroadcastComposerOpen}
+          onCancel={() => setIsBroadcastComposerOpen(false)}
+          footer={null}
+        >
+          {broadcastComposer}
+        </ResponsiveModal>
+      )}
+
+      <ResponsiveModal
         title="Подтверждение рассылки"
         open={sendingBroadcastId !== null}
         okText="Поставить в очередь"
@@ -838,9 +1087,9 @@ const PlatformConsole = () => {
           onChange={(event) => setSendConfirmation(event.target.value)}
           placeholder="SEND"
         />
-      </Modal>
+      </ResponsiveModal>
 
-      <Modal
+      <ResponsiveModal
         title={recipientModalCampaign ? `Получатели: ${recipientModalCampaign.title}` : 'Получатели'}
         open={recipientModalCampaign !== null}
         footer={null}
@@ -863,27 +1112,27 @@ const PlatformConsole = () => {
               renderItem={(recipient) => (
                 <List.Item>
                   <List.Item.Meta
-                    title={
+                    title={(
                       <Space wrap>
                         <Text>{recipientLabel(recipient)}</Text>
                         {recipientStatusTag(recipient.status)}
                       </Space>
-                    }
-                    description={
+                    )}
+                    description={(
                       <Space direction="vertical" size={0}>
                         <Text type="secondary">chat_id: {recipient.chat_id}</Text>
                         {recipient.error_message && (
                           <Text type="danger">{recipient.error_message}</Text>
                         )}
                       </Space>
-                    }
+                    )}
                   />
                 </List.Item>
               )}
             />
           </>
         )}
-      </Modal>
+      </ResponsiveModal>
     </div>
   );
 };

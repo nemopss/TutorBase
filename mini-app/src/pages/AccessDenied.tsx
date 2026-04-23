@@ -22,7 +22,7 @@ const AccessDenied = () => {
     >
       <Card
         style={{ maxWidth: 420, width: '100%', textAlign: 'center' }}
-        bordered={false}
+        variant="borderless"
       >
         <LockOutlined style={{ fontSize: 48, color: '#fa8c16' }} />
         <Typography.Title level={3} style={{ marginTop: 16 }}>

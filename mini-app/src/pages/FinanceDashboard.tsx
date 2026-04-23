@@ -197,7 +197,7 @@ const FinanceDashboard: React.FC = () => {
       {/* Chart and Outstanding List */}
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={16}>
-          <Card title={t('pages.finance.incomeChart')} bordered={false} style={cardStyle}>
+          <Card title={t('pages.finance.incomeChart')} variant="borderless" style={cardStyle}>
             <ResponsiveContainer width="100%" height={currentChartHeight}>
               <LineChart data={chartData}>
                 <CartesianGrid strokeDasharray="3 3" stroke={chartGridColor} />
@@ -225,7 +225,7 @@ const FinanceDashboard: React.FC = () => {
         <Col xs={24} lg={8}>
           <Card
             title={t('pages.finance.learnersWithDebt')}
-            bordered={false}
+            variant="borderless"
             style={cardStyle}
             extra={
               <Button type="link" onClick={() => navigate('/learners')}>

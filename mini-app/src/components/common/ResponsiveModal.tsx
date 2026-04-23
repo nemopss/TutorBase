@@ -60,7 +60,7 @@ const ResponsiveModal: React.FC<ResponsiveModalProps> = ({
           footer: { padding: spacing.md, borderTop: '1px solid #303030' },
         }}
         footer={drawerFooter}
-        destroyOnClose={props.destroyOnClose}
+        destroyOnHidden={props.destroyOnHidden}
         closable={props.closable}
         maskClosable={props.maskClosable}
       >

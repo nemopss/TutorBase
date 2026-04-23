@@ -558,11 +558,14 @@ const LearnerProfile: React.FC = () => {
     <div>
       <PageHeader
         title={learner.display_name}
+        variant="compact"
+        leading={(
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/learners')}>
+            {t('common.back')}
+          </Button>
+        )}
         actions={
           <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/learners')}>
-              {t('common.back')}
-            </Button>
             <Button icon={<EditOutlined />} disabled={!canUseFullActions} onClick={() => setIsEditModalOpen(true)}>
               {t('common.edit')}
             </Button>
@@ -772,7 +775,7 @@ const LearnerProfile: React.FC = () => {
                                 key={lesson.id}
                                 hoverable
                                 style={{ background: colors.bgSecondary, borderColor: colors.borderPrimary }}
-                                bodyStyle={{ padding: spacing.md }}
+                                styles={{ body: { padding: spacing.md } }}
                                 onClick={() => navigate(`/packages/${lesson.id}`)}
                               >
                                 <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>

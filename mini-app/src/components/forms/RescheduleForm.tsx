@@ -58,7 +58,7 @@ const RescheduleForm: React.FC<RescheduleFormProps> = ({
       confirmLoading={isLoading}
       okText={t('pages.lessons.reschedule')}
       cancelText={t('common.cancel')}
-      destroyOnClose
+      destroyOnHidden
     >
       {currentDateTime && (
         <div style={{ marginBottom: 16, padding: '8px 12px', background: 'rgba(0,0,0,0.02)', borderRadius: 8 }}>

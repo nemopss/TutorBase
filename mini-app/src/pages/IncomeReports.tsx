@@ -318,7 +318,7 @@ const IncomeReports: React.FC = () => {
       {/* Breakdown Tables */}
       <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
         <Col xs={24} lg={12}>
-          <Card title={t('pages.incomeReports.byLearners')} bordered={false} style={cardStyle}>
+          <Card title={t('pages.incomeReports.byLearners')} variant="borderless" style={cardStyle}>
             <Table
               dataSource={report?.by_learner || []}
               columns={learnerColumns}
@@ -330,7 +330,7 @@ const IncomeReports: React.FC = () => {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title={t('pages.incomeReports.byPackages')} bordered={false} style={cardStyle}>
+          <Card title={t('pages.incomeReports.byPackages')} variant="borderless" style={cardStyle}>
             <Table
               dataSource={report?.by_package || []}
               columns={packageColumns}

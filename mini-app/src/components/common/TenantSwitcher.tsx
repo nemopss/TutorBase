@@ -29,7 +29,11 @@ interface TenantListResponse {
     total: number;
 }
 
-const TenantSwitcher: React.FC = () => {
+interface TenantSwitcherProps {
+    fullWidth?: boolean;
+}
+
+const TenantSwitcher: React.FC<TenantSwitcherProps> = ({ fullWidth = false }) => {
     const { canSwitchTenant, tenantId, switchTenant } = useAuth();
     const [tenants, setTenants] = useState<Tenant[]>([]);
     const [loading, setLoading] = useState(false);
@@ -124,7 +128,7 @@ const TenantSwitcher: React.FC = () => {
                 onChange={handleTenantSwitch}
                 loading={switching}
                 disabled={switching}
-                style={{ minWidth: 200 }}
+                style={fullWidth ? { width: '100%' } : { minWidth: 200 }}
                 placeholder="Select tenant context"
                 suffixIcon={<SwapOutlined />}
                 options={selectOptions}
