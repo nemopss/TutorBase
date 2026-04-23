@@ -10,6 +10,32 @@ import { useTelegram } from './hooks/useTelegram';
 import { useTheme } from './theme/ThemeProvider';
 import { generateAntdTheme } from './theme/antdTokens';
 import type { SupportedLanguage } from './i18n';
+import {
+  loadAccessDeniedPage,
+  loadAnalyticsPage,
+  loadDashboardPage,
+  loadFinanceDashboardPage,
+  loadGroupsPage,
+  loadIncomeReportsPage,
+  loadInviteCodesPage,
+  loadLearnerFinancePage,
+  loadLearnerProfilePage,
+  loadLearnersPage,
+  loadLessonsPage,
+  loadNotificationsPage,
+  loadPackageDetailPage,
+  loadPackagesPage,
+  loadPlatformConsolePage,
+  loadRemindersPage,
+  loadRoleSelectionScreenPage,
+  loadSchedulePage,
+  loadSettingsPage,
+  loadStudentDashboardPage,
+  loadStudentRegistrationFormPage,
+  loadTenantAccessBlockedPage,
+  loadTenantAccessPreviewPage,
+  loadTutorRegistrationFormPage,
+} from './navigation/prefetch';
 
 const antdLocales = {
   ru: ruRU,
@@ -21,30 +47,30 @@ const antdLocales = {
 import AppLayout from './components/layout/AppLayout';
 
 // Lazy-loaded pages for code-splitting
-const Dashboard = lazy(() => import('./pages/Dashboard'));
-const Packages = lazy(() => import('./pages/Packages'));
-const PackageDetail = lazy(() => import('./pages/PackageDetail'));
-const Reminders = lazy(() => import('./pages/Reminders'));
-const Notifications = lazy(() => import('./pages/Notifications'));
-const Groups = lazy(() => import('./pages/Groups'));
-const Settings = lazy(() => import('./pages/Settings'));
-const Analytics = lazy(() => import('./pages/Analytics'));
-const Lessons = lazy(() => import('./pages/Lessons'));
-const Learners = lazy(() => import('./pages/Learners'));
-const PlatformConsole = lazy(() => import('./pages/PlatformConsole'));
-const AccessDenied = lazy(() => import('./pages/AccessDenied'));
-const TenantAccessBlocked = lazy(() => import('./pages/TenantAccessBlocked'));
-const TenantAccessPreview = lazy(() => import('./pages/TenantAccessPreview'));
-const RoleSelectionScreen = lazy(() => import('./pages/RoleSelectionScreen'));
-const TutorRegistrationForm = lazy(() => import('./pages/TutorRegistrationForm'));
-const StudentRegistrationForm = lazy(() => import('./pages/StudentRegistrationForm'));
-const StudentDashboard = lazy(() => import('./pages/StudentDashboard'));
-const Schedule = lazy(() => import('./pages/Schedule'));
-const InviteCodes = lazy(() => import('./pages/InviteCodes'));
-const FinanceDashboard = lazy(() => import('./pages/FinanceDashboard'));
-const IncomeReports = lazy(() => import('./pages/IncomeReports'));
-const LearnerFinance = lazy(() => import('./pages/LearnerFinance'));
-const LearnerProfile = lazy(() => import('./pages/LearnerProfile'));
+const Dashboard = lazy(loadDashboardPage);
+const Packages = lazy(loadPackagesPage);
+const PackageDetail = lazy(loadPackageDetailPage);
+const Reminders = lazy(loadRemindersPage);
+const Notifications = lazy(loadNotificationsPage);
+const Groups = lazy(loadGroupsPage);
+const Settings = lazy(loadSettingsPage);
+const Analytics = lazy(loadAnalyticsPage);
+const Lessons = lazy(loadLessonsPage);
+const Learners = lazy(loadLearnersPage);
+const PlatformConsole = lazy(loadPlatformConsolePage);
+const AccessDenied = lazy(loadAccessDeniedPage);
+const TenantAccessBlocked = lazy(loadTenantAccessBlockedPage);
+const TenantAccessPreview = lazy(loadTenantAccessPreviewPage);
+const RoleSelectionScreen = lazy(loadRoleSelectionScreenPage);
+const TutorRegistrationForm = lazy(loadTutorRegistrationFormPage);
+const StudentRegistrationForm = lazy(loadStudentRegistrationFormPage);
+const StudentDashboard = lazy(loadStudentDashboardPage);
+const Schedule = lazy(loadSchedulePage);
+const InviteCodes = lazy(loadInviteCodesPage);
+const FinanceDashboard = lazy(loadFinanceDashboardPage);
+const IncomeReports = lazy(loadIncomeReportsPage);
+const LearnerFinance = lazy(loadLearnerFinancePage);
+const LearnerProfile = lazy(loadLearnerProfilePage);
 
 // Loading fallback component
 const PageLoader = () => (

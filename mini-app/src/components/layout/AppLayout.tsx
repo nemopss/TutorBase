@@ -1,4 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import { Alert, Layout, Menu, Drawer, Button, Space, Tag, Typography, type MenuProps } from 'antd';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -19,6 +20,12 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
 import { useAuth } from '../../auth/AuthProvider';
 import { useResponsive } from '../../hooks/useResponsive';
+import {
+  prefetchNavigationTarget,
+  prefetchStaffMoreNavigation,
+  prefetchStaffPrimaryNavigation,
+  prefetchStudentNavigation,
+} from '../../navigation/prefetch';
 import TenantIndicator from '../common/TenantIndicator';
 import TenantSwitcher from '../common/TenantSwitcher';
 
@@ -73,6 +80,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const { t } = useTranslation();
   const location = useLocation();
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
   const { isMobile } = useResponsive();
   const isDark = resolvedTheme.colorScheme === 'dark';
@@ -87,6 +95,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const sheetTouchStartY = useRef<number | null>(null);
   const sheetDragOffsetRef = useRef(0);
   const sheetCloseTimerRef = useRef<number | null>(null);
+  const hasMoreNavigationPrefetchedRef = useRef(false);
   const { user, isSuperAdmin, tenantAccess, canSwitchTenant } = useAuth();
   const hasStaffAccess = isSuperAdmin || user?.role === 'teacher';
   const isStudent = user?.role === 'viewer';
@@ -328,6 +337,34 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
   }, []);
 
+  useEffect(() => {
+    const warmupTimer = window.setTimeout(() => {
+      if (isStudent) {
+        void prefetchStudentNavigation(queryClient);
+        return;
+      }
+
+      void prefetchStaffPrimaryNavigation(queryClient);
+    }, 180);
+
+    return () => {
+      window.clearTimeout(warmupTimer);
+    };
+  }, [isStudent, queryClient]);
+
+  const handleNavigationIntent = (pathname: string) => {
+    void prefetchNavigationTarget(queryClient, pathname);
+  };
+
+  const warmMoreNavigation = () => {
+    if (isStudent || hasMoreNavigationPrefetchedRef.current) {
+      return;
+    }
+
+    hasMoreNavigationPrefetchedRef.current = true;
+    void prefetchStaffMoreNavigation(queryClient, isSuperAdmin);
+  };
+
   const resetMoreSheetState = () => {
     if (sheetCloseTimerRef.current !== null) {
       window.clearTimeout(sheetCloseTimerRef.current);
@@ -340,6 +377,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   const openMoreSheet = () => {
+    warmMoreNavigation();
     resetMoreSheetState();
     setMoreSheetOpen(true);
   };
@@ -573,6 +611,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               <button
                 key={item.key}
                 type="button"
+                onTouchStart={() => handleNavigationIntent(item.key)}
+                onMouseEnter={() => handleNavigationIntent(item.key)}
                 onClick={() => handleMobilePrimaryAction(item)}
                 style={{
                   all: 'unset',
@@ -628,6 +668,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         {!isStudent && (
           <button
             type="button"
+            onTouchStart={warmMoreNavigation}
+            onMouseEnter={warmMoreNavigation}
             onClick={openMoreSheet}
             style={{
               all: 'unset',
@@ -867,6 +909,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     <button
                       key={item.key}
                       type="button"
+                      onTouchStart={() => handleNavigationIntent(item.key)}
+                      onMouseEnter={() => handleNavigationIntent(item.key)}
                       onClick={() => handleMobileMoreNavigation(item.key)}
                       style={{
                         all: 'unset',

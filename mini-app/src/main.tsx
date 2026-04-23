@@ -13,7 +13,17 @@ import './index.css';
 import './styles/mobile.css';
 import './styles/safe-area.css';
 
-const queryClient = new QueryClient();
+const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      staleTime: 2 * 60 * 1000,
+      gcTime: 15 * 60 * 1000,
+      refetchOnWindowFocus: false,
+      refetchOnReconnect: false,
+      retry: 1,
+    },
+  },
+});
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
