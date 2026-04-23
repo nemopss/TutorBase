@@ -518,7 +518,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     </div>
   );
 
-  const navGlassBackground = isDark ? 'rgba(18, 18, 18, 0.72)' : 'rgba(255, 255, 255, 0.72)';
+  const navGlassBackground = isDark ? 'rgba(34, 39, 48, 0.58)' : 'rgba(255, 255, 255, 0.72)';
+  const navActiveBackground = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(35, 131, 226, 0.12)';
   const isMoreButtonActive = !isStudent && (moreSheetOpen || activePrimaryKey === null);
 
   const mobileBottomNav = isMobile ? (
@@ -559,7 +560,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               left: MOBILE_NAV_PADDING,
               width: `calc((100% - ${MOBILE_NAV_PADDING * 2}px - ${(mobilePrimaryNavItems.length - 1) * MOBILE_NAV_GAP}px) / ${mobilePrimaryNavItems.length})`,
               borderRadius: 999,
-              background: isDark ? 'rgba(255,255,255,0.1)' : 'rgba(35, 131, 226, 0.12)',
+              background: navActiveBackground,
               transform: `translateX(calc(${activePrimaryIndex} * (100% + ${MOBILE_NAV_GAP}px)))`,
               transition: 'transform 520ms cubic-bezier(0.22, 1, 0.36, 1)',
               pointerEvents: 'none',
@@ -592,6 +593,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   ].join(', '),
                   position: 'relative',
                   zIndex: 1,
+                  outline: 'none',
+                  WebkitAppearance: 'none',
+                  appearance: 'none',
+                  WebkitTapHighlightColor: 'transparent',
+                  userSelect: 'none',
+                  touchAction: 'manipulation',
                 }}
               >
                 <span style={{
@@ -641,15 +648,19 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               color: isMoreButtonActive ? colors.textPrimary : colors.textSecondary,
               position: 'relative',
               overflow: 'hidden',
+              outline: 'none',
+              WebkitAppearance: 'none',
+              appearance: 'none',
+              WebkitTapHighlightColor: 'transparent',
+              userSelect: 'none',
+              touchAction: 'manipulation',
             }}
           >
             <div style={{
               position: 'absolute',
               inset: 8,
               borderRadius: 999,
-              background: isMoreButtonActive
-                ? (isDark ? 'rgba(255,255,255,0.1)' : 'rgba(35, 131, 226, 0.12)')
-                : 'transparent',
+              background: isMoreButtonActive ? navActiveBackground : 'transparent',
               transition: 'background-color 420ms cubic-bezier(0.22, 1, 0.36, 1)',
             }} />
             <span style={{
