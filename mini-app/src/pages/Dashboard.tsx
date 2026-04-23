@@ -1034,6 +1034,7 @@ const Dashboard: React.FC = () => {
       <PageHeader
         title={t('pages.dashboard.title')}
         subtitle={t('pages.dashboard.subtitle')}
+        variant="minimal"
         actions={
           <Space wrap size="small" style={{ display: 'flex', flexWrap: 'wrap' }}>
             <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/packages')} size="middle">

@@ -71,7 +71,7 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
         }
       })}
       confirmLoading={isLoading}
-      destroyOnClose
+      destroyOnHidden
       width={600}
     >
       <Form form={form} layout="vertical" name="template_form" autoComplete="off">

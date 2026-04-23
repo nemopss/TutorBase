@@ -39,6 +39,7 @@ import { formatDate } from '../utils/datetime';
 import { spacing } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../auth/AuthProvider';
+import { useResponsive } from '../hooks/useResponsive';
 
 const { Text, Title } = Typography;
 
@@ -134,6 +135,7 @@ const PackageDetail: React.FC = () => {
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
   const { tenantAccess } = useAuth();
+  const { isMobile } = useResponsive();
   const isDark = resolvedTheme.colorScheme === 'dark';
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   const [paymentForm] = Form.useForm();
@@ -627,21 +629,29 @@ const PackageDetail: React.FC = () => {
       <div
         style={{
           display: 'flex',
-          alignItems: 'center',
+          flexDirection: isMobile ? 'column' : 'row',
+          alignItems: isMobile ? 'stretch' : 'center',
           gap: spacing.md,
-          marginBottom: spacing.lg,
-          flexWrap: 'wrap',
+          marginBottom: isMobile ? spacing.md : spacing.lg,
         }}
       >
-        <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/packages')}>
-          {t('common.back')}
-        </Button>
-        <SegmentedProgress
-          total={progress.total}
-          completed={progress.completed}
-          cancelled={progress.cancelled}
-          size={80}
-        />
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          gap: spacing.sm,
+          flexWrap: 'wrap',
+        }}>
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/packages')}>
+            {t('common.back')}
+          </Button>
+          <SegmentedProgress
+            total={progress.total}
+            completed={progress.completed}
+            cancelled={progress.cancelled}
+            size={80}
+          />
+        </div>
         <div style={{ flex: 1, minWidth: 200 }}>
           <Title level={4} style={{ margin: 0 }}>
             {packageData?.title}

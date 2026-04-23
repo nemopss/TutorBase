@@ -168,10 +168,12 @@ const Packages: React.FC = () => {
               background: 'transparent',
               opacity: canUseFullActions ? 1 : 0.5,
             }}
-            bodyStyle={{
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
+            styles={{
+              body: {
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+              },
             }}
           >
             <PlusOutlined style={{ fontSize: 32, color: '#8c8c8c' }} />

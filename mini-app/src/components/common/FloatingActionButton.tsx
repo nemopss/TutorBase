@@ -1,6 +1,7 @@
 import React from 'react';
 import { Button } from 'antd';
 import { useTheme } from '../../theme/ThemeProvider';
+import { useResponsive } from '../../hooks/useResponsive';
 
 interface FloatingActionButtonProps {
   /** Icon to display in the button */
@@ -21,11 +22,12 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
   position = 'bottom-right',
 }) => {
   const { resolvedTheme } = useTheme();
+  const { isMobile } = useResponsive();
   const isDark = resolvedTheme.colorScheme === 'dark';
 
   const positionStyles = position === 'bottom-right'
-    ? { right: 32, left: 'auto' }
-    : { left: 32, right: 'auto' };
+    ? { right: isMobile ? 20 : 32, left: 'auto' }
+    : { left: isMobile ? 20 : 32, right: 'auto' };
 
   return (
     <Button
@@ -35,7 +37,9 @@ const FloatingActionButton: React.FC<FloatingActionButtonProps> = ({
       onClick={onClick}
       style={{
         position: 'fixed',
-        bottom: 32,
+        bottom: isMobile
+          ? 'calc(96px + env(safe-area-inset-bottom, 0px))'
+          : 32,
         ...positionStyles,
         width: 56,
         height: 56,

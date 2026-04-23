@@ -371,7 +371,7 @@ const Reminders: React.FC = () => {
         onCancel={handleCancel}
         onOk={() => form.submit()}
         confirmLoading={updateMutation.isPending}
-        destroyOnClose
+        destroyOnHidden
       >
         <ReminderEditForm
           reminder={editingReminder}

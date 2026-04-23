@@ -28,6 +28,10 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
   const [form] = Form.useForm();
 
   useEffect(() => {
+    if (!open) {
+      return;
+    }
+
     if (initialValues) {
       const tz = initialValues.timezone || DEFAULT_TIMEZONE;
       form.setFieldsValue({
@@ -81,7 +85,7 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
           });
       }}
       confirmLoading={isLoading}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" name="lesson_form">
         <Form.Item

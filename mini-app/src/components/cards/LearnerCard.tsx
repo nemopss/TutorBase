@@ -162,8 +162,10 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
         transform: isPressed ? 'scale(0.98)' : 'scale(1)',
         transition: 'transform 0.1s ease-out',
       }}
-      bodyStyle={{
-        padding: spacing.md,
+      styles={{
+        body: {
+          padding: spacing.md,
+        },
       }}
       onClick={handleCardClick}
       onMouseDown={() => setIsPressed(true)}

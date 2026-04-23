@@ -88,8 +88,10 @@ const PackageCard: React.FC<PackageCardProps> = ({
         transform: isPressed ? 'scale(0.98)' : 'scale(1)',
         transition: 'transform 0.1s ease-out',
       }}
-      bodyStyle={{
-        padding: spacing.md,
+      styles={{
+        body: {
+          padding: spacing.md,
+        },
       }}
       onClick={onClick}
       onMouseDown={() => setIsPressed(true)}

@@ -365,11 +365,14 @@ const LearnerFinance: React.FC = () => {
       <PageHeader
         title={`${t('pages.finance.title')}: ${learner?.display_name || t('pages.learners.learner')}`}
         subtitle={t('pages.finance.subtitle')}
+        variant="compact"
+        leading={(
+          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/learners')}>
+            {t('common.back')}
+          </Button>
+        )}
         actions={
           <Space>
-            <Button icon={<ArrowLeftOutlined />} onClick={() => navigate('/learners')}>
-              {t('common.back')}
-            </Button>
             <Button
               type="primary"
               icon={<PlusOutlined />}
