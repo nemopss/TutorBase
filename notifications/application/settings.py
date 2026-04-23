@@ -16,7 +16,7 @@ from notifications.application.ports import NotificationMaterializationUnitOfWor
 from notifications.domain.enums import NotificationSystemMode
 
 
-_TENANT_MODE_REBUILD_LIMIT = 10_000
+_TENANT_MODE_REBUILD_PAGE_SIZE = 1_000
 
 
 class GetNotificationSettingsUseCase:
@@ -131,7 +131,7 @@ async def _rebuild_queue_for_tenant_mode(
         uow,
         rules,
         horizon_days=30,
-        limit=_TENANT_MODE_REBUILD_LIMIT,
+        limit=_TENANT_MODE_REBUILD_PAGE_SIZE,
         delivery_enabled=True,
         shadow=False,
         commit=False,

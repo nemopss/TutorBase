@@ -30,12 +30,13 @@ class FakeAudienceResolver:
 class FakeEventRepository:
     events: tuple[PreviewEvent, ...]
 
-    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit):
-        return tuple(
+    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit, offset=0):
+        events = tuple(
             event
             for event in self.events
             if event.event_type == event_type and event.learner_id in learner_ids
-        )[:limit]
+        )
+        return events[offset:offset + limit]
 
 
 @dataclass

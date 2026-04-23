@@ -312,10 +312,13 @@ class _SingleEventRepository:
         learner_ids: tuple[int, ...],
         horizon_days: int,
         limit: int,
+        offset: int = 0,
     ) -> tuple[PreviewEvent, ...]:
         if event_type != self._event.event_type:
             return ()
         if self._event.learner_id not in set(learner_ids):
+            return ()
+        if offset > 0:
             return ()
         return (self._event,)
 

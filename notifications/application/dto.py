@@ -173,6 +173,7 @@ class CombinedPreviewInstance:
 class RulePreviewResult:
     instances: tuple[PreviewInstance | CombinedPreviewInstance, ...]
     warnings: tuple[str, ...] = ()
+    has_more: bool = False
 
 
 @dataclass(frozen=True)

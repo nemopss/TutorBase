@@ -161,7 +161,7 @@ class NotificationPreviewResponse(BaseResponse):
 
 class MaterializeActiveRulesRequest(BaseRequest):
     horizon_days: int = Field(30, ge=1, le=365)
-    limit: int = Field(100, ge=1, le=1000)
+    limit: int = Field(100, ge=1, le=1000, description="Paged batch size for candidate traversal")
     delivery_enabled: bool = True
     shadow: bool = False
 
@@ -197,7 +197,7 @@ class NotificationReconcileEventRequest(BaseRequest):
     delivery_enabled: bool = False
     shadow: bool = True
     horizon_days: int = Field(30, ge=1, le=365)
-    limit: int = Field(100, ge=1, le=1000)
+    limit: int = Field(100, ge=1, le=1000, description="Paged batch size for candidate traversal")
 
 
 class NotificationJobResponse(BaseResponse):

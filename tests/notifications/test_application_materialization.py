@@ -52,12 +52,13 @@ class FakeAudienceResolver:
 class FakeEventRepository:
     events: tuple[PreviewEvent, ...]
 
-    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit):
-        return tuple(
+    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit, offset=0):
+        events = tuple(
             event
             for event in self.events
             if event.event_type == event_type and event.learner_id in learner_ids
-        )[:limit]
+        )
+        return events[offset:offset + limit]
 
 
 class FakePreferenceRepository:
@@ -299,6 +300,57 @@ async def test_materialize_rules_upserts_scheduled_instance_drafts():
     assert instance.delivery_enabled is True
     assert instance.dedupe_key.startswith("single|lesson_confirmation|lesson_confirmation|")
     assert uow.instances.upserted == result.planned_instances
+
+
+@pytest.mark.asyncio
+async def test_materialize_rules_pages_through_all_matching_events():
+    future_start = datetime.now(timezone.utc) + timedelta(days=14)
+    uow = FakeMaterializationUnitOfWork(
+        audience_resolver=FakeAudienceResolver(
+            recipients=(PreviewRecipient(learner_id=10, display_name="Вика"),)
+        ),
+        events=FakeEventRepository(
+            events=(
+                PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=617,
+                    learner_id=10,
+                    starts_at=future_start,
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=True,
+                ),
+                PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=618,
+                    learner_id=10,
+                    starts_at=future_start + timedelta(days=1),
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=True,
+                ),
+                PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=619,
+                    learner_id=10,
+                    starts_at=future_start + timedelta(days=2),
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=True,
+                ),
+            )
+        ),
+    )
+
+    result = await MaterializeRulesUseCase(uow).execute((_draft(),), limit=1)
+
+    assert result.upsert_result.planned_count == 3
+    assert len(result.planned_instances) == 3
+    assert [instance.event_id for instance in result.planned_instances] == [617, 618, 619]
+    assert len(uow.instances.upserted) == 3
 
 
 @pytest.mark.asyncio
