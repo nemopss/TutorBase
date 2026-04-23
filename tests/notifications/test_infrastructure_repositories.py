@@ -126,8 +126,10 @@ class FakeBulkUpdateSession:
 
 
 class FakeAsyncSession:
-    def __init__(self):
+    def __init__(self, *, existing_rows=(), inserted_rows=()):
         self.calls = []
+        self.existing_rows = list(existing_rows)
+        self.inserted_rows = list(inserted_rows)
 
     async def execute(self, statement, params=None):
         self.calls.append((statement, params))
@@ -138,19 +140,10 @@ class FakeAsyncSession:
                     SimpleNamespace(key="homework", id=2),
                 ]
             )
-        if getattr(statement, "table", None) is NotificationInstance.__table__:
-            return FakeResult(
-                [
-                    SimpleNamespace(
-                        id=101,
-                        recipient_type="learner",
-                        recipient_id=10,
-                        event_type="lesson",
-                        event_key="lesson:617",
-                        dedupe_key="combined|lesson_confirmation_homework|x",
-                    )
-                ]
-            )
+        if len(self.calls) == 2:
+            return FakeResult(self.existing_rows)
+        if getattr(statement, "is_insert", False) and getattr(statement, "table", None) is NotificationInstance.__table__:
+            return FakeResult(self.inserted_rows)
         return FakeResult([])
 
 
@@ -300,27 +293,50 @@ def _planned_instance(*, components: bool = False) -> NotificationInstanceDraft:
 
 
 @pytest.mark.asyncio
-async def test_instance_repository_uses_postgresql_upsert_with_non_nullable_event_key():
-    session = FakeAsyncSession()
+async def test_instance_repository_inserts_missing_planned_instance_with_conflict_guard():
+    session = FakeAsyncSession(
+        inserted_rows=(
+            SimpleNamespace(
+                id=101,
+                recipient_type="learner",
+                recipient_id=10,
+                event_type="lesson",
+                event_key="lesson:617",
+                dedupe_key="single|lesson_confirmation|x",
+            ),
+        )
+    )
     repository = SqlAlchemyNotificationInstanceRepository(session, tenant_id=1)
 
-    await repository.upsert_planned_instances((_planned_instance(),))
+    result = await repository.upsert_planned_instances((_planned_instance(),))
 
-    upsert_statement = session.calls[1][0]
-    compiled = str(upsert_statement.compile(dialect=postgresql.dialect()))
+    insert_statement = session.calls[2][0]
+    compiled = str(insert_statement.compile(dialect=postgresql.dialect()))
     assert (
         "ON CONFLICT (tenant_id, recipient_type, recipient_id, event_type, event_key, dedupe_key)"
         in compiled
     )
+    assert "DO NOTHING" in compiled
     assert "event_id" not in compiled.partition("ON CONFLICT")[2].partition(")")[0]
-    assert "notification_instances.status NOT IN" in compiled
-    assert "notification_responses.notification_instance_id = notification_instances.id" in compiled
-    assert "notification_instances.status_reason IN" in compiled
+    assert result.upserted_count == 1
+    assert result.inserted_count == 1
+    assert result.updated_count == 0
 
 
 @pytest.mark.asyncio
 async def test_instance_repository_replaces_combined_components_after_upsert():
-    session = FakeAsyncSession()
+    session = FakeAsyncSession(
+        inserted_rows=(
+            SimpleNamespace(
+                id=101,
+                recipient_type="learner",
+                recipient_id=10,
+                event_type="lesson",
+                event_key="lesson:617",
+                dedupe_key="combined|lesson_confirmation_homework|x",
+            ),
+        )
+    )
     repository = SqlAlchemyNotificationInstanceRepository(session, tenant_id=1)
 
     result = await repository.upsert_planned_instances((_planned_instance(components=True),))
@@ -334,6 +350,38 @@ async def test_instance_repository_replaces_combined_components_after_upsert():
         "lesson_confirmation:lesson_confirmation",
         "homework:homework",
     ]
+
+
+@pytest.mark.asyncio
+async def test_instance_repository_updates_existing_matching_key_without_reinsert():
+    session = FakeAsyncSession(
+        existing_rows=(
+            SimpleNamespace(
+                id=101,
+                recipient_type="learner",
+                recipient_id=10,
+                event_type="lesson",
+                event_key="lesson:617",
+                dedupe_key="single|lesson_confirmation|x",
+                status="cancelled",
+                status_reason="reconciled:lesson_updated",
+                has_response=False,
+            ),
+        )
+    )
+    repository = SqlAlchemyNotificationInstanceRepository(session, tenant_id=1)
+
+    result = await repository.upsert_planned_instances((_planned_instance(),))
+
+    assert result.planned_count == 1
+    assert result.upserted_count == 1
+    assert result.inserted_count == 0
+    assert result.updated_count == 1
+    assert result.skipped_count == 0
+    update_statement = session.calls[2][0]
+    compiled = str(update_statement.compile(dialect=postgresql.dialect()))
+    assert "UPDATE notification_instances" in compiled
+    assert "notification_instances.id =" in compiled
 
 
 @pytest.mark.asyncio

@@ -4,7 +4,7 @@ from collections.abc import Callable
 from datetime import datetime, time, timedelta, timezone
 
 from database.models import BotUser, Learner, Lesson, LessonPackage
-from sqlalchemy import delete, exists, func, insert, or_, select, update
+from sqlalchemy import delete, exists, func, insert, or_, select, tuple_, update
 from sqlalchemy.orm import aliased, joinedload, selectinload
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
@@ -90,6 +90,22 @@ _REMATERIALIZATION_STATUS_REASONS = (
     "rematerialized:all_rules",
     "rematerialized:shadow_all_rules",
 )
+
+def _instance_identity_key(
+    *,
+    recipient_type: str,
+    recipient_id: int,
+    event_type: str,
+    event_key: str,
+    dedupe_key: str,
+) -> tuple[str, int, str, str, str]:
+    return (
+        recipient_type,
+        recipient_id,
+        event_type,
+        event_key,
+        dedupe_key,
+    )
 
 
 def _cancellable_instance_status_values(
@@ -738,73 +754,91 @@ class SqlAlchemyNotificationInstanceRepository:
             | {component.category for instance in instances for component in instance.components}
         )
         now = self._now_factory()
-        rows = [
-            self._instance_row(instance, category_ids=category_ids, now=now)
+        instance_by_key = {
+            _instance_identity_key(
+                recipient_type=instance.recipient_type,
+                recipient_id=instance.recipient_id,
+                event_type=instance.event_type.value,
+                event_key=instance.event_key,
+                dedupe_key=instance.dedupe_key,
+            ): instance
             for instance in instances
-        ]
-        insert_stmt = pg_insert(NotificationInstance.__table__).values(rows)
-        upsert_stmt = (
-            insert_stmt.on_conflict_do_update(
-                index_elements=[
-                    "tenant_id",
-                    "recipient_type",
-                    "recipient_id",
-                    "event_type",
-                    "event_key",
-                    "dedupe_key",
-                ],
-                set_={
-                    "rule_id": insert_stmt.excluded.rule_id,
-                    "category_id": insert_stmt.excluded.category_id,
-                    "event_id": insert_stmt.excluded.event_id,
-                    "scheduled_for": insert_stmt.excluded.scheduled_for,
-                    "effective_scheduled_for": insert_stmt.excluded.effective_scheduled_for,
-                    "status": insert_stmt.excluded.status,
-                    "status_reason": insert_stmt.excluded.status_reason,
-                    "delivery_enabled": insert_stmt.excluded.delivery_enabled,
-                    "priority": insert_stmt.excluded.priority,
-                    "channel": insert_stmt.excluded.channel,
-                    "combination_key": insert_stmt.excluded.combination_key,
-                    "explanation": insert_stmt.excluded.explanation,
-                    "updated_at": insert_stmt.excluded.updated_at,
-                },
-                where=(
-                    NotificationInstance.status.notin_(
-                        (
-                            InstanceStatus.SENT.value,
-                            InstanceStatus.PROCESSING.value,
-                        )
-                    )
-                    & (
-                        ~exists().where(
-                            NotificationResponse.notification_instance_id == NotificationInstance.id
-                        )
-                        | NotificationInstance.status_reason.in_(
-                            _REMATERIALIZATION_STATUS_REASONS
-                        )
-                    )
-                ),
-            )
-            .returning(
-                NotificationInstance.id,
-                NotificationInstance.recipient_type,
-                NotificationInstance.recipient_id,
-                NotificationInstance.event_type,
-                NotificationInstance.event_key,
-                NotificationInstance.dedupe_key,
-            )
-        )
-        result = await self._session.execute(upsert_stmt)
-        instance_ids_by_key = {
-            (
-                row.recipient_type,
-                row.recipient_id,
-                row.event_type,
-                row.event_key,
-                row.dedupe_key,
-            ): row.id
-            for row in result
         }
+        existing_by_key = await self._load_existing_instances_by_identity(tuple(instance_by_key))
+        instance_ids_by_key: dict[tuple[str, int, str, str, str], int] = {}
+        updated_count = 0
+
+        for identity_key, existing in existing_by_key.items():
+            if not self._instance_is_mutable_for_plan(
+                status=existing.status,
+                status_reason=existing.status_reason,
+                has_response=bool(existing.has_response),
+            ):
+                continue
+            await self._session.execute(
+                update(NotificationInstance)
+                .where(
+                    NotificationInstance.tenant_id == self._tenant_id,
+                    NotificationInstance.id == existing.id,
+                )
+                .values(
+                    **self._instance_update_values(
+                        instance_by_key[identity_key],
+                        category_ids=category_ids,
+                        now=now,
+                    )
+                )
+            )
+            instance_ids_by_key[identity_key] = existing.id
+            updated_count += 1
+
+        missing_instances = tuple(
+            instance
+            for identity_key, instance in instance_by_key.items()
+            if identity_key not in existing_by_key
+        )
+        if missing_instances:
+            insert_stmt = (
+                pg_insert(NotificationInstance.__table__)
+                .values(
+                    [
+                        self._instance_row(instance, category_ids=category_ids, now=now)
+                        for instance in missing_instances
+                    ]
+                )
+                .on_conflict_do_nothing(
+                    index_elements=[
+                        "tenant_id",
+                        "recipient_type",
+                        "recipient_id",
+                        "event_type",
+                        "event_key",
+                        "dedupe_key",
+                    ]
+                )
+                .returning(
+                    NotificationInstance.id,
+                    NotificationInstance.recipient_type,
+                    NotificationInstance.recipient_id,
+                    NotificationInstance.event_type,
+                    NotificationInstance.event_key,
+                    NotificationInstance.dedupe_key,
+                )
+            )
+            result = await self._session.execute(insert_stmt)
+            instance_ids_by_key.update(
+                {
+                    _instance_identity_key(
+                        recipient_type=row.recipient_type,
+                        recipient_id=row.recipient_id,
+                        event_type=row.event_type,
+                        event_key=row.event_key,
+                        dedupe_key=row.dedupe_key,
+                    ): row.id
+                    for row in result
+                }
+            )
+
         await self._replace_components(
             instances,
             instance_ids_by_key=instance_ids_by_key,
@@ -814,6 +848,8 @@ class SqlAlchemyNotificationInstanceRepository:
         return InstanceUpsertResult(
             planned_count=len(instances),
             upserted_count=len(instance_ids_by_key),
+            inserted_count=len(instance_ids_by_key) - updated_count,
+            updated_count=updated_count,
             skipped_count=len(instances) - len(instance_ids_by_key),
         )
 
@@ -1279,6 +1315,60 @@ class SqlAlchemyNotificationInstanceRepository:
             raise ValueError(f"Missing notification categories: {missing_keys}")
         return category_ids
 
+    async def _load_existing_instances_by_identity(
+        self,
+        identity_keys: tuple[tuple[str, int, str, str, str], ...],
+    ) -> dict[tuple[str, int, str, str, str], object]:
+        has_response = exists().where(
+            NotificationResponse.notification_instance_id == NotificationInstance.id
+        )
+        result = await self._session.execute(
+            select(
+                NotificationInstance.id,
+                NotificationInstance.recipient_type,
+                NotificationInstance.recipient_id,
+                NotificationInstance.event_type,
+                NotificationInstance.event_key,
+                NotificationInstance.dedupe_key,
+                NotificationInstance.status,
+                NotificationInstance.status_reason,
+                has_response.label("has_response"),
+            ).where(
+                NotificationInstance.tenant_id == self._tenant_id,
+                tuple_(
+                    NotificationInstance.recipient_type,
+                    NotificationInstance.recipient_id,
+                    NotificationInstance.event_type,
+                    NotificationInstance.event_key,
+                    NotificationInstance.dedupe_key,
+                ).in_(identity_keys),
+            )
+        )
+        return {
+            _instance_identity_key(
+                recipient_type=row.recipient_type,
+                recipient_id=row.recipient_id,
+                event_type=row.event_type,
+                event_key=row.event_key,
+                dedupe_key=row.dedupe_key,
+            ): row
+            for row in result
+        }
+
+    def _instance_is_mutable_for_plan(
+        self,
+        *,
+        status: str,
+        status_reason: str | None,
+        has_response: bool,
+    ) -> bool:
+        if status in {
+            InstanceStatus.SENT.value,
+            InstanceStatus.PROCESSING.value,
+        }:
+            return False
+        return not has_response or status_reason in _REMATERIALIZATION_STATUS_REASONS
+
     def _instance_row(
         self,
         instance: NotificationInstanceDraft,
@@ -1308,6 +1398,29 @@ class SqlAlchemyNotificationInstanceRepository:
             "manual_overrides": {},
             "explanation": instance.explanation,
             "created_at": now,
+            "updated_at": now,
+        }
+
+    def _instance_update_values(
+        self,
+        instance: NotificationInstanceDraft,
+        *,
+        category_ids: dict[CategoryKey, int],
+        now: datetime,
+    ) -> dict:
+        return {
+            "rule_id": _persisted_rule_id(instance.rule_id),
+            "category_id": category_ids[instance.category],
+            "event_id": instance.event_id,
+            "scheduled_for": instance.scheduled_for,
+            "effective_scheduled_for": instance.effective_scheduled_for,
+            "status": instance.status.value,
+            "status_reason": instance.status_reason,
+            "delivery_enabled": instance.delivery_enabled,
+            "priority": instance.priority.value,
+            "channel": instance.channel,
+            "combination_key": instance.combination_key,
+            "explanation": instance.explanation,
             "updated_at": now,
         }
 
