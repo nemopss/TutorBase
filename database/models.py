@@ -619,6 +619,38 @@ class DashboardAttentionDismissal(Base):
     )
 
 
+class NotificationActivityAcknowledgement(Base):
+    """Persist handled state for teacher-facing notification activity items."""
+    __tablename__ = 'notification_activity_acknowledgements'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False, index=True)
+    activity_type = Column(String(64), nullable=False)
+    activity_id = Column(Integer, nullable=False)
+    acknowledged_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    acknowledged_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant')
+    acknowledged_by_user = relationship('User')
+
+    __table_args__ = (
+        UniqueConstraint(
+            'tenant_id',
+            'activity_type',
+            'activity_id',
+            name='uq_notification_activity_acknowledgements_item',
+        ),
+        Index(
+            'ix_notification_activity_acknowledgements_lookup',
+            'tenant_id',
+            'activity_type',
+            'acknowledged_at',
+        ),
+    )
+
+
 class ReminderRule(Base):
     """Reminder rule model for automated notifications.
     

@@ -156,9 +156,10 @@ const DayColumn: React.FC<DayColumnProps> = ({
       return isDark ? `${themeColors.accentPrimary}33` : `${themeColors.accentPrimary}1a`;
     }
     if (isToday) {
-      return isDark ? `${themeColors.accentPrimary}1a` : `${themeColors.accentPrimary}0d`;
+      // return isDark ? `${themeColors.accentPrimary}1a` : `${themeColors.accentPrimary}0d`;
+      return isDark ? `${themeColors.bgPrimary}A0` : `${themeColors.bgPrimary}A0`;
     }
-    return themeColors.bgPrimary;
+    return `${themeColors.bgPrimary}dc`;
   };
 
   const handleMouseEnter = (e: React.MouseEvent) => {

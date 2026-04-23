@@ -71,6 +71,7 @@ def test_notification_routes_are_registered():
     assert "/api/v1/notifications/instances/{instance_id}/cancel" in paths
     assert "/api/v1/notifications/instances/{instance_id}/send-now" in paths
     assert "/api/v1/notifications/activity" in paths
+    assert "/api/v1/notifications/activity-acknowledgements" in paths
     assert "/api/v1/notifications/audit" in paths
     assert "/api/v1/notifications/materialize-active-rules" in paths
     assert "/api/v1/notifications/reconcile/event" in paths

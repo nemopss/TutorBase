@@ -304,7 +304,7 @@ const Dashboard: React.FC = () => {
     ...cardStyle,
     width: '100%',
     height: topRowHeight ?? '100%',
-    border: `1px solid ${colors.borderPrimary}`,
+    border: `0px solid ${colors.borderPrimary}`,
     borderRadius: tileRadius,
     boxShadow: 'none',
     display: 'flex',
@@ -704,7 +704,7 @@ const Dashboard: React.FC = () => {
   const attentionTileStyle = {
     ...cardStyle,
     width: '100%',
-    border: `1px solid ${colors.borderPrimary}`,
+    border: `0px solid ${colors.borderPrimary}`,
     borderRadius: tileRadius,
     boxShadow: 'none',
   };
@@ -841,7 +841,7 @@ const Dashboard: React.FC = () => {
               padding: isMobile ? 10 : 10,
               borderRadius: tileRadius,
               background: colors.bgTertiary,
-              border: `1px solid ${borderColor}`,
+              border: `0px solid ${borderColor}`,
               minHeight: 0,
             }}
           >

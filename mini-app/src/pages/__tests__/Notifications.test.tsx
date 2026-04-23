@@ -1,4 +1,4 @@
-import { render, screen, fireEvent } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import Notifications from '../Notifications';
@@ -14,9 +14,13 @@ const translations: Record<string, string> = {
   'pages.notifications.tabs.queue': 'Queue',
   'pages.notifications.tabs.activity': 'Activity',
   'pages.notifications.tabs.settings': 'Settings',
+  'pages.notifications.rulesTabs.current': 'Rules',
+  'pages.notifications.rulesTabs.archived': 'Archive',
   'pages.notifications.categories.lesson_confirmation': 'Lesson confirmation',
+  'pages.notifications.categories.package_renewal': 'Package renewal',
   'pages.notifications.categories.custom': 'Custom',
   'pages.notifications.createRuleWizard': 'Create rule',
+  'pages.notifications.restore': 'Restore',
   'pages.notifications.ruleWizard.title': 'Create notification rule',
   'pages.notifications.ruleWizard.presets.lesson_confirmation.title': 'Lesson confirmation preset',
   'pages.notifications.ruleWizard.presets.lesson_confirmation.description': 'Lesson confirmation description',
@@ -75,6 +79,7 @@ const translations: Record<string, string> = {
   'pages.notifications.queueTimeline.deliveryLine': '{{event}} · event at {{eventTime}}',
   'pages.notifications.activitySections.attention': 'Needs attention',
   'pages.notifications.activitySections.recent': 'Recent activity',
+  'pages.notifications.activityStatuses.handled': 'Handled',
   'pages.notifications.activityDetails.lessonConfirmed': 'The learner confirmed the lesson',
   'pages.notifications.activityDetails.packageRenewalNeedsDiscussion': 'The learner wants to discuss package renewal',
   'pages.notifications.activityDetails.responseConfirmed': 'The learner confirmed the notification',
@@ -95,6 +100,10 @@ const translations: Record<string, string> = {
   'pages.notifications.sendNow': 'Send now',
   'pages.notifications.sendNowConfirmTitle': 'Send this notification outside the normal queue?',
   'pages.notifications.sendNowConfirmDescription': 'Send now confirmation',
+  'pages.notifications.markHandled': 'Mark handled',
+  'pages.notifications.activityHandled': 'The event was marked as handled',
+  'pages.notifications.noArchivedRules': 'No archived rules yet',
+  'pages.notifications.noArchivedRulesDescription': 'Archived rules will appear here after they are taken out of operation.',
   'pages.notifications.globalNewConfirmTitle': 'Enable the new system globally?',
   'pages.notifications.globalNewConfirmDescription': 'Global new confirmation',
   'pages.notifications.enableGlobalNew': 'Enable for all learners',
@@ -145,22 +154,79 @@ jest.mock('react-i18next', () => ({
 }));
 
 const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
+const buildMockNotificationRules = () => ([
+  {
+    id: 1,
+    name: 'Lesson confirmation',
+    category: 'lesson_confirmation',
+    event_type: 'lesson',
+    trigger_type: 'day_offset_at_time',
+    trigger_config: {},
+    priority: 'normal',
+    status: 'active',
+    assignments: [{ scope_type: 'all_learners', scope_id: null, is_exclusion: false }],
+  },
+  {
+    id: 2,
+    name: 'Renewal archive',
+    category: 'package_renewal',
+    event_type: 'package',
+    trigger_type: 'day_offset_at_time',
+    trigger_config: {},
+    priority: 'normal',
+    status: 'archived',
+    assignments: [{ scope_type: 'all_learners', scope_id: null, is_exclusion: false }],
+  },
+]);
+
+let mockNotificationRules = buildMockNotificationRules();
+
+const mockPost = jest.fn((url: string, payload?: Record<string, unknown>) => {
+  if (url === '/notifications/activity-acknowledgements') {
+    return Promise.resolve({
+      data: {
+        id: 1,
+        tenant_id: 1,
+        activity_type: 'teacher_alert',
+        activity_id: payload?.activity_id ?? 302,
+        acknowledged_by_user_id: 1,
+        acknowledged_at: '2026-04-07T07:06:00+00:00',
+        created_at: '2026-04-07T07:06:00+00:00',
+        updated_at: '2026-04-07T07:06:00+00:00',
+      },
+    });
+  }
+
+  const ruleStatusMatch = url.match(/^\/notifications\/rules\/(\d+)\/(activate|pause|archive)$/);
+  if (ruleStatusMatch) {
+    const ruleId = Number(ruleStatusMatch[1]);
+    const action = ruleStatusMatch[2];
+    mockNotificationRules = mockNotificationRules.map((rule) => {
+      if (rule.id !== ruleId) {
+        return rule;
+      }
+      if (action === 'archive') {
+        return { ...rule, status: 'archived' };
+      }
+      if (action === 'pause') {
+        return { ...rule, status: 'paused' };
+      }
+      if (action === 'activate') {
+        return { ...rule, status: 'active' };
+      }
+      return rule;
+    });
+    return Promise.resolve({
+      data: mockNotificationRules.find((rule) => rule.id === ruleId),
+    });
+  }
+
+  return Promise.resolve({ data: {} });
+});
 const mockGet = jest.fn((url: string, _config?: unknown) => {
     if (url === '/notifications/rules') {
       return Promise.resolve({
-        data: [
-          {
-            id: 1,
-            name: 'Lesson confirmation',
-            category: 'lesson_confirmation',
-            event_type: 'lesson',
-            trigger_type: 'day_offset_at_time',
-            trigger_config: {},
-            priority: 'normal',
-            status: 'draft',
-            assignments: [{ scope_type: 'all_learners', scope_id: null, is_exclusion: false }],
-          },
-        ],
+        data: mockNotificationRules,
       });
     }
 
@@ -376,6 +442,10 @@ const mockGet = jest.fn((url: string, _config?: unknown) => {
       });
     }
 
+    if (url === '/notifications/activity-acknowledgements') {
+      return Promise.resolve({ data: [] });
+    }
+
     if (url === '/groups') {
       return Promise.resolve({ data: [] });
     }
@@ -393,7 +463,7 @@ jest.mock('../../auth/AuthProvider', () => ({
 
 jest.mock('../../services/api', () => ({
   get: (url: string, config?: unknown) => mockGet(url, config),
-  post: jest.fn(() => Promise.resolve({ data: {} })),
+  post: (url: string, payload?: unknown) => mockPost(url, payload as Record<string, unknown> | undefined),
   patch: jest.fn(() => Promise.resolve({ data: {} })),
 }));
 
@@ -413,24 +483,30 @@ const renderComponent = () => {
   );
 };
 
+const setAuthMock = (overrides?: Partial<ReturnType<typeof useAuth>>) => {
+  mockUseAuth.mockReturnValue({
+    isAuthenticated: true,
+    isLoading: false,
+    user: { id: 1, display_name: 'Admin', role: 'admin', tenant_id: 1 },
+    tenantId: 1,
+    tenantAccess: null,
+    isSuperAdmin: true,
+    canSwitchTenant: true,
+    isTenantAccessLoading: false,
+    switchTenant: jest.fn(),
+    refreshTenantAccess: jest.fn(),
+    registerTutor: jest.fn(),
+    registerStudent: jest.fn(),
+    logout: jest.fn(),
+    ...overrides,
+  });
+};
+
 describe('Notifications', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
-      user: { id: 1, display_name: 'Admin', role: 'admin', tenant_id: 1 },
-      tenantId: 1,
-      tenantAccess: null,
-      isSuperAdmin: true,
-      canSwitchTenant: true,
-      isTenantAccessLoading: false,
-      switchTenant: jest.fn(),
-      refreshTenantAccess: jest.fn(),
-      registerTutor: jest.fn(),
-      registerStudent: jest.fn(),
-      logout: jest.fn(),
-    });
+    mockNotificationRules = buildMockNotificationRules();
+    setAuthMock();
   });
 
   it('renders rules tab data', async () => {
@@ -438,6 +514,37 @@ describe('Notifications', () => {
 
     expect(await screen.findByText('Notifications')).toBeInTheDocument();
     expect((await screen.findAllByText('Lesson confirmation')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Refresh notification plan')).not.toBeInTheDocument();
+  });
+
+  it('keeps archived rules in the archive tab instead of the main grid', async () => {
+    renderComponent();
+
+    expect((await screen.findAllByText('Lesson confirmation')).length).toBeGreaterThan(0);
+    expect(screen.queryByText('Renewal archive')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Archive (1)'));
+
+    expect(await screen.findByText('Renewal archive')).toBeInTheDocument();
+  });
+
+  it('restores an archived rule back to the main rules grid in paused state', async () => {
+    renderComponent();
+
+    expect((await screen.findAllByText('Lesson confirmation')).length).toBeGreaterThan(0);
+    fireEvent.click(screen.getByText('Archive (1)'));
+    expect(await screen.findByText('Renewal archive')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByLabelText('common.actions'));
+    fireEvent.click(await screen.findByText('Restore'));
+
+    await waitFor(() => {
+      expect(screen.queryByText('Renewal archive')).not.toBeInTheDocument();
+    });
+
+    fireEvent.click(screen.getByText('Rules (2)'));
+
+    expect(await screen.findByText('Renewal archive')).toBeInTheDocument();
   });
 
   it('loads templates tab data', async () => {
@@ -535,20 +642,9 @@ describe('Notifications', () => {
   });
 
   it('shows tenant selection prompt in global super-admin context without firing notification queries', async () => {
-    mockUseAuth.mockReturnValue({
-      isAuthenticated: true,
-      isLoading: false,
+    setAuthMock({
       user: { id: 1, display_name: 'Admin', role: 'admin', tenant_id: null },
       tenantId: null,
-      tenantAccess: null,
-      isSuperAdmin: true,
-      canSwitchTenant: true,
-      isTenantAccessLoading: false,
-      switchTenant: jest.fn(),
-      refreshTenantAccess: jest.fn(),
-      registerTutor: jest.fn(),
-      registerStudent: jest.fn(),
-      logout: jest.fn(),
     });
 
     renderComponent();
@@ -556,5 +652,51 @@ describe('Notifications', () => {
     expect(await screen.findByText('Choose a school first')).toBeInTheDocument();
     expect(screen.getByText('The Notifications section works only inside a selected school context.')).toBeInTheDocument();
     expect(mockGet).not.toHaveBeenCalled();
+  });
+
+  it('shows the full working tabs to a teacher but hides admin-only settings', async () => {
+    setAuthMock({
+      user: { id: 2, display_name: 'Teacher', role: 'teacher', tenant_id: 1 },
+      isSuperAdmin: false,
+      canSwitchTenant: false,
+    });
+
+    renderComponent();
+
+    expect(await screen.findByText('Rules')).toBeInTheDocument();
+    expect(screen.getByText('Templates')).toBeInTheDocument();
+    expect(screen.getByText('Queue')).toBeInTheDocument();
+    expect(screen.getByText('Activity')).toBeInTheDocument();
+    expect(screen.queryByText('Settings')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Queue'));
+    expect(await screen.findByText('Vika')).toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Activity'));
+    expect(await screen.findByText('The learner wants to discuss package renewal')).toBeInTheDocument();
+  });
+
+  it('marks teacher alerts as handled and removes them from active pilot attention', async () => {
+    renderComponent();
+
+    fireEvent.click(await screen.findByText('Activity'));
+
+    expect(await screen.findByText('Mark handled')).toBeInTheDocument();
+    fireEvent.click(screen.getByText('Mark handled'));
+
+    await waitFor(() => {
+      expect(mockPost).toHaveBeenCalledWith('/notifications/activity-acknowledgements', {
+        activity_type: 'teacher_alert',
+        activity_id: 302,
+      });
+    });
+
+    expect(await screen.findByText('Handled')).toBeInTheDocument();
+    expect(screen.queryByText('Mark handled')).not.toBeInTheDocument();
+
+    fireEvent.click(screen.getByText('Settings'));
+
+    expect(await screen.findByText('Choose one learner for the new-system pilot before running real deliveries.')).toBeInTheDocument();
+    expect(screen.queryByText('Review attention-required events first so the pilot does not hide real problems.')).not.toBeInTheDocument();
   });
 });

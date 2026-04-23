@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Literal
 
 from pydantic import Field
 
@@ -368,6 +368,22 @@ class NotificationActivityResponse(BaseResponse):
     provider_message_id: str | None = None
     occurred_at: datetime | None = None
     metadata: dict[str, Any] = Field(default_factory=dict)
+
+
+class NotificationActivityAcknowledgementRequest(BaseRequest):
+    activity_type: Literal["teacher_alert"]
+    activity_id: int = Field(..., ge=1)
+
+
+class NotificationActivityAcknowledgementResponse(BaseResponse):
+    id: int
+    tenant_id: int
+    activity_type: Literal["teacher_alert"]
+    activity_id: int
+    acknowledged_by_user_id: int | None = None
+    acknowledged_at: datetime
+    created_at: datetime | None = None
+    updated_at: datetime | None = None
 
 
 class NotificationAuditLogResponse(BaseResponse):

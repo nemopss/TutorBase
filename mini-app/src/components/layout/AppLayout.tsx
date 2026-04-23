@@ -309,7 +309,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           collapsedWidth={80}
           style={{
             background: colors.bgSecondary,
-            border: `1px solid ${colors.borderPrimary}`,
+            border: `0px solid ${colors.borderPrimary}`,
             borderRadius: shellRadius,
             overflow: 'hidden',
             height: '100%',
@@ -382,7 +382,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           minHeight: isMobile ? 'calc(100vh - 120px)' : 0,
           height: isMobile ? undefined : '100%',
           borderRadius: isTutorDashboardRoute ? 0 : shellRadius,
-          border: isTutorDashboardRoute ? 'none' : `1px solid ${colors.borderPrimary}`,
+          border: isTutorDashboardRoute ? 'none' : `none`,
           overflow: isMobile ? undefined : 'auto',
           boxSizing: 'border-box',
         }}>
