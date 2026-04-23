@@ -7,6 +7,7 @@ jest.mock('../../services/api', () => ({
   __esModule: true,
   setBrowserRefreshHandler: jest.fn(),
   default: {
+    get: jest.fn(() => Promise.resolve({ data: null })),
     post: jest.fn(),
     defaults: {
       headers: {
@@ -17,6 +18,7 @@ jest.mock('../../services/api', () => ({
 }));
 
 const api = require('../../services/api').default as {
+  get: jest.Mock;
   post: jest.Mock;
   defaults: { headers: { common: Record<string, string> } };
 };
@@ -151,7 +153,9 @@ describe('AuthProvider', () => {
     expect(postMock).toHaveBeenCalledWith('/auth/browser/refresh', undefined, {
       withCredentials: true,
     });
-    expect(localStorageMock.setItem).not.toHaveBeenCalled();
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('accessToken', expect.anything());
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('refreshToken', expect.anything());
+    expect(localStorageMock.setItem).toHaveBeenCalledWith('authUser', expect.any(String));
     expect(api.defaults.headers.common['Authorization']).toBe(`Bearer ${validAccessToken}`);
   });
 });

@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useCallback, useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { message, Modal } from 'antd';
 import dayjs from 'dayjs';
 import updateLocale from 'dayjs/plugin/updateLocale';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import 'dayjs/locale/ru';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
@@ -10,10 +12,13 @@ import LessonForm from '../components/forms/LessonForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
 import PageHeader from '../components/common/PageHeader';
 import CalendarContainer from '../components/common/CalendarContainer';
+import type { CalendarVisibleRange } from '../components/common/CalendarContainer';
 import { DEFAULT_TIMEZONE } from '../utils/datetime';
 import { useAuth } from '../auth/AuthProvider';
 
 dayjs.extend(updateLocale);
+dayjs.extend(utc);
+dayjs.extend(timezone);
 dayjs.updateLocale('ru', { week: { dow: 1 } });
 dayjs.locale('ru');
 
@@ -38,12 +43,25 @@ interface LessonListResponse {
   items: Lesson[];
 }
 
+const getInitialLessonRange = (): CalendarVisibleRange => ({
+  from: dayjs().tz(DEFAULT_TIMEZONE).startOf('month').startOf('isoWeek').subtract(14, 'day').toISOString(),
+  to: dayjs().tz(DEFAULT_TIMEZONE).endOf('month').endOf('isoWeek').add(21, 'day').toISOString(),
+});
+
 // --- API Fetchers --- //
-const fetchLessons = async (status: string | null, search: string, limit: number, offset: number): Promise<LessonListResponse> => {
+const fetchLessons = async (
+  status: string | null,
+  search: string,
+  limit: number,
+  offset: number,
+  range: CalendarVisibleRange,
+): Promise<LessonListResponse> => {
   const { data } = await api.get('/lessons', {
     params: {
       status: status || undefined,
       search: search || undefined,
+      from_date: range.from,
+      to_date: range.to,
       limit,
       offset,
       sort_by: 'scheduled_at',
@@ -54,21 +72,21 @@ const fetchLessons = async (status: string | null, search: string, limit: number
 };
 
 // Fetch all lessons with pagination (API limit is 100 per request)
-const fetchAllLessons = async (): Promise<LessonListResponse> => {
+const fetchAllLessons = async (range: CalendarVisibleRange): Promise<LessonListResponse> => {
   const limit = 100;
   let allItems: Lesson[] = [];
   let offset = 0;
   let total = 0;
   
   // First request to get total count
-  const firstResponse = await fetchLessons(null, '', limit, 0);
+  const firstResponse = await fetchLessons(null, '', limit, 0, range);
   allItems = [...firstResponse.items];
   total = firstResponse.total;
   offset = limit;
   
   // Fetch remaining pages if needed
   while (offset < total && offset < 1000) { // Safety limit of 1000
-    const response = await fetchLessons(null, '', limit, offset);
+    const response = await fetchLessons(null, '', limit, offset, range);
     allItems = [...allItems, ...response.items];
     offset += limit;
   }
@@ -104,10 +122,19 @@ const Lessons: React.FC = () => {
   // Complete/Cancel confirmation modals
   const [isCompleteLessonModalOpen, setIsCompleteLessonModalOpen] = useState(false);
   const [isCancelLessonModalOpen, setIsCancelLessonModalOpen] = useState(false);
+  const [visibleRange, setVisibleRange] = useState<CalendarVisibleRange>(() => getInitialLessonRange());
+  const handleVisibleRangeChange = useCallback((nextRange: CalendarVisibleRange) => {
+    setVisibleRange((currentRange) => (
+      currentRange.from === nextRange.from && currentRange.to === nextRange.to
+        ? currentRange
+        : nextRange
+    ));
+  }, []);
 
   const { data: calendarData } = useQuery<LessonListResponse, Error>({
-    queryKey: ['lessons', 'calendar', 'all'],
-    queryFn: fetchAllLessons,
+    queryKey: ['lessons', 'calendar', visibleRange.from, visibleRange.to],
+    queryFn: () => fetchAllLessons(visibleRange),
+    placeholderData: (previousData) => previousData,
   });
 
   const updateMutation = useMutation({
@@ -258,6 +285,7 @@ const Lessons: React.FC = () => {
         lessons={calendarData?.items || []}
         timezone={DEFAULT_TIMEZONE}
         onLessonClick={handleLessonClick}
+        onRangeChange={handleVisibleRangeChange}
         onReschedule={handleReschedule}
         onComplete={handleComplete}
         onCancel={handleCancel}

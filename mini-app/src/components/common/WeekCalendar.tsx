@@ -20,6 +20,7 @@ import LessonContextMenu from './LessonContextMenu';
 import CurrentTimeIndicator from './CurrentTimeIndicator';
 import type { Lesson } from './calendar-types';
 import { statusColors, DEFAULT_DURATION } from './calendar-types';
+import type { CalendarVisibleRange } from './CalendarContainer';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -39,6 +40,7 @@ interface WeekCalendarProps {
   onComplete?: (lessonId: number) => void;
   onCancel?: (lessonId: number) => void;
   onDelete?: (lessonId: number) => void;
+  onRangeChange?: (range: CalendarVisibleRange) => void;
 }
 
 // Responsive constants
@@ -545,6 +547,7 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
   onComplete,
   onCancel,
   onDelete,
+  onRangeChange,
 }) => {
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
@@ -767,8 +770,8 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     containerWidth,
   });
 
-  // Update view start when switching between mobile/desktop
-  useMemo(() => {
+  // Keep the view aligned when layout switches between mobile and desktop.
+  useEffect(() => {
     const today = dayjs().tz(tz);
     if (isMobile) {
       setViewStart(today.subtract(1, 'day'));
@@ -829,9 +832,26 @@ const WeekCalendar: React.FC<WeekCalendarProps> = ({
     }
   };
 
-  const viewEnd = viewStart.add(dayCount - 1, 'day');
+  const viewEnd = useMemo(() => viewStart.add(dayCount - 1, 'day'), [dayCount, viewStart]);
   const today = dayjs().tz(tz);
   const isTodayVisible = today.isSameOrAfter(viewStart, 'day') && today.isSameOrBefore(viewEnd, 'day');
+  const visibleRange = useMemo<CalendarVisibleRange>(() => {
+    const bufferBeforeDays = isMobile ? 7 : 14;
+    const bufferAfterDays = isMobile ? 21 : 35;
+
+    return {
+      from: viewStart.startOf('day').subtract(bufferBeforeDays, 'day').toISOString(),
+      to: viewEnd.endOf('day').add(bufferAfterDays, 'day').toISOString(),
+    };
+  }, [isMobile, viewEnd, viewStart]);
+
+  useEffect(() => {
+    if (!onRangeChange) {
+      return;
+    }
+
+    onRangeChange(visibleRange);
+  }, [onRangeChange, visibleRange]);
 
   // Calculate week stats - only for currently visible days
   const weekStats = useMemo(() => {

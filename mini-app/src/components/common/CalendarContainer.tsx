@@ -8,6 +8,10 @@ import MonthCalendar from './MonthCalendar';
 import { spacing } from '../../theme/tokens';
 
 type CalendarView = 'week' | 'month';
+export interface CalendarVisibleRange {
+  from: string;
+  to: string;
+}
 
 interface CalendarContainerProps {
   lessons: Lesson[];
@@ -19,6 +23,7 @@ interface CalendarContainerProps {
   onCancel?: (lessonId: number) => void;
   onDelete?: (lessonId: number) => void;
   defaultView?: CalendarView;
+  onRangeChange?: (range: CalendarVisibleRange) => void;
 }
 
 const CalendarContainer: React.FC<CalendarContainerProps> = ({
@@ -31,6 +36,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   onCancel,
   onDelete,
   defaultView = 'week',
+  onRangeChange,
 }) => {
   const { t } = useTranslation();
   const [view, setView] = useState<CalendarView>(defaultView);
@@ -70,6 +76,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
           onComplete={onComplete}
           onCancel={onCancel}
           onDelete={onDelete}
+          onRangeChange={onRangeChange}
         />
       ) : (
         <MonthCalendar
@@ -81,6 +88,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
           onComplete={onComplete}
           onCancel={onCancel}
           onDelete={onDelete}
+          onRangeChange={onRangeChange}
         />
       )}
     </div>

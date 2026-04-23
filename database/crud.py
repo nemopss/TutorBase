@@ -1581,6 +1581,8 @@ async def list_all_lessons(
     status: Optional[str] = None, 
     learner_id: Optional[int] = None,
     search: Optional[str] = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
     limit: int = 100, 
     offset: int = 0,
     sort_by: str = 'scheduled_at',
@@ -1597,6 +1599,8 @@ async def list_all_lessons(
         status: Optional status filter
         learner_id: Optional learner ID filter
         search: Optional search string (date, package title, or learner name)
+        from_date: Optional start of scheduled_at range
+        to_date: Optional end of scheduled_at range
         limit: Maximum number of results
         offset: Number of results to skip
         sort_by: Field to sort by (default: scheduled_at)
@@ -1631,6 +1635,12 @@ async def list_all_lessons(
     if learner_id is not None:
         needs_package_join = True
         conditions.append(LessonPackage.learner_id == learner_id)
+
+    if from_date is not None:
+        conditions.append(Lesson.scheduled_at >= from_date)
+
+    if to_date is not None:
+        conditions.append(Lesson.scheduled_at <= to_date)
 
     search_term = (search or "").strip()
     if search_term:

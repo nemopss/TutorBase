@@ -363,6 +363,8 @@ async def list_all_lessons(
     status: Optional[str] = None, 
     learner_id: Optional[int] = None,
     search: Optional[str] = None,
+    from_date: datetime | None = None,
+    to_date: datetime | None = None,
     limit: int = 100, 
     offset: int = 0,
     sort_by: str = 'scheduled_at',
@@ -379,6 +381,8 @@ async def list_all_lessons(
         status: Filter by lesson status (scheduled/completed/cancelled) (optional)
         learner_id: Filter by learner ID (optional)
         search: Search query to filter by learner name or package title (optional)
+        from_date: Start of date range filter (inclusive)
+        to_date: End of date range filter (inclusive)
         limit: Maximum number of lessons in result (default 100)
         offset: Offset for pagination (default 0)
         sort_by: Field to sort by (default 'scheduled_at')
@@ -399,6 +403,8 @@ async def list_all_lessons(
         status=status, 
         learner_id=learner_id,
         search=search,
+        from_date=from_date,
+        to_date=to_date,
         limit=limit, 
         offset=offset,
         sort_by=sort_by,

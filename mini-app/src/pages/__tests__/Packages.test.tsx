@@ -2,6 +2,7 @@ import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import Packages from '../Packages';
+import { useAuth } from '../../auth/AuthProvider';
 
 // Mock the api module
 jest.mock('../../services/api', () => ({
@@ -22,6 +23,12 @@ jest.mock('../../services/api', () => ({
 jest.mock('../../hooks/useDebounce', () => ({
   useDebounce: (value: any) => value,
 }));
+
+jest.mock('../../auth/AuthProvider', () => ({
+  useAuth: jest.fn(),
+}));
+
+const mockUseAuth = useAuth as jest.MockedFunction<typeof useAuth>;
 
 const queryClient = new QueryClient({
   defaultOptions: {
@@ -44,6 +51,21 @@ const renderComponent = () => {
 describe('Packages', () => {
   beforeEach(() => {
     jest.clearAllMocks();
+    mockUseAuth.mockReturnValue({
+      isAuthenticated: true,
+      isLoading: false,
+      user: { id: 1, display_name: 'Admin', role: 'admin', tenant_id: 1 },
+      tenantId: 1,
+      tenantAccess: null,
+      isTenantAccessLoading: false,
+      isSuperAdmin: false,
+      canSwitchTenant: false,
+      refreshTenantAccess: jest.fn(),
+      switchTenant: jest.fn(),
+      registerTutor: jest.fn(),
+      registerStudent: jest.fn(),
+      logout: jest.fn(),
+    });
   });
 
   it('renders the main heading', async () => {
