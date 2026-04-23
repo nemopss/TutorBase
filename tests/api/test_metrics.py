@@ -137,6 +137,39 @@ async def test_dashboard_attention_dismissals_hide_expired_items(
 
 
 @pytest.mark.asyncio
+async def test_notification_activity_acknowledgements_roundtrip(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    headers, user_id = await get_auth_headers(db_session, current_tenant)
+
+    create_response = await client.post(
+        "/api/v1/notifications/activity-acknowledgements",
+        headers=headers,
+        json={
+            "activity_type": "teacher_alert",
+            "activity_id": 302,
+        },
+    )
+    assert create_response.status_code == 200
+    created = create_response.json()
+    assert created["activity_type"] == "teacher_alert"
+    assert created["activity_id"] == 302
+    assert created["acknowledged_by_user_id"] == user_id
+
+    list_response = await client.get(
+        "/api/v1/notifications/activity-acknowledgements",
+        headers=headers,
+    )
+    assert list_response.status_code == 200
+    items = list_response.json()
+    assert len(items) == 1
+    assert items[0]["activity_type"] == "teacher_alert"
+    assert items[0]["activity_id"] == 302
+
+
+@pytest.mark.asyncio
 async def test_dashboard_history_metrics_aggregates_lesson_load(
     client: AsyncClient,
     db_session: AsyncSession,

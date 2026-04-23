@@ -312,7 +312,7 @@
         "aqua": "Aqua",
         "tokyonight": "Tokyo Night",
         "gruvbox": "Gruvbox",
-        "darkplus": "Dark+"
+        "darkplus": "Coal"
       },
       "notifications": "알림",
       "enableNotifications": "알림 활성화",
@@ -508,6 +508,7 @@
         "teacherAlert": "주의 필요"
       },
       "activityStatuses": {
+        "handled": "처리됨",
         "requiresAttention": "주의 필요",
         "confirmed": "확인됨",
         "declined": "거절",
@@ -537,10 +538,13 @@
       "activate": "활성화",
       "pause": "일시 중지",
       "archive": "보관",
+      "restore": "보관 해제",
       "sendNow": "지금 보내기",
       "sendNowConfirmTitle": "이 알림을 일반 큐 밖에서 보낼까요?",
       "sendNowConfirmDescription": "{{learner}}에게 “{{category}}” 알림이 다음 전송 틱에 예약됩니다.",
       "technicalList": "기술 세부 정보",
+      "markHandled": "처리 완료로 표시",
+      "activityHandled": "이벤트를 처리 완료로 표시했습니다",
       "materializeShadow": "알림 계획 새로고침",
       "materializeQueued": "알림 계획이 갱신되었습니다",
       "materializeHelpTitle": "향후 알림 다시 계산",
@@ -556,7 +560,7 @@
       "advancedSettingsTitle": "추가 설정",
       "templateCreated": "템플릿이 생성되었습니다",
       "templateArchived": "템플릿이 보관되었습니다",
-      "ruleCreated": "규칙이 초안으로 생성되었습니다",
+      "ruleCreated": "규칙이 생성되었습니다",
       "ruleUpdated": "규칙이 업데이트되었습니다",
       "learnerModeSaved": "학생 모드가 저장되었습니다",
       "instanceCancelled": "전송이 취소되었습니다",
@@ -566,6 +570,8 @@
       "tenantTemplate": "사용자 정의",
       "noRules": "아직 규칙이 없습니다",
       "noRulesDescription": "규칙은 무엇을 언제 보낼지 정의합니다.",
+      "noArchivedRules": "보관된 규칙이 아직 없습니다",
+      "noArchivedRulesDescription": "작업에서 제외된 규칙은 여기에 표시됩니다.",
       "noTemplates": "아직 템플릿이 없습니다",
       "noTemplatesDescription": "템플릿을 만들거나 seed migration 이후 시스템 템플릿을 사용하세요.",
       "noInstances": "큐에 알림이 없습니다",
@@ -590,6 +596,10 @@
         "draft": "초안",
         "paused": "일시 중지됨",
         "archived": "보관됨"
+      },
+      "rulesTabs": {
+        "current": "규칙",
+        "archived": "보관"
       },
       "templateSections": {
         "system": "시스템 템플릿",

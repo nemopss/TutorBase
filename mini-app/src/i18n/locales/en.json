@@ -313,7 +313,7 @@
         "aqua": "Aqua",
         "tokyonight": "Tokyo Night",
         "gruvbox": "Gruvbox",
-        "darkplus": "Dark+"
+        "darkplus": "Coal"
       },
       "notifications": "Notifications",
       "enableNotifications": "Enable Notifications",
@@ -509,6 +509,7 @@
         "teacherAlert": "Needs attention"
       },
       "activityStatuses": {
+        "handled": "Handled",
         "requiresAttention": "Requires attention",
         "confirmed": "Confirmed",
         "declined": "Declined",
@@ -538,10 +539,13 @@
       "activate": "Activate",
       "pause": "Pause",
       "archive": "Archive",
+      "restore": "Restore",
       "sendNow": "Send now",
       "sendNowConfirmTitle": "Send this notification outside the normal queue?",
       "sendNowConfirmDescription": "For {{learner}}, the “{{category}}” notification will be scheduled for the next delivery tick.",
       "technicalList": "Technical details",
+      "markHandled": "Mark handled",
+      "activityHandled": "The event was marked as handled",
       "materializeShadow": "Refresh notification plan",
       "materializeQueued": "Notification plan refreshed",
       "materializeHelpTitle": "Recalculate future notifications",
@@ -557,7 +561,7 @@
       "advancedSettingsTitle": "Advanced settings",
       "templateCreated": "Template created",
       "templateArchived": "Template archived",
-      "ruleCreated": "Rule created as draft",
+      "ruleCreated": "Rule created",
       "ruleUpdated": "Rule updated",
       "learnerModeSaved": "Learner mode saved",
       "instanceCancelled": "Delivery cancelled",
@@ -567,6 +571,8 @@
       "tenantTemplate": "Custom",
       "noRules": "No rules yet",
       "noRulesDescription": "Rules define what to send and when to send it.",
+      "noArchivedRules": "No archived rules yet",
+      "noArchivedRulesDescription": "Archived rules will appear here after they are taken out of operation.",
       "noTemplates": "No templates yet",
       "noTemplatesDescription": "Create a template or use system templates after seed migration.",
       "noInstances": "No notifications in the queue",
@@ -591,6 +597,10 @@
         "draft": "Drafts",
         "paused": "Paused",
         "archived": "Archived"
+      },
+      "rulesTabs": {
+        "current": "Rules",
+        "archived": "Archive"
       },
       "templateSections": {
         "system": "System templates",

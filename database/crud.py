@@ -46,6 +46,7 @@ from database.models import (
     Lesson,
     ReminderRule,
     ReminderInstance,
+    NotificationActivityAcknowledgement,
     User,
     Tenant,
 )
@@ -2484,6 +2485,65 @@ async def upsert_dashboard_attention_dismissal(
         session.add(existing)
     else:
         existing.dismissed_until = dismissed_until
+        existing.updated_at = now
+    await session.flush()
+    return existing
+
+
+async def fetch_notification_activity_acknowledgements(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    activity_type: str | None = None,
+) -> list[NotificationActivityAcknowledgement]:
+    """Fetch notification activity acknowledgements for the tenant."""
+    tenant_id = resolve_tenant_id(current_tenant)
+    stmt = (
+        select(NotificationActivityAcknowledgement)
+        .where(NotificationActivityAcknowledgement.tenant_id == tenant_id)
+        .order_by(
+            NotificationActivityAcknowledgement.activity_type.asc(),
+            NotificationActivityAcknowledgement.acknowledged_at.desc(),
+            NotificationActivityAcknowledgement.activity_id.desc(),
+        )
+    )
+    if activity_type is not None:
+        stmt = stmt.where(NotificationActivityAcknowledgement.activity_type == activity_type)
+    result = await session.execute(stmt)
+    return result.scalars().all()
+
+
+async def upsert_notification_activity_acknowledgement(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    activity_type: str,
+    activity_id: int,
+    acknowledged_by_user_id: int | None,
+) -> NotificationActivityAcknowledgement:
+    """Create or update handled state for a notification activity item."""
+    tenant_id = resolve_tenant_id(current_tenant)
+    now = datetime.now(timezone.utc)
+    stmt = select(NotificationActivityAcknowledgement).where(
+        NotificationActivityAcknowledgement.tenant_id == tenant_id,
+        NotificationActivityAcknowledgement.activity_type == activity_type,
+        NotificationActivityAcknowledgement.activity_id == activity_id,
+    )
+    existing = (await session.execute(stmt)).scalar_one_or_none()
+    if existing is None:
+        existing = NotificationActivityAcknowledgement(
+            tenant_id=tenant_id,
+            activity_type=activity_type,
+            activity_id=activity_id,
+            acknowledged_by_user_id=acknowledged_by_user_id,
+            acknowledged_at=now,
+            created_at=now,
+            updated_at=now,
+        )
+        session.add(existing)
+    else:
+        existing.acknowledged_by_user_id = acknowledged_by_user_id
+        existing.acknowledged_at = now
         existing.updated_at = now
     await session.flush()
     return existing

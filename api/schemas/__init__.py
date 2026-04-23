@@ -94,6 +94,8 @@ from api.schemas.reminders import (
 from api.schemas.notifications import (
     MaterializeActiveRulesRequest,
     MaterializeActiveRulesResponse,
+    NotificationActivityAcknowledgementRequest,
+    NotificationActivityAcknowledgementResponse,
     LearnerNotificationModeResponse,
     LearnerNotificationModeUpdateRequest,
     NotificationActivityResponse,
@@ -227,6 +229,8 @@ __all__ = [
     # Notifications
     'MaterializeActiveRulesRequest',
     'MaterializeActiveRulesResponse',
+    'NotificationActivityAcknowledgementRequest',
+    'NotificationActivityAcknowledgementResponse',
     'LearnerNotificationModeResponse',
     'LearnerNotificationModeUpdateRequest',
     'NotificationActivityResponse',

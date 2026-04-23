@@ -19,6 +19,8 @@ from api.schemas.notifications import (
     MaterializeActiveRulesResponse,
     LearnerNotificationModeResponse,
     LearnerNotificationModeUpdateRequest,
+    NotificationActivityAcknowledgementRequest,
+    NotificationActivityAcknowledgementResponse,
     NotificationActivityResponse,
     NotificationAuditLogResponse,
     NotificationAudienceSelectorRequest,
@@ -46,6 +48,7 @@ from api.schemas.notifications import (
     NotificationTemplateResponse,
     NotificationTemplateUpdateRequest,
 )
+from database import crud
 from database.models import User
 from notifications.application.dto import (
     AudienceSelector,
@@ -335,6 +338,48 @@ async def list_notification_activity(
         limit=limit,
     )
     return [_activity_response(item) for item in activity]
+
+
+@router.get(
+    "/activity-acknowledgements",
+    response_model=list[NotificationActivityAcknowledgementResponse],
+)
+async def list_notification_activity_acknowledgements(
+    activity_type: str | None = Query(None, max_length=64),
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
+) -> list[NotificationActivityAcknowledgementResponse]:
+    acknowledgements = await crud.fetch_notification_activity_acknowledgements(
+        session,
+        current_tenant,
+        activity_type=activity_type,
+    )
+    return [_activity_acknowledgement_response(item) for item in acknowledgements]
+
+
+@router.post(
+    "/activity-acknowledgements",
+    response_model=NotificationActivityAcknowledgementResponse,
+)
+async def acknowledge_notification_activity(
+    payload: NotificationActivityAcknowledgementRequest,
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    current_user: User = Depends(get_current_user),
+    _=Depends(admin_or_teacher_required),
+    __=Depends(require_maintenance_tenant_access),
+) -> NotificationActivityAcknowledgementResponse:
+    acknowledgement = await crud.upsert_notification_activity_acknowledgement(
+        session,
+        current_tenant,
+        activity_type=payload.activity_type,
+        activity_id=payload.activity_id,
+        acknowledged_by_user_id=current_user.id,
+    )
+    await session.commit()
+    await session.refresh(acknowledgement)
+    return _activity_acknowledgement_response(acknowledgement)
 
 
 @router.get("/audit", response_model=list[NotificationAuditLogResponse])
@@ -855,6 +900,19 @@ def _activity_response(activity: NotificationActivityRecord) -> NotificationActi
         provider_message_id=activity.provider_message_id,
         occurred_at=activity.occurred_at,
         metadata=activity.metadata,
+    )
+
+
+def _activity_acknowledgement_response(item) -> NotificationActivityAcknowledgementResponse:
+    return NotificationActivityAcknowledgementResponse(
+        id=item.id,
+        tenant_id=item.tenant_id,
+        activity_type=item.activity_type,
+        activity_id=item.activity_id,
+        acknowledged_by_user_id=item.acknowledged_by_user_id,
+        acknowledged_at=item.acknowledged_at,
+        created_at=item.created_at,
+        updated_at=item.updated_at,
     )
 
 

@@ -8,6 +8,7 @@ import {
   Collapse,
   Descriptions,
   Divider,
+  Dropdown,
   Drawer,
   Empty,
   Form,
@@ -25,7 +26,7 @@ import {
   Typography,
 } from 'antd';
 import type { TableProps } from 'antd';
-import { PlusOutlined, ReloadOutlined } from '@ant-design/icons';
+import { MoreOutlined, PlusOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import PageHeader from '../components/common/PageHeader';
@@ -135,6 +136,17 @@ interface NotificationActivity {
   provider_message_id?: string | null;
   occurred_at?: string | null;
   metadata: Record<string, unknown>;
+}
+
+interface NotificationActivityAcknowledgement {
+  id: number;
+  tenant_id: number;
+  activity_type: 'teacher_alert';
+  activity_id: number;
+  acknowledged_by_user_id?: number | null;
+  acknowledged_at: string;
+  created_at?: string | null;
+  updated_at?: string | null;
 }
 
 interface NotificationSettings {
@@ -293,7 +305,9 @@ const ACTIVE_QUEUE_INSTANCE_STATUSES = new Set([
 const isQueueInstance = (instance: NotificationInstance): boolean => ACTIVE_QUEUE_INSTANCE_STATUSES.has(instance.status);
 
 const fetchNotificationRules = async (): Promise<NotificationRule[]> => {
-  const { data } = await api.get('/notifications/rules');
+  const { data } = await api.get('/notifications/rules', {
+    params: { include_archived: true },
+  });
   return data;
 };
 
@@ -315,6 +329,23 @@ const fetchNotificationInstanceDetail = async (instanceId: number): Promise<Noti
 const fetchNotificationActivity = async (): Promise<NotificationActivity[]> => {
   const { data } = await api.get('/notifications/activity', { params: { limit: 100 } });
   return data;
+};
+
+const fetchNotificationActivityAcknowledgements = async (): Promise<NotificationActivityAcknowledgement[]> => {
+  try {
+    const { data } = await api.get('/notifications/activity-acknowledgements', {
+      params: { activity_type: 'teacher_alert' },
+    });
+    return data;
+  } catch (error) {
+    const statusCode = (
+      error as Error & { response?: { status?: number } }
+    ).response?.status;
+    if (statusCode === 404) {
+      return [];
+    }
+    throw error;
+  }
 };
 
 const fetchNotificationSettings = async (): Promise<NotificationSettings> => {
@@ -353,23 +384,14 @@ const createNotificationTemplate = async (values: NotificationTemplateFormValues
   return data;
 };
 
-const setRuleStatus = async ({ ruleId, action }: { ruleId: number; action: 'activate' | 'pause' | 'archive' }): Promise<NotificationRule> => {
-  const { data } = await api.post(`/notifications/rules/${ruleId}/${action}`);
+const setRuleStatus = async ({ ruleId, action }: { ruleId: number; action: 'activate' | 'pause' | 'archive' | 'restore' }): Promise<NotificationRule> => {
+  const endpointAction = action === 'restore' ? 'pause' : action;
+  const { data } = await api.post(`/notifications/rules/${ruleId}/${endpointAction}`);
   return data;
 };
 
 const archiveTemplate = async (templateId: number): Promise<NotificationTemplate> => {
   const { data } = await api.post(`/notifications/templates/${templateId}/archive`);
-  return data;
-};
-
-const materializeShadowQueue = async () => {
-  const { data } = await api.post('/notifications/materialize-active-rules', {
-    horizon_days: 30,
-    limit: 100,
-    delivery_enabled: false,
-    shadow: true,
-  });
   return data;
 };
 
@@ -413,6 +435,14 @@ const triggerNotificationJobProcessing = async (): Promise<NotificationTaskTrigg
 const triggerNotificationDeliveryTick = async (): Promise<NotificationTaskTriggerResult> => {
   const { data } = await api.post('/notifications/pilot/deliver-now', {
     limit: 100,
+  });
+  return data;
+};
+
+const acknowledgeNotificationActivity = async (activityId: number): Promise<NotificationActivityAcknowledgement> => {
+  const { data } = await api.post('/notifications/activity-acknowledgements', {
+    activity_type: 'teacher_alert',
+    activity_id: activityId,
   });
   return data;
 };
@@ -538,6 +568,8 @@ const getInstanceStatusLabel = (status: string, t: TranslateFn): string => {
 
 const getActivityStatusLabel = (status: string, t: TranslateFn): string => {
   switch (status) {
+    case 'handled':
+      return t('pages.notifications.activityStatuses.handled');
     case 'requires_attention':
       return t('pages.notifications.activityStatuses.requiresAttention');
     case 'confirmed':
@@ -553,6 +585,8 @@ const getActivityStatusLabel = (status: string, t: TranslateFn): string => {
 
 const getActivityStatusColor = (status: string): string => {
   switch (status) {
+    case 'handled':
+      return 'green';
     case 'requires_attention':
     case 'declined':
       return 'red';
@@ -653,17 +687,6 @@ const formatRuleTrigger = (rule: NotificationRule, t: TranslateFn): string => {
   }
 };
 
-const formatAssignmentLabel = (assignment: NotificationAssignment, t: TranslateFn): string => {
-  const label = assignment.scope_type === 'all_learners'
-    ? t('pages.notifications.assignmentLabels.all_learners')
-    : t(`pages.notifications.assignmentLabels.${assignment.scope_type}`, {
-      id: assignment.scope_id ?? '—',
-    });
-  return assignment.is_exclusion
-    ? `${t('pages.notifications.assignmentLabels.excludedPrefix')} ${label}`
-    : label;
-};
-
 const formatAudienceSummary = (assignments: NotificationAssignment[], t: TranslateFn): string => {
   const included = assignments.filter((assignment) => !assignment.is_exclusion);
   const excludedCount = assignments.filter((assignment) => assignment.is_exclusion).length;
@@ -694,9 +717,13 @@ const buildNotificationPilotSummary = (
   learnerModes: LearnerNotificationMode[],
   instances: NotificationInstance[],
   activity: NotificationActivity[],
+  activityAcknowledgements: NotificationActivityAcknowledgement[],
 ): NotificationPilotSummary => {
   const now = dayjs();
   const plannedInstances = instances.filter(isQueueInstance);
+  const acknowledgedActivityKeys = new Set(
+    activityAcknowledgements.map((item) => `${item.activity_type}:${item.activity_id}`),
+  );
 
   return {
     globalMode: settings?.mode ?? 'legacy',
@@ -709,7 +736,10 @@ const buildNotificationPilotSummary = (
       && instance.delivery_enabled
       && !dayjs(instance.effective_scheduled_for).isAfter(now)
     )).length,
-    attentionAlertCount: activity.filter((item) => item.activity_type === 'teacher_alert' || item.status === 'requires_attention').length,
+    attentionAlertCount: activity.filter((item) => (
+      (item.activity_type === 'teacher_alert' || item.status === 'requires_attention')
+      && !acknowledgedActivityKeys.has(`${item.activity_type}:${item.activity_id}`)
+    )).length,
   };
 };
 
@@ -776,13 +806,33 @@ const getQueueSectionKey = (scheduledFor: string): 'past_due' | 'today' | 'tomor
 
 const getQueueSectionOrder: Array<'past_due' | 'today' | 'tomorrow' | 'later'> = ['past_due', 'today', 'tomorrow', 'later'];
 
-const getActivitySectionKey = (item: NotificationActivity): 'attention' | 'recent' => (
+const getActivityAcknowledgementKey = (item: Pick<NotificationActivity, 'activity_type' | 'activity_id'>): string => (
+  `${item.activity_type}:${item.activity_id}`
+);
+
+const isAttentionActivity = (item: NotificationActivity): boolean => (
   item.activity_type === 'teacher_alert' || item.status === 'requires_attention'
+);
+
+const isHandleableActivity = (item: NotificationActivity): boolean => item.activity_type === 'teacher_alert';
+
+const getActivitySectionKey = (
+  item: NotificationActivity,
+  acknowledgedActivityKeys: Set<string>,
+): 'attention' | 'recent' => (
+  isAttentionActivity(item) && !acknowledgedActivityKeys.has(getActivityAcknowledgementKey(item))
     ? 'attention'
     : 'recent'
 );
 
-const getRuleSectionOrder: Array<'active' | 'draft' | 'paused' | 'archived'> = ['active', 'draft', 'paused', 'archived'];
+const getActivityVisibleStatus = (
+  item: NotificationActivity,
+  acknowledgedActivityKeys: Set<string>,
+): string => (
+  isHandleableActivity(item) && acknowledgedActivityKeys.has(getActivityAcknowledgementKey(item))
+    ? 'handled'
+    : item.status
+);
 
 const getTemplateSectionKey = (template: NotificationTemplate): 'system' | 'custom' | 'archived' => {
   if (template.archived_at) {
@@ -833,33 +883,6 @@ const RULE_WIZARD_PRESETS: Record<NonNullable<RuleWizardValues['preset_key']>, P
     audience_scope_type: 'learner',
   },
 };
-
-const TUTOR_NOTIFICATION_PRESETS = [
-  {
-    presetKey: 'lesson_confirmation_day_before',
-    titleKey: 'pages.notifications.tutorOverview.presets.lessonConfirmation.title',
-    descriptionKey: 'pages.notifications.tutorOverview.presets.lessonConfirmation.description',
-    group: 'core',
-  },
-  {
-    presetKey: 'lesson_reminder_soon',
-    titleKey: 'pages.notifications.tutorOverview.presets.lessonReminder.title',
-    descriptionKey: 'pages.notifications.tutorOverview.presets.lessonReminder.description',
-    group: 'core',
-  },
-  {
-    presetKey: 'package_renewal',
-    titleKey: 'pages.notifications.tutorOverview.presets.packageRenewal.title',
-    descriptionKey: 'pages.notifications.tutorOverview.presets.packageRenewal.description',
-    group: 'extra',
-  },
-  {
-    presetKey: 'homework_before_lesson',
-    titleKey: 'pages.notifications.tutorOverview.presets.homework.title',
-    descriptionKey: 'pages.notifications.tutorOverview.presets.homework.description',
-    group: 'extra',
-  },
-] as const;
 
 const getDefaultTemplateIdForCategory = (
   category: string,
@@ -918,7 +941,7 @@ const createNotificationRule = async (values: RuleWizardValues): Promise<Notific
     inline_template_body: values.message_mode === 'inline' ? values.inline_template_body : null,
     inline_template_format: 'plain_text',
     priority: values.priority,
-    status: 'draft',
+    status: 'paused',
     combine_policy_key: values.combine_policy_key || null,
     delivery_channel: 'telegram',
     cap_mode: 'warn_only',
@@ -1028,7 +1051,7 @@ const Notifications: React.FC = () => {
   const instancesQuery = useQuery<NotificationInstance[], Error>({
     queryKey: ['notificationInstances'],
     queryFn: fetchNotificationInstances,
-    enabled: !requiresTenantContext && (!isOwnerDebug || activeTab === 'queue' || activeTab === 'settings'),
+    enabled: !requiresTenantContext && (activeTab === 'queue' || (isOwnerDebug && activeTab === 'settings')),
   });
 
   const instanceDetailQuery = useQuery<NotificationInstance, Error>({
@@ -1040,7 +1063,13 @@ const Notifications: React.FC = () => {
   const activityQuery = useQuery<NotificationActivity[], Error>({
     queryKey: ['notificationActivity'],
     queryFn: fetchNotificationActivity,
-    enabled: !requiresTenantContext && (!isOwnerDebug || activeTab === 'activity' || activeTab === 'settings'),
+    enabled: !requiresTenantContext && (activeTab === 'activity' || (isOwnerDebug && activeTab === 'settings')),
+  });
+
+  const activityAcknowledgementsQuery = useQuery<NotificationActivityAcknowledgement[], Error>({
+    queryKey: ['notificationActivityAcknowledgements'],
+    queryFn: fetchNotificationActivityAcknowledgements,
+    enabled: !requiresTenantContext && (activeTab === 'activity' || (isOwnerDebug && activeTab === 'settings')),
   });
 
   const settingsQuery = useQuery<NotificationSettings, Error>({
@@ -1138,15 +1167,6 @@ const Notifications: React.FC = () => {
     onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
   });
 
-  const materializeMutation = useMutation({
-    mutationFn: materializeShadowQueue,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['notificationInstances'] });
-      message.success(t('pages.notifications.materializeQueued'));
-    },
-    onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
-  });
-
   const cancelInstanceMutation = useMutation({
     mutationFn: cancelInstance,
     onSuccess: () => {
@@ -1208,6 +1228,24 @@ const Notifications: React.FC = () => {
     onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
   });
 
+  const acknowledgeActivityMutation = useMutation({
+    mutationFn: acknowledgeNotificationActivity,
+    onSuccess: (acknowledgement) => {
+      queryClient.setQueryData<NotificationActivityAcknowledgement[]>(
+        ['notificationActivityAcknowledgements'],
+        (current = []) => {
+          const next = current.filter((item) => !(
+            item.activity_type === acknowledgement.activity_type
+            && item.activity_id === acknowledgement.activity_id
+          ));
+          return [...next, acknowledgement];
+        },
+      );
+      message.success(t('pages.notifications.activityHandled'));
+    },
+    onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
+  });
+
   const categoryOptions = useMemo(
     () => CATEGORY_OPTIONS.map((category) => ({ value: category, label: t(`pages.notifications.categories.${category}`) })),
     [t],
@@ -1219,8 +1257,15 @@ const Notifications: React.FC = () => {
       learnerModesQuery.data ?? [],
       instancesQuery.data ?? [],
       activityQuery.data ?? [],
+      activityAcknowledgementsQuery.data ?? [],
     ),
-    [activityQuery.data, instancesQuery.data, learnerModesQuery.data, settingsQuery.data],
+    [
+      activityAcknowledgementsQuery.data,
+      activityQuery.data,
+      instancesQuery.data,
+      learnerModesQuery.data,
+      settingsQuery.data,
+    ],
   );
 
   const openRuleWizard = () => {
@@ -1289,10 +1334,7 @@ const Notifications: React.FC = () => {
           loading={rulesQuery.isLoading}
           error={rulesQuery.error}
           onSetStatus={(ruleId, action) => ruleStatusMutation.mutate({ ruleId, action })}
-          onMaterializeShadow={() => materializeMutation.mutate()}
           onCreateRule={openRuleWizard}
-          materializing={materializeMutation.isPending}
-          showDebugControls={isOwnerDebug}
         />
       ),
     },
@@ -1336,8 +1378,11 @@ const Notifications: React.FC = () => {
       children: (
         <ActivityTab
           activity={activityQuery.data ?? []}
+          acknowledgements={activityAcknowledgementsQuery.data ?? []}
           loading={activityQuery.isLoading}
-          error={activityQuery.error}
+          error={activityQuery.error ?? activityAcknowledgementsQuery.error ?? null}
+          acknowledgingActivityId={acknowledgeActivityMutation.isPending ? acknowledgeActivityMutation.variables ?? null : null}
+          onAcknowledge={(activityId) => acknowledgeActivityMutation.mutate(activityId)}
         />
       ),
     },
@@ -1377,47 +1422,6 @@ const Notifications: React.FC = () => {
         />
 
         <TenantContextRequired sectionLabel={t('pages.notifications.title')} />
-      </div>
-    );
-  }
-
-  if (!isOwnerDebug) {
-    return (
-      <div>
-        <PageHeader
-          title={t('pages.notifications.title')}
-          subtitle={t('pages.notifications.subtitle')}
-        />
-
-        <TutorNotificationsOverview
-          rules={rulesQuery.data ?? []}
-          rulesLoading={rulesQuery.isLoading}
-          rulesError={rulesQuery.error}
-          instances={instancesQuery.data ?? []}
-          activity={activityQuery.data ?? []}
-          actionPending={ruleStatusMutation.isPending}
-          onSetStatus={(ruleId, action) => ruleStatusMutation.mutate({ ruleId, action })}
-          onCreateRule={openRuleWizard}
-        />
-
-        <RuleWizardModal
-          open={ruleWizardOpen}
-          step={ruleWizardStep}
-          form={ruleForm}
-          templates={templatesQuery.data ?? []}
-          learners={learnersQuery.data ?? []}
-          groups={groupsQuery.data ?? []}
-          packages={packagesQuery.data ?? []}
-          categoryOptions={categoryOptions}
-          preview={rulePreview}
-          loadingLookups={templatesQuery.isLoading || learnersQuery.isLoading || groupsQuery.isLoading || packagesQuery.isLoading}
-          previewing={previewRuleMutation.isPending}
-          saving={createRuleMutation.isPending}
-          onStepChange={setRuleWizardStep}
-          onCancel={closeRuleWizard}
-          onPreview={previewRuleFromWizard}
-          onSave={saveRuleFromWizard}
-        />
       </div>
     );
   }
@@ -1651,7 +1655,7 @@ const RuleWizardModal: React.FC<RuleWizardModalProps> = ({
           )}
           {step === 3 && (
             <Button type="primary" onClick={onSave} loading={saving}>
-              {t('pages.notifications.ruleWizard.saveDraft')}
+              {t('common.create')}
             </Button>
           )}
         </Space>
@@ -2029,75 +2033,101 @@ const PreviewStep: React.FC<{ preview: NotificationPreviewResponse | null; loadi
   );
 };
 
-interface TutorNotificationsOverviewProps {
+interface RulesTabProps {
   rules: NotificationRule[];
-  rulesLoading: boolean;
-  rulesError: Error | null;
-  instances: NotificationInstance[];
-  activity: NotificationActivity[];
-  actionPending: boolean;
-  onSetStatus: (ruleId: number, action: 'activate' | 'pause') => void;
+  loading: boolean;
+  error: Error | null;
+  onSetStatus: (ruleId: number, action: 'activate' | 'pause' | 'archive' | 'restore') => void;
   onCreateRule: () => void;
 }
 
-const TutorNotificationsOverview: React.FC<TutorNotificationsOverviewProps> = ({
+const RulesTab: React.FC<RulesTabProps> = ({
   rules,
-  rulesLoading,
-  rulesError,
-  instances,
-  activity,
-  actionPending,
+  loading,
+  error,
   onSetStatus,
   onCreateRule,
 }) => {
   const { t } = useTranslation();
-  const rulesByPreset = useMemo(
-    () => new Map(rules.map((rule) => [rule.preset_key, rule])),
+  const [rulesView, setRulesView] = useState<'current' | 'archived'>('current');
+
+  const currentRules = useMemo(
+    () => rules.filter((rule) => rule.status !== 'archived'),
     [rules],
   );
-  const corePresets = TUTOR_NOTIFICATION_PRESETS.filter((preset) => preset.group === 'core');
-  const extraPresets = TUTOR_NOTIFICATION_PRESETS.filter((preset) => preset.group === 'extra');
-  const attentionCount = activity.filter((item) => (
-    item.activity_type === 'teacher_alert'
-    || item.status === 'requires_attention'
-    || item.status === 'failed'
-  )).length + instances.filter((instance) => instance.status === 'failed').length;
-  const activeCount = TUTOR_NOTIFICATION_PRESETS.filter((preset) => (
-    rulesByPreset.get(preset.presetKey)?.status === 'active'
-  )).length;
+  const archivedRules = useMemo(
+    () => rules.filter((rule) => rule.status === 'archived'),
+    [rules],
+  );
+  const visibleRules = rulesView === 'archived' ? archivedRules : currentRules;
 
-  const renderPreset = (preset: typeof TUTOR_NOTIFICATION_PRESETS[number]) => {
-    const rule = rulesByPreset.get(preset.presetKey);
-    const isActive = rule?.status === 'active';
-    const isArchived = rule?.status === 'archived';
-    const isMissing = !rule;
-    const canToggle = !!rule && !isArchived;
-    const statusText = rule
-      ? t(`pages.notifications.ruleStatus.${rule.status}`)
-      : t('pages.notifications.tutorOverview.status.missing');
+  const renderRuleCard = (rule: NotificationRule) => {
+    const displayStatus = getRuleDisplayStatus(rule.status);
+    const menuItems = rule.status === 'archived'
+      ? [
+        {
+          key: 'restore',
+          label: t('pages.notifications.restore'),
+        },
+      ]
+      : [
+        {
+          key: 'archive',
+          label: t('pages.notifications.archive'),
+          danger: true,
+        },
+      ];
 
     return (
-      <Col xs={24} md={12} key={preset.presetKey}>
-        <Card size="small">
-          <Space direction="vertical" style={{ width: '100%' }} size={8}>
-            <Space align="start" style={{ width: '100%', justifyContent: 'space-between' }}>
-              <Space direction="vertical" size={2}>
-                <Typography.Text strong>{t(preset.titleKey)}</Typography.Text>
-                <Typography.Text type="secondary">{t(preset.descriptionKey)}</Typography.Text>
+      <Col xs={24} md={12} xl={8} key={rule.id}>
+        <Card
+          size="small"
+          style={{ height: '100%' }}
+          styles={{ body: { height: '100%' } }}
+        >
+          <Space direction="vertical" style={{ width: '100%', height: '100%', justifyContent: 'space-between' }} size="middle">
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Space wrap align="start" style={{ justifyContent: 'space-between', width: '100%' }}>
+                <Space direction="vertical" size={6} style={{ minWidth: 0 }}>
+                  <Typography.Text strong>{rule.name}</Typography.Text>
+                  <Space wrap size={[8, 8]}>
+                    <Tag>{t(`pages.notifications.categories.${rule.category}`)}</Tag>
+                    <Tag color={getRuleStatusColor(displayStatus)}>
+                      {t(`pages.notifications.ruleStatus.${displayStatus}`)}
+                    </Tag>
+                  </Space>
+                </Space>
+                <Space size="small" align="start">
+                  {rule.status !== 'archived' && (
+                    <Switch
+                      checked={displayStatus === 'active'}
+                      onChange={(checked) => onSetStatus(rule.id, checked ? 'activate' : 'pause')}
+                    />
+                  )}
+                  {menuItems.length > 0 && (
+                    <Dropdown
+                      trigger={['click']}
+                      menu={{
+                        items: menuItems,
+                        onClick: ({ key }) => onSetStatus(rule.id, key as 'archive' | 'restore'),
+                      }}
+                    >
+                      <Button
+                        type="text"
+                        size="small"
+                        icon={<MoreOutlined />}
+                        aria-label={t('common.actions')}
+                      />
+                    </Dropdown>
+                  )}
+                </Space>
               </Space>
-              <Switch
-                checked={isActive}
-                disabled={!canToggle || actionPending}
-                loading={actionPending}
-                onChange={(checked) => {
-                  if (!rule) return;
-                  onSetStatus(rule.id, checked ? 'activate' : 'pause');
-                }}
-              />
+
+              <Space direction="vertical" size={6} style={{ width: '100%' }}>
+                <Typography.Text>{formatRuleTrigger(rule, t)}</Typography.Text>
+                <Typography.Text type="secondary">{formatAudienceSummary(rule.assignments, t)}</Typography.Text>
+              </Space>
             </Space>
-            <Tag color={isActive ? 'green' : isArchived ? 'default' : isMissing ? 'orange' : 'default'} style={{ width: 'fit-content' }}>
-              {statusText}
-            </Tag>
           </Space>
         </Card>
       </Col>
@@ -2106,284 +2136,45 @@ const TutorNotificationsOverview: React.FC<TutorNotificationsOverviewProps> = ({
 
   return (
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <Alert
-        type="info"
-        showIcon
-        message={t('pages.notifications.tutorOverview.introTitle')}
-        description={t('pages.notifications.tutorOverview.introDescription')}
-      />
-      <NoticeError error={rulesError} />
-
-      <Row gutter={[16, 16]}>
-        <Col xs={24} md={8}>
-          <Card loading={rulesLoading}>
-            <Typography.Text type="secondary">{t('pages.notifications.tutorOverview.enabledCount')}</Typography.Text>
-            <Typography.Title level={3} style={{ margin: 0 }}>{activeCount}</Typography.Title>
-          </Card>
-        </Col>
-        <Col xs={24} md={8}>
-          <Card>
-            <Typography.Text type="secondary">{t('pages.notifications.tutorOverview.attentionCount')}</Typography.Text>
-            <Typography.Title level={3} style={{ margin: 0 }}>{attentionCount}</Typography.Title>
-          </Card>
-        </Col>
-        <Col xs={24} md={8}>
-          <Card>
-            <Typography.Text type="secondary">{t('pages.notifications.tutorOverview.nextStep')}</Typography.Text>
-            <Typography.Paragraph style={{ margin: 0 }}>
-              {attentionCount > 0
-                ? t('pages.notifications.tutorOverview.nextStepCheckProblems')
-                : t('pages.notifications.tutorOverview.nextStepOk')}
-            </Typography.Paragraph>
-          </Card>
-        </Col>
-      </Row>
-
-      <Typography.Title level={4}>{t('pages.notifications.tutorOverview.lessonRemindersTitle')}</Typography.Title>
-      <Row gutter={[16, 16]}>
-        {corePresets.map(renderPreset)}
-      </Row>
-
-      <Typography.Title level={4}>{t('pages.notifications.tutorOverview.extraTitle')}</Typography.Title>
-      <Typography.Paragraph type="secondary">
-        {t('pages.notifications.tutorOverview.extraDescription')}
-      </Typography.Paragraph>
-      <Row gutter={[16, 16]}>
-        {extraPresets.map(renderPreset)}
-      </Row>
-
-      {rules.length === 0 && !rulesLoading && (
-        <Alert
-          type="warning"
-          showIcon
-          message={t('pages.notifications.tutorOverview.noRulesTitle')}
-          description={t('pages.notifications.tutorOverview.noRulesDescription')}
-          action={(
-            <Button size="small" onClick={onCreateRule}>
-              {t('pages.notifications.createRuleWizard')}
-            </Button>
-          )}
+      <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
+        <Tabs
+          activeKey={rulesView}
+          onChange={(nextKey) => setRulesView(nextKey as 'current' | 'archived')}
+          items={[
+            {
+              key: 'current',
+              label: `${t('pages.notifications.rulesTabs.current')} (${currentRules.length})`,
+            },
+            {
+              key: 'archived',
+              label: `${t('pages.notifications.rulesTabs.archived')} (${archivedRules.length})`,
+            },
+          ]}
         />
-      )}
-    </Space>
-  );
-};
-
-interface RulesTabProps {
-  rules: NotificationRule[];
-  loading: boolean;
-  error: Error | null;
-  materializing: boolean;
-  onSetStatus: (ruleId: number, action: 'activate' | 'pause' | 'archive') => void;
-  onMaterializeShadow: () => void;
-  onCreateRule: () => void;
-  showDebugControls: boolean;
-}
-
-const RulesTab: React.FC<RulesTabProps> = ({
-  rules,
-  loading,
-  error,
-  materializing,
-  onSetStatus,
-  onMaterializeShadow,
-  onCreateRule,
-  showDebugControls,
-}) => {
-  const { t } = useTranslation();
-  const groupedRules = useMemo(() => {
-    const groups: Record<'active' | 'draft' | 'paused' | 'archived', NotificationRule[]> = {
-      active: [],
-      draft: [],
-      paused: [],
-      archived: [],
-    };
-
-    rules.forEach((rule) => {
-      groups[rule.status as keyof typeof groups]?.push(rule);
-    });
-
-    return groups;
-  }, [rules]);
-
-  const columns: TableProps<NotificationRule>['columns'] = [
-    {
-      title: t('pages.notifications.name'),
-      dataIndex: 'name',
-      key: 'name',
-    },
-    {
-      title: t('pages.notifications.category'),
-      dataIndex: 'category',
-      key: 'category',
-      render: (category: string) => <Tag>{t(`pages.notifications.categories.${category}`)}</Tag>,
-    },
-    {
-      title: t('pages.notifications.status'),
-      dataIndex: 'status',
-      key: 'status',
-      render: (status: string) => <Tag color={getRuleStatusColor(status)}>{t(`pages.notifications.ruleStatus.${status}`)}</Tag>,
-    },
-    {
-      title: t('pages.notifications.trigger'),
-      key: 'trigger',
-      render: (_, record) => formatRuleTrigger(record, t),
-    },
-    {
-      title: t('pages.notifications.audience'),
-      key: 'assignments',
-      render: (_, record) => record.assignments.length ? (
-        <Space wrap>
-          {record.assignments.map((assignment, index) => (
-            <Tag key={`${assignment.scope_type}-${assignment.scope_id ?? 'all'}-${index}`} color={assignment.is_exclusion ? 'red' : 'blue'}>
-              {formatAssignmentLabel(assignment, t)}
-            </Tag>
-          ))}
-        </Space>
-      ) : '-',
-    },
-    {
-      title: t('common.actions'),
-      key: 'actions',
-      render: (_, record) => (
-        <Space wrap>
-          {record.status !== 'active' && record.status !== 'archived' && (
-            <Button type="link" onClick={() => onSetStatus(record.id, 'activate')}>
-              {t('pages.notifications.activate')}
-            </Button>
-          )}
-          {record.status === 'active' && (
-            <Button type="link" onClick={() => onSetStatus(record.id, 'pause')}>
-              {t('pages.notifications.pause')}
-            </Button>
-          )}
-          {record.status !== 'archived' && (
-            <Button type="link" danger onClick={() => onSetStatus(record.id, 'archive')}>
-              {t('pages.notifications.archive')}
-            </Button>
-          )}
-        </Space>
-      ),
-    },
-  ];
-
-  return (
-    <Space direction="vertical" style={{ width: '100%' }} size="middle">
-      <Space wrap>
-        {showDebugControls && (
-          <Button icon={<ReloadOutlined />} onClick={onMaterializeShadow} loading={materializing}>
-            {t('pages.notifications.materializeShadow')}
-          </Button>
-        )}
         <Button type="primary" icon={<PlusOutlined />} onClick={onCreateRule}>
           {t('pages.notifications.createRuleWizard')}
         </Button>
       </Space>
-      {showDebugControls && (
-        <Alert
-          type="info"
-          showIcon
-          message={t('pages.notifications.materializeHelpTitle')}
-          description={t('pages.notifications.materializeHelpDescription')}
-        />
-      )}
       <NoticeError error={error} />
       {loading ? (
         <Card loading />
-      ) : rules.length === 0 ? (
+      ) : visibleRules.length === 0 ? (
         <Empty
           description={(
             <Space direction="vertical" size={4}>
-              <Typography.Text>{t('pages.notifications.noRules')}</Typography.Text>
-              <Typography.Text type="secondary">{t('pages.notifications.noRulesDescription')}</Typography.Text>
+              <Typography.Text>
+                {t(rulesView === 'archived' ? 'pages.notifications.noArchivedRules' : 'pages.notifications.noRules')}
+              </Typography.Text>
+              <Typography.Text type="secondary">
+                {t(rulesView === 'archived' ? 'pages.notifications.noArchivedRulesDescription' : 'pages.notifications.noRulesDescription')}
+              </Typography.Text>
             </Space>
           )}
         />
       ) : (
-        <Space direction="vertical" style={{ width: '100%' }} size="middle">
-          {getRuleSectionOrder.map((sectionKey) => {
-            const sectionRules = groupedRules[sectionKey];
-            if (sectionRules.length === 0) {
-              return null;
-            }
-
-            return (
-              <Card
-                key={sectionKey}
-                title={t(`pages.notifications.ruleSections.${sectionKey}`)}
-                extra={<Tag>{sectionRules.length}</Tag>}
-              >
-                <Space direction="vertical" style={{ width: '100%' }} size="middle">
-                  {sectionRules.map((rule) => (
-                    <Card key={rule.id} size="small" type="inner">
-                      <Space direction="vertical" style={{ width: '100%' }} size="small">
-                        <Space wrap style={{ justifyContent: 'space-between', width: '100%' }}>
-                          <Space wrap>
-                            <Typography.Text strong>{rule.name}</Typography.Text>
-                            <Tag>{t(`pages.notifications.categories.${rule.category}`)}</Tag>
-                            <Tag color={getRuleStatusColor(rule.status)}>{t(`pages.notifications.ruleStatus.${rule.status}`)}</Tag>
-                          </Space>
-                          <Typography.Text type="secondary">
-                            {t(`pages.notifications.eventTypes.${rule.event_type}`)}
-                          </Typography.Text>
-                        </Space>
-                        <Typography.Text>{formatRuleTrigger(rule, t)}</Typography.Text>
-                        <Typography.Text type="secondary">{formatAudienceSummary(rule.assignments, t)}</Typography.Text>
-                        <Space wrap>
-                          {rule.status !== 'active' && rule.status !== 'archived' && (
-                            <Button size="small" onClick={() => onSetStatus(rule.id, 'activate')}>
-                              {t('pages.notifications.activate')}
-                            </Button>
-                          )}
-                          {rule.status === 'active' && (
-                            <Button size="small" onClick={() => onSetStatus(rule.id, 'pause')}>
-                              {t('pages.notifications.pause')}
-                            </Button>
-                          )}
-                          {rule.status !== 'archived' && (
-                            <Button size="small" danger onClick={() => onSetStatus(rule.id, 'archive')}>
-                              {t('pages.notifications.archive')}
-                            </Button>
-                          )}
-                        </Space>
-                      </Space>
-                    </Card>
-                  ))}
-                </Space>
-              </Card>
-            );
-          })}
-
-          <Collapse
-            size="small"
-            items={[
-              {
-                key: 'technical-rules',
-                label: t('pages.notifications.technicalList'),
-                children: (
-                  <ResponsiveDataView<NotificationRule>
-                    data={rules}
-                    loading={false}
-                    columns={columns}
-                    rowKey="id"
-                    emptyText={t('pages.notifications.noRules')}
-                    emptyDescription={t('pages.notifications.noRulesDescription')}
-                    renderCard={(rule) => (
-                      <Card key={rule.id} title={rule.name} size="small" style={{ marginBottom: 12 }}>
-                        <Space direction="vertical">
-                          <Tag color={getRuleStatusColor(rule.status)}>{t(`pages.notifications.ruleStatus.${rule.status}`)}</Tag>
-                          <span>{t(`pages.notifications.categories.${rule.category}`)}</span>
-                          <Typography.Text>{formatRuleTrigger(rule, t)}</Typography.Text>
-                        </Space>
-                      </Card>
-                    )}
-                    pagination={false}
-                  />
-                ),
-              },
-            ]}
-          />
-        </Space>
+        <Row gutter={[16, 16]}>
+          {visibleRules.map(renderRuleCard)}
+        </Row>
       )}
     </Space>
   );
@@ -3071,22 +2862,36 @@ const NotificationInstanceDrawer: React.FC<NotificationInstanceDrawerProps> = ({
 
 interface ActivityTabProps {
   activity: NotificationActivity[];
+  acknowledgements: NotificationActivityAcknowledgement[];
   loading: boolean;
   error: Error | null;
+  acknowledgingActivityId: number | null;
+  onAcknowledge: (activityId: number) => void;
 }
 
-const ActivityTab: React.FC<ActivityTabProps> = ({ activity, loading, error }) => {
+const ActivityTab: React.FC<ActivityTabProps> = ({
+  activity,
+  acknowledgements,
+  loading,
+  error,
+  acknowledgingActivityId,
+  onAcknowledge,
+}) => {
   const { t } = useTranslation();
+  const acknowledgedActivityKeys = useMemo(
+    () => new Set(acknowledgements.map((item) => `${item.activity_type}:${item.activity_id}`)),
+    [acknowledgements],
+  );
   const groupedActivity = useMemo(() => {
     const groups: Record<'attention' | 'recent', NotificationActivity[]> = {
       attention: [],
       recent: [],
     };
     activity.forEach((item) => {
-      groups[getActivitySectionKey(item)].push(item);
+      groups[getActivitySectionKey(item, acknowledgedActivityKeys)].push(item);
     });
     return groups;
-  }, [activity]);
+  }, [acknowledgedActivityKeys, activity]);
 
   const columns: TableProps<NotificationActivity>['columns'] = [
     {
@@ -3111,7 +2916,10 @@ const ActivityTab: React.FC<ActivityTabProps> = ({ activity, loading, error }) =
       title: t('pages.notifications.status'),
       dataIndex: 'status',
       key: 'status',
-      render: (value: string) => <Tag color={getActivityStatusColor(value)}>{getActivityStatusLabel(value, t)}</Tag>,
+      render: (_value: string, record) => {
+        const visibleStatus = getActivityVisibleStatus(record, acknowledgedActivityKeys);
+        return <Tag color={getActivityStatusColor(visibleStatus)}>{getActivityStatusLabel(visibleStatus, t)}</Tag>;
+      },
     },
     {
       title: t('pages.notifications.details'),
@@ -3164,13 +2972,25 @@ const ActivityTab: React.FC<ActivityTabProps> = ({ activity, loading, error }) =
                               {item.learner_display_name || t(`pages.notifications.eventTypes.${item.event_type}`)}
                             </Typography.Text>
                             <Tag>{getActivityTypeLabel(item.activity_type, t)}</Tag>
-                            <Tag color={getActivityStatusColor(item.status)}>
-                              {getActivityStatusLabel(item.status, t)}
+                            <Tag color={getActivityStatusColor(getActivityVisibleStatus(item, acknowledgedActivityKeys))}>
+                              {getActivityStatusLabel(getActivityVisibleStatus(item, acknowledgedActivityKeys), t)}
                             </Tag>
                           </Space>
-                          <Typography.Text>
-                            {item.occurred_at ? dayjs(item.occurred_at).format('YYYY-MM-DD HH:mm') : '-'}
-                          </Typography.Text>
+                          <Space wrap size="small">
+                            {sectionKey === 'attention' && isHandleableActivity(item) && (
+                              <Button
+                                size="small"
+                                type="text"
+                                onClick={() => onAcknowledge(item.activity_id)}
+                                loading={acknowledgingActivityId === item.activity_id}
+                              >
+                                {t('pages.notifications.markHandled')}
+                              </Button>
+                            )}
+                            <Typography.Text>
+                              {item.occurred_at ? dayjs(item.occurred_at).format('YYYY-MM-DD HH:mm') : '-'}
+                            </Typography.Text>
+                          </Space>
                         </Space>
                         <Typography.Text>
                           {getActivityDetails(item, t)}
@@ -3201,7 +3021,9 @@ const ActivityTab: React.FC<ActivityTabProps> = ({ activity, loading, error }) =
                       <Card key={`${item.activity_type}-${item.activity_id}`} title={item.learner_display_name || item.activity_type} size="small" style={{ marginBottom: 12 }}>
                         <Space direction="vertical">
                           <span>{item.occurred_at ? dayjs(item.occurred_at).format('YYYY-MM-DD HH:mm') : '-'}</span>
-                          <Tag color={getActivityStatusColor(item.status)}>{getActivityStatusLabel(item.status, t)}</Tag>
+                          <Tag color={getActivityStatusColor(getActivityVisibleStatus(item, acknowledgedActivityKeys))}>
+                            {getActivityStatusLabel(getActivityVisibleStatus(item, acknowledgedActivityKeys), t)}
+                          </Tag>
                           <span>{getActivityDetails(item, t)}</span>
                         </Space>
                       </Card>
@@ -3274,169 +3096,183 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
     <Space direction="vertical" style={{ width: '100%' }} size="middle">
       <NoticeError error={error} />
       <Card title={t('pages.notifications.rolloutStatus.title')}>
-        <Alert
-          type={nextAction.type}
-          showIcon
-          message={t('pages.notifications.rolloutStatus.nextActionTitle')}
-          description={t(nextAction.translationKey)}
-          style={{ marginBottom: 16 }}
-        />
-        <Descriptions bordered size="small" column={{ xs: 1, md: 2 }}>
-          <Descriptions.Item label={t('pages.notifications.rolloutStatus.globalMode')}>
-            <Tag color={pilotSummary.globalMode === 'new' ? 'red' : pilotSummary.globalMode === 'shadow' ? 'blue' : 'default'}>
-              {t(`pages.notifications.modes.${pilotSummary.globalMode}`)}
-            </Tag>
-          </Descriptions.Item>
-          <Descriptions.Item label={t('pages.notifications.rolloutStatus.totalLearners')}>
-            {pilotSummary.totalLearners}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('pages.notifications.rolloutStatus.learnersInTestMode')}>
-            {pilotSummary.learnerShadowCount}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('pages.notifications.rolloutStatus.learnersInNew')}>
-            {pilotSummary.learnerNewCount}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('pages.notifications.rolloutStatus.plannedNotifications')}>
-            {pilotSummary.plannedCount}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('pages.notifications.rolloutStatus.readyForDelivery')}>
-            {pilotSummary.dueDeliveryCount}
-          </Descriptions.Item>
-          <Descriptions.Item label={t('pages.notifications.rolloutStatus.attentionAlerts')}>
-            {pilotSummary.attentionAlertCount}
-          </Descriptions.Item>
-        </Descriptions>
-      </Card>
-      <Card title={t('pages.notifications.rolloutChecklist.title')}>
-        <Alert
-          type="info"
-          showIcon
-          message={t('pages.notifications.rolloutChecklist.noticeTitle')}
-          description={t('pages.notifications.rolloutChecklist.noticeDescription')}
-          style={{ marginBottom: 16 }}
-        />
-        <Steps
-          direction="vertical"
-          size="small"
-          current={currentChecklistIndex === -1 ? checklistItems.length - 1 : currentChecklistIndex}
-          items={checklistItems.map((item) => ({
-            status: item.status,
-            title: t(item.titleKey),
-          }))}
-        />
-      </Card>
-      <Card title={t('pages.notifications.pilotControls.title')}>
-        <Alert
-          type="warning"
-          showIcon
-          message={t('pages.notifications.pilotControls.noticeTitle')}
-          description={t('pages.notifications.pilotControls.noticeDescription')}
-          style={{ marginBottom: 16 }}
-        />
-        <Typography.Paragraph type="secondary">
-          {t('pages.notifications.pilotControls.statusSummary', {
-            planned: pilotSummary.plannedCount,
-            ready: pilotSummary.dueDeliveryCount,
-          })}
-        </Typography.Paragraph>
-        <Space wrap>
-          <Button onClick={onProcessJobs} loading={processingJobs}>
-            {t('pages.notifications.pilotControls.processJobs')}
-          </Button>
-          <Button
-            danger
-            disabled={deliveryBlocked}
-            onClick={() => setConfirmDeliverNowOpen(true)}
-            loading={deliveringNow}
-          >
-            {t('pages.notifications.pilotControls.deliverNow')}
-          </Button>
-        </Space>
-        {deliveryBlocked && (
-          <Typography.Paragraph type="secondary" style={{ marginTop: 12, marginBottom: 0 }}>
-            {t('pages.notifications.pilotControls.deliveryBlockedHint')}
-          </Typography.Paragraph>
-        )}
-      </Card>
-      <Card title={t('pages.notifications.settingsPanelTitle')} loading={loading}>
-        <Typography.Paragraph type="secondary">
-          {t('pages.notifications.settingsPanelDescription')}
-        </Typography.Paragraph>
-        <Form<NotificationSettingsFormValues> form={form} layout="vertical" onFinish={handleSubmit}>
-          <Row gutter={16}>
-            <Col xs={24} md={12}>
-              <Form.Item name="mode" label={t('pages.notifications.systemMode')} rules={[{ required: true }]}>
-                <Select
-                  options={[
-                    { value: 'legacy', label: t('pages.notifications.modes.legacy') },
-                    { value: 'shadow', label: t('pages.notifications.modes.shadow') },
-                    { value: 'new', label: t('pages.notifications.modes.new') },
-                  ]}
-                />
-              </Form.Item>
-              <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
-                {t(`pages.notifications.modeDescriptions.${selectedMode}`)}
-              </Typography.Paragraph>
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <div>
+            <Typography.Text type="secondary">
+              {t('pages.notifications.rolloutStatus.nextActionTitle')}
+            </Typography.Text>
+            <Alert
+              type={nextAction.type}
+              showIcon
+              message={t(nextAction.translationKey)}
+              style={{ marginTop: 8 }}
+            />
+          </div>
+          <Row gutter={[24, 16]}>
+            <Col xs={12} sm={8} md={6} xl={4}>
+              <Space direction="vertical" size={2}>
+                <Typography.Text type="secondary">{t('pages.notifications.rolloutStatus.globalMode')}</Typography.Text>
+                <Tag color={pilotSummary.globalMode === 'new' ? 'red' : pilotSummary.globalMode === 'shadow' ? 'blue' : 'default'}>
+                  {t(`pages.notifications.modes.${pilotSummary.globalMode}`)}
+                </Tag>
+              </Space>
+            </Col>
+            <Col xs={12} sm={8} md={6} xl={4}>
+              <Space direction="vertical" size={2}>
+                <Typography.Text type="secondary">{t('pages.notifications.rolloutStatus.totalLearners')}</Typography.Text>
+                <Typography.Text strong>{pilotSummary.totalLearners}</Typography.Text>
+              </Space>
+            </Col>
+            <Col xs={12} sm={8} md={6} xl={4}>
+              <Space direction="vertical" size={2}>
+                <Typography.Text type="secondary">{t('pages.notifications.rolloutStatus.learnersInTestMode')}</Typography.Text>
+                <Typography.Text strong>{pilotSummary.learnerShadowCount}</Typography.Text>
+              </Space>
+            </Col>
+            <Col xs={12} sm={8} md={6} xl={4}>
+              <Space direction="vertical" size={2}>
+                <Typography.Text type="secondary">{t('pages.notifications.rolloutStatus.learnersInNew')}</Typography.Text>
+                <Typography.Text strong>{pilotSummary.learnerNewCount}</Typography.Text>
+              </Space>
+            </Col>
+            <Col xs={12} sm={8} md={6} xl={4}>
+              <Space direction="vertical" size={2}>
+                <Typography.Text type="secondary">{t('pages.notifications.rolloutStatus.plannedNotifications')}</Typography.Text>
+                <Typography.Text strong>{pilotSummary.plannedCount}</Typography.Text>
+              </Space>
+            </Col>
+            <Col xs={12} sm={8} md={6} xl={4}>
+              <Space direction="vertical" size={2}>
+                <Typography.Text type="secondary">{t('pages.notifications.rolloutStatus.readyForDelivery')}</Typography.Text>
+                <Typography.Text strong>{pilotSummary.dueDeliveryCount}</Typography.Text>
+              </Space>
+            </Col>
+            <Col xs={12} sm={8} md={6} xl={4}>
+              <Space direction="vertical" size={2}>
+                <Typography.Text type="secondary">{t('pages.notifications.rolloutStatus.attentionAlerts')}</Typography.Text>
+                <Typography.Text strong>{pilotSummary.attentionAlertCount}</Typography.Text>
+              </Space>
             </Col>
           </Row>
-          <Collapse
-            size="small"
-            style={{ marginBottom: 16 }}
-            items={[
-              {
-                key: 'advanced-settings',
-                label: t('pages.notifications.advancedSettingsTitle'),
-                children: (
-                  <>
-                    <Row gutter={16}>
-                      <Col xs={24} md={8}>
-                        <Form.Item name="daily_cap" label={t('pages.notifications.dailyCap')}>
-                          <InputNumber min={0} max={50} style={{ width: '100%' }} />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={8}>
-                        <Form.Item name="cap_mode" label={t('pages.notifications.capMode')}>
-                          <Select
-                            options={[
-                              { value: 'warn_only', label: t('pages.notifications.capModes.warn_only') },
-                              { value: 'enforce', label: t('pages.notifications.capModes.enforce') },
-                            ]}
-                          />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={8}>
-                        <Form.Item name="notifications_enabled" valuePropName="checked" label={t('pages.notifications.notificationsEnabled')}>
-                          <Switch />
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                    <Row gutter={16}>
-                      <Col xs={24} md={8}>
-                        <Form.Item name="quiet_hours_start" label={t('pages.notifications.quietHoursStart')}>
-                          <Input placeholder="21:00" />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={8}>
-                        <Form.Item name="quiet_hours_end" label={t('pages.notifications.quietHoursEnd')}>
-                          <Input placeholder="09:00" />
-                        </Form.Item>
-                      </Col>
-                      <Col xs={24} md={8}>
-                        <Form.Item name="timezone" label={t('pages.notifications.timezone')}>
-                          <Input placeholder="Europe/Moscow" />
-                        </Form.Item>
-                      </Col>
-                    </Row>
-                  </>
-                ),
-              },
-            ]}
-          />
-          <Button type="primary" htmlType="submit" loading={saving}>
-            {t('common.save')}
-          </Button>
-        </Form>
+        </Space>
       </Card>
+
+      <Row gutter={[16, 16]} align="stretch">
+        <Col xs={24} xl={10}>
+          <Card title={t('pages.notifications.pilotControls.title')} style={{ height: '100%' }}>
+            <Space direction="vertical" style={{ width: '100%' }} size="middle">
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                {t('pages.notifications.pilotControls.noticeDescription')}
+              </Typography.Paragraph>
+              <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                {t('pages.notifications.pilotControls.statusSummary', {
+                  planned: pilotSummary.plannedCount,
+                  ready: pilotSummary.dueDeliveryCount,
+                })}
+              </Typography.Paragraph>
+              <Space wrap>
+                <Button onClick={onProcessJobs} loading={processingJobs}>
+                  {t('pages.notifications.pilotControls.processJobs')}
+                </Button>
+                <Button
+                  danger
+                  disabled={deliveryBlocked}
+                  onClick={() => setConfirmDeliverNowOpen(true)}
+                  loading={deliveringNow}
+                >
+                  {t('pages.notifications.pilotControls.deliverNow')}
+                </Button>
+              </Space>
+              {deliveryBlocked && (
+                <Typography.Paragraph type="secondary" style={{ marginBottom: 0 }}>
+                  {t('pages.notifications.pilotControls.deliveryBlockedHint')}
+                </Typography.Paragraph>
+              )}
+            </Space>
+          </Card>
+        </Col>
+        <Col xs={24} xl={14}>
+          <Card title={t('pages.notifications.settingsPanelTitle')} loading={loading} style={{ height: '100%' }}>
+            <Typography.Paragraph type="secondary">
+              {t('pages.notifications.settingsPanelDescription')}
+            </Typography.Paragraph>
+            <Form<NotificationSettingsFormValues> form={form} layout="vertical" onFinish={handleSubmit}>
+              <Row gutter={16}>
+                <Col xs={24} md={12}>
+                  <Form.Item name="mode" label={t('pages.notifications.systemMode')} rules={[{ required: true }]}>
+                    <Select
+                      options={[
+                        { value: 'legacy', label: t('pages.notifications.modes.legacy') },
+                        { value: 'shadow', label: t('pages.notifications.modes.shadow') },
+                        { value: 'new', label: t('pages.notifications.modes.new') },
+                      ]}
+                    />
+                  </Form.Item>
+                  <Typography.Paragraph type="secondary" style={{ marginTop: -8 }}>
+                    {t(`pages.notifications.modeDescriptions.${selectedMode}`)}
+                  </Typography.Paragraph>
+                </Col>
+              </Row>
+              <Collapse
+                size="small"
+                style={{ marginBottom: 16 }}
+                items={[
+                  {
+                    key: 'advanced-settings',
+                    label: t('pages.notifications.advancedSettingsTitle'),
+                    children: (
+                      <>
+                        <Row gutter={16}>
+                          <Col xs={24} md={8}>
+                            <Form.Item name="daily_cap" label={t('pages.notifications.dailyCap')}>
+                              <InputNumber min={0} max={50} style={{ width: '100%' }} />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={8}>
+                            <Form.Item name="cap_mode" label={t('pages.notifications.capMode')}>
+                              <Select
+                                options={[
+                                  { value: 'warn_only', label: t('pages.notifications.capModes.warn_only') },
+                                  { value: 'enforce', label: t('pages.notifications.capModes.enforce') },
+                                ]}
+                              />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={8}>
+                            <Form.Item name="notifications_enabled" valuePropName="checked" label={t('pages.notifications.notificationsEnabled')}>
+                              <Switch />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+                        <Row gutter={16}>
+                          <Col xs={24} md={8}>
+                            <Form.Item name="quiet_hours_start" label={t('pages.notifications.quietHoursStart')}>
+                              <Input placeholder="21:00" />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={8}>
+                            <Form.Item name="quiet_hours_end" label={t('pages.notifications.quietHoursEnd')}>
+                              <Input placeholder="09:00" />
+                            </Form.Item>
+                          </Col>
+                          <Col xs={24} md={8}>
+                            <Form.Item name="timezone" label={t('pages.notifications.timezone')}>
+                              <Input placeholder="Europe/Moscow" />
+                            </Form.Item>
+                          </Col>
+                        </Row>
+                      </>
+                    ),
+                  },
+                ]}
+              />
+              <Button type="primary" htmlType="submit" loading={saving}>
+                {t('common.save')}
+              </Button>
+            </Form>
+          </Card>
+        </Col>
+      </Row>
 
       <LearnerRolloutSettings
         learnerModes={learnerModes}
@@ -3444,6 +3280,35 @@ const SettingsTab: React.FC<SettingsTabProps> = ({
         error={learnerModesError}
         updating={learnerModeUpdating}
         onModeChange={onLearnerModeChange}
+      />
+
+      <Collapse
+        size="small"
+        items={[
+          {
+            key: 'rollout-checklist',
+            label: t('pages.notifications.rolloutChecklist.title'),
+            children: (
+              <Space direction="vertical" style={{ width: '100%' }} size="middle">
+                <Alert
+                  type="info"
+                  showIcon
+                  message={t('pages.notifications.rolloutChecklist.noticeTitle')}
+                  description={t('pages.notifications.rolloutChecklist.noticeDescription')}
+                />
+                <Steps
+                  direction="vertical"
+                  size="small"
+                  current={currentChecklistIndex === -1 ? checklistItems.length - 1 : currentChecklistIndex}
+                  items={checklistItems.map((item) => ({
+                    status: item.status,
+                    title: t(item.titleKey),
+                  }))}
+                />
+              </Space>
+            ),
+          },
+        ]}
       />
 
       <Modal
@@ -3640,10 +3505,22 @@ const NoticeError: React.FC<{ error: Error | null }> = ({ error }) => {
   );
 };
 
-const getRuleStatusColor = (status: string) => {
+const getRuleDisplayStatus = (status: string): 'active' | 'paused' | 'archived' => {
   switch (status) {
+    case 'active':
+      return 'active';
+    case 'archived':
+      return 'archived';
+    case 'paused':
+    case 'draft':
+    default:
+      return 'paused';
+  }
+};
+
+const getRuleStatusColor = (status: string) => {
+  switch (getRuleDisplayStatus(status)) {
     case 'active': return 'green';
-    case 'draft': return 'default';
     case 'paused': return 'orange';
     case 'archived': return 'red';
     default: return 'default';

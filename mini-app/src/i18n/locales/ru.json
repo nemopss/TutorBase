@@ -314,7 +314,7 @@
         "aqua": "Aqua",
         "tokyonight": "Tokyo Night",
         "gruvbox": "Gruvbox",
-        "darkplus": "Dark+"
+        "darkplus": "Coal"
       },
       "notifications": "Уведомления",
       "enableNotifications": "Включить уведомления",
@@ -510,6 +510,7 @@
         "teacherAlert": "Нужно внимание"
       },
       "activityStatuses": {
+        "handled": "Разобрано",
         "requiresAttention": "Требует внимания",
         "confirmed": "Подтверждено",
         "declined": "Отказ",
@@ -539,10 +540,13 @@
       "activate": "Активировать",
       "pause": "Пауза",
       "archive": "Архивировать",
+      "restore": "Вернуть из архива",
       "sendNow": "Отправить сейчас",
       "sendNowConfirmTitle": "Отправить уведомление вне очереди?",
       "sendNowConfirmDescription": "Для ученика {{learner}} уведомление категории «{{category}}» будет поставлено в ближайшую очередь отправки.",
       "technicalList": "Технические детали",
+      "markHandled": "Отметить разобранным",
+      "activityHandled": "Событие отмечено как разобранное",
       "materializeShadow": "Обновить план уведомлений",
       "materializeQueued": "План уведомлений обновлён",
       "materializeHelpTitle": "Пересчитать будущие уведомления",
@@ -558,7 +562,7 @@
       "advancedSettingsTitle": "Дополнительные настройки",
       "templateCreated": "Шаблон создан",
       "templateArchived": "Шаблон архивирован",
-      "ruleCreated": "Правило создано как черновик",
+      "ruleCreated": "Правило создано",
       "ruleUpdated": "Правило обновлено",
       "learnerModeSaved": "Режим ученика сохранён",
       "instanceCancelled": "Отправка отменена",
@@ -568,6 +572,8 @@
       "tenantTemplate": "Свой",
       "noRules": "Правил пока нет",
       "noRulesDescription": "Правила будут управлять тем, что и когда отправлять ученикам.",
+      "noArchivedRules": "В архиве пока нет правил",
+      "noArchivedRulesDescription": "Архивные правила будут появляться здесь после вывода из работы.",
       "noTemplates": "Шаблонов пока нет",
       "noTemplatesDescription": "Создайте шаблон или используйте системные шаблоны после seed-миграции.",
       "noInstances": "В очереди пока нет уведомлений",
@@ -591,6 +597,10 @@
         "active": "Активные правила",
         "draft": "Черновики",
         "paused": "На паузе",
+        "archived": "Архив"
+      },
+      "rulesTabs": {
+        "current": "Правила",
         "archived": "Архив"
       },
       "templateSections": {

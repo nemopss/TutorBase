@@ -585,12 +585,15 @@ class SqlAlchemyNotificationRuleRepository:
         if status == RuleStatus.ACTIVE:
             rule.activated_at = rule.activated_at or now
             rule.paused_at = None
+            rule.archived_at = None
         elif status == RuleStatus.PAUSED:
             rule.paused_at = now
+            rule.archived_at = None
         elif status == RuleStatus.ARCHIVED:
             rule.archived_at = rule.archived_at or now
         elif status == RuleStatus.DRAFT:
             rule.paused_at = None
+            rule.archived_at = None
 
 
 class SqlAlchemyNotificationJobRepository:
