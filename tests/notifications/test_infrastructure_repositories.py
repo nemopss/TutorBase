@@ -315,6 +315,7 @@ async def test_instance_repository_uses_postgresql_upsert_with_non_nullable_even
     assert "event_id" not in compiled.partition("ON CONFLICT")[2].partition(")")[0]
     assert "notification_instances.status NOT IN" in compiled
     assert "notification_responses.notification_instance_id = notification_instances.id" in compiled
+    assert "notification_instances.status_reason IN" in compiled
 
 
 @pytest.mark.asyncio
