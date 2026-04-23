@@ -1,6 +1,6 @@
 import json
 from typing import Optional
-from urllib.parse import quote_plus
+from urllib.parse import quote, quote_plus
 
 from pydantic import field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -49,9 +49,15 @@ class Settings(BaseSettings):
     NOTIFICATIONS_AUTOMATION_ENABLED: bool = False
     NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS: int = 60
     NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS: int = 30
+    NOTIFICATIONS_DELIVERY_GRACE_SECONDS: int = 120
     TENANT_ACCESS_SYNC_ENABLED: bool = True
     TENANT_ACCESS_SYNC_INTERVAL_SECONDS: int = 3600
     TELEGRAM_REQUEST_TIMEOUT_SECONDS: float = 15.0
+    TELEGRAM_PROXY_SCHEME: str = "socks5"
+    TELEGRAM_PROXY_HOST: Optional[str] = None
+    TELEGRAM_PROXY_PORT: Optional[int] = None
+    TELEGRAM_PROXY_USERNAME: Optional[str] = None
+    TELEGRAM_PROXY_PASSWORD: Optional[str] = None
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -91,6 +97,7 @@ class Settings(BaseSettings):
     @field_validator(
         "NOTIFICATIONS_PROCESS_JOBS_INTERVAL_SECONDS",
         "NOTIFICATIONS_DELIVERY_INTERVAL_SECONDS",
+        "NOTIFICATIONS_DELIVERY_GRACE_SECONDS",
         "TENANT_ACCESS_SYNC_INTERVAL_SECONDS",
         "TELEGRAM_REQUEST_TIMEOUT_SECONDS",
     )
@@ -98,6 +105,27 @@ class Settings(BaseSettings):
     def validate_positive_interval(cls, value):
         if value <= 0:
             raise ValueError("Timeouts and intervals must be greater than zero")
+        return value
+
+    @field_validator("TELEGRAM_PROXY_SCHEME")
+    @classmethod
+    def validate_telegram_proxy_scheme(cls, value):
+        scheme = value.lower()
+        if scheme not in {"socks5", "socks5h", "socks4", "http"}:
+            raise ValueError("Telegram proxy scheme must be one of: socks5, socks5h, socks4, http")
+        return scheme
+
+    @field_validator(
+        "TELEGRAM_PROXY_HOST",
+        "TELEGRAM_PROXY_PORT",
+        "TELEGRAM_PROXY_USERNAME",
+        "TELEGRAM_PROXY_PASSWORD",
+        mode="before",
+    )
+    @classmethod
+    def empty_telegram_proxy_value_is_none(cls, value):
+        if value == "":
+            return None
         return value
 
     def build_async_database_url(self) -> str:
@@ -114,6 +142,29 @@ class Settings(BaseSettings):
             port = f":{self.POSTGRESQL_PORT}" if self.POSTGRESQL_PORT else ""
             return f"postgresql+asyncpg://{auth}{host}{port}/{self.POSTGRESQL_DBNAME}"
         return f"sqlite+aiosqlite:///{self.DB_PATH}"
+
+    def build_telegram_proxy_url(self) -> str | None:
+        if not self.TELEGRAM_PROXY_HOST:
+            return None
+        if not self.TELEGRAM_PROXY_PORT:
+            raise ValueError("TELEGRAM_PROXY_PORT is required when TELEGRAM_PROXY_HOST is set")
+
+        auth = ""
+        if self.TELEGRAM_PROXY_USERNAME or self.TELEGRAM_PROXY_PASSWORD:
+            if not self.TELEGRAM_PROXY_USERNAME or not self.TELEGRAM_PROXY_PASSWORD:
+                raise ValueError(
+                    "Both TELEGRAM_PROXY_USERNAME and TELEGRAM_PROXY_PASSWORD are required "
+                    "when proxy authentication is enabled"
+                )
+            auth = (
+                f"{quote(self.TELEGRAM_PROXY_USERNAME, safe='')}:"
+                f"{quote(self.TELEGRAM_PROXY_PASSWORD, safe='')}@"
+            )
+
+        return (
+            f"{self.TELEGRAM_PROXY_SCHEME}://"
+            f"{auth}{self.TELEGRAM_PROXY_HOST}:{self.TELEGRAM_PROXY_PORT}"
+        )
 
 
 config = Settings()
