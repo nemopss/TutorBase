@@ -86,6 +86,11 @@ _DEFAULT_CANCELLABLE_INSTANCE_STATUSES = (
     InstanceStatus.SUPPRESSED,
 )
 
+_REMATERIALIZATION_STATUS_REASONS = (
+    "rematerialized:all_rules",
+    "rematerialized:shadow_all_rules",
+)
+
 
 def _cancellable_instance_status_values(
     statuses: tuple[InstanceStatus, ...] | None = None,
@@ -770,8 +775,13 @@ class SqlAlchemyNotificationInstanceRepository:
                             InstanceStatus.PROCESSING.value,
                         )
                     )
-                    & ~exists().where(
-                        NotificationResponse.notification_instance_id == NotificationInstance.id
+                    & (
+                        ~exists().where(
+                            NotificationResponse.notification_instance_id == NotificationInstance.id
+                        )
+                        | NotificationInstance.status_reason.in_(
+                            _REMATERIALIZATION_STATUS_REASONS
+                        )
                     )
                 ),
             )
