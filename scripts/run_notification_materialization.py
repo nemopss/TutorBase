@@ -27,7 +27,7 @@ def _parser() -> argparse.ArgumentParser:
         "--mode",
         choices=("live", "shadow"),
         default="live",
-        help="Materialization mode. Use live for production delivery rebuilds.",
+        help="Materialization mode, use live for production delivery rebuilds.",
     )
     parser.add_argument(
         "--horizon-days",

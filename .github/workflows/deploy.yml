@@ -50,6 +50,7 @@ jobs:
               - 'config.py'
               - 'requirements.txt'
               - 'push.py'
+              - 'scripts/**'
             app:
               - '.github/workflows/deploy.yml'
               - 'mini-app/**'
