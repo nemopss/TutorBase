@@ -30,12 +30,6 @@ const MIN_CELL_SIZE = 8;
 const DEFAULT_CELL_SIZE = 12;
 const MONTH_TRACK_HEIGHT = 18;
 
-const HEATMAP_COLORS = {
-  low: 'rgba(70, 160, 84, 0.30)',
-  medium: 'rgba(225, 183, 52, 0.34)',
-  high: 'rgba(217, 92, 78, 0.42)',
-} as const;
-
 const formatHours = (value: number): string => {
   if (Number.isInteger(value)) {
     return String(value);
@@ -193,15 +187,15 @@ const DashboardLessonLoadHeatmap: React.FC<DashboardLessonLoadHeatmapProps> = ({
       return colors.bgTertiary;
     }
     if (hours <= 1) {
-      return HEATMAP_COLORS.low;
+      return `${colors.accentSuccess}18`;
     }
     if (hours <= 2) {
-      return 'rgba(70, 160, 84, 0.46)';
+      return `${colors.accentSuccess}30`;
     }
     if (hours <= 4) {
-      return HEATMAP_COLORS.medium;
+      return `${colors.accentSuccess}4a`;
     }
-    return HEATMAP_COLORS.high;
+    return `${colors.accentSuccess}66`;
   };
 
   if (isEmpty) {

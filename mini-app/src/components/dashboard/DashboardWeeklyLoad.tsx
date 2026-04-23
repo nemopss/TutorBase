@@ -26,11 +26,18 @@ const formatHours = (value: number): string => {
   return value.toFixed(1).replace(/\.0$/, '');
 };
 
-const getBarColor = (hours: number, colors: ReturnType<typeof useTheme>['resolvedTheme']['colors']): string => {
-  if (hours <= 6) {
+const getBarColor = (
+  hours: number,
+  colors: ReturnType<typeof useTheme>['resolvedTheme']['colors'],
+  thresholds: { lowUpper: number; mediumUpper: number } | null,
+): string => {
+  if (!thresholds) {
     return colors.accentSuccess;
   }
-  if (hours <= 12) {
+  if (hours <= thresholds.lowUpper) {
+    return colors.accentSuccess;
+  }
+  if (hours <= thresholds.mediumUpper) {
     return '#d9a441';
   }
   return colors.accentError;
@@ -51,6 +58,30 @@ const DashboardWeeklyLoad: React.FC<DashboardWeeklyLoadProps> = ({ weeks }) => {
     () => Math.max(0, ...visibleWeeks.map((week) => week.hours)),
     [visibleWeeks],
   );
+
+  const colorThresholds = useMemo(() => {
+    const positiveHours = visibleWeeks
+      .map((week) => week.hours)
+      .filter((hours) => hours > 0)
+      .sort((a, b) => a - b);
+
+    if (positiveHours.length === 0) {
+      return null;
+    }
+
+    const minHours = positiveHours[0];
+    const maxVisibleHours = positiveHours[positiveHours.length - 1];
+    const spread = maxVisibleHours - minHours;
+
+    if (spread < 0.5) {
+      return null;
+    }
+
+    return {
+      lowUpper: minHours + spread / 3,
+      mediumUpper: minHours + (spread * 2) / 3,
+    };
+  }, [visibleWeeks]);
 
   if (maxHours <= 0) {
     return (
@@ -104,7 +135,7 @@ const DashboardWeeklyLoad: React.FC<DashboardWeeklyLoadProps> = ({ weeks }) => {
                     width,
                     height: '100%',
                     borderRadius: 999,
-                    background: getBarColor(week.hours, colors),
+                    background: getBarColor(week.hours, colors, colorThresholds),
                   }}
                 />
               </div>
