@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -87,6 +87,9 @@ class FakeSettingsRepository:
     async def list_learner_modes(self):
         return self.learner_modes
 
+    async def clear_learner_modes(self):
+        self.learner_modes = ()
+
 
 @dataclass
 class FakeInstanceRepository:
@@ -95,16 +98,25 @@ class FakeInstanceRepository:
     sent_calls: list[dict] = field(default_factory=list)
     failed_calls: list[dict] = field(default_factory=list)
     cancel_rule_calls: list[dict] = field(default_factory=list)
+    claim_calls: list[dict] = field(default_factory=list)
 
     async def upsert_planned_instances(self, instances):
         self.upserted = instances
         return InstanceUpsertResult(planned_count=len(instances), inserted_count=len(instances))
 
-    async def cancel_future_instances_for_rules(self, *, rule_ids, reason: str):
-        self.cancel_rule_calls.append({"rule_ids": rule_ids, "reason": reason})
+    async def cancel_future_instances_for_rules(self, *, rule_ids, reason: str, statuses=None):
+        self.cancel_rule_calls.append({"rule_ids": rule_ids, "reason": reason, "statuses": statuses})
         return 0
 
-    async def claim_due_instances(self, *, now, limit: int, lease_seconds: int):
+    async def claim_due_instances(self, *, now, limit: int, lease_seconds: int, delivery_grace_seconds: int = 0):
+        self.claim_calls.append(
+            {
+                "now": now,
+                "limit": limit,
+                "lease_seconds": lease_seconds,
+                "delivery_grace_seconds": delivery_grace_seconds,
+            }
+        )
         return self.claim_result
 
     async def mark_delivery_sent(self, **kwargs):
@@ -251,6 +263,7 @@ def _uow(
     recipient: PreviewRecipient | None = None,
     event: PreviewEvent | None = None,
 ) -> FakeMaterializationUnitOfWork:
+    future_start = datetime.now(timezone.utc) + timedelta(days=14)
     return FakeMaterializationUnitOfWork(
         audience_resolver=FakeAudienceResolver(
             recipients=(recipient or PreviewRecipient(learner_id=10, display_name="Вика"),)
@@ -262,7 +275,7 @@ def _uow(
                     event_type=EventType.LESSON,
                     event_id=617,
                     learner_id=10,
-                    starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+                    starts_at=future_start,
                     timezone="UTC",
                     package_status="active",
                     lesson_status="scheduled",
@@ -394,18 +407,20 @@ async def test_materialize_active_rules_records_job_summary():
     assert uow.jobs.summaries == [
         {
             "rules_count": 1,
+            "cancelled_count": 0,
             "planned_count": 1,
             "upserted_count": 0,
             "warnings": [],
         }
     ]
     assert uow.instances.cancel_rule_calls == [
-        {"rule_ids": (1,), "reason": "rematerialized:all_rules"}
+        {"rule_ids": (1,), "reason": "rematerialized:all_rules", "statuses": None}
     ]
 
 
 @pytest.mark.asyncio
 async def test_materialize_active_rules_shadow_rebuild_does_not_enable_rollout_delivery():
+    future_start = datetime.now(timezone.utc) + timedelta(days=14)
     rule = NotificationRuleDraft(
         rule_id=1,
         name="lesson_confirmation",
@@ -430,7 +445,7 @@ async def test_materialize_active_rules_shadow_rebuild_does_not_enable_rollout_d
                     event_type=EventType.LESSON,
                     event_id=617,
                     learner_id=10,
-                    starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+                    starts_at=future_start,
                     timezone="UTC",
                     package_status="active",
                     lesson_status="scheduled",
@@ -440,7 +455,7 @@ async def test_materialize_active_rules_shadow_rebuild_does_not_enable_rollout_d
                     event_type=EventType.LESSON,
                     event_id=618,
                     learner_id=11,
-                    starts_at=datetime(2026, 4, 9, 20, 0, tzinfo=timezone.utc),
+                    starts_at=future_start + timedelta(days=1),
                     timezone="UTC",
                     package_status="active",
                     lesson_status="scheduled",
@@ -481,10 +496,18 @@ async def test_materialize_active_rules_shadow_rebuild_does_not_enable_rollout_d
     assert {
         instance.delivery_enabled for instance in result.materialization.planned_instances
     } == {False}
+    assert uow.instances.cancel_rule_calls == [
+        {
+            "rule_ids": (1,),
+            "reason": "rematerialized:shadow_all_rules",
+            "statuses": (InstanceStatus.SHADOW,),
+        }
+    ]
 
 
 @pytest.mark.asyncio
 async def test_materialize_active_rules_live_run_respects_learner_rollout_modes():
+    future_start = datetime.now(timezone.utc) + timedelta(days=14)
     rule = NotificationRuleDraft(
         rule_id=1,
         name="lesson_confirmation",
@@ -509,7 +532,7 @@ async def test_materialize_active_rules_live_run_respects_learner_rollout_modes(
                     event_type=EventType.LESSON,
                     event_id=617,
                     learner_id=10,
-                    starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+                    starts_at=future_start,
                     timezone="UTC",
                     package_status="active",
                     lesson_status="scheduled",
@@ -519,7 +542,7 @@ async def test_materialize_active_rules_live_run_respects_learner_rollout_modes(
                     event_type=EventType.LESSON,
                     event_id=618,
                     learner_id=11,
-                    starts_at=datetime(2026, 4, 9, 20, 0, tzinfo=timezone.utc),
+                    starts_at=future_start + timedelta(days=1),
                     timezone="UTC",
                     package_status="active",
                     lesson_status="scheduled",
@@ -591,7 +614,7 @@ async def test_materialize_active_rules_cleans_future_instances_for_paused_rules
     await MaterializeActiveRulesUseCase(uow).execute()
 
     assert uow.instances.cancel_rule_calls == [
-        {"rule_ids": (1, 2, 5), "reason": "rematerialized:all_rules"}
+        {"rule_ids": (1, 2, 5), "reason": "rematerialized:all_rules", "statuses": None}
     ]
 
 
@@ -627,7 +650,11 @@ async def test_run_materialize_active_rules_job_uses_claimed_job_scope():
     assert result.materialization.planned_instances[0].delivery_enabled is False
     assert uow.jobs.summaries[-1]["rules_count"] == 1
     assert uow.instances.cancel_rule_calls == [
-        {"rule_ids": (1,), "reason": "rematerialized:all_rules"}
+        {
+            "rule_ids": (1,),
+            "reason": "rematerialized:shadow_all_rules",
+            "statuses": (InstanceStatus.SHADOW,),
+        }
     ]
 
 
@@ -657,10 +684,19 @@ async def test_claim_due_notifications_commits_claimed_instances():
     result = await ClaimDueNotificationsUseCase(uow).execute(
         now=datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc),
         limit=100,
+        delivery_grace_seconds=120,
     )
 
     assert uow.committed
     assert result.claimed[0].instance_id == 101
+    assert uow.instances.claim_calls == [
+        {
+            "now": datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc),
+            "limit": 100,
+            "lease_seconds": 300,
+            "delivery_grace_seconds": 120,
+        }
+    ]
 
 
 @pytest.mark.asyncio

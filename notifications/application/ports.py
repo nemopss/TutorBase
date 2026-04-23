@@ -36,7 +36,7 @@ from notifications.application.dto import (
     RenderedNotification,
 )
 from notifications.domain.entities import NotificationPreference
-from notifications.domain.enums import EventType
+from notifications.domain.enums import EventType, InstanceStatus
 
 
 class AudienceResolver(Protocol):
@@ -132,6 +132,7 @@ class NotificationInstanceRepository(Protocol):
         event_type: EventType,
         event_id: int,
         reason: str,
+        statuses: tuple[InstanceStatus, ...] | None = None,
     ) -> int:
         ...
 
@@ -141,6 +142,7 @@ class NotificationInstanceRepository(Protocol):
         rule_ids: tuple[int, ...],
         learner_ids: tuple[int, ...],
         reason: str,
+        statuses: tuple[InstanceStatus, ...] | None = None,
     ) -> int:
         ...
 
@@ -157,6 +159,7 @@ class NotificationInstanceRepository(Protocol):
         *,
         rule_ids: tuple[int, ...],
         reason: str,
+        statuses: tuple[InstanceStatus, ...] | None = None,
     ) -> int:
         ...
 
@@ -166,6 +169,7 @@ class NotificationInstanceRepository(Protocol):
         now,
         limit: int,
         lease_seconds: int,
+        delivery_grace_seconds: int = 0,
     ) -> ClaimDueNotificationsResult:
         ...
 
@@ -331,6 +335,9 @@ class NotificationSettingsRepository(Protocol):
         ...
 
     async def update_settings(self, draft: NotificationSettingsUpdateDraft) -> NotificationSettingsRecord:
+        ...
+
+    async def clear_learner_modes(self) -> None:
         ...
 
     async def list_learner_modes(self) -> tuple[LearnerNotificationModeRecord, ...]:

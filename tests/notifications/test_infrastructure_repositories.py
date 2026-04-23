@@ -45,6 +45,7 @@ from notifications.infrastructure.repositories import (
 class FakeResult:
     def __init__(self, rows):
         self._rows = rows
+        self.rowcount = len(rows)
 
     def __iter__(self):
         return iter(self._rows)
@@ -154,16 +155,23 @@ class FakeAsyncSession:
 
 
 class FakeClaimSession:
-    def __init__(self, instances):
+    def __init__(self, instances, *, stale_instances=()):
         self.instances = instances
+        self.stale_instances = list(stale_instances)
         self.calls = []
         self.added = []
 
     async def execute(self, statement, params=None):
         self.calls.append((statement, params))
         if len(self.calls) == 1:
+            for instance in self.stale_instances:
+                instance.status = "expired"
+                instance.status_reason = "delivery_window_exceeded"
+                instance.delivery_enabled = False
+            return FakeResult([])
+        if len(self.calls) == 2:
             return FakeResult(self.instances)
-        if len(self.calls) <= 1 + len(self.instances):
+        if len(self.calls) <= 2 + len(self.instances):
             return FakeResult([1])
         return FakeResult([SimpleNamespace(id=10, chat_id="5390064156")])
 
@@ -878,7 +886,12 @@ async def test_instance_repository_claims_due_instances_and_creates_processing_a
     session = FakeClaimSession([instance])
     repository = SqlAlchemyNotificationInstanceRepository(session, tenant_id=1)
 
-    result = await repository.claim_due_instances(now=now, limit=100, lease_seconds=300)
+    result = await repository.claim_due_instances(
+        now=now,
+        limit=100,
+        lease_seconds=300,
+        delivery_grace_seconds=120,
+    )
 
     assert instance.status == "processing"
     assert instance.processing_started_at == now
@@ -891,6 +904,45 @@ async def test_instance_repository_claims_due_instances_and_creates_processing_a
     assert result.claimed[0].attempt_id == 201
     assert result.claimed[0].category == CategoryKey.LESSON_CONFIRMATION
     assert result.claimed[0].provider_chat_id == "5390064156"
+
+
+@pytest.mark.asyncio
+async def test_instance_repository_expires_stale_due_instances_before_claiming():
+    now = datetime(2026, 4, 7, 7, 5, tzinfo=timezone.utc)
+    stale_instance = NotificationInstance(
+        id=101,
+        tenant_id=1,
+        rule_id=1,
+        category=NotificationCategory(key="lesson_confirmation", display_name="Подтверждение"),
+        event_type="lesson",
+        event_id=617,
+        event_key="lesson:617",
+        recipient_type="learner",
+        recipient_id=10,
+        learner_id=10,
+        scheduled_for=now - timedelta(minutes=5),
+        effective_scheduled_for=now - timedelta(minutes=5),
+        status="scheduled",
+        delivery_enabled=True,
+        priority="normal",
+        channel="telegram",
+        dedupe_key="single|lesson_confirmation|x",
+        explanation={"rule_name": "Подтверждение"},
+    )
+    session = FakeClaimSession([], stale_instances=(stale_instance,))
+    repository = SqlAlchemyNotificationInstanceRepository(session, tenant_id=1)
+
+    result = await repository.claim_due_instances(
+        now=now,
+        limit=100,
+        lease_seconds=300,
+        delivery_grace_seconds=120,
+    )
+
+    assert result.claimed == ()
+    assert stale_instance.status == "expired"
+    assert stale_instance.status_reason == "delivery_window_exceeded"
+    assert stale_instance.delivery_enabled is False
 
 
 @pytest.mark.asyncio

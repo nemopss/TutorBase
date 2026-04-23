@@ -11,13 +11,13 @@ from notifications.application.dto import (
     ReconcileNotificationGroupMembershipResult,
     ReconcileNotificationEventResult,
 )
-from notifications.application.materialization import _materialize_rules
+from notifications.application.materialization import _is_live_materialization, _materialize_rules
 from notifications.application.ports import (
     AudienceResolver,
     EventRepository,
     NotificationMaterializationUnitOfWork,
 )
-from notifications.domain.enums import EventType, NotificationSystemMode
+from notifications.domain.enums import EventType, InstanceStatus, NotificationSystemMode
 
 
 class QueueNotificationEventReconciliationUseCase:
@@ -134,11 +134,19 @@ class RunReconcileNotificationEventJobUseCase:
         shadow = bool(job.scope.get("shadow", True))
         horizon_days = int(job.scope.get("horizon_days", 30))
         limit = int(job.scope.get("limit", 100))
+        live_materialization = _is_live_materialization(
+            delivery_enabled=delivery_enabled,
+            shadow=shadow,
+        )
 
         cancelled_count = await self._uow.instances.cancel_future_instances_for_event(
             event_type=event_type,
             event_id=event_id,
             reason=f"reconciled:{reason}",
+            statuses=_reconciliation_cancel_statuses(
+                delivery_enabled=delivery_enabled,
+                shadow=shadow,
+            ),
         )
         event = await self._uow.events.get_event(event_type=event_type, event_id=event_id)
         if event is None:
@@ -171,6 +179,7 @@ class RunReconcileNotificationEventJobUseCase:
             shadow=shadow,
             commit=False,
             respect_rollout_modes=True,
+            skip_past_due=live_materialization,
         )
         succeeded = await self._mark_succeeded(
             job,
@@ -223,6 +232,10 @@ class RunReconcileNotificationGroupMembershipJobUseCase:
         shadow = bool(job.scope.get("shadow", True))
         horizon_days = int(job.scope.get("horizon_days", 30))
         limit = int(job.scope.get("limit", 100))
+        live_materialization = _is_live_materialization(
+            delivery_enabled=delivery_enabled,
+            shadow=shadow,
+        )
 
         rules = await self._uow.rules.list_active_rules_for_group(group_id)
         rule_ids = tuple(int(rule.rule_id) for rule in rules)
@@ -230,6 +243,10 @@ class RunReconcileNotificationGroupMembershipJobUseCase:
             rule_ids=rule_ids,
             learner_ids=learner_ids,
             reason=f"reconciled:{reason}",
+            statuses=_reconciliation_cancel_statuses(
+                delivery_enabled=delivery_enabled,
+                shadow=shadow,
+            ),
         )
         if not rules or not learner_ids:
             warning = "no_group_rules" if not rules else "empty_learner_scope"
@@ -248,6 +265,7 @@ class RunReconcileNotificationGroupMembershipJobUseCase:
                 shadow=shadow,
                 commit=False,
                 respect_rollout_modes=True,
+                skip_past_due=live_materialization,
             )
 
         succeeded = await self._uow.jobs.mark_succeeded(
@@ -271,6 +289,16 @@ class RunReconcileNotificationGroupMembershipJobUseCase:
             rules_count=len(rules),
             cancelled_count=cancelled_count,
         )
+
+
+def _reconciliation_cancel_statuses(
+    *,
+    delivery_enabled: bool,
+    shadow: bool,
+) -> tuple[InstanceStatus, ...] | None:
+    if shadow and not delivery_enabled:
+        return (InstanceStatus.SHADOW,)
+    return None
 
 
 class _SingleEventRepository:

@@ -8,9 +8,15 @@ from notifications.application.dto import (
     NotificationSettingsUpdateDraft,
     PreviewRecipient,
 )
-from notifications.application.materialization import _materialize_rules
+from notifications.application.materialization import (
+    _cancel_persisted_instances_for_materialization,
+    _materialize_rules,
+)
 from notifications.application.ports import NotificationMaterializationUnitOfWork
 from notifications.domain.enums import NotificationSystemMode
+
+
+_TENANT_MODE_REBUILD_LIMIT = 10_000
 
 
 class GetNotificationSettingsUseCase:
@@ -26,9 +32,13 @@ class UpdateNotificationSettingsUseCase:
         self._uow = uow
 
     async def execute(self, draft: NotificationSettingsUpdateDraft) -> NotificationSettingsRecord:
+        current_settings = await self._uow.settings.get_settings()
         if draft.mode == NotificationSystemMode.NEW and not draft.confirm_global_new:
             raise ValueError("Enabling the new notification system globally requires explicit confirmation")
         settings = await self._uow.settings.update_settings(draft)
+        if draft.mode == NotificationSystemMode.NEW and current_settings.mode != NotificationSystemMode.NEW:
+            await self._uow.settings.clear_learner_modes()
+            await _rebuild_queue_for_tenant_mode(self._uow, settings)
         await self._uow.commit()
         return settings
 
@@ -95,6 +105,35 @@ async def _rebuild_queue_for_learner_mode(
         limit=100,
         delivery_enabled=mode.effective_mode == NotificationSystemMode.NEW,
         shadow=mode.effective_mode == NotificationSystemMode.SHADOW,
+        commit=False,
+        respect_rollout_modes=False,
+        skip_past_due=True,
+    )
+
+
+async def _rebuild_queue_for_tenant_mode(
+    uow: NotificationMaterializationUnitOfWork,
+    settings: NotificationSettingsRecord,
+) -> None:
+    if settings.mode != NotificationSystemMode.NEW:
+        return
+
+    rules = await uow.rules.list_active_rules()
+    if not rules:
+        return
+
+    await _cancel_persisted_instances_for_materialization(
+        uow,
+        delivery_enabled=True,
+        shadow=False,
+    )
+    await _materialize_rules(
+        uow,
+        rules,
+        horizon_days=30,
+        limit=_TENANT_MODE_REBUILD_LIMIT,
+        delivery_enabled=True,
+        shadow=False,
         commit=False,
         respect_rollout_modes=False,
         skip_past_due=True,

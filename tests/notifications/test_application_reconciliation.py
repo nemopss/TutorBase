@@ -1,5 +1,5 @@
 from dataclasses import dataclass, field
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
@@ -93,12 +93,23 @@ class FakeInstanceRepository:
     cancelled: list[dict] = field(default_factory=list)
     upserted: tuple[NotificationInstanceDraft, ...] = ()
 
-    async def cancel_future_instances_for_event(self, *, event_type, event_id, reason):
-        self.cancelled.append({"event_type": event_type, "event_id": event_id, "reason": reason})
+    async def cancel_future_instances_for_event(self, *, event_type, event_id, reason, statuses=None):
+        self.cancelled.append(
+            {"event_type": event_type, "event_id": event_id, "reason": reason, "statuses": statuses}
+        )
         return 2
 
-    async def cancel_future_instances_for_rules_and_learners(self, *, rule_ids, learner_ids, reason):
-        self.cancelled.append({"rule_ids": rule_ids, "learner_ids": learner_ids, "reason": reason})
+    async def cancel_future_instances_for_rules_and_learners(
+        self,
+        *,
+        rule_ids,
+        learner_ids,
+        reason,
+        statuses=None,
+    ):
+        self.cancelled.append(
+            {"rule_ids": rule_ids, "learner_ids": learner_ids, "reason": reason, "statuses": statuses}
+        )
         return 3
 
     async def upsert_planned_instances(self, instances):
@@ -143,6 +154,9 @@ class FakeSettingsRepository:
     async def list_learner_modes(self):
         return ()
 
+    async def clear_learner_modes(self):
+        return None
+
 
 @dataclass
 class FakeUnitOfWork:
@@ -163,11 +177,12 @@ class FakeUnitOfWork:
 
 
 def _event() -> PreviewEvent:
+    future_start = datetime.now(timezone.utc) + timedelta(days=14)
     return PreviewEvent(
         event_type=EventType.LESSON,
         event_id=617,
         learner_id=10,
-        starts_at=datetime(2026, 4, 8, 20, 0, tzinfo=timezone.utc),
+        starts_at=future_start,
         timezone="UTC",
         package_status="active",
         lesson_status="scheduled",
@@ -282,6 +297,7 @@ async def test_run_event_reconciliation_cancels_stale_instances_and_upserts_scop
             "event_type": EventType.LESSON,
             "event_id": 617,
             "reason": "reconciled:lesson_updated",
+            "statuses": (InstanceStatus.SHADOW,),
         }
     ]
     assert len(uow.instances.upserted) == 1
@@ -308,6 +324,49 @@ async def test_run_event_reconciliation_marks_missing_event_as_success_after_can
     assert result.materialization.warnings == ("event_not_found",)
     assert uow.instances.upserted == ()
     assert uow.jobs.succeeded[-1]["event_found"] is False
+
+
+@pytest.mark.asyncio
+async def test_run_live_event_reconciliation_skips_past_due_notifications():
+    past_event = PreviewEvent(
+        event_type=EventType.LESSON,
+        event_id=617,
+        learner_id=10,
+        starts_at=datetime.now(timezone.utc) - timedelta(days=7),
+        timezone="UTC",
+        package_status="active",
+        lesson_status="scheduled",
+        has_homework=True,
+    )
+    uow = _uow(event=past_event)
+    job = NotificationJobRecord(
+        job_id=7,
+        job_type="reconcile_event",
+        status="running",
+        scope={
+            "event_type": "lesson",
+            "event_id": 617,
+            "reason": "lesson_updated",
+            "shadow": False,
+            "delivery_enabled": True,
+        },
+    )
+    uow.jobs.records.append(job)
+
+    result = await RunReconcileNotificationEventJobUseCase(uow).execute(job)
+
+    assert uow.committed
+    assert result.event_found is True
+    assert result.materialization.planned_instances == ()
+    assert uow.instances.upserted == ()
+    assert uow.instances.cancelled == [
+        {
+            "event_type": EventType.LESSON,
+            "event_id": 617,
+            "reason": "reconciled:lesson_updated",
+            "statuses": None,
+        }
+    ]
 
 
 @pytest.mark.asyncio
@@ -348,6 +407,7 @@ async def test_run_group_membership_reconciliation_cancels_and_materializes_scop
             "rule_ids": (2,),
             "learner_ids": (10,),
             "reason": "reconciled:group_members_added",
+            "statuses": (InstanceStatus.SHADOW,),
         }
     ]
     assert len(uow.instances.upserted) == 1

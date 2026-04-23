@@ -79,6 +79,21 @@ from notifications.infrastructure.models import (
 )
 
 
+_DEFAULT_CANCELLABLE_INSTANCE_STATUSES = (
+    InstanceStatus.SHADOW,
+    InstanceStatus.SCHEDULED,
+    InstanceStatus.SKIPPED,
+    InstanceStatus.SUPPRESSED,
+)
+
+
+def _cancellable_instance_status_values(
+    statuses: tuple[InstanceStatus, ...] | None = None,
+) -> tuple[str, ...]:
+    resolved_statuses = statuses or _DEFAULT_CANCELLABLE_INSTANCE_STATUSES
+    return tuple(status.value for status in resolved_statuses)
+
+
 class SqlAlchemyNotificationUnitOfWork:
     def __init__(
         self,
@@ -909,6 +924,7 @@ class SqlAlchemyNotificationInstanceRepository:
         event_type: EventType,
         event_id: int,
         reason: str,
+        statuses: tuple[InstanceStatus, ...] | None = None,
     ) -> int:
         now = self._now_factory()
         result = await self._session.execute(
@@ -917,14 +933,7 @@ class SqlAlchemyNotificationInstanceRepository:
                 NotificationInstance.tenant_id == self._tenant_id,
                 NotificationInstance.event_type == event_type.value,
                 NotificationInstance.event_id == event_id,
-                NotificationInstance.status.in_(
-                    (
-                        InstanceStatus.SHADOW.value,
-                        InstanceStatus.SCHEDULED.value,
-                        InstanceStatus.SKIPPED.value,
-                        InstanceStatus.SUPPRESSED.value,
-                    )
-                ),
+                NotificationInstance.status.in_(_cancellable_instance_status_values(statuses)),
             )
             .values(
                 status=InstanceStatus.CANCELLED.value,
@@ -943,6 +952,7 @@ class SqlAlchemyNotificationInstanceRepository:
         rule_ids: tuple[int, ...],
         learner_ids: tuple[int, ...],
         reason: str,
+        statuses: tuple[InstanceStatus, ...] | None = None,
     ) -> int:
         unique_rule_ids = tuple(sorted(set(rule_ids)))
         unique_learner_ids = tuple(sorted(set(learner_ids)))
@@ -958,14 +968,7 @@ class SqlAlchemyNotificationInstanceRepository:
             .where(
                 NotificationInstance.tenant_id == self._tenant_id,
                 NotificationInstance.learner_id.in_(unique_learner_ids),
-                NotificationInstance.status.in_(
-                    (
-                        InstanceStatus.SHADOW.value,
-                        InstanceStatus.SCHEDULED.value,
-                        InstanceStatus.SKIPPED.value,
-                        InstanceStatus.SUPPRESSED.value,
-                    )
-                ),
+                NotificationInstance.status.in_(_cancellable_instance_status_values(statuses)),
                 or_(
                     NotificationInstance.rule_id.in_(unique_rule_ids),
                     NotificationInstance.id.in_(component_instance_ids),
@@ -1023,6 +1026,7 @@ class SqlAlchemyNotificationInstanceRepository:
         *,
         rule_ids: tuple[int, ...],
         reason: str,
+        statuses: tuple[InstanceStatus, ...] | None = None,
     ) -> int:
         unique_rule_ids = tuple(sorted(set(rule_ids)))
         if not unique_rule_ids:
@@ -1036,14 +1040,7 @@ class SqlAlchemyNotificationInstanceRepository:
             update(NotificationInstance)
             .where(
                 NotificationInstance.tenant_id == self._tenant_id,
-                NotificationInstance.status.in_(
-                    (
-                        InstanceStatus.SHADOW.value,
-                        InstanceStatus.SCHEDULED.value,
-                        InstanceStatus.SKIPPED.value,
-                        InstanceStatus.SUPPRESSED.value,
-                    )
-                ),
+                NotificationInstance.status.in_(_cancellable_instance_status_values(statuses)),
                 or_(
                     NotificationInstance.rule_id.in_(unique_rule_ids),
                     NotificationInstance.id.in_(component_instance_ids),
@@ -1066,7 +1063,12 @@ class SqlAlchemyNotificationInstanceRepository:
         now: datetime,
         limit: int,
         lease_seconds: int,
+        delivery_grace_seconds: int = 0,
     ) -> ClaimDueNotificationsResult:
+        await self._expire_stale_due_instances(
+            now=now,
+            delivery_grace_seconds=max(0, delivery_grace_seconds),
+        )
         result = await self._session.execute(
             _due_instances_for_claim_stmt(self._tenant_id, now=now, limit=limit)
         )
@@ -1113,6 +1115,36 @@ class SqlAlchemyNotificationInstanceRepository:
                 for instance, attempt in zip(instances, attempts)
             )
         )
+
+    async def _expire_stale_due_instances(
+        self,
+        *,
+        now: datetime,
+        delivery_grace_seconds: int,
+    ) -> int:
+        if delivery_grace_seconds < 0:
+            return 0
+
+        expiry_cutoff = now - timedelta(seconds=delivery_grace_seconds)
+        result = await self._session.execute(
+            update(NotificationInstance)
+            .where(
+                NotificationInstance.tenant_id == self._tenant_id,
+                NotificationInstance.status == InstanceStatus.SCHEDULED.value,
+                NotificationInstance.delivery_enabled.is_(True),
+                NotificationInstance.effective_scheduled_for < expiry_cutoff,
+                ~exists().where(NotificationResponse.notification_instance_id == NotificationInstance.id),
+            )
+            .values(
+                status=InstanceStatus.EXPIRED.value,
+                status_reason="delivery_window_exceeded",
+                delivery_enabled=False,
+                processing_started_at=None,
+                processing_expires_at=None,
+                updated_at=now,
+            )
+        )
+        return int(result.rowcount or 0)
 
     async def _get_instance_model(self, instance_id: int) -> NotificationInstance | None:
         result = await self._session.execute(
@@ -1801,6 +1833,14 @@ class SqlAlchemyNotificationSettingsRepository:
 
         await self._session.flush()
         return await self.get_settings()
+
+    async def clear_learner_modes(self) -> None:
+        await self._session.execute(
+            delete(LearnerNotificationMode).where(
+                LearnerNotificationMode.tenant_id == self._tenant_id
+            )
+        )
+        await self._session.flush()
 
     async def list_learner_modes(self) -> tuple[LearnerNotificationModeRecord, ...]:
         tenant_mode = await self._tenant_mode()

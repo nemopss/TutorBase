@@ -299,7 +299,10 @@ async def _deliver_for_tenant(
     limit: int,
 ) -> dict:
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
-    claim_result = await ClaimDueNotificationsUseCase(uow).execute(limit=limit)
+    claim_result = await ClaimDueNotificationsUseCase(uow).execute(
+        limit=limit,
+        delivery_grace_seconds=config.NOTIFICATIONS_DELIVERY_GRACE_SECONDS,
+    )
     renderer = SqlAlchemyNotificationRenderer(session, tenant_id=tenant_id)
     adapter = TelegramNotificationChannelAdapter(bot)
 

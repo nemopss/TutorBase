@@ -57,6 +57,10 @@ class MaterializeActiveRulesUseCase:
         shadow: bool = False,
         created_by_user_id: int | None = None,
     ) -> MaterializeActiveRulesResult:
+        live_materialization = _is_live_materialization(
+            delivery_enabled=delivery_enabled,
+            shadow=shadow,
+        )
         job = await self._uow.jobs.create_job(
             NotificationJobDraft(
                 job_type="materialize_active_rules",
@@ -70,7 +74,11 @@ class MaterializeActiveRulesUseCase:
             )
         )
         job = await self._uow.jobs.mark_running(job.job_id)
-        await _cancel_future_instances_for_all_rules(self._uow)
+        cancelled_count = await _cancel_persisted_instances_for_materialization(
+            self._uow,
+            delivery_enabled=delivery_enabled,
+            shadow=shadow,
+        )
         rules = await self._uow.rules.list_active_rules()
         materialization = await _materialize_rules(
             self._uow,
@@ -84,11 +92,13 @@ class MaterializeActiveRulesUseCase:
                 delivery_enabled=delivery_enabled,
                 shadow=shadow,
             ),
+            skip_past_due=live_materialization,
         )
         job = await self._uow.jobs.mark_succeeded(
             job.job_id,
             result_summary={
                 "rules_count": len(rules),
+                "cancelled_count": cancelled_count,
                 "planned_count": materialization.upsert_result.planned_count,
                 "upserted_count": materialization.upsert_result.upserted_count,
                 "warnings": list(materialization.warnings),
@@ -111,25 +121,37 @@ class RunMaterializeActiveRulesJobUseCase:
         if job.status != "running":
             raise ValueError(f"Notification job {job.job_id} is not running")
 
-        await _cancel_future_instances_for_all_rules(self._uow)
+        delivery_enabled = bool(job.scope.get("delivery_enabled", True))
+        shadow = bool(job.scope.get("shadow", False))
+        live_materialization = _is_live_materialization(
+            delivery_enabled=delivery_enabled,
+            shadow=shadow,
+        )
+        cancelled_count = await _cancel_persisted_instances_for_materialization(
+            self._uow,
+            delivery_enabled=delivery_enabled,
+            shadow=shadow,
+        )
         rules = await self._uow.rules.list_active_rules()
         materialization = await _materialize_rules(
             self._uow,
             rules,
             horizon_days=int(job.scope.get("horizon_days", 30)),
             limit=int(job.scope.get("limit", 100)),
-            delivery_enabled=bool(job.scope.get("delivery_enabled", True)),
-            shadow=bool(job.scope.get("shadow", False)),
+            delivery_enabled=delivery_enabled,
+            shadow=shadow,
             commit=False,
             respect_rollout_modes=_should_apply_rollout_modes(
-                delivery_enabled=bool(job.scope.get("delivery_enabled", True)),
-                shadow=bool(job.scope.get("shadow", False)),
+                delivery_enabled=delivery_enabled,
+                shadow=shadow,
             ),
+            skip_past_due=live_materialization,
         )
         succeeded = await self._uow.jobs.mark_succeeded(
             job.job_id,
             result_summary={
                 "rules_count": len(rules),
+                "cancelled_count": cancelled_count,
                 "planned_count": materialization.upsert_result.planned_count,
                 "upserted_count": materialization.upsert_result.upserted_count,
                 "warnings": list(materialization.warnings),
@@ -139,9 +161,12 @@ class RunMaterializeActiveRulesJobUseCase:
         return MaterializeActiveRulesResult(job=succeeded, materialization=materialization)
 
 
-async def _cancel_future_instances_for_all_rules(
+async def _cancel_persisted_instances_for_materialization(
     uow: NotificationMaterializationUnitOfWork,
-) -> None:
+    *,
+    delivery_enabled: bool,
+    shadow: bool,
+) -> int:
     all_rules = await uow.rules.list_rules(include_archived=True)
     all_rule_ids = tuple(
         sorted(
@@ -151,16 +176,38 @@ async def _cancel_future_instances_for_all_rules(
         )
     )
     if not all_rule_ids:
-        return
+        return 0
 
-    await uow.instances.cancel_future_instances_for_rules(
+    return await uow.instances.cancel_future_instances_for_rules(
         rule_ids=all_rule_ids,
-        reason="rematerialized:all_rules",
+        reason=_rematerialization_reason(shadow=shadow),
+        statuses=_rematerialization_cancel_statuses(
+            delivery_enabled=delivery_enabled,
+            shadow=shadow,
+        ),
     )
 
 
 def _should_apply_rollout_modes(*, delivery_enabled: bool, shadow: bool) -> bool:
     return delivery_enabled and not shadow
+
+
+def _is_live_materialization(*, delivery_enabled: bool, shadow: bool) -> bool:
+    return delivery_enabled and not shadow
+
+
+def _rematerialization_reason(*, shadow: bool) -> str:
+    return "rematerialized:shadow_all_rules" if shadow else "rematerialized:all_rules"
+
+
+def _rematerialization_cancel_statuses(
+    *,
+    delivery_enabled: bool,
+    shadow: bool,
+) -> tuple[InstanceStatus, ...] | None:
+    if shadow and not delivery_enabled:
+        return (InstanceStatus.SHADOW,)
+    return None
 
 
 async def _materialize_rules(
