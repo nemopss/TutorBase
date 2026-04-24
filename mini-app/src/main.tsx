@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider } from './auth/AuthProvider';
 import { ThemeProvider } from './theme/ThemeProvider';
 import App from './App';
+import { appEnv } from './env';
 
 // Initialize i18n before rendering
 import './i18n';
@@ -25,16 +26,18 @@ const queryClient = new QueryClient({
   },
 });
 
+const appTree = (
+  <BrowserRouter>
+    <QueryClientProvider client={queryClient}>
+      <AuthProvider>
+        <ThemeProvider>
+          <App />
+        </ThemeProvider>
+      </AuthProvider>
+    </QueryClientProvider>
+  </BrowserRouter>
+);
+
 createRoot(document.getElementById('root')!).render(
-  <StrictMode>
-    <BrowserRouter>
-      <QueryClientProvider client={queryClient}>
-        <AuthProvider>
-          <ThemeProvider>
-            <App />
-          </ThemeProvider>
-        </AuthProvider>
-      </QueryClientProvider>
-    </BrowserRouter>
-  </StrictMode>
+  appEnv.isDev ? appTree : <StrictMode>{appTree}</StrictMode>
 );

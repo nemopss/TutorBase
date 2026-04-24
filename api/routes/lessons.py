@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, HTTPException, status, Response, Query
@@ -40,6 +41,8 @@ async def list_all_lessons_endpoint(
     status: Optional[str] = None,
     learner_id: Optional[int] = None,
     search: Optional[str] = None,
+    from_date: datetime | None = Query(None),
+    to_date: datetime | None = Query(None),
     sort_by: str = 'scheduled_at',
     sort_order: str = 'asc',
     session: AsyncSession = Depends(get_session),
@@ -67,6 +70,8 @@ async def list_all_lessons_endpoint(
         status=status, 
         learner_id=learner_id,
         search=search,
+        from_date=from_date,
+        to_date=to_date,
         limit=pagination.limit, 
         offset=pagination.offset,
         sort_by=sort_by,

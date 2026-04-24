@@ -52,6 +52,15 @@ function ResponsiveDataView<T extends object>({
   onItemClick,
 }: ResponsiveDataViewProps<T>): React.ReactElement {
   const { isMobile } = useResponsive();
+  const paginationConfig = pagination && typeof pagination === 'object' ? pagination : null;
+  const handleMobilePaginationChange = paginationConfig?.onChange ?? ((page: number, pageSize: number) => {
+    tableProps?.onChange?.(
+      { current: page, pageSize, total: paginationConfig?.total } as never,
+      {} as never,
+      {} as never,
+      { currentDataSource: data, action: 'paginate' } as never,
+    );
+  });
 
   // Loading state
   if (loading) {
@@ -101,8 +110,9 @@ function ResponsiveDataView<T extends object>({
         {pagination !== false && data.length > 0 && (
           <div style={{ display: 'flex', justifyContent: 'center', padding: spacing.md }}>
             <Pagination
-              {...(typeof pagination === 'object' ? pagination : {})}
-              total={pagination && typeof pagination === 'object' ? pagination.total : data.length}
+              {...(paginationConfig ?? {})}
+              total={paginationConfig?.total ?? data.length}
+              onChange={handleMobilePaginationChange}
               size="small"
               showSizeChanger={false}
             />

@@ -7,6 +7,7 @@ jest.mock('../../services/api', () => ({
   __esModule: true,
   setBrowserRefreshHandler: jest.fn(),
   default: {
+    get: jest.fn(() => Promise.resolve({ data: null })),
     post: jest.fn(),
     defaults: {
       headers: {
@@ -17,6 +18,7 @@ jest.mock('../../services/api', () => ({
 }));
 
 const api = require('../../services/api').default as {
+  get: jest.Mock;
   post: jest.Mock;
   defaults: { headers: { common: Record<string, string> } };
 };
@@ -42,6 +44,16 @@ const localStorageMock = {
 };
 Object.defineProperty(window, 'localStorage', {
   value: localStorageMock
+});
+
+const sessionStorageMock = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  clear: jest.fn(),
+};
+Object.defineProperty(window, 'sessionStorage', {
+  value: sessionStorageMock
 });
 
 // Mock Telegram WebApp
@@ -103,6 +115,7 @@ describe('AuthProvider', () => {
     postMock.mockImplementation(() => Promise.resolve(defaultAuthResponse));
     setBrowserRefreshHandler.mockImplementation(() => undefined);
     localStorageMock.getItem.mockReturnValue(null);
+    sessionStorageMock.getItem.mockReturnValue(null);
     window.Telegram = { WebApp: mockTelegramWebApp } as any;
     Object.keys(api.defaults.headers.common).forEach((key) => delete api.defaults.headers.common[key]);
   });
@@ -151,7 +164,10 @@ describe('AuthProvider', () => {
     expect(postMock).toHaveBeenCalledWith('/auth/browser/refresh', undefined, {
       withCredentials: true,
     });
-    expect(localStorageMock.setItem).not.toHaveBeenCalled();
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('accessToken', expect.anything());
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('refreshToken', expect.anything());
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('authUser', expect.any(String));
+    expect(sessionStorageMock.setItem).toHaveBeenCalledWith('authUser', expect.any(String));
     expect(api.defaults.headers.common['Authorization']).toBe(`Bearer ${validAccessToken}`);
   });
 });

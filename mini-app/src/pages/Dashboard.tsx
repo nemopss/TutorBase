@@ -1,7 +1,7 @@
-import React, { useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, List, Row, Spin, Space, Typography } from 'antd';
+import { Alert, Button, Card, Col, List, Row, Skeleton, Spin, Space, Typography } from 'antd';
 import {
   CloseOutlined,
   CalendarOutlined,
@@ -149,9 +149,27 @@ interface InviteTokenListResponse {
   items: unknown[];
 }
 
-const fetchLessonsPage = async (limit: number, offset: number): Promise<LessonListResponse> => {
+const DASHBOARD_LESSON_HISTORY_DAYS = 14;
+const DASHBOARD_LESSON_FUTURE_DAYS = 365;
+
+const getDashboardLessonRange = () => {
+  const now = dayjs().tz(DEFAULT_TIMEZONE);
+  return {
+    fromDate: now.startOf('day').subtract(DASHBOARD_LESSON_HISTORY_DAYS, 'day').toISOString(),
+    toDate: now.endOf('day').add(DASHBOARD_LESSON_FUTURE_DAYS, 'day').toISOString(),
+  };
+};
+
+const fetchLessonsPage = async (
+  limit: number,
+  offset: number,
+  fromDate: string,
+  toDate: string,
+): Promise<LessonListResponse> => {
   const { data } = await api.get('/lessons', {
     params: {
+      from_date: fromDate,
+      to_date: toDate,
       sort_by: 'scheduled_at',
       sort_order: 'asc',
       limit,
@@ -161,14 +179,14 @@ const fetchLessonsPage = async (limit: number, offset: number): Promise<LessonLi
   return data;
 };
 
-const fetchDashboardLessons = async (): Promise<LessonListResponse> => {
+const fetchDashboardLessons = async (fromDate: string, toDate: string): Promise<LessonListResponse> => {
   const limit = 100;
-  const firstPage = await fetchLessonsPage(limit, 0);
+  const firstPage = await fetchLessonsPage(limit, 0, fromDate, toDate);
   let allItems = [...firstPage.items];
   let offset = limit;
 
   while (offset < firstPage.total && offset < 1000) {
-    const page = await fetchLessonsPage(limit, offset);
+    const page = await fetchLessonsPage(limit, offset, fromDate, toDate);
     allItems = [...allItems, ...page.items];
     offset += limit;
   }
@@ -294,6 +312,8 @@ const Dashboard: React.FC = () => {
   const colors = resolvedTheme.colors;
   const topRowHeight = isMobile ? undefined : 432;
   const tileRadius = 10;
+  const [loadDeferredPanels, setLoadDeferredPanels] = useState(false);
+  const dashboardLessonRange = useMemo(() => getDashboardLessonRange(), []);
   const kpiPalette = {
     blue: '#1677ff',
     green: '#52c41a',
@@ -317,8 +337,8 @@ const Dashboard: React.FC = () => {
     isError: isErrorLessons,
     error: errorLessons,
   } = useQuery<LessonListResponse, Error>({
-    queryKey: ['dashboardLessons'],
-    queryFn: fetchDashboardLessons,
+    queryKey: ['dashboardLessons', dashboardLessonRange.fromDate, dashboardLessonRange.toDate],
+    queryFn: () => fetchDashboardLessons(dashboardLessonRange.fromDate, dashboardLessonRange.toDate),
   });
 
   const { data: packagesSummaryData } = useQuery<PackageListResponse, Error>({
@@ -329,26 +349,31 @@ const Dashboard: React.FC = () => {
   const { data: activePackagesData, isLoading: isLoadingActivePackages } = useQuery<ActivePackageListResponse, Error>({
     queryKey: ['dashboardActivePackages'],
     queryFn: fetchActivePackages,
+    enabled: loadDeferredPanels,
   });
 
   const { data: notificationActivityData, isLoading: isLoadingNotificationActivity } = useQuery<NotificationActivity[], Error>({
     queryKey: ['dashboardNotificationActivity'],
     queryFn: fetchNotificationActivity,
+    enabled: loadDeferredPanels,
   });
 
   const { data: failedNotificationInstancesData, isLoading: isLoadingFailedNotificationInstances } = useQuery<NotificationInstance[], Error>({
     queryKey: ['dashboardFailedNotificationInstances'],
     queryFn: () => fetchNotificationInstancesByStatus('failed'),
+    enabled: loadDeferredPanels,
   });
 
   const { data: queuedNotificationInstancesData, isLoading: isLoadingQueuedNotificationInstances } = useQuery<NotificationInstance[], Error>({
     queryKey: ['dashboardQueuedNotificationInstances'],
     queryFn: fetchNotificationQueueInstances,
+    enabled: loadDeferredPanels,
   });
 
   const { data: attentionDismissalsData, isLoading: isLoadingAttentionDismissals } = useQuery<DashboardAttentionDismissal[], Error>({
     queryKey: ['dashboardAttentionDismissals'],
     queryFn: fetchDashboardAttentionDismissals,
+    enabled: loadDeferredPanels,
   });
 
   const {
@@ -359,6 +384,7 @@ const Dashboard: React.FC = () => {
   } = useQuery<DashboardHistoryResponse, Error>({
     queryKey: ['dashboardHistory'],
     queryFn: fetchDashboardHistory,
+    enabled: loadDeferredPanels,
   });
 
   const { data: lessonsSummaryData } = useQuery<LessonListResponse, Error>({
@@ -398,6 +424,16 @@ const Dashboard: React.FC = () => {
       console.error('Dismiss dashboard attention item failed:', error);
     },
   });
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => {
+      setLoadDeferredPanels(true);
+    }, 220);
+
+    return () => {
+      window.clearTimeout(timer);
+    };
+  }, []);
 
   const allLessons = lessonsData?.items || [];
   const activePackages = activePackagesData?.items || [];
@@ -551,7 +587,8 @@ const Dashboard: React.FC = () => {
   }, [failedNotificationInstances, queuedNotificationInstances]);
 
   const isLoadingAttention =
-    isLoadingActivePackages
+    !loadDeferredPanels
+    || isLoadingActivePackages
     || isLoadingNotificationActivity
     || isLoadingFailedNotificationInstances
     || isLoadingQueuedNotificationInstances
@@ -767,44 +804,51 @@ const Dashboard: React.FC = () => {
       style={dashboardTileStyle}
       styles={{ body: { height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 } }}
     >
-      <div
-        style={{
-          display: 'flex',
-          flexDirection: 'column',
-          gap: spacing.md,
-          height: '100%',
-          minHeight: 0,
-          overflowY: 'auto',
-          paddingRight: 2,
-        }}
-      >
-        {upcomingSections.map((section) => (
-          <div
-            key={section.key}
-            style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
-          >
-            <Text type="secondary" style={{ fontSize: 12 }}>
-              {section.title}
-            </Text>
-            {section.lessons.length > 0 ? (
-              section.lessons.map((lesson) => renderLessonRow(lesson))
-            ) : (
-              <div
-                style={{
-                  minHeight: 44,
-                  display: 'flex',
-                  alignItems: 'center',
-                  paddingInline: spacing.sm,
-                  borderRadius: tileRadius,
-                  background: colors.bgTertiary,
-                }}
-              >
-                <Text type="secondary">{section.emptyText}</Text>
-              </div>
-            )}
-          </div>
-        ))}
-      </div>
+      {isLoadingLessons ? (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
+          <Skeleton active paragraph={{ rows: 4 }} title={{ width: '42%' }} />
+          <Skeleton active paragraph={{ rows: 4 }} title={{ width: '42%' }} />
+        </div>
+      ) : (
+        <div
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: spacing.md,
+            height: '100%',
+            minHeight: 0,
+            overflowY: 'auto',
+            paddingRight: 2,
+          }}
+        >
+          {upcomingSections.map((section) => (
+            <div
+              key={section.key}
+              style={{ display: 'flex', flexDirection: 'column', gap: 4 }}
+            >
+              <Text type="secondary" style={{ fontSize: 12 }}>
+                {section.title}
+              </Text>
+              {section.lessons.length > 0 ? (
+                section.lessons.map((lesson) => renderLessonRow(lesson))
+              ) : (
+                <div
+                  style={{
+                    minHeight: 44,
+                    display: 'flex',
+                    alignItems: 'center',
+                    paddingInline: spacing.sm,
+                    borderRadius: tileRadius,
+                    background: colors.bgTertiary,
+                  }}
+                >
+                  <Text type="secondary">{section.emptyText}</Text>
+                </div>
+              )}
+            </div>
+          ))}
+        </div>
+      )}
     </Card>
   );
 
@@ -814,11 +858,15 @@ const Dashboard: React.FC = () => {
       style={dashboardTileStyle}
       styles={{ body: { padding: isMobile ? 12 : 16, height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 } }}
     >
-      <DashboardMiniWeekCalendar
-        lessons={allLessons}
-        timezone={DEFAULT_TIMEZONE}
-        onOpenCalendar={() => navigate('/lessons')}
-      />
+      {isLoadingLessons ? (
+        <Skeleton active paragraph={{ rows: 8 }} title={{ width: '48%' }} />
+      ) : (
+        <DashboardMiniWeekCalendar
+          lessons={allLessons}
+          timezone={DEFAULT_TIMEZONE}
+          onOpenCalendar={() => navigate('/lessons')}
+        />
+      )}
     </Card>
   );
 
@@ -976,7 +1024,7 @@ const Dashboard: React.FC = () => {
       style={historyTileStyle}
       styles={{ body: { padding: isMobile ? 12 : 16 } }}
     >
-      {isLoadingDashboardHistory ? (
+      {!loadDeferredPanels || isLoadingDashboardHistory ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: spacing.lg }}>
           <Spin size="small" />
         </div>
@@ -1004,7 +1052,7 @@ const Dashboard: React.FC = () => {
       style={historyTileStyle}
       styles={{ body: { padding: isMobile ? 12 : 16 } }}
     >
-      {isLoadingDashboardHistory ? (
+      {!loadDeferredPanels || isLoadingDashboardHistory ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: spacing.lg }}>
           <Spin size="small" />
         </div>
@@ -1020,10 +1068,6 @@ const Dashboard: React.FC = () => {
       )}
     </Card>
   );
-
-  if (isLoadingLessons) {
-    return <Spin size="large" />;
-  }
 
   if (isErrorLessons) {
     return <Alert message={t('errors.fetchLessons')} description={errorLessons?.message} type="error" />;

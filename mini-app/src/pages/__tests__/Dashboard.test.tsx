@@ -118,7 +118,7 @@ describe('Dashboard', () => {
     );
     expect(await screen.findByRole('heading', { name: 'Dashboard' })).toBeInTheDocument();
     expect(screen.getByText(/Upcoming lessons/i)).toBeInTheDocument();
-    expect(screen.getByText('John Doe')).toBeInTheDocument();
+    expect(await screen.findByText('John Doe')).toBeInTheDocument();
   });
 
   it('treats missing dashboard attention dismissals endpoint as non-blocking', async () => {

@@ -1,6 +1,14 @@
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
+import isoWeek from 'dayjs/plugin/isoWeek';
 import type { QueryClient } from '@tanstack/react-query';
 import api from '../services/api';
+import { DEFAULT_TIMEZONE } from '../utils/datetime';
+
+dayjs.extend(utc);
+dayjs.extend(timezone);
+dayjs.extend(isoWeek);
 
 type RouteLoader = () => Promise<unknown>;
 
@@ -21,6 +29,21 @@ type PackageListResponse<T = unknown> = {
 
 const LESSONS_PAGE_LIMIT = 100;
 const PACKAGES_PAGE_LIMIT = 100;
+const DASHBOARD_LESSON_HISTORY_DAYS = 14;
+const DASHBOARD_LESSON_FUTURE_DAYS = 365;
+
+const getDashboardLessonRange = () => {
+  const now = dayjs().tz(DEFAULT_TIMEZONE);
+  return {
+    fromDate: now.startOf('day').subtract(DASHBOARD_LESSON_HISTORY_DAYS, 'day').toISOString(),
+    toDate: now.endOf('day').add(DASHBOARD_LESSON_FUTURE_DAYS, 'day').toISOString(),
+  };
+};
+
+const getInitialCalendarRange = () => ({
+  from: dayjs().tz(DEFAULT_TIMEZONE).startOf('month').startOf('isoWeek').subtract(14, 'day').toISOString(),
+  to: dayjs().tz(DEFAULT_TIMEZONE).endOf('month').endOf('isoWeek').add(21, 'day').toISOString(),
+});
 
 export const loadDashboardPage = () => import('../pages/Dashboard');
 export const loadPackagesPage = () => import('../pages/Packages');
@@ -97,11 +120,19 @@ export const preloadRouteModule = async (pathname: string) => {
   await routeLoaders[routeKey]().catch(() => undefined);
 };
 
-const fetchLessons = async (status: string | null, search: string, limit: number, offset: number): Promise<LessonListResponse> => {
+const fetchLessons = async (
+  status: string | null,
+  search: string,
+  limit: number,
+  offset: number,
+  range: { from: string; to: string },
+): Promise<LessonListResponse> => {
   const { data } = await api.get('/lessons', {
     params: {
       status: status || undefined,
       search: search || undefined,
+      from_date: range.from,
+      to_date: range.to,
       limit,
       offset,
       sort_by: 'scheduled_at',
@@ -111,13 +142,13 @@ const fetchLessons = async (status: string | null, search: string, limit: number
   return data;
 };
 
-const fetchAllLessons = async (): Promise<LessonListResponse> => {
-  const firstPage = await fetchLessons(null, '', LESSONS_PAGE_LIMIT, 0);
+const fetchAllLessons = async (range: { from: string; to: string }): Promise<LessonListResponse> => {
+  const firstPage = await fetchLessons(null, '', LESSONS_PAGE_LIMIT, 0, range);
   let allItems = [...firstPage.items];
   let offset = LESSONS_PAGE_LIMIT;
 
   while (offset < firstPage.total && offset < 1000) {
-    const page = await fetchLessons(null, '', LESSONS_PAGE_LIMIT, offset);
+    const page = await fetchLessons(null, '', LESSONS_PAGE_LIMIT, offset, range);
     allItems = [...allItems, ...page.items];
     offset += LESSONS_PAGE_LIMIT;
   }
@@ -157,6 +188,29 @@ const fetchPackages = async (status: 'active' | 'completed' | 'draft' | 'cancell
   return data;
 };
 
+const fetchActivePackages = async () => {
+  const firstPage = await fetchPackages('active');
+  let allItems = [...firstPage.items];
+  let offset = PACKAGES_PAGE_LIMIT;
+
+  while (offset < firstPage.total && offset < 1000) {
+    const { data } = await api.get<PackageListResponse>('/packages', {
+      params: {
+        status_filter: 'active',
+        limit: PACKAGES_PAGE_LIMIT,
+        offset,
+      },
+    });
+    allItems = [...allItems, ...data.items];
+    offset += PACKAGES_PAGE_LIMIT;
+  }
+
+  return {
+    total: firstPage.total,
+    items: allItems,
+  };
+};
+
 const fetchGroups = async () => {
   const { data } = await api.get('/groups');
   return data;
@@ -172,6 +226,38 @@ const fetchNotificationRules = async () => {
     params: { include_archived: true },
   });
   return data;
+};
+
+const fetchRemindersList = async () => {
+  const { data } = await api.get('/reminders', {
+    params: {
+      offset: 0,
+      limit: 10,
+    },
+  });
+  return data;
+};
+
+const fetchPackagesForReminders = async () => {
+  let allItems: unknown[] = [];
+  let offset = 0;
+  const limit = PACKAGES_PAGE_LIMIT;
+  let hasMore = true;
+
+  while (hasMore) {
+    const { data } = await api.get('/packages', {
+      params: { limit, offset },
+    });
+    allItems = [...allItems, ...data.items];
+    hasMore = Boolean(data.has_more);
+    offset += limit;
+
+    if (offset > 10000) {
+      break;
+    }
+  }
+
+  return { items: allItems, total: allItems.length };
 };
 
 const fetchAnalyticsLessons = async (fromDate: string, toDate: string) => {
@@ -219,10 +305,11 @@ const fetchAnalyticsPackages = async () => {
 };
 
 const prefetchDashboardData = async (queryClient: QueryClient) => {
+  const range = getDashboardLessonRange();
   await Promise.allSettled([
     queryClient.prefetchQuery({
-      queryKey: ['dashboardLessons'],
-      queryFn: fetchAllLessons,
+      queryKey: ['dashboardLessons', range.fromDate, range.toDate],
+      queryFn: () => fetchAllLessons({ from: range.fromDate, to: range.toDate }),
     }),
     queryClient.prefetchQuery({
       queryKey: ['dashboardPackagesSummary'],
@@ -233,15 +320,7 @@ const prefetchDashboardData = async (queryClient: QueryClient) => {
     }),
     queryClient.prefetchQuery({
       queryKey: ['dashboardActivePackages'],
-      queryFn: async () => {
-        const { data } = await api.get('/packages', {
-          params: {
-            status_filter: 'active',
-            limit: PACKAGES_PAGE_LIMIT,
-          },
-        });
-        return data;
-      },
+      queryFn: fetchActivePackages,
     }),
     queryClient.prefetchQuery({
       queryKey: ['dashboardHistory'],
@@ -254,9 +333,10 @@ const prefetchDashboardData = async (queryClient: QueryClient) => {
 };
 
 const prefetchLessonsData = async (queryClient: QueryClient) => {
+  const range = getInitialCalendarRange();
   await queryClient.prefetchQuery({
-    queryKey: ['lessons', 'calendar', 'all'],
-    queryFn: fetchAllLessons,
+    queryKey: ['lessons', 'calendar', range.from, range.to],
+    queryFn: () => fetchAllLessons(range),
   });
 };
 
@@ -307,6 +387,19 @@ const prefetchNotificationsData = async (queryClient: QueryClient) => {
   });
 };
 
+const prefetchRemindersData = async (queryClient: QueryClient) => {
+  await Promise.allSettled([
+    queryClient.prefetchQuery({
+      queryKey: ['reminders', 1, 10, null, null, null, ''],
+      queryFn: fetchRemindersList,
+    }),
+    queryClient.prefetchQuery({
+      queryKey: ['packagesForReminders'],
+      queryFn: fetchPackagesForReminders,
+    }),
+  ]);
+};
+
 const prefetchAnalyticsData = async (queryClient: QueryClient) => {
   const endDate = dayjs();
   const startDate = endDate.subtract(30, 'days');
@@ -336,6 +429,7 @@ const routeDataPrefetchers: Partial<Record<string, (queryClient: QueryClient) =>
   '/learners': prefetchLearnersData,
   '/finance/dashboard': prefetchFinanceData,
   '/notifications': prefetchNotificationsData,
+  '/reminders': prefetchRemindersData,
   '/groups': prefetchGroupsData,
   '/analytics': prefetchAnalyticsData,
 };

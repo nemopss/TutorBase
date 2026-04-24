@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Button, Typography } from 'antd';
 import { LeftOutlined, RightOutlined } from '@ant-design/icons';
 import dayjs, { Dayjs } from 'dayjs';
@@ -13,6 +13,7 @@ import { useResponsive } from '../../hooks/useResponsive';
 import { spacing } from '../../theme/tokens';
 import MonthDayCell from './MonthDayCell';
 import DayLessonsModal from './DayLessonsModal';
+import type { CalendarVisibleRange } from './CalendarContainer';
 
 dayjs.extend(utc);
 dayjs.extend(timezone);
@@ -29,6 +30,7 @@ interface MonthCalendarProps {
   onComplete?: (lessonId: number) => void;
   onCancel?: (lessonId: number) => void;
   onDelete?: (lessonId: number) => void;
+  onRangeChange?: (range: CalendarVisibleRange) => void;
 }
 
 const MonthCalendar: React.FC<MonthCalendarProps> = ({
@@ -40,6 +42,7 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
   onComplete,
   onCancel,
   onDelete,
+  onRangeChange,
 }) => {
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
@@ -168,6 +171,23 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
 
   // Calculate number of rows
   const rowCount = Math.ceil(monthDays.length / 7);
+  const visibleRange = useMemo<CalendarVisibleRange>(() => {
+    const visibleStart = currentMonth.startOf('month').startOf('isoWeek');
+    const visibleEnd = currentMonth.endOf('month').endOf('isoWeek');
+
+    return {
+      from: visibleStart.startOf('day').subtract(14, 'day').toISOString(),
+      to: visibleEnd.endOf('day').add(21, 'day').toISOString(),
+    };
+  }, [currentMonth]);
+
+  useEffect(() => {
+    if (!onRangeChange) {
+      return;
+    }
+
+    onRangeChange(visibleRange);
+  }, [onRangeChange, visibleRange]);
 
   return (
     <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 280px)', minHeight: 400 }}>

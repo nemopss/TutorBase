@@ -1,6 +1,7 @@
-import React, { useEffect, useMemo, useRef, useState } from 'react';
+import React, { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Alert, Layout, Menu, Drawer, Button, Space, Tag, Typography, type MenuProps } from 'antd';
+import { flushSync } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
   HomeOutlined,
@@ -22,9 +23,7 @@ import { useAuth } from '../../auth/AuthProvider';
 import { useResponsive } from '../../hooks/useResponsive';
 import {
   prefetchNavigationTarget,
-  prefetchStaffMoreNavigation,
-  prefetchStaffPrimaryNavigation,
-  prefetchStudentNavigation,
+  preloadRouteModule,
 } from '../../navigation/prefetch';
 import TenantIndicator from '../common/TenantIndicator';
 import TenantSwitcher from '../common/TenantSwitcher';
@@ -49,9 +48,11 @@ const MOBILE_NAV_GAP = 8;
 const MOBILE_NAV_PADDING = 10;
 const MORE_SHEET_CLOSE_THRESHOLD = 84;
 const MORE_BUTTON_WIDTH = 80;
+const MORE_SHEET_OPEN_OFFSET = 56;
 const MORE_SHEET_CLOSE_OFFSET = 220;
 const MORE_SHEET_CLOSE_ANIMATION_MS = 260;
 const MORE_SHEET_RETURN_ANIMATION_MS = 220;
+const NAVIGATION_PREFETCH_GRACE_MS = 120;
 
 const isFinanceRoute = (pathname: string) => (
   pathname.startsWith('/finance') || /^\/learners\/[^/]+\/finance$/.test(pathname)
@@ -88,6 +89,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [sheetDragOffset, setSheetDragOffset] = useState(0);
   const [isSheetClosing, setIsSheetClosing] = useState(false);
+  const [pendingNavigationPath, setPendingNavigationPath] = useState<string | null>(null);
+  const [isMoreSheetTransitioningOut, setIsMoreSheetTransitioningOut] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     return saved === 'true';
@@ -95,7 +98,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const sheetTouchStartY = useRef<number | null>(null);
   const sheetDragOffsetRef = useRef(0);
   const sheetCloseTimerRef = useRef<number | null>(null);
+  const sheetOpenAnimationFrameRef = useRef<number | null>(null);
   const hasMoreNavigationPrefetchedRef = useRef(false);
+  const prefetchPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
+  const warmedNavigationTargetsRef = useRef<Set<string>>(new Set());
   const { user, isSuperAdmin, tenantAccess, canSwitchTenant } = useAuth();
   const hasStaffAccess = isSuperAdmin || user?.role === 'teacher';
   const isStudent = user?.role === 'viewer';
@@ -311,8 +317,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   }, [isSuperAdmin, isStudent, t]);
 
   const activePrimaryKey = useMemo<string | null>(() => {
+    const navigationPath = pendingNavigationPath ?? location.pathname;
     const matchedItem = mobilePrimaryNavItems.find((item) => (
-      matchesNavItem(location.pathname, item.key)
+      matchesNavItem(navigationPath, item.key)
     ));
 
     if (matchedItem) {
@@ -320,7 +327,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
 
     return isStudent ? (mobilePrimaryNavItems[0]?.key ?? '/') : null;
-  }, [isStudent, location.pathname, mobilePrimaryNavItems]);
+  }, [isStudent, location.pathname, mobilePrimaryNavItems, pendingNavigationPath]);
 
   const activePrimaryIndex = useMemo(() => {
     if (activePrimaryKey === null) {
@@ -335,25 +342,39 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     if (sheetCloseTimerRef.current !== null) {
       window.clearTimeout(sheetCloseTimerRef.current);
     }
+    if (sheetOpenAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(sheetOpenAnimationFrameRef.current);
+    }
   }, []);
 
   useEffect(() => {
-    const warmupTimer = window.setTimeout(() => {
-      if (isStudent) {
-        void prefetchStudentNavigation(queryClient);
-        return;
-      }
-
-      void prefetchStaffPrimaryNavigation(queryClient);
-    }, 180);
-
-    return () => {
-      window.clearTimeout(warmupTimer);
-    };
-  }, [isStudent, queryClient]);
+    if (isMoreSheetTransitioningOut) {
+      return;
+    }
+    setPendingNavigationPath(null);
+  }, [isMoreSheetTransitioningOut, location.pathname]);
 
   const handleNavigationIntent = (pathname: string) => {
-    void prefetchNavigationTarget(queryClient, pathname);
+    if (warmedNavigationTargetsRef.current.has(pathname)) {
+      return Promise.resolve();
+    }
+
+    const existingPromise = prefetchPromisesRef.current.get(pathname);
+    if (existingPromise) {
+      return existingPromise;
+    }
+
+    const nextPromise = prefetchNavigationTarget(queryClient, pathname)
+      .then(() => {
+        warmedNavigationTargetsRef.current.add(pathname);
+      })
+      .catch(() => undefined)
+      .finally(() => {
+        prefetchPromisesRef.current.delete(pathname);
+      });
+
+    prefetchPromisesRef.current.set(pathname, nextPromise);
+    return nextPromise;
   };
 
   const warmMoreNavigation = () => {
@@ -362,13 +383,17 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
 
     hasMoreNavigationPrefetchedRef.current = true;
-    void prefetchStaffMoreNavigation(queryClient, isSuperAdmin);
+    void Promise.allSettled(mobileMoreItems.map((item) => preloadRouteModule(item.key)));
   };
 
   const resetMoreSheetState = () => {
     if (sheetCloseTimerRef.current !== null) {
       window.clearTimeout(sheetCloseTimerRef.current);
       sheetCloseTimerRef.current = null;
+    }
+    if (sheetOpenAnimationFrameRef.current !== null) {
+      window.cancelAnimationFrame(sheetOpenAnimationFrameRef.current);
+      sheetOpenAnimationFrameRef.current = null;
     }
     sheetTouchStartY.current = null;
     sheetDragOffsetRef.current = 0;
@@ -379,12 +404,22 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const openMoreSheet = () => {
     warmMoreNavigation();
     resetMoreSheetState();
+    setIsMoreSheetTransitioningOut(false);
+    const openOffset = typeof window !== 'undefined'
+      ? Math.min(MORE_SHEET_OPEN_OFFSET, Math.round(window.innerHeight * 0.08))
+      : MORE_SHEET_OPEN_OFFSET;
+    sheetDragOffsetRef.current = openOffset;
+    setSheetDragOffset(openOffset);
     setMoreSheetOpen(true);
+    sheetOpenAnimationFrameRef.current = window.requestAnimationFrame(() => {
+      sheetOpenAnimationFrameRef.current = null;
+      sheetDragOffsetRef.current = 0;
+      setSheetDragOffset(0);
+    });
   };
 
   const closeMoreSheet = () => {
-    resetMoreSheetState();
-    setMoreSheetOpen(false);
+    triggerMoreSheetCloseAnimation();
   };
 
   const triggerMoreSheetCloseAnimation = () => {
@@ -446,18 +481,52 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   const handleMobilePrimaryAction = (item: MobileNavItem) => {
-    closeMoreSheet();
-    if (!matchesNavItem(location.pathname, item.key)) {
-      navigate(item.key);
+    if (matchesNavItem(location.pathname, item.key)) {
+      flushSync(() => {
+        closeMoreSheet();
+        setPendingNavigationPath(null);
+      });
+      return;
     }
+
+    flushSync(() => {
+      closeMoreSheet();
+      setPendingNavigationPath(item.key);
+    });
+    window.requestAnimationFrame(() => {
+      startTransition(() => {
+        navigate(item.key);
+      });
+    });
   };
 
   const handleMobileMoreNavigation = (key: string) => {
-    closeMoreSheet();
-
-    if (!matchesNavItem(location.pathname, key)) {
-      navigate(key);
+    if (matchesNavItem(location.pathname, key)) {
+      flushSync(() => {
+        closeMoreSheet();
+        setPendingNavigationPath(null);
+      });
+      return;
     }
+
+    flushSync(() => {
+      setIsMoreSheetTransitioningOut(true);
+      setPendingNavigationPath(key);
+      triggerMoreSheetCloseAnimation();
+    });
+    const navigationWarmup = handleNavigationIntent(key);
+    window.requestAnimationFrame(() => {
+      void Promise.race([
+        navigationWarmup,
+        new Promise<void>((resolve) => {
+          window.setTimeout(resolve, NAVIGATION_PREFETCH_GRACE_MS);
+        }),
+      ]).finally(() => {
+        startTransition(() => {
+          navigate(key);
+        });
+      });
+    });
   };
 
   const menuContent = (
@@ -558,7 +627,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const navGlassBackground = isDark ? 'rgba(34, 39, 48, 0.58)' : 'rgba(255, 255, 255, 0.72)';
   const navActiveBackground = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(35, 131, 226, 0.12)';
-  const isMoreButtonActive = !isStudent && (moreSheetOpen || activePrimaryKey === null);
+  const isMoreButtonActive = !isStudent && (
+    moreSheetOpen
+    || activePrimaryKey === null
+    || (pendingNavigationPath !== null && activePrimaryKey === null)
+  );
 
   const mobileBottomNav = isMobile ? (
     <div style={{
@@ -611,6 +684,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
               <button
                 key={item.key}
                 type="button"
+                onPointerDown={() => handleNavigationIntent(item.key)}
                 onTouchStart={() => handleNavigationIntent(item.key)}
                 onMouseEnter={() => handleNavigationIntent(item.key)}
                 onClick={() => handleMobilePrimaryAction(item)}
@@ -668,6 +742,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         {!isStudent && (
           <button
             type="button"
+            onPointerDown={() => {
+              warmMoreNavigation();
+            }}
             onTouchStart={warmMoreNavigation}
             onMouseEnter={warmMoreNavigation}
             onClick={openMoreSheet}
@@ -809,21 +886,34 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           placement="bottom"
           open={moreSheetOpen}
           onClose={closeMoreSheet}
+          destroyOnHidden
           afterOpenChange={(open) => {
             if (!open) {
               resetMoreSheetState();
+              setIsMoreSheetTransitioningOut(false);
+              setPendingNavigationPath(null);
             }
           }}
           height="calc(100dvh - 24px)"
           closable={false}
           styles={{
             wrapper: {
+              opacity: isMoreSheetTransitioningOut && !moreSheetOpen ? 0 : 1,
               transform: `translateY(${sheetDragOffset}px)`,
-              transition: isSheetClosing
-                ? `transform ${MORE_SHEET_CLOSE_ANIMATION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`
-                : sheetTouchStartY.current === null
-                  ? `transform ${MORE_SHEET_RETURN_ANIMATION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`
-                  : 'none',
+              pointerEvents: isMoreSheetTransitioningOut && !moreSheetOpen ? 'none' : undefined,
+              transition: isMoreSheetTransitioningOut && !moreSheetOpen
+                ? 'none'
+                : (
+                  isSheetClosing
+                    ? `transform ${MORE_SHEET_CLOSE_ANIMATION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`
+                    : sheetTouchStartY.current === null
+                      ? `transform ${MORE_SHEET_RETURN_ANIMATION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`
+                      : 'none'
+                ),
+            },
+            mask: {
+              opacity: isMoreSheetTransitioningOut && !moreSheetOpen ? 0 : undefined,
+              transition: isMoreSheetTransitioningOut && !moreSheetOpen ? 'none' : undefined,
             },
             content: {
               borderRadius: '28px 28px 0 0',
@@ -909,6 +999,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                     <button
                       key={item.key}
                       type="button"
+                      onPointerDown={() => handleNavigationIntent(item.key)}
                       onTouchStart={() => handleNavigationIntent(item.key)}
                       onMouseEnter={() => handleNavigationIntent(item.key)}
                       onClick={() => handleMobileMoreNavigation(item.key)}
