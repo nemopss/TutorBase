@@ -13,11 +13,11 @@ import type { TelegramLoginWidgetPayload } from './browserSession';
 import { detectAuthMode, prepareTelegramWebApp } from './modes';
 import type { AuthMode } from './modes';
 import { parseJwt } from './token';
+import { cacheUser, clearCachedUser, readCachedUser } from './userCache';
 import { appEnv } from '../env';
 
 const DEV_MODE = appEnv.devMode;
 const DEV_INIT_DATA = appEnv.devInitData;
-const AUTH_USER_STORAGE_KEY = 'authUser';
 const AUTH_BOOTSTRAP_TIMEOUT_MS = appEnv.isDev
   ? Math.max(appEnv.apiTimeoutMs, 45000)
   : appEnv.apiTimeoutMs;
@@ -51,29 +51,6 @@ interface AuthResponse {
   user: User;
   expires_in?: number;
 }
-
-const readCachedUser = (): User | null => {
-  const raw = localStorage.getItem(AUTH_USER_STORAGE_KEY);
-  if (!raw) {
-    return null;
-  }
-
-  try {
-    return JSON.parse(raw) as User;
-  } catch {
-    localStorage.removeItem(AUTH_USER_STORAGE_KEY);
-    return null;
-  }
-};
-
-const cacheUser = (user: User | null) => {
-  if (user === null) {
-    localStorage.removeItem(AUTH_USER_STORAGE_KEY);
-    return;
-  }
-
-  localStorage.setItem(AUTH_USER_STORAGE_KEY, JSON.stringify(user));
-};
 
 interface TutorRegistrationData {
   school_name: string;
@@ -128,7 +105,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   const clearAuthState = () => {
     localStorage.removeItem('accessToken');
     localStorage.removeItem('refreshToken');
-    localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+    clearCachedUser();
     delete api.defaults.headers.common['Authorization'];
     setUser(null);
     setTenantId(null);
@@ -170,7 +147,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       localStorage.setItem('accessToken', access_token);
       localStorage.setItem('refreshToken', refresh_token);
     }
-    cacheUser(nextUser);
+    cacheUser(nextUser, mode);
 
     api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
@@ -238,7 +215,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
             // Set up API with existing token
             api.defaults.headers.common['Authorization'] = `Bearer ${existingToken}`;
             const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
-            const cachedUser = readCachedUser();
+            const cachedUser = readCachedUser<User>(currentAuthMode);
 
             if (cachedUser) {
               console.log('[AuthProvider] Restoring session from cached user');
@@ -251,7 +228,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
               void api.get<User>('/users/me', {
                 timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
               }).then((userResponse) => {
-                cacheUser(userResponse.data);
+                cacheUser(userResponse.data, currentAuthMode);
                 setUser(userResponse.data);
               }).catch((err) => {
                 console.log('[AuthProvider] Background user refresh failed:', err);
@@ -266,7 +243,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
                 timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
               });
               const user = userResponse.data;
-              cacheUser(user);
+              cacheUser(user, currentAuthMode);
 
               console.log('[AuthProvider] Restored session:', {
                 user: user.display_name,
@@ -287,13 +264,13 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
               // Token might be invalid, continue with normal login
               localStorage.removeItem('accessToken');
               localStorage.removeItem('refreshToken');
-              localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+              clearCachedUser();
             }
           } else {
             console.log('[AuthProvider] Existing token expired, will re-login');
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
-            localStorage.removeItem(AUTH_USER_STORAGE_KEY);
+            clearCachedUser();
           }
         }
 
@@ -335,7 +312,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         if (refresh_token) {
           localStorage.setItem('refreshToken', refresh_token);
         }
-        cacheUser(user);
+        cacheUser(user, currentAuthMode);
 
         // Настраиваем заголовок по умолчанию для всех запросов
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
@@ -377,6 +354,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         // Очищаем токены в случае ошибки
         localStorage.removeItem('accessToken');
         localStorage.removeItem('refreshToken');
+        clearCachedUser();
         delete api.defaults.headers.common['Authorization'];
         setIsLoading(false);
       }
@@ -429,7 +407,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         if (newRefreshToken) {
           localStorage.setItem('refreshToken', newRefreshToken);
         }
-        cacheUser(updatedUser);
+        cacheUser(updatedUser, mode);
         api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
         // Extract tenant_id from new JWT
@@ -486,7 +464,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       if (newRefreshToken) {
         localStorage.setItem('refreshToken', newRefreshToken);
       }
-      cacheUser(updatedUser);
+      cacheUser(updatedUser, authMode);
       api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
       setUser(updatedUser);
@@ -535,7 +513,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       if (refresh_token) {
         localStorage.setItem('refreshToken', refresh_token);
       }
-      cacheUser(registeredUser);
+      cacheUser(registeredUser, authMode);
       api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
       // Extract tenant_id from JWT
@@ -593,7 +571,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       if (refresh_token) {
         localStorage.setItem('refreshToken', refresh_token);
       }
-      cacheUser(registeredUser);
+      cacheUser(registeredUser, authMode);
       api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
 
       // Extract tenant_id from JWT

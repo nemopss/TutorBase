@@ -1,8 +1,13 @@
 import dayjs from 'dayjs';
+import utc from 'dayjs/plugin/utc';
+import timezone from 'dayjs/plugin/timezone';
 import isoWeek from 'dayjs/plugin/isoWeek';
 import type { QueryClient } from '@tanstack/react-query';
 import api from '../services/api';
+import { DEFAULT_TIMEZONE } from '../utils/datetime';
 
+dayjs.extend(utc);
+dayjs.extend(timezone);
 dayjs.extend(isoWeek);
 
 type RouteLoader = () => Promise<unknown>;
@@ -28,7 +33,7 @@ const DASHBOARD_LESSON_HISTORY_DAYS = 14;
 const DASHBOARD_LESSON_FUTURE_DAYS = 365;
 
 const getDashboardLessonRange = () => {
-  const now = dayjs();
+  const now = dayjs().tz(DEFAULT_TIMEZONE);
   return {
     fromDate: now.startOf('day').subtract(DASHBOARD_LESSON_HISTORY_DAYS, 'day').toISOString(),
     toDate: now.endOf('day').add(DASHBOARD_LESSON_FUTURE_DAYS, 'day').toISOString(),
@@ -36,8 +41,8 @@ const getDashboardLessonRange = () => {
 };
 
 const getInitialCalendarRange = () => ({
-  from: dayjs().startOf('month').startOf('isoWeek').subtract(14, 'day').toISOString(),
-  to: dayjs().endOf('month').endOf('isoWeek').add(21, 'day').toISOString(),
+  from: dayjs().tz(DEFAULT_TIMEZONE).startOf('month').startOf('isoWeek').subtract(14, 'day').toISOString(),
+  to: dayjs().tz(DEFAULT_TIMEZONE).endOf('month').endOf('isoWeek').add(21, 'day').toISOString(),
 });
 
 export const loadDashboardPage = () => import('../pages/Dashboard');
@@ -183,6 +188,29 @@ const fetchPackages = async (status: 'active' | 'completed' | 'draft' | 'cancell
   return data;
 };
 
+const fetchActivePackages = async () => {
+  const firstPage = await fetchPackages('active');
+  let allItems = [...firstPage.items];
+  let offset = PACKAGES_PAGE_LIMIT;
+
+  while (offset < firstPage.total && offset < 1000) {
+    const { data } = await api.get<PackageListResponse>('/packages', {
+      params: {
+        status_filter: 'active',
+        limit: PACKAGES_PAGE_LIMIT,
+        offset,
+      },
+    });
+    allItems = [...allItems, ...data.items];
+    offset += PACKAGES_PAGE_LIMIT;
+  }
+
+  return {
+    total: firstPage.total,
+    items: allItems,
+  };
+};
+
 const fetchGroups = async () => {
   const { data } = await api.get('/groups');
   return data;
@@ -224,7 +252,7 @@ const fetchPackagesForReminders = async () => {
     hasMore = Boolean(data.has_more);
     offset += limit;
 
-    if (offset > 1000) {
+    if (offset > 10000) {
       break;
     }
   }
@@ -292,15 +320,7 @@ const prefetchDashboardData = async (queryClient: QueryClient) => {
     }),
     queryClient.prefetchQuery({
       queryKey: ['dashboardActivePackages'],
-      queryFn: async () => {
-        const { data } = await api.get('/packages', {
-          params: {
-            status_filter: 'active',
-            limit: PACKAGES_PAGE_LIMIT,
-          },
-        });
-        return data;
-      },
+      queryFn: fetchActivePackages,
     }),
     queryClient.prefetchQuery({
       queryKey: ['dashboardHistory'],

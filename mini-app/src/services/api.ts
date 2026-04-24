@@ -1,4 +1,5 @@
 import axios, { type AxiosRequestConfig } from "axios";
+import { clearCachedUser } from "../auth/userCache";
 import { appEnv } from "../env";
 
 type RetryableRequestConfig = AxiosRequestConfig & {
@@ -33,6 +34,7 @@ const notifyRefreshSubscribers = (token: string | null) => {
 const clearStoredTokens = () => {
   localStorage.removeItem("accessToken");
   localStorage.removeItem("refreshToken");
+  clearCachedUser();
   delete api.defaults.headers.common.Authorization;
 };
 

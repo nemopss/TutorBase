@@ -46,6 +46,16 @@ Object.defineProperty(window, 'localStorage', {
   value: localStorageMock
 });
 
+const sessionStorageMock = {
+  getItem: jest.fn(),
+  setItem: jest.fn(),
+  removeItem: jest.fn(),
+  clear: jest.fn(),
+};
+Object.defineProperty(window, 'sessionStorage', {
+  value: sessionStorageMock
+});
+
 // Mock Telegram WebApp
 const mockTelegramWebApp = {
   initData: 'test-init-data',
@@ -105,6 +115,7 @@ describe('AuthProvider', () => {
     postMock.mockImplementation(() => Promise.resolve(defaultAuthResponse));
     setBrowserRefreshHandler.mockImplementation(() => undefined);
     localStorageMock.getItem.mockReturnValue(null);
+    sessionStorageMock.getItem.mockReturnValue(null);
     window.Telegram = { WebApp: mockTelegramWebApp } as any;
     Object.keys(api.defaults.headers.common).forEach((key) => delete api.defaults.headers.common[key]);
   });
@@ -155,7 +166,8 @@ describe('AuthProvider', () => {
     });
     expect(localStorageMock.setItem).not.toHaveBeenCalledWith('accessToken', expect.anything());
     expect(localStorageMock.setItem).not.toHaveBeenCalledWith('refreshToken', expect.anything());
-    expect(localStorageMock.setItem).toHaveBeenCalledWith('authUser', expect.any(String));
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('authUser', expect.any(String));
+    expect(sessionStorageMock.setItem).toHaveBeenCalledWith('authUser', expect.any(String));
     expect(api.defaults.headers.common['Authorization']).toBe(`Bearer ${validAccessToken}`);
   });
 });
