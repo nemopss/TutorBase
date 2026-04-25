@@ -4,7 +4,7 @@
   "tags": ["fastapi", "celery", "tutorbase", "monitoring"],
   "timezone": "browser",
   "schemaVersion": 16,
-  "version": 2,
+  "version": 3,
   "refresh": "15s",
   "editable": true,
   "graphTooltip": 0,
@@ -12,7 +12,7 @@
     {
       "id": 1,
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
-      "type": "graph",
+      "type": "timeseries",
       "title": "HTTP Request Rate by Status",
       "targets": [
         {
@@ -20,206 +20,500 @@
           "legendFormat": "{{status}}"
         }
       ],
-      "yaxes": [
-        {"format": "reqps", "label": "Requests/sec"},
-        {"format": "short"}
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 2,
+            "fillOpacity": 12,
+            "gradientMode": "opacity",
+            "spanNulls": false,
+            "showPoints": "never",
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            }
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "legend": {
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi",
+          "sort": "desc"
+        }
+      }
     },
     {
       "id": 2,
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
-      "type": "graph",
+      "type": "bargauge",
       "title": "Top Endpoints by Request Rate",
       "targets": [
         {
           "expr": "topk(10, sum by (method, handler) (rate(http_requests_total{handler!~\"/metrics|/health\"}[5m])))",
-          "legendFormat": "{{method}} {{handler}}"
+          "legendFormat": "{{method}} {{handler}}",
+          "instant": true
         }
       ],
-      "yaxes": [
-        {"format": "reqps", "label": "Requests/sec"},
-        {"format": "short"}
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showUnfilled": false
+      }
     },
     {
       "id": 3,
-      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 8},
+      "gridPos": {"h": 6, "w": 4, "x": 0, "y": 8},
       "type": "stat",
       "title": "Active Packages",
       "targets": [
         {
-          "expr": "active_packages"
+          "expr": "active_packages",
+          "instant": true
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        },
+        "overrides": []
+      },
       "options": {
         "colorMode": "value",
-        "graphMode": "area"
+        "graphMode": "none",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
       }
     },
     {
       "id": 4,
-      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 8},
+      "gridPos": {"h": 6, "w": 4, "x": 4, "y": 8},
       "type": "stat",
       "title": "Scheduled Lessons",
       "targets": [
         {
-          "expr": "scheduled_lessons"
+          "expr": "scheduled_lessons",
+          "instant": true
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        },
+        "overrides": []
+      },
       "options": {
         "colorMode": "value",
-        "graphMode": "area"
+        "graphMode": "none",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
       }
     },
     {
       "id": 5,
-      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 8},
+      "gridPos": {"h": 6, "w": 4, "x": 8, "y": 8},
       "type": "stat",
       "title": "Total Learners",
       "targets": [
         {
-          "expr": "total_learners"
+          "expr": "total_learners",
+          "instant": true
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        },
+        "overrides": []
+      },
       "options": {
         "colorMode": "value",
-        "graphMode": "area"
+        "graphMode": "none",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
       }
     },
     {
       "id": 6,
-      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 8},
+      "gridPos": {"h": 6, "w": 4, "x": 12, "y": 8},
+      "type": "stat",
+      "title": "Packages Created (24h)",
+      "targets": [
+        {
+          "expr": "increase(packages_created_total[24h])",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 14,
+      "gridPos": {"h": 6, "w": 4, "x": 16, "y": 8},
       "type": "stat",
       "title": "Unmatched Requests (1h)",
       "targets": [
         {
-          "expr": "sum(increase(http_requests_total{handler=\"none\"}[1h]))"
+          "expr": "sum(increase(http_requests_total{handler=\"none\"}[1h]))",
+          "instant": true
         }
       ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 25},
+              {"color": "red", "value": 100}
+            ]
+          }
+        },
+        "overrides": []
+      },
       "options": {
         "colorMode": "value",
-        "graphMode": "area"
+        "graphMode": "area",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
+      }
+    },
+    {
+      "id": 15,
+      "gridPos": {"h": 6, "w": 4, "x": 20, "y": 8},
+      "type": "stat",
+      "title": "Server Errors (1h)",
+      "targets": [
+        {
+          "expr": "sum(increase(http_requests_total{status=~\"5..\"}[1h]))",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        }
       }
     },
     {
       "id": 7,
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
-      "type": "graph",
+      "type": "bargauge",
       "title": "Slowest Endpoints (p95)",
       "targets": [
         {
           "expr": "topk(10, histogram_quantile(0.95, sum by (le, method, handler) (rate(http_request_duration_seconds_bucket{handler!~\"/metrics|/health\"}[5m]))))",
-          "legendFormat": "{{method}} {{handler}}"
+          "legendFormat": "{{method}} {{handler}}",
+          "instant": true
         }
       ],
-      "yaxes": [
-        {"format": "s", "label": "Duration"},
-        {"format": "short"}
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showUnfilled": false
+      }
     },
     {
       "id": 8,
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
-      "type": "graph",
+      "type": "bargauge",
       "title": "Slowest Endpoints (avg)",
       "targets": [
         {
           "expr": "topk(10, (sum by (method, handler) (rate(http_request_duration_seconds_sum{handler!~\"/metrics|/health\"}[5m]))) / clamp_min(sum by (method, handler) (rate(http_request_duration_seconds_count{handler!~\"/metrics|/health\"}[5m])), 0.001))",
-          "legendFormat": "{{method}} {{handler}}"
+          "legendFormat": "{{method}} {{handler}}",
+          "instant": true
         }
       ],
-      "yaxes": [
-        {"format": "s", "label": "Duration"},
-        {"format": "short"}
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "min": 0,
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showUnfilled": false
+      }
     },
     {
       "id": 9,
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
-      "type": "graph",
+      "gridPos": {"h": 8, "w": 8, "x": 0, "y": 22},
+      "type": "bargauge",
       "title": "Junk Requests by Status (1h)",
       "targets": [
         {
           "expr": "sum by (status) (increase(http_requests_total{handler=\"none\"}[1h]))",
-          "legendFormat": "{{status}}"
+          "legendFormat": "{{status}}",
+          "instant": true
         }
       ],
-      "yaxes": [
-        {"format": "short", "label": "Requests"},
-        {"format": "short"}
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showUnfilled": false
+      }
     },
     {
       "id": 10,
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
-      "type": "graph",
-      "title": "Client Errors (4xx) by Endpoint",
-      "targets": [
-        {
-          "expr": "topk(10, sum by (status, method, handler) (rate(http_requests_total{status=~\"4..\", handler!~\"/metrics|/health\"}[5m])))",
-          "legendFormat": "{{status}} {{method}} {{handler}}"
-        }
-      ],
-      "yaxes": [
-        {"format": "reqps", "label": "Requests/sec"},
-        {"format": "short"}
-      ]
-    },
-    {
-      "id": 11,
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30},
-      "type": "graph",
+      "gridPos": {"h": 8, "w": 8, "x": 8, "y": 22},
+      "type": "bargauge",
       "title": "Notification Deliveries (1h)",
       "targets": [
         {
-          "expr": "increase(notification_deliveries_claimed_total[1h])",
-          "legendFormat": "claimed"
+          "expr": "label_replace(vector(increase(notification_deliveries_claimed_total[1h])), \"result\", \"claimed\", \"__name__\", \".*\")",
+          "legendFormat": "{{result}}",
+          "instant": true
         },
         {
           "expr": "sum by (result) (increase(notification_deliveries_processed_total[1h]))",
-          "legendFormat": "{{result}}"
+          "legendFormat": "{{result}}",
+          "instant": true
         }
       ],
-      "yaxes": [
-        {"format": "short", "label": "Notifications"},
-        {"format": "short"}
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showUnfilled": false
+      }
     },
     {
-      "id": 12,
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30},
-      "type": "graph",
+      "id": 11,
+      "gridPos": {"h": 8, "w": 8, "x": 16, "y": 22},
+      "type": "bargauge",
       "title": "Payment Amounts (24h)",
       "targets": [
         {
           "expr": "sum by (currency) (increase(payments_recorded_amount_total[24h]))",
-          "legendFormat": "recorded {{currency}}"
+          "legendFormat": "recorded {{currency}}",
+          "instant": true
         },
         {
           "expr": "sum by (currency) (increase(payments_voided_amount_total[24h]))",
-          "legendFormat": "voided {{currency}}"
+          "legendFormat": "voided {{currency}}",
+          "instant": true
         }
       ],
-      "yaxes": [
-        {"format": "short", "label": "Amount"},
-        {"format": "short"}
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "min": 0,
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showUnfilled": false
+      }
+    },
+    {
+      "id": 12,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30},
+      "type": "bargauge",
+      "title": "Client Errors (4xx) by Endpoint",
+      "targets": [
+        {
+          "expr": "topk(10, sum by (status, method, handler) (rate(http_requests_total{status=~\"4..\", handler!~\"/metrics|/health\"}[5m])))",
+          "legendFormat": "{{status}} {{method}} {{handler}}",
+          "instant": true
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showUnfilled": false
+      }
     },
     {
       "id": 13,
-      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 38},
-      "type": "graph",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30},
+      "type": "bargauge",
       "title": "Server Errors (5xx) by Endpoint",
       "targets": [
         {
           "expr": "topk(10, sum by (status, method, handler) (rate(http_requests_total{status=~\"5..\", handler!~\"/metrics|/health\"}[5m])))",
-          "legendFormat": "{{status}} {{method}} {{handler}}"
+          "legendFormat": "{{status}} {{method}} {{handler}}",
+          "instant": true
         }
       ],
-      "yaxes": [
-        {"format": "reqps", "label": "Requests/sec"},
-        {"format": "short"}
-      ]
+      "fieldConfig": {
+        "defaults": {
+          "unit": "reqps",
+          "min": 0,
+          "color": {"mode": "palette-classic"}
+        },
+        "overrides": []
+      },
+      "options": {
+        "displayMode": "gradient",
+        "orientation": "horizontal",
+        "reduceOptions": {
+          "values": false,
+          "calcs": ["lastNotNull"],
+          "fields": ""
+        },
+        "showUnfilled": false
+      }
     }
   ],
   "templating": {

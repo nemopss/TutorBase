@@ -46,6 +46,11 @@ docker compose ps prometheus grafana
 - Не добавляйте raw path как label в метрики для произвольных URL: это создаёт взрыв cardinality и со временем убивает Prometheus.
 - Если нужен точный список сканерских или мусорных URL, это уже задача access logs, а не Prometheus labels.
 
+### Best Practice по типам панелей
+- `Time series`: для трендов во времени, где важна динамика, например request rate или error rate.
+- `Stat`: для текущих состояний и rolling totals, например активные пакеты, количество учеников, число мусорных запросов за окно.
+- `Bar gauge`: для snapshot-ранжирования, когда нужно быстро увидеть top slow endpoints, top noisy endpoints или распределение по статусам.
+
 ### Бизнес-метрики
 - `packages_created_total` - Созданные пакеты уроков
 - `active_packages` - Активные пакеты (gauge)
