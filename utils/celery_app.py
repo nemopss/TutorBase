@@ -43,10 +43,18 @@ Usage:
     result = my_task.apply_async(args=[arg1, arg2], countdown=60)  # Delayed execution
 """
 import logging
+from time import monotonic
 from importlib import import_module
 
 from celery import Celery
 from celery.signals import task_prerun, task_postrun, task_failure, task_retry
+from api.prometheus_metrics import (
+    celery_task_duration_seconds,
+    celery_task_failed_total,
+    celery_task_retried_total,
+    celery_task_started_total,
+    celery_task_succeeded_total,
+)
 from config import config
 
 logger = logging.getLogger(__name__)
@@ -58,6 +66,16 @@ TASK_MODULES = (
     'utils.tasks.tenant_access',
     'utils.tasks.broadcasts',
 )
+
+_task_started_at: dict[str, float] = {}
+
+
+def _resolve_task_name(sender=None, task=None) -> str:
+    if task is not None and getattr(task, "name", None):
+        return task.name
+    if sender is not None and getattr(sender, "name", None):
+        return sender.name
+    return "unknown"
 
 
 def _build_notifications_beat_schedule(
@@ -202,11 +220,15 @@ for module_name in TASK_MODULES:
 @task_prerun.connect
 def task_prerun_handler(sender=None, task_id=None, task=None, args=None, kwargs=None, **extra):
     """Log when task starts execution."""
+    task_name = _resolve_task_name(sender=sender, task=task)
+    if task_id is not None:
+        _task_started_at[task_id] = monotonic()
+    celery_task_started_total.labels(task_name=task_name).inc()
     logger.info(
-        f"Task started: {task.name}",
+        f"Task started: {task_name}",
         extra={
             'task_id': task_id,
-            'task_name': task.name,
+            'task_name': task_name,
             'task_args': str(args)[:100],  # Limit arg length in logs
             'task_kwargs': str(kwargs)[:100],
         }
@@ -214,13 +236,31 @@ def task_prerun_handler(sender=None, task_id=None, task=None, args=None, kwargs=
 
 
 @task_postrun.connect
-def task_postrun_handler(sender=None, task_id=None, task=None, args=None, kwargs=None, retval=None, **extra):
-    """Log when task completes successfully."""
+def task_postrun_handler(
+    sender=None,
+    task_id=None,
+    task=None,
+    args=None,
+    kwargs=None,
+    retval=None,
+    state=None,
+    **extra,
+):
+    """Log when task finishes and record terminal state metrics."""
+    task_name = _resolve_task_name(sender=sender, task=task)
+    started_at = _task_started_at.pop(task_id, None) if task_id is not None else None
+    if started_at is not None:
+        celery_task_duration_seconds.labels(task_name=task_name).observe(
+            monotonic() - started_at
+        )
+    if state == 'SUCCESS':
+        celery_task_succeeded_total.labels(task_name=task_name).inc()
     logger.info(
-        f"Task completed: {task.name}",
+        f"Task finished: {task_name}",
         extra={
             'task_id': task_id,
-            'task_name': task.name,
+            'task_name': task_name,
+            'state': state,
             'result': str(retval)[:100] if retval else None,
         }
     )
@@ -229,11 +269,13 @@ def task_postrun_handler(sender=None, task_id=None, task=None, args=None, kwargs
 @task_failure.connect
 def task_failure_handler(sender=None, task_id=None, exception=None, args=None, kwargs=None, traceback=None, **extra):
     """Log when task fails."""
+    task_name = _resolve_task_name(sender=sender)
+    celery_task_failed_total.labels(task_name=task_name).inc()
     logger.error(
-        f"Task failed: {sender.name}",
+        f"Task failed: {task_name}",
         extra={
             'task_id': task_id,
-            'task_name': sender.name,
+            'task_name': task_name,
             'exception': str(exception),
             'task_args': str(args)[:100],
             'task_kwargs': str(kwargs)[:100],
@@ -245,13 +287,17 @@ def task_failure_handler(sender=None, task_id=None, exception=None, args=None, k
 @task_retry.connect
 def task_retry_handler(sender=None, task_id=None, reason=None, **extra):
     """Log when task is retried."""
+    task_name = _resolve_task_name(sender=sender)
+    request = extra.get('request')
+    retry_count = getattr(request, 'retries', 0) if request is not None else 0
+    celery_task_retried_total.labels(task_name=task_name).inc()
     logger.warning(
-        f"Task retry: {sender.name}",
+        f"Task retry: {task_name}",
         extra={
             'task_id': task_id,
-            'task_name': sender.name,
+            'task_name': task_name,
             'reason': str(reason),
-            'retry_count': extra.get('request', {}).get('retries', 0),
+            'retry_count': retry_count,
         }
     )
 

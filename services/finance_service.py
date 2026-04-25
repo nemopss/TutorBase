@@ -29,6 +29,12 @@ from typing import TYPE_CHECKING, Optional, Any
 from sqlalchemy import case, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.prometheus_metrics import (
+    payments_recorded_amount_total,
+    payments_recorded_total,
+    payments_voided_amount_total,
+    payments_voided_total,
+)
 from database.models import Learner, LessonPackage, Lesson, Payment, PaymentAuditEvent
 
 if TYPE_CHECKING:
@@ -37,6 +43,10 @@ if TYPE_CHECKING:
 
 DEBT_PACKAGE_STATUSES: tuple[str, ...] = ("active", "completed")
 PACKAGE_TYPE_PACKAGE = "package"
+
+
+def _payment_metric_currency(currency: str | None) -> str:
+    return (currency or "UNKNOWN").upper()
 
 
 def _package_charge_expr():
@@ -281,6 +291,9 @@ async def record_payment(
         previous_state=None,
         notes=notes,
     )
+    metric_currency = _payment_metric_currency(payment.currency)
+    payments_recorded_total.labels(currency=metric_currency).inc()
+    payments_recorded_amount_total.labels(currency=metric_currency).inc(float(payment.amount))
 
     return payment
 
@@ -356,6 +369,9 @@ async def void_payment(
         previous_state=previous_state,
         notes=reason,
     )
+    metric_currency = _payment_metric_currency(payment.currency)
+    payments_voided_total.labels(currency=metric_currency).inc()
+    payments_voided_amount_total.labels(currency=metric_currency).inc(float(payment.amount))
     return payment
 
 

@@ -1,0 +1,232 @@
+{
+  "dashboard": {
+    "title": "TutorBase Operations Monitoring",
+    "tags": ["fastapi", "celery", "tutorbase", "monitoring"],
+    "timezone": "browser",
+    "refresh": "15s",
+    "schemaVersion": 16,
+    "version": 1,
+    "panels": [
+      {
+        "id": 1,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
+        "type": "graph",
+        "title": "HTTP Request Rate",
+        "targets": [
+          {
+            "expr": "sum by (method, handler) (rate(http_requests_total[5m]))",
+            "legendFormat": "{{method}} {{handler}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 2,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
+        "type": "graph",
+        "title": "HTTP Request Duration (p95)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum by (le, method, handler) (rate(http_request_duration_seconds_bucket[5m])))",
+            "legendFormat": "{{method}} {{handler}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 3,
+        "gridPos": {"h": 6, "w": 6, "x": 0, "y": 8},
+        "type": "stat",
+        "title": "Active Packages",
+        "targets": [
+          {
+            "expr": "active_packages"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        }
+      },
+      {
+        "id": 4,
+        "gridPos": {"h": 6, "w": 6, "x": 6, "y": 8},
+        "type": "stat",
+        "title": "Scheduled Lessons",
+        "targets": [
+          {
+            "expr": "scheduled_lessons"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        }
+      },
+      {
+        "id": 5,
+        "gridPos": {"h": 6, "w": 6, "x": 12, "y": 8},
+        "type": "stat",
+        "title": "Total Learners",
+        "targets": [
+          {
+            "expr": "total_learners"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        }
+      },
+      {
+        "id": 6,
+        "gridPos": {"h": 6, "w": 6, "x": 18, "y": 8},
+        "type": "stat",
+        "title": "Packages Created (24h)",
+        "targets": [
+          {
+            "expr": "increase(packages_created_total[24h])"
+          }
+        ],
+        "options": {
+          "colorMode": "value",
+          "graphMode": "area"
+        }
+      },
+      {
+        "id": 7,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+        "type": "graph",
+        "title": "Celery Task Start Rate",
+        "targets": [
+          {
+            "expr": "sum by (task_name) (rate(celery_task_started_total[5m]))",
+            "legendFormat": "{{task_name}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Tasks/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 8,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+        "type": "graph",
+        "title": "Celery Failures and Retries",
+        "targets": [
+          {
+            "expr": "sum by (task_name) (rate(celery_task_failed_total[5m]))",
+            "legendFormat": "failed {{task_name}}"
+          },
+          {
+            "expr": "sum by (task_name) (rate(celery_task_retried_total[5m]))",
+            "legendFormat": "retried {{task_name}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "ops", "label": "Events/sec"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 9,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+        "type": "graph",
+        "title": "Celery Task Duration (p95)",
+        "targets": [
+          {
+            "expr": "histogram_quantile(0.95, sum by (le, task_name) (rate(celery_task_duration_seconds_bucket[5m])))",
+            "legendFormat": "{{task_name}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "s", "label": "Duration"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 10,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+        "type": "graph",
+        "title": "Notification Jobs (1h)",
+        "targets": [
+          {
+            "expr": "sum by (job_type) (increase(notification_jobs_claimed_total[1h]))",
+            "legendFormat": "{{job_type}} claimed"
+          },
+          {
+            "expr": "sum by (job_type, result) (increase(notification_jobs_processed_total[1h]))",
+            "legendFormat": "{{job_type}} {{result}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Jobs"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 11,
+        "gridPos": {"h": 8, "w": 12, "x": 0, "y": 30},
+        "type": "graph",
+        "title": "Notification Deliveries (1h)",
+        "targets": [
+          {
+            "expr": "increase(notification_deliveries_claimed_total[1h])",
+            "legendFormat": "claimed"
+          },
+          {
+            "expr": "sum by (result) (increase(notification_deliveries_processed_total[1h]))",
+            "legendFormat": "{{result}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Notifications"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 12,
+        "gridPos": {"h": 8, "w": 12, "x": 12, "y": 30},
+        "type": "graph",
+        "title": "Payment Amounts (24h)",
+        "targets": [
+          {
+            "expr": "sum by (currency) (increase(payments_recorded_amount_total[24h]))",
+            "legendFormat": "recorded {{currency}}"
+          },
+          {
+            "expr": "sum by (currency) (increase(payments_voided_amount_total[24h]))",
+            "legendFormat": "voided {{currency}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "short", "label": "Amount"},
+          {"format": "short"}
+        ]
+      },
+      {
+        "id": 13,
+        "gridPos": {"h": 8, "w": 24, "x": 0, "y": 38},
+        "type": "graph",
+        "title": "HTTP Error Rate (4xx, 5xx)",
+        "targets": [
+          {
+            "expr": "sum by (status, handler) (rate(http_requests_total{status=~\"4..|5..\"}[5m]))",
+            "legendFormat": "{{status}} {{handler}}"
+          }
+        ],
+        "yaxes": [
+          {"format": "reqps", "label": "Requests/sec"},
+          {"format": "short"}
+        ]
+      }
+    ]
+  }
+}

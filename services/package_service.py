@@ -338,7 +338,7 @@ async def create_package(
     await regenerate_package_reminders(session, current_tenant, package)
     
     if packages_created_total:
-        packages_created_total.labels(learner_id=learner_id).inc()
+        packages_created_total.inc()
     
     # Transaction will be committed by @transactional decorator
     return _build_package_dto(package)
@@ -403,7 +403,7 @@ async def create_one_off_lesson(
     await regenerate_package_reminders(session, current_tenant, package)
 
     if packages_created_total:
-        packages_created_total.labels(learner_id=learner_id).inc()
+        packages_created_total.inc()
 
     return _build_package_dto(package)
 
@@ -503,7 +503,7 @@ async def create_package_with_schedule(
     await regenerate_package_reminders(session, current_tenant, package)
     
     if packages_created_total:
-        packages_created_total.labels(learner_id=learner_id).inc()
+        packages_created_total.inc()
     
     return _build_package_dto(package)
 
@@ -596,7 +596,7 @@ async def create_package_from_template(
     await regenerate_package_reminders(session, current_tenant, package)
     
     if packages_created_total:
-        packages_created_total.labels(learner_id=learner_id).inc()
+        packages_created_total.inc()
     
     # Transaction will be committed by @transactional decorator
     return _build_package_dto(package)

@@ -30,6 +30,12 @@ from notifications.infrastructure.models import NotificationCategory, Notificati
 from notifications.infrastructure.rendering import SqlAlchemyNotificationRenderer
 from notifications.infrastructure.repositories import SqlAlchemySessionNotificationUnitOfWork
 from notifications.infrastructure.telegram_delivery import TelegramNotificationChannelAdapter
+from api.prometheus_metrics import (
+    notification_deliveries_claimed_total,
+    notification_deliveries_processed_total,
+    notification_jobs_claimed_total,
+    notification_jobs_processed_total,
+)
 from utils.celery_app import celery_app
 from utils.formatters import escape_html_text, format_timestamp_msk
 from utils.telegram_bot import build_telegram_bot
@@ -44,6 +50,39 @@ class NotificationDeliveryLogContext:
     category_name: str
     event_type: str
     lesson_scheduled_at: datetime | None = None
+
+
+def _observe_notification_job_summary(summary: dict) -> None:
+    job_type = str(summary["job_type"])
+    claimed = int(summary["claimed"])
+    succeeded = int(summary["succeeded"])
+    failed = int(summary["failed"])
+
+    if claimed:
+        notification_jobs_claimed_total.labels(job_type=job_type).inc(claimed)
+    if succeeded:
+        notification_jobs_processed_total.labels(
+            job_type=job_type,
+            result="succeeded",
+        ).inc(succeeded)
+    if failed:
+        notification_jobs_processed_total.labels(
+            job_type=job_type,
+            result="failed",
+        ).inc(failed)
+
+
+def _observe_notification_delivery_summary(summary: dict) -> None:
+    claimed = int(summary["claimed"])
+    sent = int(summary["sent"])
+    failed = int(summary["failed"])
+
+    if claimed:
+        notification_deliveries_claimed_total.inc(claimed)
+    if sent:
+        notification_deliveries_processed_total.labels(result="sent").inc(sent)
+    if failed:
+        notification_deliveries_processed_total.labels(result="failed").inc(failed)
 
 
 @celery_app.task(
@@ -269,13 +308,15 @@ async def _process_jobs_for_tenant(
             await failure_uow.commit()
             failed += 1
 
-    return {
+    summary = {
         "tenant_id": tenant_id,
         "job_type": job_type,
         "claimed": len(claim_result.claimed),
         "succeeded": succeeded,
         "failed": failed,
     }
+    _observe_notification_job_summary(summary)
+    return summary
 
 
 async def _run_claimed_job(uow, job: NotificationJobRecord) -> None:
@@ -326,12 +367,14 @@ async def _deliver_for_tenant(
         else:
             failed += 1
 
-    return {
+    summary = {
         "tenant_id": tenant_id,
         "claimed": len(claim_result.claimed),
         "sent": sent,
         "failed": failed,
     }
+    _observe_notification_delivery_summary(summary)
+    return summary
 
 
 async def _send_delivery_log(
