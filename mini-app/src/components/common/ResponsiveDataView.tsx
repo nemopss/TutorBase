@@ -1,8 +1,9 @@
 import React from 'react';
-import { Table, List, Spin, Pagination } from 'antd';
+import { Table, List, Pagination, Skeleton } from 'antd';
 import type { TableProps, TablePaginationConfig } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { useResponsive } from '../../hooks/useResponsive';
+import { useResponsiveStyles } from '../../hooks/useResponsiveStyles';
 import { spacing } from '../../theme/tokens';
 import EmptyState from './EmptyState';
 
@@ -52,6 +53,7 @@ function ResponsiveDataView<T extends object>({
   onItemClick,
 }: ResponsiveDataViewProps<T>): React.ReactElement {
   const { isMobile } = useResponsive();
+  const { cardStyle, borderColor } = useResponsiveStyles();
   const paginationConfig = pagination && typeof pagination === 'object' ? pagination : null;
   const handleMobilePaginationChange = paginationConfig?.onChange ?? ((page: number, pageSize: number) => {
     tableProps?.onChange?.(
@@ -64,15 +66,56 @@ function ResponsiveDataView<T extends object>({
 
   // Loading state
   if (loading) {
+    if (isMobile) {
+      return (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
+          {Array.from({ length: 3 }).map((_, index) => (
+            <div
+              key={index}
+              style={{
+                ...cardStyle,
+                border: `1px solid ${borderColor}`,
+                borderRadius: 12,
+                padding: spacing.md,
+              }}
+            >
+              <Skeleton active title={{ width: '48%' }} paragraph={{ rows: 3 }} />
+            </div>
+          ))}
+        </div>
+      );
+    }
+
     return (
-      <div style={{ 
-        display: 'flex', 
-        justifyContent: 'center', 
-        alignItems: 'center', 
-        minHeight: 200,
-        padding: spacing.lg,
-      }}>
-        <Spin size="large" />
+      <div
+        style={{
+          ...cardStyle,
+          border: `1px solid ${borderColor}`,
+          borderRadius: 12,
+          overflow: 'hidden',
+        }}
+      >
+        <div
+          style={{
+            padding: spacing.md,
+            borderBottom: `1px solid ${borderColor}`,
+          }}
+        >
+          <Skeleton.Input active style={{ width: 220, maxWidth: '40%' }} />
+        </div>
+        <div style={{ padding: `0 ${spacing.md}` }}>
+          {Array.from({ length: 5 }).map((_, index) => (
+            <div
+              key={index}
+              style={{
+                padding: `${spacing.md}px 0`,
+                borderBottom: index === 4 ? 'none' : `1px solid ${borderColor}`,
+              }}
+            >
+              <Skeleton active title={false} paragraph={{ rows: 1, width: ['100%'] }} />
+            </div>
+          ))}
+        </div>
       </div>
     );
   }

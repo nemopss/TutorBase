@@ -1,7 +1,7 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Col, List, Row, Skeleton, Spin, Space, Typography } from 'antd';
+import { Alert, Button, Card, Col, List, Row, Skeleton, Spin, Typography } from 'antd';
 import {
   CloseOutlined,
   CalendarOutlined,
@@ -24,7 +24,6 @@ import isoWeek from 'dayjs/plugin/isoWeek';
 import isSameOrAfter from 'dayjs/plugin/isSameOrAfter';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
-import PageHeader from '../components/common/PageHeader';
 import DashboardMiniWeekCalendar from '../components/dashboard/DashboardMiniWeekCalendar';
 import DashboardLessonLoadHeatmap from '../components/dashboard/DashboardLessonLoadHeatmap';
 import DashboardWeeklyLoad from '../components/dashboard/DashboardWeeklyLoad';
@@ -341,7 +340,7 @@ const Dashboard: React.FC = () => {
     queryFn: () => fetchDashboardLessons(dashboardLessonRange.fromDate, dashboardLessonRange.toDate),
   });
 
-  const { data: packagesSummaryData } = useQuery<PackageListResponse, Error>({
+  const { data: packagesSummaryData, isSuccess: hasPackagesSummaryData } = useQuery<PackageListResponse, Error>({
     queryKey: ['dashboardPackagesSummary'],
     queryFn: fetchPackagesSummary,
   });
@@ -387,17 +386,17 @@ const Dashboard: React.FC = () => {
     enabled: loadDeferredPanels,
   });
 
-  const { data: lessonsSummaryData } = useQuery<LessonListResponse, Error>({
+  const { data: lessonsSummaryData, isSuccess: hasLessonsSummaryData } = useQuery<LessonListResponse, Error>({
     queryKey: ['dashboardLessonsSummary'],
     queryFn: fetchLessonsSummary,
   });
 
-  const { data: learnersData } = useQuery<LearnerListResponse, Error>({
+  const { data: learnersData, isSuccess: hasLearnersData } = useQuery<LearnerListResponse, Error>({
     queryKey: ['dashboardLearnersSummary'],
     queryFn: fetchLearnersSummary,
   });
 
-  const { data: inviteTokensData } = useQuery<InviteTokenListResponse, Error>({
+  const { data: inviteTokensData, isSuccess: hasInviteTokensData } = useQuery<InviteTokenListResponse, Error>({
     queryKey: ['dashboardInviteTokensSummary', tenantId],
     queryFn: () => fetchInviteTokensSummary(tenantId!),
     enabled: !!tenantId,
@@ -638,7 +637,12 @@ const Dashboard: React.FC = () => {
   ];
 
   const completedOnboardingSteps = onboardingSteps.filter((step) => step.done).length;
-  const showOnboarding = completedOnboardingSteps < onboardingSteps.length;
+  const isOnboardingReady =
+    hasLearnersData
+    && hasPackagesSummaryData
+    && hasLessonsSummaryData
+    && (tenantId === null || hasInviteTokensData);
+  const showOnboarding = isOnboardingReady && completedOnboardingSteps < onboardingSteps.length;
 
   const upcomingSections = [
     {
@@ -1075,22 +1079,6 @@ const Dashboard: React.FC = () => {
 
   return (
     <div style={{ padding: isMobile ? 0 : spacing.lg }}>
-      <PageHeader
-        title={t('pages.dashboard.title')}
-        subtitle={t('pages.dashboard.subtitle')}
-        variant="minimal"
-        actions={
-          <Space wrap size="small" style={{ display: 'flex', flexWrap: 'wrap' }}>
-            <Button type="primary" icon={<PlusOutlined />} onClick={() => navigate('/packages')} size="middle">
-              {t('pages.dashboard.newPackage')}
-            </Button>
-            <Button icon={<CalendarOutlined />} onClick={() => navigate('/lessons')} size="middle">
-              {t('pages.dashboard.openCalendar')}
-            </Button>
-          </Space>
-        }
-      />
-
       {showOnboarding && (
         <Card
           title={t('pages.dashboard.onboarding.title')}

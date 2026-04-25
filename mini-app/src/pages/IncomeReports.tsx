@@ -5,7 +5,6 @@ import {
   Col,
   Row,
   Statistic,
-  Spin,
   Alert,
   Table,
   Button,
@@ -25,6 +24,7 @@ import dayjs, { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import { ReportPageSkeleton } from '../components/common/PageSkeletons';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 
 const { RangePicker } = DatePicker;
@@ -218,8 +218,30 @@ const IncomeReports: React.FC = () => {
     },
   ];
 
+  const pageHeader = (
+    <PageHeader
+      title={t('pages.incomeReports.title')}
+      subtitle={t('pages.incomeReports.subtitle')}
+      actions={
+        <Button
+          type="primary"
+          icon={<DownloadOutlined />}
+          onClick={handleExport}
+          loading={isExporting}
+        >
+          {t('pages.incomeReports.exportCsv')}
+        </Button>
+      }
+    />
+  );
+
   if (isLoading) {
-    return <Spin size="large" />;
+    return (
+      <div>
+        {pageHeader}
+        <ReportPageSkeleton />
+      </div>
+    );
   }
 
   if (isError) {
@@ -230,20 +252,7 @@ const IncomeReports: React.FC = () => {
 
   return (
     <div>
-      <PageHeader
-        title={t('pages.incomeReports.title')}
-        subtitle={t('pages.incomeReports.subtitle')}
-        actions={
-          <Button
-            type="primary"
-            icon={<DownloadOutlined />}
-            onClick={handleExport}
-            loading={isExporting}
-          >
-            {t('pages.incomeReports.exportCsv')}
-          </Button>
-        }
-      />
+      {pageHeader}
 
       {/* Period Selector */}
       <Card style={{ ...cardStyle, marginBottom: 16 }}>

@@ -103,3 +103,16 @@ button:focus-visible {
 .week-calendar-scroll::-webkit-scrollbar-thumb:hover {
   background-color: rgba(128, 128, 128, 0.6);
 }
+
+.mobile-more-drawer {
+  --mobile-more-drawer-motion-ms: 360ms;
+  --mobile-more-drawer-motion-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.mobile-more-drawer .ant-drawer-content-wrapper,
+.mobile-more-drawer .ant-drawer-mask,
+.mobile-more-drawer [class*='ant-drawer-panel-motion-bottom'][class*='-active'],
+.mobile-more-drawer [class*='ant-drawer-mask-motion'][class*='-active'] {
+  transition-duration: var(--mobile-more-drawer-motion-ms) !important;
+  transition-timing-function: var(--mobile-more-drawer-motion-ease) !important;
+}

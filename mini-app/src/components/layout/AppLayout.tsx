@@ -48,10 +48,7 @@ const MOBILE_NAV_GAP = 8;
 const MOBILE_NAV_PADDING = 10;
 const MORE_SHEET_CLOSE_THRESHOLD = 84;
 const MORE_BUTTON_WIDTH = 80;
-const MORE_SHEET_OPEN_OFFSET = 56;
-const MORE_SHEET_CLOSE_OFFSET = 220;
-const MORE_SHEET_CLOSE_ANIMATION_MS = 260;
-const MORE_SHEET_RETURN_ANIMATION_MS = 220;
+const MORE_SHEET_DRAG_RETURN_ANIMATION_MS = 240;
 const NAVIGATION_PREFETCH_GRACE_MS = 120;
 
 const isFinanceRoute = (pathname: string) => (
@@ -88,17 +85,13 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const colors = resolvedTheme.colors;
   const [moreSheetOpen, setMoreSheetOpen] = useState(false);
   const [sheetDragOffset, setSheetDragOffset] = useState(0);
-  const [isSheetClosing, setIsSheetClosing] = useState(false);
   const [pendingNavigationPath, setPendingNavigationPath] = useState<string | null>(null);
-  const [isMoreSheetTransitioningOut, setIsMoreSheetTransitioningOut] = useState(false);
   const [sidebarCollapsed, setSidebarCollapsed] = useState(() => {
     const saved = localStorage.getItem(SIDEBAR_COLLAPSED_KEY);
     return saved === 'true';
   });
   const sheetTouchStartY = useRef<number | null>(null);
   const sheetDragOffsetRef = useRef(0);
-  const sheetCloseTimerRef = useRef<number | null>(null);
-  const sheetOpenAnimationFrameRef = useRef<number | null>(null);
   const hasMoreNavigationPrefetchedRef = useRef(false);
   const prefetchPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
   const warmedNavigationTargetsRef = useRef<Set<string>>(new Set());
@@ -338,21 +331,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     return index >= 0 ? index : -1;
   }, [activePrimaryKey, mobilePrimaryNavItems]);
 
-  useEffect(() => () => {
-    if (sheetCloseTimerRef.current !== null) {
-      window.clearTimeout(sheetCloseTimerRef.current);
-    }
-    if (sheetOpenAnimationFrameRef.current !== null) {
-      window.cancelAnimationFrame(sheetOpenAnimationFrameRef.current);
-    }
-  }, []);
-
   useEffect(() => {
-    if (isMoreSheetTransitioningOut) {
-      return;
-    }
     setPendingNavigationPath(null);
-  }, [isMoreSheetTransitioningOut, location.pathname]);
+  }, [location.pathname]);
 
   const handleNavigationIntent = (pathname: string) => {
     if (warmedNavigationTargetsRef.current.has(pathname)) {
@@ -387,73 +368,28 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   const resetMoreSheetState = () => {
-    if (sheetCloseTimerRef.current !== null) {
-      window.clearTimeout(sheetCloseTimerRef.current);
-      sheetCloseTimerRef.current = null;
-    }
-    if (sheetOpenAnimationFrameRef.current !== null) {
-      window.cancelAnimationFrame(sheetOpenAnimationFrameRef.current);
-      sheetOpenAnimationFrameRef.current = null;
-    }
     sheetTouchStartY.current = null;
     sheetDragOffsetRef.current = 0;
-    setIsSheetClosing(false);
     setSheetDragOffset(0);
   };
 
   const openMoreSheet = () => {
     warmMoreNavigation();
     resetMoreSheetState();
-    setIsMoreSheetTransitioningOut(false);
-    const openOffset = typeof window !== 'undefined'
-      ? Math.min(MORE_SHEET_OPEN_OFFSET, Math.round(window.innerHeight * 0.08))
-      : MORE_SHEET_OPEN_OFFSET;
-    sheetDragOffsetRef.current = openOffset;
-    setSheetDragOffset(openOffset);
     setMoreSheetOpen(true);
-    sheetOpenAnimationFrameRef.current = window.requestAnimationFrame(() => {
-      sheetOpenAnimationFrameRef.current = null;
-      sheetDragOffsetRef.current = 0;
-      setSheetDragOffset(0);
-    });
   };
 
   const closeMoreSheet = () => {
-    triggerMoreSheetCloseAnimation();
-  };
-
-  const triggerMoreSheetCloseAnimation = () => {
-    if (isSheetClosing) {
-      return;
-    }
-
-    sheetTouchStartY.current = null;
-    setIsSheetClosing(true);
-    const closeOffset = typeof window !== 'undefined'
-      ? Math.max(
-        window.innerHeight + 32,
-        sheetDragOffsetRef.current + 32,
-        MORE_SHEET_CLOSE_OFFSET,
-      )
-      : MORE_SHEET_CLOSE_OFFSET;
-    sheetDragOffsetRef.current = closeOffset;
-    setSheetDragOffset(closeOffset);
-    sheetCloseTimerRef.current = window.setTimeout(() => {
-      setMoreSheetOpen(false);
-      sheetCloseTimerRef.current = null;
-    }, MORE_SHEET_CLOSE_ANIMATION_MS);
+    resetMoreSheetState();
+    setMoreSheetOpen(false);
   };
 
   const handleMoreSheetTouchStart = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (isSheetClosing) {
-      return;
-    }
-
     sheetTouchStartY.current = event.touches[0]?.clientY ?? null;
   };
 
   const handleMoreSheetTouchMove = (event: React.TouchEvent<HTMLDivElement>) => {
-    if (sheetTouchStartY.current === null || isSheetClosing) {
+    if (sheetTouchStartY.current === null) {
       return;
     }
 
@@ -465,19 +401,24 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   };
 
   const handleMoreSheetTouchEnd = () => {
-    if (isSheetClosing) {
-      return;
-    }
-
     const shouldClose = sheetDragOffsetRef.current >= MORE_SHEET_CLOSE_THRESHOLD;
     sheetTouchStartY.current = null;
     if (shouldClose) {
-      triggerMoreSheetCloseAnimation();
+      closeMoreSheet();
       return;
     }
 
     sheetDragOffsetRef.current = 0;
     setSheetDragOffset(0);
+  };
+
+  const handleMoreButtonClick = () => {
+    if (moreSheetOpen) {
+      closeMoreSheet();
+      return;
+    }
+
+    openMoreSheet();
   };
 
   const handleMobilePrimaryAction = (item: MobileNavItem) => {
@@ -510,9 +451,8 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
     }
 
     flushSync(() => {
-      setIsMoreSheetTransitioningOut(true);
       setPendingNavigationPath(key);
-      triggerMoreSheetCloseAnimation();
+      closeMoreSheet();
     });
     const navigationWarmup = handleNavigationIntent(key);
     window.requestAnimationFrame(() => {
@@ -627,6 +567,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
   const navGlassBackground = isDark ? 'rgba(34, 39, 48, 0.58)' : 'rgba(255, 255, 255, 0.72)';
   const navActiveBackground = isDark ? 'rgba(255,255,255,0.14)' : 'rgba(35, 131, 226, 0.12)';
+  const moreSheetContentTransition = sheetTouchStartY.current === null
+    ? `transform ${MORE_SHEET_DRAG_RETURN_ANIMATION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`
+    : 'none';
   const isMoreButtonActive = !isStudent && (
     moreSheetOpen
     || activePrimaryKey === null
@@ -747,7 +690,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             }}
             onTouchStart={warmMoreNavigation}
             onMouseEnter={warmMoreNavigation}
-            onClick={openMoreSheet}
+            onClick={handleMoreButtonClick}
             style={{
               all: 'unset',
               width: MORE_BUTTON_WIDTH,
@@ -883,6 +826,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
 
       {isMobile && !isStudent && (
         <Drawer
+          rootClassName="mobile-more-drawer"
           placement="bottom"
           open={moreSheetOpen}
           onClose={closeMoreSheet}
@@ -890,31 +834,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           afterOpenChange={(open) => {
             if (!open) {
               resetMoreSheetState();
-              setIsMoreSheetTransitioningOut(false);
-              setPendingNavigationPath(null);
             }
           }}
           height="calc(100dvh - 24px)"
           closable={false}
           styles={{
-            wrapper: {
-              opacity: isMoreSheetTransitioningOut && !moreSheetOpen ? 0 : 1,
-              transform: `translateY(${sheetDragOffset}px)`,
-              pointerEvents: isMoreSheetTransitioningOut && !moreSheetOpen ? 'none' : undefined,
-              transition: isMoreSheetTransitioningOut && !moreSheetOpen
-                ? 'none'
-                : (
-                  isSheetClosing
-                    ? `transform ${MORE_SHEET_CLOSE_ANIMATION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`
-                    : sheetTouchStartY.current === null
-                      ? `transform ${MORE_SHEET_RETURN_ANIMATION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`
-                      : 'none'
-                ),
-            },
-            mask: {
-              opacity: isMoreSheetTransitioningOut && !moreSheetOpen ? 0 : undefined,
-              transition: isMoreSheetTransitioningOut && !moreSheetOpen ? 'none' : undefined,
-            },
             content: {
               borderRadius: '28px 28px 0 0',
               overflow: 'hidden',
@@ -930,6 +854,9 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
             display: 'flex',
             flexDirection: 'column',
             height: '100%',
+            transform: `translateY(${sheetDragOffset}px)`,
+            transition: moreSheetContentTransition,
+            willChange: sheetDragOffset > 0 ? 'transform' : undefined,
           }}>
             <div
               onTouchStart={handleMoreSheetTouchStart}
@@ -945,9 +872,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                   borderRadius: 999,
                   background: isDark ? 'rgba(255,255,255,0.18)' : 'rgba(0,0,0,0.12)',
                   transform: sheetDragOffset > 0 ? `scaleX(${1 + Math.min(sheetDragOffset / 280, 0.12)})` : 'scaleX(1)',
-                  transition: isSheetClosing
-                    ? `transform ${MORE_SHEET_CLOSE_ANIMATION_MS}ms cubic-bezier(0.22, 0.61, 0.36, 1)`
-                    : 'none',
+                  transition: moreSheetContentTransition,
                 }} />
               </div>
 

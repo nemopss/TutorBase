@@ -44,6 +44,7 @@ import RescheduleForm from '../components/forms/RescheduleForm';
 import EmptyState from '../components/common/EmptyState';
 import CalendarContainer from '../components/common/CalendarContainer';
 import ScheduleTab from '../components/learner/ScheduleTab';
+import { DetailPageSkeleton } from '../components/common/PageSkeletons';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
 import { useAuth } from '../auth/AuthProvider';
@@ -536,7 +537,7 @@ const LearnerProfile: React.FC = () => {
   ] : [];
 
   if (isLoading) {
-    return <Spin size="large" style={{ display: 'block', margin: '100px auto' }} />;
+    return <DetailPageSkeleton />;
   }
 
   if (isError || !learner) {

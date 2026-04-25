@@ -35,6 +35,7 @@ import CalendarContainer from '../components/common/CalendarContainer';
 import PackageForm from '../components/forms/PackageForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
 import LessonForm from '../components/forms/LessonForm';
+import { DetailPageSkeleton } from '../components/common/PageSkeletons';
 import { formatDate } from '../utils/datetime';
 import { spacing } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
@@ -385,11 +386,7 @@ const PackageDetail: React.FC = () => {
 
   // Loading/Error states
   if (!id || isLoadingPackage) {
-    return (
-      <div style={{ display: 'flex', justifyContent: 'center', padding: 48 }}>
-        <Spin size="large" />
-      </div>
-    );
+    return <DetailPageSkeleton showTabs={false} />;
   }
 
   if (isErrorPackage) {

@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Row, Col, Statistic, DatePicker, Space, Button, Table, Spin } from 'antd';
+import { Card, Row, Col, Statistic, DatePicker, Space, Button, Table } from 'antd';
 import { DownloadOutlined, BarChartOutlined, PieChartOutlined, LineChartOutlined } from '@ant-design/icons';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 import dayjs, { Dayjs } from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import { OverviewPageSkeleton } from '../components/common/PageSkeletons';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 import { useResponsive } from '../hooks/useResponsive';
-import { chartHeight } from '../theme/tokens';
+import { chartHeight, spacing } from '../theme/tokens';
 
 const { RangePicker } = DatePicker;
 
@@ -160,37 +161,46 @@ const Analytics: React.FC = () => {
     .sort((a, b) => b.completed - a.completed)
     .slice(0, 5);
 
+  const pageHeader = (
+    <PageHeader 
+      title={t('pages.analytics.title')}
+      subtitle={t('pages.analytics.subtitle')}
+      actions={
+        <Space wrap size="small" direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: isMobile ? '100%' : 'auto' }}>
+          <RangePicker
+            value={dateRange}
+            onChange={handleDateChange}
+            format="YYYY-MM-DD"
+            style={{ width: isMobile ? '100%' : 'auto' }}
+            placement="bottomLeft"
+            getPopupContainer={(trigger) => trigger.parentElement || document.body}
+            panelRender={isMobile ? (panelNode) => (
+              <div style={{ maxWidth: '100vw', overflow: 'auto' }}>{panelNode}</div>
+            ) : undefined}
+          />
+          <Button icon={<DownloadOutlined />} onClick={handleExport} block={isMobile}>
+            {t('pages.analytics.exportCsv')}
+          </Button>
+        </Space>
+      }
+    />
+  );
+
   if (isLoadingLessons || isLoadingReminders) {
-    return <Spin size="large" />;
+    return (
+      <div>
+        {pageHeader}
+        <OverviewPageSkeleton />
+      </div>
+    );
   }
 
   return (
     <div>
-      <PageHeader 
-        title={t('pages.analytics.title')}
-        subtitle={t('pages.analytics.subtitle')}
-        actions={
-          <Space wrap size="small" direction={isMobile ? 'vertical' : 'horizontal'} style={{ width: isMobile ? '100%' : 'auto' }}>
-            <RangePicker
-              value={dateRange}
-              onChange={handleDateChange}
-              format="YYYY-MM-DD"
-              style={{ width: isMobile ? '100%' : 'auto' }}
-              placement="bottomLeft"
-              getPopupContainer={(trigger) => trigger.parentElement || document.body}
-              panelRender={isMobile ? (panelNode) => (
-                <div style={{ maxWidth: '100vw', overflow: 'auto' }}>{panelNode}</div>
-              ) : undefined}
-            />
-            <Button icon={<DownloadOutlined />} onClick={handleExport} block={isMobile}>
-              {t('pages.analytics.exportCsv')}
-            </Button>
-          </Space>
-        }
-      />
+      {pageHeader}
 
       {/* Summary Cards */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      <Row gutter={[16, 16]} style={{ marginBottom: spacing.lg }}>
         <Col xs={24} sm={12} lg={6}>
           <Card style={cardStyle}>
             <Statistic
@@ -234,7 +244,7 @@ const Analytics: React.FC = () => {
       </Row>
 
       {/* Charts */}
-      <Row gutter={[16, 16]} style={{ marginBottom: 24 }}>
+      <Row gutter={[16, 16]} style={{ marginBottom: spacing.lg }}>
         <Col xs={24} lg={16}>
           <Card title={t('pages.analytics.lessonsRemindersOverTime')} style={cardStyle}>
             <ResponsiveContainer width="100%" height={currentChartHeight}>

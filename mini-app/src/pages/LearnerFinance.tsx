@@ -6,7 +6,6 @@ import {
   Col,
   Row,
   Statistic,
-  Spin,
   Alert,
   Button,
   Tag,
@@ -34,6 +33,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
+import { DetailPageSkeleton } from '../components/common/PageSkeletons';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 import { useTheme } from '../theme/ThemeProvider';
@@ -353,7 +353,7 @@ const LearnerFinance: React.FC = () => {
   ];
 
   if (isLoading) {
-    return <Spin size="large" />;
+    return <DetailPageSkeleton />;
   }
 
   if (isError) {

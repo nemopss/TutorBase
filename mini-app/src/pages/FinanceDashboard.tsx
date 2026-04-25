@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
-import { Card, Col, Row, Statistic, Spin, Alert, List, Button, Tag } from 'antd';
+import { Card, Col, Row, Statistic, Alert, List, Button, Tag } from 'antd';
 import {
   DollarOutlined,
   RiseOutlined,
@@ -20,10 +20,11 @@ import {
 } from 'recharts';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
-import PageHeader from '../components/common/PageHeader';
+import PageIntro from '../components/common/PageIntro';
+import { OverviewPageSkeleton } from '../components/common/PageSkeletons';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 import { useResponsive } from '../hooks/useResponsive';
-import { chartHeight } from '../theme/tokens';
+import { chartHeight, spacing } from '../theme/tokens';
 
 // --- Types --- //
 interface MonthlyIncome {
@@ -97,11 +98,37 @@ const FinanceDashboard: React.FC = () => {
   });
 
   if (isLoading) {
-    return <Spin size="large" />;
+    return (
+      <div>
+        <PageIntro
+          title={t('pages.finance.title')}
+          subtitle={t('pages.finance.subtitle')}
+          action={(
+            <Button icon={<FileTextOutlined />} onClick={() => navigate('/finance/reports')}>
+              {t('pages.finance.reports')}
+            </Button>
+          )}
+        />
+        <OverviewPageSkeleton />
+      </div>
+    );
   }
 
   if (isError) {
-    return <Alert message={t('errors.loadFailed', { message: '' })} description={error.message} type="error" />;
+    return (
+      <div>
+        <PageIntro
+          title={t('pages.finance.title')}
+          subtitle={t('pages.finance.subtitle')}
+          action={(
+            <Button icon={<FileTextOutlined />} onClick={() => navigate('/finance/reports')}>
+              {t('pages.finance.reports')}
+            </Button>
+          )}
+        />
+        <Alert message={t('errors.loadFailed', { message: '' })} description={error.message} type="error" />
+      </div>
+    );
   }
 
   // Calculate income change percentage, handling edge cases
@@ -126,18 +153,17 @@ const FinanceDashboard: React.FC = () => {
 
   return (
     <div>
-      <PageHeader
+      <PageIntro
         title={t('pages.finance.title')}
         subtitle={t('pages.finance.subtitle')}
-        actions={
+        action={(
           <Button
-            type="primary"
             icon={<FileTextOutlined />}
             onClick={() => navigate('/finance/reports')}
           >
             {t('pages.finance.reports')}
           </Button>
-        }
+        )}
       />
 
       {/* Key Metrics */}
@@ -195,7 +221,7 @@ const FinanceDashboard: React.FC = () => {
       </Row>
 
       {/* Chart and Outstanding List */}
-      <Row gutter={[16, 16]} style={{ marginTop: 24 }}>
+      <Row gutter={[16, 16]} style={{ marginTop: spacing.lg }}>
         <Col xs={24} lg={16}>
           <Card title={t('pages.finance.incomeChart')} variant="borderless" style={cardStyle}>
             <ResponsiveContainer width="100%" height={currentChartHeight}>
