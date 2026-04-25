@@ -13,7 +13,8 @@ jobs:
       app: ${{ steps.filter.outputs.app }}
       nginx: ${{ steps.filter.outputs.nginx }}
       compose: ${{ steps.filter.outputs.compose }}
-      deploy: ${{ steps.filter.outputs.bot == 'true' || steps.filter.outputs.api == 'true' || steps.filter.outputs.app == 'true' || steps.filter.outputs.nginx == 'true' || steps.filter.outputs.compose == 'true' }}
+      monitoring: ${{ steps.filter.outputs.monitoring }}
+      deploy: ${{ steps.filter.outputs.bot == 'true' || steps.filter.outputs.api == 'true' || steps.filter.outputs.app == 'true' || steps.filter.outputs.nginx == 'true' || steps.filter.outputs.compose == 'true' || steps.filter.outputs.monitoring == 'true' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -61,6 +62,8 @@ jobs:
               - 'docker-compose.yml'
               - 'certbot/**'
               - 'scripts/**'
+            monitoring:
+              - 'monitoring/**'
 
   build:
     needs: changes
@@ -111,7 +114,7 @@ jobs:
   deploy:
     needs: [changes, build]
     runs-on: ubuntu-latest
-    if: ${{ github.ref == 'refs/heads/master' && needs.changes.outputs.deploy == 'true' }}
+    if: ${{ always() && github.ref == 'refs/heads/master' && needs.changes.outputs.deploy == 'true' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     permissions:
       contents: read
       packages: read
@@ -126,15 +129,29 @@ jobs:
             set -e
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
             cd /srv/tutorbase/current
-            git pull
+            git pull --ff-only
             compose_changed="${{ needs.changes.outputs.compose }}"
+            monitoring_changed="${{ needs.changes.outputs.monitoring }}"
+
+            flower_was_running="false"
+            if docker compose ps --services --filter status=running | grep -q '^flower$'; then
+              flower_was_running="true"
+            fi
+
+            monitoring_was_running="false"
+            if docker compose ps --services --filter status=running | grep -Eq '^(prometheus|grafana)$'; then
+              monitoring_was_running="true"
+            fi
 
             services=""
             if [ "${{ needs.changes.outputs.bot }}" = "true" ]; then
               services="$services bot"
             fi
             if [ "${{ needs.changes.outputs.api }}" = "true" ]; then
-              services="$services api celery_worker celery_beat flower"
+              services="$services api celery_worker celery_beat"
+              if [ "$flower_was_running" = "true" ]; then
+                services="$services flower"
+              fi
             fi
             if [ "${{ needs.changes.outputs.app }}" = "true" ]; then
               services="$services app"
@@ -147,6 +164,13 @@ jobs:
 
             if [ "$compose_changed" = "true" ]; then
               docker compose up -d --remove-orphans
+              if [ "$flower_was_running" != "true" ]; then
+                docker compose stop flower || true
+              fi
+            fi
+
+            if [ "$monitoring_was_running" = "true" ] && { [ "$monitoring_changed" = "true" ] || [ "$compose_changed" = "true" ]; }; then
+              docker compose --profile monitoring up -d --force-recreate prometheus grafana
             fi
 
             if [ "${{ needs.changes.outputs.nginx }}" = "true" ] || [ "${{ needs.changes.outputs.api }}" = "true" ] || [ "${{ needs.changes.outputs.app }}" = "true" ] || [ "$compose_changed" = "true" ]; then

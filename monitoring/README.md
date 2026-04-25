@@ -41,6 +41,11 @@ docker compose ps prometheus grafana
 - `http_requests_in_progress` - Запросы в процессе обработки
 - `process_*`, `python_*` - Runtime-метрики процесса API
 
+### Что считать "мусорным" трафиком
+- Для Prometheus безопасно считать мусор через `handler="none"` и 4xx/5xx-статусы.
+- Не добавляйте raw path как label в метрики для произвольных URL: это создаёт взрыв cardinality и со временем убивает Prometheus.
+- Если нужен точный список сканерских или мусорных URL, это уже задача access logs, а не Prometheus labels.
+
 ### Бизнес-метрики
 - `packages_created_total` - Созданные пакеты уроков
 - `active_packages` - Активные пакеты (gauge)
@@ -109,6 +114,21 @@ histogram_quantile(0.95, rate(http_request_duration_seconds_bucket[5m]))
 
 # Error rate
 rate(http_requests_total{status=~"5.."}[5m])
+
+# Top endpoint'ы по нагрузке
+topk(10, sum by (method, handler) (rate(http_requests_total{handler!~"/metrics|/health"}[5m])))
+
+# Самые медленные endpoint'ы по p95
+topk(10, histogram_quantile(0.95, sum by (le, method, handler) (rate(http_request_duration_seconds_bucket{handler!~"/metrics|/health"}[5m]))))
+
+# Самые медленные endpoint'ы по среднему времени
+topk(10, (sum by (method, handler) (rate(http_request_duration_seconds_sum{handler!~"/metrics|/health"}[5m]))) / clamp_min(sum by (method, handler) (rate(http_request_duration_seconds_count{handler!~"/metrics|/health"}[5m])), 0.001))
+
+# Сколько было unmatched/junk запросов за час
+sum(increase(http_requests_total{handler="none"}[1h]))
+
+# Разбивка junk-запросов по статусам
+sum by (status) (increase(http_requests_total{handler="none"}[1h]))
 
 # Активные пакеты за последний день
 active_packages

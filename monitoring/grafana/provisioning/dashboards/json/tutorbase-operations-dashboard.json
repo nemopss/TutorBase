@@ -4,7 +4,7 @@
   "tags": ["fastapi", "celery", "tutorbase", "monitoring"],
   "timezone": "browser",
   "schemaVersion": 16,
-  "version": 1,
+  "version": 2,
   "refresh": "15s",
   "editable": true,
   "graphTooltip": 0,
@@ -13,11 +13,11 @@
       "id": 1,
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 0},
       "type": "graph",
-      "title": "HTTP Request Rate",
+      "title": "HTTP Request Rate by Status",
       "targets": [
         {
-          "expr": "sum by (method, handler) (rate(http_requests_total[5m]))",
-          "legendFormat": "{{method}} {{handler}}"
+          "expr": "sum by (status) (rate(http_requests_total{handler!~\"/metrics|/health\"}[5m]))",
+          "legendFormat": "{{status}}"
         }
       ],
       "yaxes": [
@@ -29,15 +29,15 @@
       "id": 2,
       "gridPos": {"h": 8, "w": 12, "x": 12, "y": 0},
       "type": "graph",
-      "title": "HTTP Request Duration (p95)",
+      "title": "Top Endpoints by Request Rate",
       "targets": [
         {
-          "expr": "histogram_quantile(0.95, sum by (le, method, handler) (rate(http_request_duration_seconds_bucket[5m])))",
+          "expr": "topk(10, sum by (method, handler) (rate(http_requests_total{handler!~\"/metrics|/health\"}[5m])))",
           "legendFormat": "{{method}} {{handler}}"
         }
       ],
       "yaxes": [
-        {"format": "s", "label": "Duration"},
+        {"format": "reqps", "label": "Requests/sec"},
         {"format": "short"}
       ]
     },
@@ -90,10 +90,10 @@
       "id": 6,
       "gridPos": {"h": 6, "w": 6, "x": 18, "y": 8},
       "type": "stat",
-      "title": "Packages Created (24h)",
+      "title": "Unmatched Requests (1h)",
       "targets": [
         {
-          "expr": "increase(packages_created_total[24h])"
+          "expr": "sum(increase(http_requests_total{handler=\"none\"}[1h]))"
         }
       ],
       "options": {
@@ -105,47 +105,11 @@
       "id": 7,
       "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
       "type": "graph",
-      "title": "Celery Task Start Rate",
+      "title": "Slowest Endpoints (p95)",
       "targets": [
         {
-          "expr": "sum by (task_name) (rate(celery_task_started_total[5m]))",
-          "legendFormat": "{{task_name}}"
-        }
-      ],
-      "yaxes": [
-        {"format": "ops", "label": "Tasks/sec"},
-        {"format": "short"}
-      ]
-    },
-    {
-      "id": 8,
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
-      "type": "graph",
-      "title": "Celery Failures and Retries",
-      "targets": [
-        {
-          "expr": "sum by (task_name) (rate(celery_task_failed_total[5m]))",
-          "legendFormat": "failed {{task_name}}"
-        },
-        {
-          "expr": "sum by (task_name) (rate(celery_task_retried_total[5m]))",
-          "legendFormat": "retried {{task_name}}"
-        }
-      ],
-      "yaxes": [
-        {"format": "ops", "label": "Events/sec"},
-        {"format": "short"}
-      ]
-    },
-    {
-      "id": 9,
-      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
-      "type": "graph",
-      "title": "Celery Task Duration (p95)",
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.95, sum by (le, task_name) (rate(celery_task_duration_seconds_bucket[5m])))",
-          "legendFormat": "{{task_name}}"
+          "expr": "topk(10, histogram_quantile(0.95, sum by (le, method, handler) (rate(http_request_duration_seconds_bucket{handler!~\"/metrics|/health\"}[5m]))))",
+          "legendFormat": "{{method}} {{handler}}"
         }
       ],
       "yaxes": [
@@ -154,22 +118,50 @@
       ]
     },
     {
-      "id": 10,
-      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+      "id": 8,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
       "type": "graph",
-      "title": "Notification Jobs (1h)",
+      "title": "Slowest Endpoints (avg)",
       "targets": [
         {
-          "expr": "sum by (job_type) (increase(notification_jobs_claimed_total[1h]))",
-          "legendFormat": "{{job_type}} claimed"
-        },
-        {
-          "expr": "sum by (job_type, result) (increase(notification_jobs_processed_total[1h]))",
-          "legendFormat": "{{job_type}} {{result}}"
+          "expr": "topk(10, (sum by (method, handler) (rate(http_request_duration_seconds_sum{handler!~\"/metrics|/health\"}[5m]))) / clamp_min(sum by (method, handler) (rate(http_request_duration_seconds_count{handler!~\"/metrics|/health\"}[5m])), 0.001))",
+          "legendFormat": "{{method}} {{handler}}"
         }
       ],
       "yaxes": [
-        {"format": "short", "label": "Jobs"},
+        {"format": "s", "label": "Duration"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 9,
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 22},
+      "type": "graph",
+      "title": "Junk Requests by Status (1h)",
+      "targets": [
+        {
+          "expr": "sum by (status) (increase(http_requests_total{handler=\"none\"}[1h]))",
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "yaxes": [
+        {"format": "short", "label": "Requests"},
+        {"format": "short"}
+      ]
+    },
+    {
+      "id": 10,
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 22},
+      "type": "graph",
+      "title": "Client Errors (4xx) by Endpoint",
+      "targets": [
+        {
+          "expr": "topk(10, sum by (status, method, handler) (rate(http_requests_total{status=~\"4..\", handler!~\"/metrics|/health\"}[5m])))",
+          "legendFormat": "{{status}} {{method}} {{handler}}"
+        }
+      ],
+      "yaxes": [
+        {"format": "reqps", "label": "Requests/sec"},
         {"format": "short"}
       ]
     },
@@ -217,11 +209,11 @@
       "id": 13,
       "gridPos": {"h": 8, "w": 24, "x": 0, "y": 38},
       "type": "graph",
-      "title": "HTTP Error Rate (4xx, 5xx)",
+      "title": "Server Errors (5xx) by Endpoint",
       "targets": [
         {
-          "expr": "sum by (status, handler) (rate(http_requests_total{status=~\"4..|5..\"}[5m]))",
-          "legendFormat": "{{status}} {{handler}}"
+          "expr": "topk(10, sum by (status, method, handler) (rate(http_requests_total{status=~\"5..\", handler!~\"/metrics|/health\"}[5m])))",
+          "legendFormat": "{{status}} {{method}} {{handler}}"
         }
       ],
       "yaxes": [
