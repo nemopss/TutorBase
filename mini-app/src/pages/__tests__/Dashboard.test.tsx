@@ -6,11 +6,10 @@ import { AxiosError } from 'axios';
 import api from '../../services/api';
 
 const nextLessonAt = new Date(Date.now() + 60 * 60 * 1000).toISOString();
+const mockUseAuth = jest.fn();
 
 jest.mock('../../auth/AuthProvider', () => ({
-  useAuth: () => ({
-    tenantId: 1,
-  }),
+  useAuth: () => mockUseAuth(),
 }));
 
 jest.mock('../../services/api', () => ({
@@ -107,6 +106,13 @@ const createQueryClient = () =>
   });
 
 describe('Dashboard', () => {
+  beforeEach(() => {
+    mockUseAuth.mockReturnValue({
+      tenantId: 1,
+      canSwitchTenant: false,
+    });
+  });
+
   it('renders dashboard content without the page header', async () => {
     const queryClient = createQueryClient();
     render(
@@ -354,5 +360,25 @@ describe('Dashboard', () => {
     });
 
     expect(await screen.findByText('pages.dashboard.onboarding.title')).toBeInTheDocument();
+  });
+
+  it('requires tenant context in global owner mode', async () => {
+    mockUseAuth.mockReturnValue({
+      tenantId: null,
+      canSwitchTenant: true,
+    });
+
+    const queryClient = createQueryClient();
+    render(
+      <BrowserRouter>
+        <QueryClientProvider client={queryClient}>
+          <Dashboard />
+        </QueryClientProvider>
+      </BrowserRouter>
+    );
+
+    expect(await screen.findByText('common.tenantContextRequired.title')).toBeInTheDocument();
+    expect(screen.getByText('common.tenantContextRequired.description')).toBeInTheDocument();
+    expect(screen.queryByText(/Upcoming lessons/i)).not.toBeInTheDocument();
   });
 });

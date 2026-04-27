@@ -95,7 +95,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const hasMoreNavigationPrefetchedRef = useRef(false);
   const prefetchPromisesRef = useRef<Map<string, Promise<void>>>(new Map());
   const warmedNavigationTargetsRef = useRef<Set<string>>(new Set());
-  const { user, isSuperAdmin, tenantAccess, canSwitchTenant } = useAuth();
+  const { user, isSuperAdmin, tenantAccess, canSwitchTenant, tenantId } = useAuth();
   const hasStaffAccess = isSuperAdmin || user?.role === 'teacher';
   const isStudent = user?.role === 'viewer';
   const isTutorDashboardRoute = hasStaffAccess && !isStudent && location.pathname === '/';
@@ -345,7 +345,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
       return existingPromise;
     }
 
-    const nextPromise = prefetchNavigationTarget(queryClient, pathname)
+    const nextPromise = prefetchNavigationTarget(queryClient, pathname, { tenantId })
       .then(() => {
         warmedNavigationTargetsRef.current.add(pathname);
       })

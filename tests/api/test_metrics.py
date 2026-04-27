@@ -233,3 +233,23 @@ async def test_dashboard_history_metrics_aggregates_lesson_load(
     assert weekly_load[current_week_start]["lessons_count"] == 2
     assert weekly_load[previous_week_start]["hours"] == 1.0
     assert weekly_load[previous_week_start]["lessons_count"] == 1
+
+
+@pytest.mark.asyncio
+async def test_owner_global_metrics_endpoints_require_tenant_context(
+    client: AsyncClient,
+    db_session: AsyncSession,
+):
+    headers, _ = await get_auth_headers(
+        db_session,
+        CurrentTenant(tenant_id=None, is_super_admin=True, tenant=None),
+        role="admin",
+    )
+
+    history_response = await client.get("/api/v1/metrics/dashboard-history", headers=headers)
+    assert history_response.status_code == 403
+    assert history_response.json()["detail"] == "Tenant context required for metrics endpoints"
+
+    dismissals_response = await client.get("/api/v1/metrics/dashboard-attention-dismissals", headers=headers)
+    assert dismissals_response.status_code == 403
+    assert dismissals_response.json()["detail"] == "Tenant context required for metrics endpoints"

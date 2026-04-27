@@ -45,6 +45,7 @@ import EmptyState from '../components/common/EmptyState';
 import CalendarContainer from '../components/common/CalendarContainer';
 import ScheduleTab from '../components/learner/ScheduleTab';
 import { DetailPageSkeleton } from '../components/common/PageSkeletons';
+import TenantContextRequired from '../components/common/TenantContextRequired';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
 import { useAuth } from '../auth/AuthProvider';
@@ -151,7 +152,8 @@ const LearnerProfile: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
-  const { tenantAccess } = useAuth();
+  const { tenantAccess, tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const colors = resolvedTheme.colors;
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   
@@ -179,7 +181,7 @@ const LearnerProfile: React.FC = () => {
       const { data } = await api.get(`/learners/${learnerId}`);
       return data;
     },
-    enabled: !!learnerId,
+    enabled: !!learnerId && !requiresTenantContext,
   });
 
   // Fetch packages
@@ -189,7 +191,7 @@ const LearnerProfile: React.FC = () => {
       const { data } = await api.get('/packages', { params: { learner_id: learnerId } });
       return data;
     },
-    enabled: !!learnerId,
+    enabled: !!learnerId && !requiresTenantContext,
   });
 
   const { data: oneOffPackagesData } = useQuery<{ items: Package[] }>({
@@ -200,7 +202,7 @@ const LearnerProfile: React.FC = () => {
       });
       return data;
     },
-    enabled: !!learnerId,
+    enabled: !!learnerId && !requiresTenantContext,
   });
 
   const { data: learnerLessonsData, isLoading: isLoadingLearnerLessons } = useQuery<LessonListResponse>({
@@ -233,7 +235,7 @@ const LearnerProfile: React.FC = () => {
       }
       return { items, total: firstPage.total };
     },
-    enabled: !!learnerId,
+    enabled: !!learnerId && !requiresTenantContext,
   });
 
   // Fetch finance
@@ -243,7 +245,7 @@ const LearnerProfile: React.FC = () => {
       const { data } = await api.get(`/learners/${learnerId}/finance`);
       return data;
     },
-    enabled: !!learnerId,
+    enabled: !!learnerId && !requiresTenantContext,
   });
 
   // Update learner mutation
@@ -535,6 +537,10 @@ const LearnerProfile: React.FC = () => {
           onClick: () => setIsArchiveModalOpen(true),
         },
   ] : [];
+
+  if (requiresTenantContext) {
+    return <TenantContextRequired sectionLabel={t('pages.learners.title')} />;
+  }
 
   if (isLoading) {
     return <DetailPageSkeleton />;

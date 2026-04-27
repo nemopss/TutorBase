@@ -36,6 +36,7 @@ import PackageForm from '../components/forms/PackageForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
 import LessonForm from '../components/forms/LessonForm';
 import { DetailPageSkeleton } from '../components/common/PageSkeletons';
+import TenantContextRequired from '../components/common/TenantContextRequired';
 import { formatDate } from '../utils/datetime';
 import { spacing } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
@@ -135,7 +136,8 @@ const PackageDetail: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
-  const { tenantAccess } = useAuth();
+  const { tenantAccess, tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const { isMobile } = useResponsive();
   const isDark = resolvedTheme.colorScheme === 'dark';
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
@@ -163,13 +165,13 @@ const PackageDetail: React.FC = () => {
   } = useQuery<PackageDetails, Error>({
     queryKey: ['package', id],
     queryFn: () => fetchPackage(id!),
-    enabled: !!id,
+    enabled: !!id && !requiresTenantContext,
   });
 
   const { data: lessonsData, isLoading: isLoadingLessons } = useQuery<LessonListResponse, Error>({
     queryKey: ['packageLessons', id],
     queryFn: () => fetchPackageLessons(id!),
-    enabled: !!id,
+    enabled: !!id && !requiresTenantContext,
   });
 
   // Mutations
@@ -383,6 +385,10 @@ const PackageDetail: React.FC = () => {
       deletePackageMutation.mutate(parseInt(id));
     }
   };
+
+  if (requiresTenantContext) {
+    return <TenantContextRequired sectionLabel={t('pages.packages.title')} />;
+  }
 
   // Loading/Error states
   if (!id || isLoadingPackage) {

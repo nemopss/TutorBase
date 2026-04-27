@@ -12,6 +12,8 @@ import { useDebounce } from '../hooks/useDebounce';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import ReminderCard from '../components/cards/ReminderCard';
+import TenantContextRequired from '../components/common/TenantContextRequired';
+import { useAuth } from '../auth/AuthProvider';
 
 // --- Types --- //
 interface Reminder {
@@ -97,6 +99,8 @@ const updateReminder = async ({ id, values }: { id: number; values: any }) => {
 // --- Component --- //
 const Reminders: React.FC = () => {
   const { t } = useTranslation();
+  const { tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const queryClient = useQueryClient();
 
   // Status options with translations
@@ -133,11 +137,13 @@ const Reminders: React.FC = () => {
     queryKey: ['reminders', currentPage, pageSize, statusFilter, typeFilter, packageFilter, debouncedSearchTerm],
     queryFn: () => fetchReminders(currentPage, pageSize, statusFilter, typeFilter, packageFilter, debouncedSearchTerm),
     placeholderData: (previousData) => previousData,
+    enabled: !requiresTenantContext,
   });
 
   const { data: packagesData } = useQuery<PackageListResponse, Error>({
     queryKey: ['packagesForReminders'],
     queryFn: fetchPackages,
+    enabled: !requiresTenantContext,
   });
 
   const updateMutation = useMutation({
@@ -255,6 +261,18 @@ const Reminders: React.FC = () => {
       ),
     },
   ];
+
+  if (requiresTenantContext) {
+    return (
+      <div>
+        <PageHeader
+          title={t('pages.reminders.title')}
+          subtitle={t('pages.reminders.subtitle')}
+        />
+        <TenantContextRequired sectionLabel={t('pages.reminders.title')} />
+      </div>
+    );
+  }
 
   const handleTableChange = (pagination: any, _filters: any) => {
     setCurrentPage(pagination.current);

@@ -10,7 +10,7 @@ import re
 class TutorRegistrationRequest(BaseModel):
     """Request schema for tutor registration."""
     school_name: str = Field(..., min_length=2, max_length=100, description="Name of the school or tutoring business")
-    contact_email: str = Field(..., description="Contact email for the tutor/school")
+    contact_email: Optional[str] = Field(None, description="Optional contact email for the tutor/school")
     tutor_name: Optional[str] = Field(None, max_length=100, description="Tutor's display name (optional, will use Telegram name if not provided)")
     
     @validator('school_name')
@@ -21,13 +21,16 @@ class TutorRegistrationRequest(BaseModel):
     
     @validator('contact_email')
     def validate_email(cls, v):
-        if not v or not v.strip():
-            raise ValueError('Email cannot be empty')
+        if v is None:
+            return None
+        email = v.strip()
+        if not email:
+            return None
         # Simple email validation
         email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_pattern, v.strip()):
+        if not re.match(email_pattern, email):
             raise ValueError('Invalid email format')
-        return v.strip()
+        return email
 
 
 class StudentRegistrationRequest(BaseModel):

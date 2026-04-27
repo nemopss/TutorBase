@@ -9,6 +9,8 @@ import TemplateForm from '../components/forms/TemplateForm';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import TemplateCard from '../components/cards/TemplateCard';
+import TenantContextRequired from '../components/common/TenantContextRequired';
+import { useAuth } from '../auth/AuthProvider';
 
 // --- Types --- //
 interface Template {
@@ -52,6 +54,8 @@ const duplicateTemplate = async (id: number) => {
 // --- Component --- //
 const Templates: React.FC = () => {
   const { t } = useTranslation();
+  const { tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const queryClient = useQueryClient();
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<Template | null>(null);
@@ -61,6 +65,7 @@ const Templates: React.FC = () => {
   const { data, isLoading, isError, error } = useQuery<TemplateListResponse, Error>({
     queryKey: ['templates'],
     queryFn: fetchTemplates,
+    enabled: !requiresTenantContext,
   });
 
   // Debug logging for Android
@@ -184,6 +189,23 @@ const Templates: React.FC = () => {
 
   // Show error inline instead of blocking entire page
   const showError = isError && error;
+
+  if (requiresTenantContext) {
+    return (
+      <div>
+        <PageHeader
+          title={t('pages.templates.title')}
+          subtitle={t('pages.templates.subtitle')}
+          actions={
+            <Button type="primary" disabled>
+              {t('pages.templates.createTemplate')}
+            </Button>
+          }
+        />
+        <TenantContextRequired sectionLabel={t('pages.templates.title')} />
+      </div>
+    );
+  }
 
   return (
     <div>

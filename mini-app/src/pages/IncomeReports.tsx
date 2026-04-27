@@ -25,6 +25,8 @@ import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import { ReportPageSkeleton } from '../components/common/PageSkeletons';
+import TenantContextRequired from '../components/common/TenantContextRequired';
+import { useAuth } from '../auth/AuthProvider';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 
 const { RangePicker } = DatePicker;
@@ -87,6 +89,8 @@ const getDefaultDates = (period: PeriodType): [Dayjs, Dayjs] => {
 // --- Component --- //
 const IncomeReports: React.FC = () => {
   const { t } = useTranslation();
+  const { tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const { cardStyle, textColor } = useResponsiveStyles();
   const [period, setPeriod] = useState<PeriodType>('month');
   const [dateRange, setDateRange] = useState<[Dayjs, Dayjs]>(getDefaultDates('month'));
@@ -131,6 +135,7 @@ const IncomeReports: React.FC = () => {
   } = useQuery<IncomeReport, Error>({
     queryKey: ['incomeReport', period, effectiveDateRange[0].toISOString(), effectiveDateRange[1].toISOString()],
     queryFn: fetchIncomeReport,
+    enabled: !requiresTenantContext,
   });
 
   const handlePeriodChange = (value: PeriodType) => {
@@ -234,6 +239,15 @@ const IncomeReports: React.FC = () => {
       }
     />
   );
+
+  if (requiresTenantContext) {
+    return (
+      <div>
+        {pageHeader}
+        <TenantContextRequired sectionLabel={t('pages.incomeReports.title')} />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

@@ -27,6 +27,7 @@ import api from '../services/api';
 import DashboardMiniWeekCalendar from '../components/dashboard/DashboardMiniWeekCalendar';
 import DashboardLessonLoadHeatmap from '../components/dashboard/DashboardLessonLoadHeatmap';
 import DashboardWeeklyLoad from '../components/dashboard/DashboardWeeklyLoad';
+import TenantContextRequired from '../components/common/TenantContextRequired';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 import { useResponsive } from '../hooks/useResponsive';
 import { useTheme } from '../theme/ThemeProvider';
@@ -308,6 +309,7 @@ const Dashboard: React.FC = () => {
   const { isMobile } = useResponsive();
   const { resolvedTheme } = useTheme();
   const { tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const colors = resolvedTheme.colors;
   const topRowHeight = isMobile ? undefined : 432;
   const tileRadius = 10;
@@ -338,41 +340,43 @@ const Dashboard: React.FC = () => {
   } = useQuery<LessonListResponse, Error>({
     queryKey: ['dashboardLessons', dashboardLessonRange.fromDate, dashboardLessonRange.toDate],
     queryFn: () => fetchDashboardLessons(dashboardLessonRange.fromDate, dashboardLessonRange.toDate),
+    enabled: !requiresTenantContext,
   });
 
   const { data: packagesSummaryData, isSuccess: hasPackagesSummaryData } = useQuery<PackageListResponse, Error>({
     queryKey: ['dashboardPackagesSummary'],
     queryFn: fetchPackagesSummary,
+    enabled: !requiresTenantContext,
   });
 
   const { data: activePackagesData, isLoading: isLoadingActivePackages } = useQuery<ActivePackageListResponse, Error>({
     queryKey: ['dashboardActivePackages'],
     queryFn: fetchActivePackages,
-    enabled: loadDeferredPanels,
+    enabled: !requiresTenantContext && loadDeferredPanels,
   });
 
   const { data: notificationActivityData, isLoading: isLoadingNotificationActivity } = useQuery<NotificationActivity[], Error>({
     queryKey: ['dashboardNotificationActivity'],
     queryFn: fetchNotificationActivity,
-    enabled: loadDeferredPanels,
+    enabled: !requiresTenantContext && loadDeferredPanels,
   });
 
   const { data: failedNotificationInstancesData, isLoading: isLoadingFailedNotificationInstances } = useQuery<NotificationInstance[], Error>({
     queryKey: ['dashboardFailedNotificationInstances'],
     queryFn: () => fetchNotificationInstancesByStatus('failed'),
-    enabled: loadDeferredPanels,
+    enabled: !requiresTenantContext && loadDeferredPanels,
   });
 
   const { data: queuedNotificationInstancesData, isLoading: isLoadingQueuedNotificationInstances } = useQuery<NotificationInstance[], Error>({
     queryKey: ['dashboardQueuedNotificationInstances'],
     queryFn: fetchNotificationQueueInstances,
-    enabled: loadDeferredPanels,
+    enabled: !requiresTenantContext && loadDeferredPanels,
   });
 
   const { data: attentionDismissalsData, isLoading: isLoadingAttentionDismissals } = useQuery<DashboardAttentionDismissal[], Error>({
     queryKey: ['dashboardAttentionDismissals'],
     queryFn: fetchDashboardAttentionDismissals,
-    enabled: loadDeferredPanels,
+    enabled: !requiresTenantContext && loadDeferredPanels,
   });
 
   const {
@@ -383,23 +387,25 @@ const Dashboard: React.FC = () => {
   } = useQuery<DashboardHistoryResponse, Error>({
     queryKey: ['dashboardHistory'],
     queryFn: fetchDashboardHistory,
-    enabled: loadDeferredPanels,
+    enabled: !requiresTenantContext && loadDeferredPanels,
   });
 
   const { data: lessonsSummaryData, isSuccess: hasLessonsSummaryData } = useQuery<LessonListResponse, Error>({
     queryKey: ['dashboardLessonsSummary'],
     queryFn: fetchLessonsSummary,
+    enabled: !requiresTenantContext,
   });
 
   const { data: learnersData, isSuccess: hasLearnersData } = useQuery<LearnerListResponse, Error>({
     queryKey: ['dashboardLearnersSummary'],
     queryFn: fetchLearnersSummary,
+    enabled: !requiresTenantContext,
   });
 
   const { data: inviteTokensData, isSuccess: hasInviteTokensData } = useQuery<InviteTokenListResponse, Error>({
     queryKey: ['dashboardInviteTokensSummary', tenantId],
     queryFn: () => fetchInviteTokensSummary(tenantId!),
-    enabled: !!tenantId,
+    enabled: !requiresTenantContext && !!tenantId,
   });
 
   const dismissAttentionMutation = useMutation({
@@ -433,6 +439,10 @@ const Dashboard: React.FC = () => {
       window.clearTimeout(timer);
     };
   }, []);
+
+  if (requiresTenantContext) {
+    return <TenantContextRequired sectionLabel={t('pages.dashboard.title')} />;
+  }
 
   const allLessons = lessonsData?.items || [];
   const activePackages = activePackagesData?.items || [];

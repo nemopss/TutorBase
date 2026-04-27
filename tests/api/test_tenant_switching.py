@@ -8,7 +8,10 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from api.dependencies import CurrentTenant
 from api.security import create_access_token, decode_token, TokenType
+from config import config
+from database import crud
 from database.models import User, Tenant
 from tests import factories
 
@@ -61,6 +64,40 @@ async def test_switch_tenant_to_global_context(
     # Verify new token has null tenant_id
     new_token = data["access_token"]
     token_payload = decode_token(new_token, TokenType.ACCESS)
+    assert token_payload["tenant_id"] is None
+    assert token_payload["role"] == "admin"
+
+
+@pytest.mark.asyncio
+async def test_switch_tenant_to_global_context_for_tenant_bound_platform_admin(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tenant_1: Tenant,
+    monkeypatch,
+):
+    """Platform admins attached to a tenant can still switch into global mode."""
+    telegram_id = 987654321
+    monkeypatch.setattr(config, "ADMINS", [*config.ADMINS, telegram_id])
+    tenant_bound_admin = await crud.create_user(
+        db_session,
+        CurrentTenant(tenant_id=tenant_1.id, is_super_admin=False, tenant=tenant_1),
+        telegram_id=telegram_id,
+        display_name="Tenant Bound Platform Admin",
+        role="admin",
+        tenant_id=tenant_1.id,
+        username="tenant_bound_platform_admin",
+    )
+    await db_session.commit()
+
+    headers = await get_auth_headers(tenant_bound_admin)
+    response = await client.post(
+        "/api/v1/auth/switch-tenant",
+        json={"tenant_id": None},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    token_payload = decode_token(response.json()["access_token"], TokenType.ACCESS)
     assert token_payload["tenant_id"] is None
     assert token_payload["role"] == "admin"
 

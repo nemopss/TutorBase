@@ -10,6 +10,7 @@ import PageHeader from '../components/common/PageHeader';
 import PackageCard from '../components/cards/PackageCard';
 import PackageGrid from '../components/common/PackageGrid';
 import FloatingActionButton from '../components/common/FloatingActionButton';
+import TenantContextRequired from '../components/common/TenantContextRequired';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
 import { useAuth } from '../auth/AuthProvider';
@@ -68,7 +69,8 @@ const Packages: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
-  const { tenantAccess } = useAuth();
+  const { tenantAccess, tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const isDark = resolvedTheme.colorScheme === 'dark';
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'draft' | 'cancelled'>('active');
@@ -77,6 +79,7 @@ const Packages: React.FC = () => {
   const { data, isLoading, error, isError } = useQuery<PackageListResponse, Error>({
     queryKey: ['packages', activeTab],
     queryFn: () => fetchPackages(activeTab),
+    enabled: !requiresTenantContext,
   });
 
   const packagesData = data?.items ?? [];
@@ -118,6 +121,18 @@ const Packages: React.FC = () => {
     { key: 'draft', label: t('pages.packages.status.draft') },
     { key: 'cancelled', label: t('pages.packages.status.cancelled') },
   ];
+
+  if (requiresTenantContext) {
+    return (
+      <div>
+        <PageHeader
+          title={t('pages.packages.title')}
+          subtitle={t('pages.packages.subtitle')}
+        />
+        <TenantContextRequired sectionLabel={t('pages.packages.title')} />
+      </div>
+    );
+  }
 
   return (
     <div>

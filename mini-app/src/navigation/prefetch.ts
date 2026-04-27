@@ -11,6 +11,9 @@ dayjs.extend(timezone);
 dayjs.extend(isoWeek);
 
 type RouteLoader = () => Promise<unknown>;
+type PrefetchOptions = {
+  tenantId?: number | null;
+};
 
 type LessonListResponse = {
   total: number;
@@ -434,9 +437,25 @@ const routeDataPrefetchers: Partial<Record<string, (queryClient: QueryClient) =>
   '/analytics': prefetchAnalyticsData,
 };
 
-export const prefetchRouteData = async (queryClient: QueryClient, pathname: string) => {
+const tenantScopedRoutes = new Set([
+  '/',
+  '/lessons',
+  '/finance/dashboard',
+  '/finance/reports',
+  '/analytics',
+]);
+
+export const prefetchRouteData = async (
+  queryClient: QueryClient,
+  pathname: string,
+  options?: PrefetchOptions,
+) => {
   const routeKey = matchPrefetchRoute(pathname);
   if (!routeKey) {
+    return;
+  }
+
+  if (tenantScopedRoutes.has(routeKey) && options?.tenantId === null) {
     return;
   }
 
@@ -448,10 +467,14 @@ export const prefetchRouteData = async (queryClient: QueryClient, pathname: stri
   await prefetcher(queryClient).catch(() => undefined);
 };
 
-export const prefetchNavigationTarget = async (queryClient: QueryClient, pathname: string) => {
+export const prefetchNavigationTarget = async (
+  queryClient: QueryClient,
+  pathname: string,
+  options?: PrefetchOptions,
+) => {
   await Promise.allSettled([
     preloadRouteModule(pathname),
-    prefetchRouteData(queryClient, pathname),
+    prefetchRouteData(queryClient, pathname, options),
   ]);
 };
 

@@ -8,6 +8,8 @@ import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import { OverviewPageSkeleton } from '../components/common/PageSkeletons';
+import TenantContextRequired from '../components/common/TenantContextRequired';
+import { useAuth } from '../auth/AuthProvider';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 import { useResponsive } from '../hooks/useResponsive';
 import { chartHeight, spacing } from '../theme/tokens';
@@ -84,6 +86,8 @@ const fetchAllPackages = async (): Promise<PackageListResponse> => {
 
 const Analytics: React.FC = () => {
   const { t } = useTranslation();
+  const { tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const { cardStyle, textColor, chartGridColor, tooltipStyle } = useResponsiveStyles();
   const { isMobile } = useResponsive();
   const currentChartHeight = isMobile ? chartHeight.mobile : chartHeight.desktop;
@@ -95,16 +99,19 @@ const Analytics: React.FC = () => {
   const { data: lessonsData, isLoading: isLoadingLessons } = useQuery<DailyMetricsResponse, Error>({
     queryKey: ['analyticsLessons', dateRange[0].toISOString(), dateRange[1].toISOString()],
     queryFn: () => fetchDailyLessons(dateRange[0].toISOString(), dateRange[1].toISOString()),
+    enabled: !requiresTenantContext,
   });
 
   const { data: remindersData, isLoading: isLoadingReminders } = useQuery<DailyMetricsResponse, Error>({
     queryKey: ['analyticsReminders', dateRange[0].toISOString(), dateRange[1].toISOString()],
     queryFn: () => fetchDailyReminders(dateRange[0].toISOString(), dateRange[1].toISOString()),
+    enabled: !requiresTenantContext,
   });
 
   const { data: packagesData } = useQuery<PackageListResponse, Error>({
     queryKey: ['analyticsPackages'],
     queryFn: fetchAllPackages,
+    enabled: !requiresTenantContext,
   });
 
   const handleDateChange = (dates: any) => {
@@ -185,6 +192,15 @@ const Analytics: React.FC = () => {
       }
     />
   );
+
+  if (requiresTenantContext) {
+    return (
+      <div>
+        {pageHeader}
+        <TenantContextRequired sectionLabel={t('pages.analytics.title')} />
+      </div>
+    );
+  }
 
   if (isLoadingLessons || isLoadingReminders) {
     return (

@@ -22,6 +22,8 @@ import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageIntro from '../components/common/PageIntro';
 import { OverviewPageSkeleton } from '../components/common/PageSkeletons';
+import TenantContextRequired from '../components/common/TenantContextRequired';
+import { useAuth } from '../auth/AuthProvider';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 import { useResponsive } from '../hooks/useResponsive';
 import { chartHeight, spacing } from '../theme/tokens';
@@ -77,6 +79,8 @@ const formatMonth = (month: string): string => {
 const FinanceDashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
+  const { tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const { cardStyle, textColor, chartGridColor, tooltipStyle } = useResponsiveStyles();
   const { isMobile } = useResponsive();
   const currentChartHeight = isMobile ? chartHeight.mobile : chartHeight.desktop;
@@ -89,13 +93,31 @@ const FinanceDashboard: React.FC = () => {
   } = useQuery<DashboardMetrics, Error>({
     queryKey: ['financeDashboard'],
     queryFn: fetchDashboardMetrics,
+    enabled: !requiresTenantContext,
   });
 
   const { data: learnersWithBalance } = useQuery<LearnerWithBalance[], Error>({
     queryKey: ['learnersWithBalance'],
     queryFn: fetchLearnersWithBalance,
-    enabled: !!metrics,
+    enabled: !requiresTenantContext && !!metrics,
   });
+
+  if (requiresTenantContext) {
+    return (
+      <div>
+        <PageIntro
+          title={t('pages.finance.title')}
+          subtitle={t('pages.finance.subtitle')}
+          action={(
+            <Button icon={<FileTextOutlined />} disabled>
+              {t('pages.finance.reports')}
+            </Button>
+          )}
+        />
+        <TenantContextRequired sectionLabel={t('pages.finance.title')} />
+      </div>
+    );
+  }
 
   if (isLoading) {
     return (

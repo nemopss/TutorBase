@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from datetime import datetime, date, timezone
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import (
@@ -23,6 +23,14 @@ from api.schemas import (
 from database import crud
 
 router = APIRouter()
+
+
+def _require_metrics_tenant_context(current_tenant: CurrentTenant) -> None:
+    if current_tenant.tenant_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Tenant context required for metrics endpoints",
+        )
 
 
 def _coerce_row_to_date(raw: datetime | date | str) -> date:
@@ -56,6 +64,7 @@ async def metrics_summary(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
 ) -> MetricsSummary:
+    _require_metrics_tenant_context(current_tenant)
     lessons = await crud.count_lessons_by_status(session, current_tenant, from_date=from_date, to_date=to_date)
     reminders = await crud.count_reminders_by_status(session, current_tenant)
     return MetricsSummary(lessons=lessons, reminders=reminders)
@@ -69,6 +78,7 @@ async def lessons_daily_metrics(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
 ) -> DailyMetricsResponse:
+    _require_metrics_tenant_context(current_tenant)
     rows = await crud.lessons_daily_stats(session, current_tenant, from_date=from_date, to_date=to_date)
     points = [DailyPoint(date=_coerce_row_to_date(row[0]), value=row[1]) for row in rows if row[0] is not None]
     return DailyMetricsResponse(items=points)
@@ -82,6 +92,7 @@ async def reminders_daily_metrics(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
 ) -> DailyMetricsResponse:
+    _require_metrics_tenant_context(current_tenant)
     rows = await crud.reminders_daily_stats(session, current_tenant, from_date=from_date, to_date=to_date)
     points = [DailyPoint(date=_coerce_row_to_date(row[0]), value=row[1]) for row in rows if row[0] is not None]
     return DailyMetricsResponse(items=points)
@@ -93,6 +104,7 @@ async def dashboard_history_metrics(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
 ) -> DashboardHistoryResponse:
+    _require_metrics_tenant_context(current_tenant)
     history = await crud.fetch_dashboard_history_metrics(session, current_tenant)
     return DashboardHistoryResponse.model_validate(history)
 
@@ -107,6 +119,7 @@ async def list_dashboard_attention_dismissals(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
 ) -> list[DashboardAttentionDismissalResponse]:
+    _require_metrics_tenant_context(current_tenant)
     dismissals = await crud.fetch_active_dashboard_attention_dismissals(
         session,
         current_tenant,
@@ -127,6 +140,7 @@ async def dismiss_dashboard_attention_item(
     _=Depends(admin_or_teacher_required),
     __=Depends(require_maintenance_tenant_access),
 ) -> DashboardAttentionDismissalResponse:
+    _require_metrics_tenant_context(current_tenant)
     dismissal = await crud.upsert_dashboard_attention_dismissal(
         session,
         current_tenant,

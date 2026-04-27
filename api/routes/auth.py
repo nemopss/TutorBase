@@ -45,6 +45,7 @@ from services import notification_bootstrap_service, tenant_access_service
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 BROWSER_REFRESH_COOKIE_PATH = "/api/v1/auth/browser"
+_TOKEN_TENANT_UNSET = object()
 
 # Helper function to apply rate limiting conditionally
 def rate_limit(limit_string: str):
@@ -84,13 +85,19 @@ def _build_user_payload(user: User) -> UserPayload:
     )
 
 
-def _build_token_payload(user: User, *, tenant_id: int | None = None) -> dict[str, object]:
+def _build_token_payload(
+    user: User,
+    *,
+    tenant_id: int | None | object = _TOKEN_TENANT_UNSET,
+) -> dict[str, object]:
+    # `None` is a valid explicit global context for platform admins.
+    resolved_tenant_id = user.tenant_id if tenant_id is _TOKEN_TENANT_UNSET else tenant_id
     return {
         "sub": str(user.id),
         "role": user.role,
         "is_platform_admin": is_platform_admin(user),
         "telegram_id": user.telegram_id,
-        "tenant_id": tenant_id if tenant_id is not None else user.tenant_id,
+        "tenant_id": resolved_tenant_id,
     }
 
 

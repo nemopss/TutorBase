@@ -23,7 +23,6 @@ async def test_register_tutor_success(client: AsyncClient, db_session: AsyncSess
     """Test successful tutor registration."""
     registration_data = {
         "school_name": "Test Tutoring School",
-        "contact_email": "test@example.com",
         "tutor_name": "John Doe"
     }
     

@@ -1,16 +1,23 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Form, Input, Button, Typography, Space, Alert, Card, List, theme } from 'antd';
-import { ArrowLeftOutlined, CheckCircleOutlined } from '@ant-design/icons';
+import { Alert, Button, Form, Input, Space, Typography } from 'antd';
+import {
+    ArrowLeftOutlined,
+    BellOutlined,
+    CalendarOutlined,
+    CheckCircleOutlined,
+    TeamOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
+import { useResponsive } from '../hooks/useResponsive';
 import { useTheme } from '../theme/ThemeProvider';
+import { spacing } from '../theme/tokens';
 
-const { Title, Text } = Typography;
+const { Text } = Typography;
 
 interface FormData {
     school_name: string;
-    contact_email?: string;
     tutor_name?: string;
 }
 
@@ -19,8 +26,8 @@ const TutorRegistrationForm: React.FC = () => {
     const navigate = useNavigate();
     const { registerTutor } = useAuth();
     const { resolvedTheme } = useTheme();
-    const { token } = theme.useToken();
-    const isDark = resolvedTheme.colorScheme === 'dark';
+    const { isMobile } = useResponsive();
+    const colors = resolvedTheme.colors;
     const [form] = Form.useForm();
 
     const [loading, setLoading] = useState(false);
@@ -33,12 +40,8 @@ const TutorRegistrationForm: React.FC = () => {
         try {
             await registerTutor({
                 school_name: values.school_name.trim(),
-                contact_email: values.contact_email?.trim() || undefined,
                 tutor_name: values.tutor_name?.trim() || undefined,
             });
-
-            // Success - AuthProvider will handle redirect
-
         } catch (err: any) {
             console.error('Registration failed:', err);
             setError(err.response?.data?.detail || t('pages.tutorRegistration.genericError'));
@@ -47,149 +50,210 @@ const TutorRegistrationForm: React.FC = () => {
         }
     };
 
-    const benefits = [
-        t('pages.tutorRegistration.benefit1'),
-        t('pages.tutorRegistration.benefit2'),
-        t('pages.tutorRegistration.benefit3'),
-        t('pages.tutorRegistration.benefit4'),
+    const facts = [
+        { icon: <TeamOutlined />, text: t('pages.tutorRegistration.factLearners') },
+        { icon: <CalendarOutlined />, text: t('pages.tutorRegistration.factSchedule') },
+        { icon: <BellOutlined />, text: t('pages.tutorRegistration.factReminders') },
+        { icon: <CheckCircleOutlined />, text: t('pages.tutorRegistration.factTrial') },
     ];
 
     return (
-        <div style={{
+        <main style={{
             minHeight: '100vh',
-            background: isDark ? token.colorBgContainer : '#fff',
+            background: colors.bgPrimary,
+            color: colors.textPrimary,
+            boxSizing: 'border-box',
+            padding: isMobile ? `${spacing.md}px ${spacing.md}px ${spacing.xl}px` : `${spacing.xl}px`,
         }}>
-            {/* Header */}
-            <div style={{
-                padding: '16px',
-                position: 'sticky',
-                top: 0,
-                zIndex: 10,
-                backdropFilter: 'blur(8px)',
-                background: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
-            }}>
-                <Space align="center">
-                    <Button
-                        type="text"
-                        icon={<ArrowLeftOutlined />}
-                        onClick={() => navigate(-1)}
-                    />
-                    <div>
-                        <Title level={4} style={{ margin: 0 }}>
+            <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+                <Button
+                    type="text"
+                    icon={<ArrowLeftOutlined />}
+                    onClick={() => navigate(-1)}
+                    style={{
+                        marginBottom: isMobile ? spacing.lg : spacing.xl,
+                        color: colors.textSecondary,
+                    }}
+                >
+                    {t('common.back', { defaultValue: 'Назад' })}
+                </Button>
+
+                <section style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(360px, 440px)',
+                    gap: isMobile ? spacing.xl : 56,
+                    alignItems: 'start',
+                }}>
+                    <div style={{ paddingTop: isMobile ? 0 : spacing.lg }}>
+                        <Text style={{
+                            display: 'inline-flex',
+                            marginBottom: spacing.md,
+                            color: colors.accentPrimary,
+                            fontWeight: 700,
+                        }}>
+                            {t('pages.tutorRegistration.badge')}
+                        </Text>
+                        <h1 style={{
+                            margin: 0,
+                            color: colors.textPrimary,
+                            fontSize: isMobile ? 32 : 44,
+                            lineHeight: 1.05,
+                            fontWeight: 760,
+                            letterSpacing: 0,
+                            maxWidth: 560,
+                        }}>
                             {t('pages.tutorRegistration.title')}
-                        </Title>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
+                        </h1>
+                        <p style={{
+                            margin: `${spacing.md}px 0 0`,
+                            color: colors.textSecondary,
+                            fontSize: isMobile ? 15 : 17,
+                            lineHeight: 1.55,
+                            maxWidth: 540,
+                        }}>
                             {t('pages.tutorRegistration.subtitle')}
-                        </Text>
+                        </p>
+
+                        <div style={{
+                            display: 'grid',
+                            gridTemplateColumns: isMobile ? '1fr' : 'repeat(2, minmax(0, 1fr))',
+                            gap: spacing.sm,
+                            marginTop: isMobile ? spacing.xl : 40,
+                            maxWidth: 560,
+                        }}>
+                            {facts.map((item) => (
+                                <div
+                                    key={item.text}
+                                    style={{
+                                        display: 'flex',
+                                        alignItems: 'center',
+                                        gap: spacing.sm,
+                                        minHeight: 44,
+                                        borderRadius: 8,
+                                        background: colors.bgSecondary,
+                                        padding: `${spacing.sm}px ${spacing.md}px`,
+                                    }}
+                                >
+                                    <span style={{
+                                        color: colors.accentPrimary,
+                                        display: 'inline-flex',
+                                        fontSize: 18,
+                                    }}>
+                                        {item.icon}
+                                    </span>
+                                    <Text style={{ color: colors.textPrimary }}>{item.text}</Text>
+                                </div>
+                            ))}
+                        </div>
                     </div>
-                </Space>
-            </div>
 
-            {/* Content */}
-            <div style={{
-                maxWidth: 600,
-                margin: '0 auto',
-                padding: '24px 16px'
-            }}>
-                <Form
-                    form={form}
-                    layout="vertical"
-                    onFinish={handleSubmit}
-                    autoComplete="off"
-                >
-                    <Form.Item
-                        label={t('pages.tutorRegistration.schoolNameLabel')}
-                        name="school_name"
-                        rules={[
-                            { required: true, message: t('pages.tutorRegistration.schoolNameRequired') },
-                            { min: 2, message: t('pages.tutorRegistration.schoolNameMinLength') }
-                        ]}
-                    >
-                        <Input
-                            placeholder={t('pages.tutorRegistration.schoolNamePlaceholder')}
-                            size="large"
-                            autoFocus
-                        />
-                    </Form.Item>
-
-                    <Form.Item
-                        label={t('pages.tutorRegistration.contactEmailLabel')}
-                        name="contact_email"
-                        rules={[
-                            { type: 'email', message: t('pages.tutorRegistration.contactEmailInvalid') }
-                        ]}
-                    >
-                        <Input
-                            placeholder={t('pages.tutorRegistration.contactEmailPlaceholder')}
-                            size="large"
-                            type="email"
-                        />
-                    </Form.Item>
-
-                    <Form.Item
-                        label={t('pages.tutorRegistration.yourNameLabel')}
-                        name="tutor_name"
-                    >
-                        <Input
-                            placeholder={t('pages.tutorRegistration.yourNamePlaceholder')}
-                            size="large"
-                        />
-                    </Form.Item>
-
-                    <Form.Item>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                            {t('pages.tutorRegistration.termsText')}{' '}
-                            <a href="/terms">{t('pages.tutorRegistration.termsOfService')}</a>
-                            {' '}{t('pages.tutorRegistration.and')}{' '}
-                            <a href="/privacy">{t('pages.tutorRegistration.privacyPolicy')}</a>
+                    <div style={{
+                        background: colors.bgSecondary,
+                        borderRadius: 8,
+                        padding: isMobile ? spacing.lg : spacing.xl,
+                    }}>
+                        <h2 style={{
+                            margin: 0,
+                            marginBottom: spacing.xs,
+                            color: colors.textPrimary,
+                            fontSize: isMobile ? 22 : 24,
+                            lineHeight: 1.2,
+                            fontWeight: 720,
+                            letterSpacing: 0,
+                        }}>
+                            {t('pages.tutorRegistration.formTitle')}
+                        </h2>
+                        <Text style={{
+                            display: 'block',
+                            color: colors.textSecondary,
+                            marginBottom: spacing.lg,
+                        }}>
+                            {t('pages.tutorRegistration.formSubtitle')}
                         </Text>
-                    </Form.Item>
 
-                    {error && (
-                        <Form.Item>
-                            <Alert
-                                message={t('pages.tutorRegistration.registrationFailed')}
-                                description={error}
-                                type="error"
-                                showIcon
-                                closable
-                                onClose={() => setError(null)}
-                            />
-                        </Form.Item>
-                    )}
-
-                    <Form.Item>
-                        <Button
-                            type="primary"
-                            htmlType="submit"
-                            size="large"
-                            loading={loading}
-                            block
+                        <Form
+                            form={form}
+                            layout="vertical"
+                            onFinish={handleSubmit}
+                            autoComplete="off"
+                            requiredMark={false}
                         >
-                            {loading ? t('pages.tutorRegistration.submitting') : t('pages.tutorRegistration.submit')}
-                        </Button>
-                    </Form.Item>
-                </Form>
+                            <Form.Item
+                                label={t('pages.tutorRegistration.schoolNameLabel')}
+                                name="school_name"
+                                rules={[
+                                    { required: true, message: t('pages.tutorRegistration.schoolNameRequired') },
+                                    { min: 2, message: t('pages.tutorRegistration.schoolNameMinLength') },
+                                ]}
+                            >
+                                <Input
+                                    placeholder={t('pages.tutorRegistration.schoolNamePlaceholder')}
+                                    size="large"
+                                    autoFocus
+                                    variant="filled"
+                                />
+                            </Form.Item>
 
-                {/* Benefits Card */}
-                <Card
-                    title={t('pages.tutorRegistration.trialBenefits')}
-                    style={{ marginTop: 24 }}
-                >
-                    <List
-                        dataSource={benefits}
-                        renderItem={(item) => (
-                            <List.Item>
-                                <Space>
-                                    <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
-                                    <Text>{item}</Text>
+                            <Form.Item
+                                label={t('pages.tutorRegistration.yourNameLabel')}
+                                name="tutor_name"
+                            >
+                                <Input
+                                    placeholder={t('pages.tutorRegistration.yourNamePlaceholder')}
+                                    size="large"
+                                    variant="filled"
+                                />
+                            </Form.Item>
+
+                            <Form.Item style={{ marginBottom: spacing.md }}>
+                                <Text type="secondary" style={{ fontSize: 12 }}>
+                                    {t('pages.tutorRegistration.termsText')}{' '}
+                                    <a href="/terms">{t('pages.tutorRegistration.termsOfService')}</a>
+                                    {' '}{t('pages.tutorRegistration.and')}{' '}
+                                    <a href="/privacy">{t('pages.tutorRegistration.privacyPolicy')}</a>
+                                </Text>
+                            </Form.Item>
+
+                            {error && (
+                                <Form.Item>
+                                    <Alert
+                                        message={t('pages.tutorRegistration.registrationFailed')}
+                                        description={error}
+                                        type="error"
+                                        showIcon
+                                        closable
+                                        onClose={() => setError(null)}
+                                        style={{ border: 0 }}
+                                    />
+                                </Form.Item>
+                            )}
+
+                            <Form.Item style={{ marginBottom: 0 }}>
+                                <Space direction="vertical" size={spacing.sm} style={{ width: '100%' }}>
+                                    <Button
+                                        type="primary"
+                                        htmlType="submit"
+                                        size="large"
+                                        loading={loading}
+                                        block
+                                    >
+                                        {loading ? t('pages.tutorRegistration.submitting') : t('pages.tutorRegistration.submit')}
+                                    </Button>
+                                    <Text style={{
+                                        color: colors.textSecondary,
+                                        fontSize: 12,
+                                        textAlign: 'center',
+                                        display: 'block',
+                                    }}>
+                                        {t('pages.tutorRegistration.telegramNameHint')}
+                                    </Text>
                                 </Space>
-                            </List.Item>
-                        )}
-                    />
-                </Card>
+                            </Form.Item>
+                        </Form>
+                    </div>
+                </section>
             </div>
-        </div>
+        </main>
     );
 };
 

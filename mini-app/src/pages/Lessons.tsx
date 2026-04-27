@@ -12,6 +12,7 @@ import LessonForm from '../components/forms/LessonForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
 import PageHeader from '../components/common/PageHeader';
 import CalendarContainer from '../components/common/CalendarContainer';
+import TenantContextRequired from '../components/common/TenantContextRequired';
 import type { CalendarVisibleRange } from '../components/common/CalendarContainer';
 import { DEFAULT_TIMEZONE } from '../utils/datetime';
 import { useAuth } from '../auth/AuthProvider';
@@ -107,7 +108,8 @@ const deleteLesson = async (lessonId: number) => {
 const Lessons: React.FC = () => {
   const { t } = useTranslation();
   const queryClient = useQueryClient();
-  const { tenantAccess } = useAuth();
+  const { tenantAccess, tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
@@ -135,6 +137,7 @@ const Lessons: React.FC = () => {
     queryKey: ['lessons', 'calendar', visibleRange.from, visibleRange.to],
     queryFn: () => fetchAllLessons(visibleRange),
     placeholderData: (previousData) => previousData,
+    enabled: !requiresTenantContext,
   });
 
   const updateMutation = useMutation({
@@ -175,6 +178,18 @@ const Lessons: React.FC = () => {
       setLessonToDelete(null);
     }
   };
+
+  if (requiresTenantContext) {
+    return (
+      <div>
+        <PageHeader
+          title={t('pages.lessons.title')}
+          subtitle={t('pages.lessons.subtitle')}
+        />
+        <TenantContextRequired sectionLabel={t('pages.lessons.title')} />
+      </div>
+    );
+  }
 
   // Calendar handlers
   const handleLessonClick = (lessonId: number) => {

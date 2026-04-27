@@ -11,6 +11,7 @@ import LearnerGrid from '../components/common/LearnerGrid';
 import LearnerCard from '../components/cards/LearnerCard';
 import FloatingActionButton from '../components/common/FloatingActionButton';
 import EmptyState from '../components/common/EmptyState';
+import TenantContextRequired from '../components/common/TenantContextRequired';
 import { useTheme } from '../theme/ThemeProvider';
 import { useDebounce } from '../hooks/useDebounce';
 import { spacing } from '../theme/tokens';
@@ -98,7 +99,8 @@ const Learners: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
-  const { tenantAccess } = useAuth();
+  const { tenantAccess, tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const isDark = resolvedTheme.colorScheme === 'dark';
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   
@@ -121,6 +123,7 @@ const Learners: React.FC = () => {
   const { data, isLoading } = useQuery<LearnerListResponse, Error>({
     queryKey: ['learners', statusView],
     queryFn: () => fetchLearners(statusView),
+    enabled: !requiresTenantContext,
   });
 
   const createMutation = useMutation({
@@ -329,6 +332,18 @@ const Learners: React.FC = () => {
   const hasFilteredResults = filteredLearners.length > 0;
   const isSearching = debouncedSearch.trim().length > 0;
   const isArchiveView = statusView === 'archived';
+
+  if (requiresTenantContext) {
+    return (
+      <div>
+        <PageHeader
+          title={t('pages.learners.title')}
+          subtitle={t('pages.learners.subtitle')}
+        />
+        <TenantContextRequired sectionLabel={t('pages.learners.title')} />
+      </div>
+    );
+  }
 
   return (
     <div>

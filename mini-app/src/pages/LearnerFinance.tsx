@@ -34,10 +34,12 @@ import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import { DetailPageSkeleton } from '../components/common/PageSkeletons';
+import TenantContextRequired from '../components/common/TenantContextRequired';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
 import { useResponsiveStyles } from '../hooks/useResponsiveStyles';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
+import { useAuth } from '../auth/AuthProvider';
 
 const { Text } = Typography;
 
@@ -90,6 +92,8 @@ const LearnerFinance: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const { tenantId } = useAuth();
+  const requiresTenantContext = tenantId === null;
   const [searchParams, setSearchParams] = useSearchParams();
   const queryClient = useQueryClient();
   const { cardStyle, textColor } = useResponsiveStyles();
@@ -119,7 +123,7 @@ const LearnerFinance: React.FC = () => {
       const { data } = await api.get(`/learners/${learnerId}`);
       return data;
     },
-    enabled: !!learnerId,
+    enabled: !!learnerId && !requiresTenantContext,
   });
 
   // Fetch finance data
@@ -134,7 +138,7 @@ const LearnerFinance: React.FC = () => {
       const { data } = await api.get(`/learners/${learnerId}/finance`);
       return data;
     },
-    enabled: !!learnerId,
+    enabled: !!learnerId && !requiresTenantContext,
   });
 
   // Fetch packages for payment form
@@ -146,7 +150,7 @@ const LearnerFinance: React.FC = () => {
       });
       return data;
     },
-    enabled: !!learnerId,
+    enabled: !!learnerId && !requiresTenantContext,
   });
 
   // Create/Update payment mutation
@@ -351,6 +355,10 @@ const LearnerFinance: React.FC = () => {
       ),
     },
   ];
+
+  if (requiresTenantContext) {
+    return <TenantContextRequired sectionLabel={t('pages.finance.title')} />;
+  }
 
   if (isLoading) {
     return <DetailPageSkeleton />;

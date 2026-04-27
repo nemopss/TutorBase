@@ -54,7 +54,6 @@ interface AuthResponse {
 
 interface TutorRegistrationData {
   school_name: string;
-  contact_email?: string;
   tutor_name?: string;
 }
 

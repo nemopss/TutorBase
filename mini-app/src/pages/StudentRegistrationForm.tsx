@@ -1,13 +1,19 @@
-import React, { useState, useEffect } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Form, Input, Button, Typography, Space, Alert, Card, Collapse, theme } from 'antd';
-import { ArrowLeftOutlined, CopyOutlined, QuestionCircleOutlined } from '@ant-design/icons';
+import { Alert, Button, Form, Input, Space, Typography } from 'antd';
+import {
+    ArrowLeftOutlined,
+    CopyOutlined,
+    QuestionCircleOutlined,
+    TeamOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
+import { useResponsive } from '../hooks/useResponsive';
 import { useTheme } from '../theme/ThemeProvider';
+import { spacing } from '../theme/tokens';
 
-const { Title, Text, Paragraph } = Typography;
-const { Panel } = Collapse;
+const { Text } = Typography;
 
 interface FormData {
     invite_token: string;
@@ -20,14 +26,13 @@ const StudentRegistrationForm: React.FC = () => {
     const [searchParams] = useSearchParams();
     const { registerStudent } = useAuth();
     const { resolvedTheme } = useTheme();
-    const { token } = theme.useToken();
-    const isDark = resolvedTheme.colorScheme === 'dark';
+    const { isMobile } = useResponsive();
+    const colors = resolvedTheme.colors;
     const [form] = Form.useForm();
 
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
-    // Pre-fill invite code from URL
     useEffect(() => {
         const code = searchParams.get('code');
         if (code) {
@@ -68,9 +73,6 @@ const StudentRegistrationForm: React.FC = () => {
                 invite_token: values.invite_token.trim(),
                 student_name: values.student_name?.trim() || undefined,
             });
-
-            // Success - AuthProvider will handle redirect
-
         } catch (err: any) {
             console.error('Registration failed:', err);
             setError(getErrorMessage(err));
@@ -79,146 +81,220 @@ const StudentRegistrationForm: React.FC = () => {
         }
     };
 
+    const helpItems = [
+        {
+            question: t('pages.studentRegistration.noCodeQuestion'),
+            answer: t('pages.studentRegistration.noCodeAnswer'),
+        },
+        {
+            question: t('pages.studentRegistration.codeNotWorkingQuestion'),
+            answer: t('pages.studentRegistration.codeNotWorkingAnswer'),
+        },
+    ];
+
     return (
-        <div style={{
+        <main style={{
             minHeight: '100vh',
-            background: isDark ? token.colorBgContainer : '#fff',
+            background: colors.bgPrimary,
+            color: colors.textPrimary,
+            boxSizing: 'border-box',
+            padding: isMobile ? `${spacing.md}px ${spacing.md}px ${spacing.xl}px` : `${spacing.xl}px`,
         }}>
-            {/* Header */}
-            <div style={{
-                padding: '16px',
-                position: 'sticky',
-                top: 0,
-                zIndex: 10,
-                backdropFilter: 'blur(8px)',
-                background: isDark ? 'rgba(0,0,0,0.8)' : 'rgba(255,255,255,0.8)',
-            }}>
-                <Space align="center">
-                    <Button
-                        type="text"
-                        icon={<ArrowLeftOutlined />}
-                        onClick={() => navigate(-1)}
-                    />
-                    <div>
-                        <Title level={4} style={{ margin: 0 }}>
-                            {t('pages.studentRegistration.title')}
-                        </Title>
-                        <Text type="secondary" style={{ fontSize: 12 }}>
-                            {t('pages.studentRegistration.subtitle')}
+            <div style={{ maxWidth: 1040, margin: '0 auto' }}>
+                <Button
+                    type="text"
+                    icon={<ArrowLeftOutlined />}
+                    onClick={() => navigate(-1)}
+                    style={{
+                        marginBottom: isMobile ? spacing.lg : spacing.xl,
+                        color: colors.textSecondary,
+                    }}
+                >
+                    {t('common.back', { defaultValue: 'Назад' })}
+                </Button>
+
+                <section style={{
+                    display: 'grid',
+                    gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(360px, 440px)',
+                    gap: isMobile ? spacing.xl : 56,
+                    alignItems: 'start',
+                }}>
+                    <div style={{ paddingTop: isMobile ? 0 : spacing.lg }}>
+                        <Text style={{
+                            display: 'inline-flex',
+                            alignItems: 'center',
+                            gap: spacing.xs,
+                            marginBottom: spacing.md,
+                            color: colors.accentPrimary,
+                            fontWeight: 700,
+                        }}>
+                            <TeamOutlined />
+                            {t('pages.studentRegistration.badge', { defaultValue: 'По приглашению' })}
                         </Text>
+                        <h1 style={{
+                            margin: 0,
+                            color: colors.textPrimary,
+                            fontSize: isMobile ? 32 : 44,
+                            lineHeight: 1.05,
+                            fontWeight: 760,
+                            letterSpacing: 0,
+                            maxWidth: 560,
+                        }}>
+                            {t('pages.studentRegistration.title')}
+                        </h1>
+                        <p style={{
+                            margin: `${spacing.md}px 0 0`,
+                            color: colors.textSecondary,
+                            fontSize: isMobile ? 15 : 17,
+                            lineHeight: 1.55,
+                            maxWidth: 540,
+                        }}>
+                            {t('pages.studentRegistration.subtitle')}
+                        </p>
+
+                        <div style={{
+                            marginTop: isMobile ? spacing.xl : 40,
+                            display: 'grid',
+                            gap: spacing.sm,
+                            maxWidth: 560,
+                        }}>
+                            {helpItems.map((item) => (
+                                <details
+                                    key={item.question}
+                                    style={{
+                                        background: colors.bgSecondary,
+                                        borderRadius: 8,
+                                        padding: `${spacing.md}px ${spacing.lg}px`,
+                                    }}
+                                >
+                                    <summary style={{
+                                        cursor: 'pointer',
+                                        color: colors.textPrimary,
+                                        fontWeight: 700,
+                                        listStylePosition: 'outside',
+                                    }}>
+                                        {item.question}
+                                    </summary>
+                                    <Text style={{
+                                        display: 'block',
+                                        color: colors.textSecondary,
+                                        marginTop: spacing.sm,
+                                    }}>
+                                        {item.answer}
+                                    </Text>
+                                </details>
+                            ))}
+                        </div>
                     </div>
-                </Space>
-            </div>
 
-            {/* Content */}
-            <div style={{
-                maxWidth: 600,
-                margin: '0 auto',
-                padding: '24px 16px'
-            }}>
-                <Form
-                    form={form}
-                    layout="vertical"
-                    onFinish={handleSubmit}
-                    autoComplete="off"
-                >
-                    <Form.Item
-                        label={t('pages.studentRegistration.inviteCodeLabel')}
-                        name="invite_token"
-                        rules={[
-                            { required: true, message: t('pages.studentRegistration.inviteCodeRequired') },
-                            { min: 10, message: t('pages.studentRegistration.inviteCodeInvalid') }
-                        ]}
-                    >
-                        <Input
-                            placeholder={t('pages.studentRegistration.inviteCodePlaceholder')}
-                            size="large"
-                            autoFocus={!searchParams.get('code')}
-                            suffix={
-                                <Button
-                                    type="text"
-                                    icon={<CopyOutlined />}
-                                    onClick={handlePasteInviteCode}
-                                    size="small"
-                                >
-                                    {t('common.copy')}
-                                </Button>
-                            }
-                        />
-                    </Form.Item>
+                    <div style={{
+                        background: colors.bgSecondary,
+                        borderRadius: 8,
+                        padding: isMobile ? spacing.lg : spacing.xl,
+                    }}>
+                        <h2 style={{
+                            margin: 0,
+                            marginBottom: spacing.xs,
+                            color: colors.textPrimary,
+                            fontSize: isMobile ? 22 : 24,
+                            lineHeight: 1.2,
+                            fontWeight: 720,
+                            letterSpacing: 0,
+                        }}>
+                            {t('pages.studentRegistration.formTitle', { defaultValue: 'Введите код приглашения' })}
+                        </h2>
+                        <Text style={{
+                            display: 'block',
+                            color: colors.textSecondary,
+                            marginBottom: spacing.lg,
+                        }}>
+                            {t('pages.studentRegistration.formSubtitle', { defaultValue: 'Код выдаёт ваш преподаватель.' })}
+                        </Text>
 
-                    <Form.Item
-                        label={t('forms.learner.displayNameLabel')}
-                        name="student_name"
-                    >
-                        <Input
-                            placeholder={t('forms.learner.displayNamePlaceholder')}
-                            size="large"
-                        />
-                    </Form.Item>
-
-                    {error && (
-                        <Form.Item>
-                            <Alert
-                                message={t('pages.studentRegistration.registrationFailed')}
-                                description={error}
-                                type="error"
-                                showIcon
-                                closable
-                                onClose={() => setError(null)}
-                            />
-                        </Form.Item>
-                    )}
-
-                    <Form.Item>
-                        <Button
-                            type="primary"
-                            htmlType="submit"
-                            size="large"
-                            loading={loading}
-                            block
+                        <Form
+                            form={form}
+                            layout="vertical"
+                            onFinish={handleSubmit}
+                            autoComplete="off"
+                            requiredMark={false}
                         >
-                            {loading ? t('common.loading') : t('pages.studentRegistration.submit')}
-                        </Button>
-                    </Form.Item>
-                </Form>
+                            <Form.Item
+                                label={t('pages.studentRegistration.inviteCodeLabel')}
+                                name="invite_token"
+                                rules={[
+                                    { required: true, message: t('pages.studentRegistration.inviteCodeRequired') },
+                                    { min: 10, message: t('pages.studentRegistration.inviteCodeInvalid') },
+                                ]}
+                            >
+                                <Input
+                                    placeholder={t('pages.studentRegistration.inviteCodePlaceholder')}
+                                    size="large"
+                                    autoFocus={!searchParams.get('code')}
+                                    variant="filled"
+                                    suffix={
+                                        <Button
+                                            type="text"
+                                            icon={<CopyOutlined />}
+                                            onClick={handlePasteInviteCode}
+                                            size="small"
+                                            aria-label={t('common.copy')}
+                                        />
+                                    }
+                                />
+                            </Form.Item>
 
-                {/* Help Section */}
-                <Card
-                    title={
-                        <Space>
-                            <QuestionCircleOutlined />
-                            <span>{t('pages.studentRegistration.needHelp')}</span>
-                        </Space>
-                    }
-                    style={{ marginTop: 24 }}
-                >
-                    <Collapse ghost>
-                        <Panel header={t('pages.studentRegistration.noCodeQuestion')} key="1">
-                            <Paragraph type="secondary">
-                                {t('pages.studentRegistration.noCodeAnswer')}
-                            </Paragraph>
-                        </Panel>
-                        <Panel header={t('pages.studentRegistration.codeNotWorkingQuestion')} key="2">
-                            <Paragraph type="secondary">
-                                {t('pages.studentRegistration.codeNotWorkingAnswer')}
-                            </Paragraph>
-                        </Panel>
-                        <Panel header={t('pages.studentRegistration.areTutorQuestion')} key="3">
-                            <Paragraph type="secondary">
-                                <Button
-                                    type="link"
-                                    onClick={() => navigate('/register/tutor')}
-                                    style={{ padding: 0 }}
-                                >
-                                    {t('pages.studentRegistration.areTutorAnswer')}
-                                </Button>
-                            </Paragraph>
-                        </Panel>
-                    </Collapse>
-                </Card>
+                            <Form.Item
+                                label={t('forms.learner.displayNameLabel')}
+                                name="student_name"
+                            >
+                                <Input
+                                    placeholder={t('forms.learner.displayNamePlaceholder')}
+                                    size="large"
+                                    variant="filled"
+                                />
+                            </Form.Item>
+
+                            {error && (
+                                <Form.Item>
+                                    <Alert
+                                        message={t('pages.studentRegistration.registrationFailed')}
+                                        description={error}
+                                        type="error"
+                                        showIcon
+                                        closable
+                                        onClose={() => setError(null)}
+                                        style={{ border: 0 }}
+                                    />
+                                </Form.Item>
+                            )}
+
+                            <Form.Item style={{ marginBottom: 0 }}>
+                                <Space direction="vertical" size={spacing.sm} style={{ width: '100%' }}>
+                                    <Button
+                                        type="primary"
+                                        htmlType="submit"
+                                        size="large"
+                                        loading={loading}
+                                        block
+                                    >
+                                        {loading ? t('common.loading') : t('pages.studentRegistration.submit')}
+                                    </Button>
+                                    <Button
+                                        type="text"
+                                        icon={<QuestionCircleOutlined />}
+                                        onClick={() => navigate('/register/tutor')}
+                                        block
+                                        style={{ color: colors.textSecondary }}
+                                    >
+                                        {t('pages.studentRegistration.areTutorAnswer')}
+                                    </Button>
+                                </Space>
+                            </Form.Item>
+                        </Form>
+                    </div>
+                </section>
             </div>
-        </div>
+        </main>
     );
 };
 
