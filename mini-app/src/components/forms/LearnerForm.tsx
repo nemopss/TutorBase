@@ -3,6 +3,7 @@ import { Form, Input, InputNumber, Switch, Space, Typography, Divider } from 'an
 import { UserAddOutlined, BellOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import ResponsiveModal from '../common/ResponsiveModal';
+import { devError } from '../../utils/safeLogging';
 
 const { Text } = Typography;
 
@@ -38,7 +39,7 @@ const LearnerForm: React.FC<LearnerFormProps> = ({
       await onSubmit(values);
       form.resetFields();
     } catch (error) {
-      console.error('Form validation failed:', error);
+      devError('Form validation failed:', error);
     }
   };
 

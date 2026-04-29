@@ -12,6 +12,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { useResponsive } from '../hooks/useResponsive';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
+import { devError, devLog } from '../utils/safeLogging';
 
 const { Text } = Typography;
 
@@ -49,7 +50,7 @@ const StudentRegistrationForm: React.FC = () => {
                 form.setFieldsValue({ invite_token: text.trim() });
             }
         } catch (error) {
-            console.log('Clipboard access not available');
+            devLog('Clipboard access not available');
         }
     };
 
@@ -78,7 +79,7 @@ const StudentRegistrationForm: React.FC = () => {
                 privacy_accepted: values.privacy_accepted,
             });
         } catch (err: any) {
-            console.error('Registration failed:', err);
+            devError('Registration failed:', err);
             setError(getErrorMessage(err));
         } finally {
             setLoading(false);

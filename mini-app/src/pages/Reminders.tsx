@@ -8,6 +8,7 @@ import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import { appEnv } from '../env';
+import { devLog } from '../utils/safeLogging';
 import { useDebounce } from '../hooks/useDebounce';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
@@ -442,7 +443,7 @@ const ReminderEditForm: React.FC<ReminderEditFormProps> = ({ reminder, onFinish,
       onFinish={onFinish}
       onFinishFailed={(info) => {
         if (appEnv.isDev) {
-          console.log('Validate Failed:', info);
+          devLog('Validate Failed:', info);
         }
       }}    >
       <Form.Item

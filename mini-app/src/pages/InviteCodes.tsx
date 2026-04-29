@@ -8,6 +8,7 @@ import InviteCodeCard from '../components/cards/InviteCodeCard';
 import api from '../services/api';
 import { useAuth } from '../auth/AuthProvider';
 import dayjs from 'dayjs';
+import { devError } from '../utils/safeLogging';
 
 const { Text } = Typography;
 
@@ -38,7 +39,7 @@ const InviteCodes: React.FC = () => {
 
     const fetchTokens = useCallback(async () => {
         if (!tenantId) {
-            console.error('No tenant_id available');
+            devError('No tenant_id available');
             return;
         }
 
@@ -48,7 +49,7 @@ const InviteCodes: React.FC = () => {
             setTokens(response.data.items || []);
         } catch (error: any) {
             message.error(t('errors.loadFailed', { message: '' }));
-            console.error('Failed to fetch tokens:', error);
+            devError('Failed to fetch tokens:', error);
         } finally {
             setLoading(false);
         }

@@ -20,7 +20,7 @@ LEGACY_PUBLIC_CALLBACKS = {
 
 @router.message(CommandStart())
 async def cmd_start(message: types.Message):
-    logging.info(f"User {message.from_user.id} ({message.from_user.full_name}) started the bot.")
+    logging.info("User started the bot: user_id=%s", message.from_user.id)
     
     if config.START_PHOTO_FILE_ID:
         try:
@@ -30,7 +30,7 @@ async def cmd_start(message: types.Message):
                 reply_markup=start_keyboard()
             )
         except Exception as e:
-            logging.error(f"Failed to send start photo: {e}")
+            logging.error("Failed to send start photo: %s", type(e).__name__)
             await message.answer(texts.START_MESSAGE, reply_markup=start_keyboard())
     else:
         await message.answer(texts.START_MESSAGE, reply_markup=start_keyboard())

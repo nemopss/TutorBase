@@ -412,7 +412,7 @@ async def state_test_reminder_contact(message: types.Message, state: FSMContext,
         await message.answer(texts.TEST_INVALID_CONTACT, reply_markup=builder.as_markup())
         return
     
-    logging.info(f"Admin {message.from_user.id} entered contact {contact_display} for package {package_id}")
+    logging.info("Admin entered test reminder contact: admin_id=%s package_id=%s", message.from_user.id, package_id)
     
     # Create a mock CurrentTenant for now
     from api.dependencies import CurrentTenant
@@ -613,7 +613,7 @@ async def cb_test_confirm_send(query: CallbackQuery, state: FSMContext, session:
     data = await state.get_data()
     contact_display = data.get('contact_display', contact_value)
     
-    logging.info(f"Admin {query.from_user.id} confirming test send for package {package_id} to {contact_display}")
+    logging.info("Admin confirmed test reminder send: admin_id=%s package_id=%s", query.from_user.id, package_id)
     
     # Clear state
     await state.clear()

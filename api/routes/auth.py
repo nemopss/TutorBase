@@ -484,7 +484,7 @@ async def register_tutor(
     username = user_block.get("username")
     telegram_display_name = build_display_name(user_block)
     
-    logger.info(f"[{request_id}] Tutor registration attempt: telegram_id={telegram_id}, school={registration_data.school_name}")
+    logger.info(f"[{request_id}] Tutor registration attempt")
     
     # Generate slug for tenant
     import re
@@ -546,10 +546,10 @@ async def register_tutor(
     
     try:
         await session.commit()
-        logger.info(f"[{request_id}] Tutor registration successful: user_id={user.id}, tenant_id={tenant.id}, school={tenant.name}")
+        logger.info(f"[{request_id}] Tutor registration successful: user_id={user.id}, tenant_id={tenant.id}")
     except Exception as e:
         await session.rollback()
-        logger.error(f"[{request_id}] Tutor registration failed during commit: {e}")
+        logger.error(f"[{request_id}] Tutor registration failed during commit: {type(e).__name__}")
         
         # Handle specific constraint violations
         from sqlalchemy.exc import IntegrityError
@@ -621,7 +621,7 @@ async def register_student(
     username = user_block.get("username")
     telegram_display_name = build_display_name(user_block)
     
-    logger.info(f"[{request_id}] Student registration attempt: telegram_id={telegram_id}, invite_token_prefix={registration_data.invite_token[:8]}")
+    logger.info(f"[{request_id}] Student registration attempt")
     
     # Atomically reserve the invite token for this transaction.
     invite_token = await crud.consume_invite_token_for_registration(session, registration_data.invite_token)
@@ -662,7 +662,7 @@ async def register_student(
         session.add(bot_user)
     else:
         # Create new BotUser record
-        logger.info(f"[{request_id}] Creating new BotUser for chat_id={telegram_id}")
+        logger.info(f"[{request_id}] Creating new BotUser")
         bot_user = BotUser(
             chat_id=telegram_id,
             username=username,
@@ -764,7 +764,7 @@ async def register_student(
         await session.commit()
     except Exception as e:
         await session.rollback()
-        logger.error(f"[{request_id}] Student registration failed during commit: {e}")
+        logger.error(f"[{request_id}] Student registration failed during commit: {type(e).__name__}")
         
         # Handle specific constraint violations
         from sqlalchemy.exc import IntegrityError

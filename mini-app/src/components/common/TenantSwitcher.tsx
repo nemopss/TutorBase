@@ -15,6 +15,7 @@ import { Select, message, Spin, Badge, Tooltip } from 'antd';
 import { GlobalOutlined, TeamOutlined, SwapOutlined } from '@ant-design/icons';
 import { useAuth } from '../../auth/AuthProvider';
 import api from '../../services/api';
+import { devError } from '../../utils/safeLogging';
 
 interface Tenant {
     id: number;
@@ -56,7 +57,7 @@ const TenantSwitcher: React.FC<TenantSwitcherProps> = ({ fullWidth = false }) =>
             const response = await api.get<TenantListResponse>('/tenants');
             setTenants(response.data.items);
         } catch (error: any) {
-            console.error('Failed to fetch tenants:', error);
+            devError('Failed to fetch tenants:', error);
             message.error('Failed to load tenants');
         } finally {
             setLoading(false);
@@ -80,7 +81,7 @@ const TenantSwitcher: React.FC<TenantSwitcherProps> = ({ fullWidth = false }) =>
             );
             setSwitching(false);
         } catch (error: any) {
-            console.error('Tenant switch failed:', error);
+            devError('Tenant switch failed:', error);
             message.error(error.message || 'Failed to switch tenant');
             setSwitching(false);
         }

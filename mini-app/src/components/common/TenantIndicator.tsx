@@ -15,6 +15,7 @@ import { GlobalOutlined, TeamOutlined, CrownOutlined } from '@ant-design/icons';
 import { useAuth } from '../../auth/AuthProvider';
 import { useTheme } from '../../theme/ThemeProvider';
 import api from '../../services/api';
+import { devError } from '../../utils/safeLogging';
 
 interface Tenant {
     id: number;
@@ -39,7 +40,7 @@ const TenantIndicator: React.FC = () => {
                 const response = await api.get<Tenant>(`/platform/tenants/${tenantId}`);
                 setTenantName(response.data.name);
             } catch (error) {
-                console.error('Failed to fetch tenant name:', error);
+                devError('Failed to fetch tenant name:', error);
                 setTenantName(`Tenant ${tenantId}`);
             } finally {
                 setLoading(false);

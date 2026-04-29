@@ -5,6 +5,7 @@ import utc from 'dayjs/plugin/utc';
 import timezone from 'dayjs/plugin/timezone';
 import { useTranslation } from 'react-i18next';
 import { appEnv } from '../../env';
+import { devLog } from '../../utils/safeLogging';
 import ResponsiveModal from '../common/ResponsiveModal';
 
 dayjs.extend(utc);
@@ -80,7 +81,7 @@ const LessonForm: React.FC<LessonFormProps> = ({ open, onCancel, onFinish, isLoa
           })
           .catch((info) => {
             if (appEnv.isDev) {
-              console.log('Validate Failed:', info);
+              devLog('Validate Failed:', info);
             }
           });
       }}

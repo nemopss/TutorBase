@@ -1,6 +1,7 @@
 import axios, { type AxiosRequestConfig } from "axios";
 import { clearCachedUser } from "../auth/userCache";
 import { appEnv } from "../env";
+import { devError, devLog, redactSensitive } from "../utils/safeLogging";
 
 type RetryableRequestConfig = AxiosRequestConfig & {
   _retry?: boolean;
@@ -55,7 +56,7 @@ const redactHeaders = (headers: AxiosRequestConfig["headers"]) => {
       ) {
         return [key, "[redacted]"];
       }
-      return [key, value];
+      return [key, redactSensitive(value)];
     })
   );
 };
@@ -85,7 +86,7 @@ const refreshAccessToken = async (): Promise<string | null> => {
 api.interceptors.request.use(
   (config) => {
     if (appEnv.isDev) {
-      console.log(
+      devLog(
         `API Request: ${config.method?.toUpperCase()} ${config.url}`,
         {
           headers: redactHeaders(config.headers),
@@ -96,7 +97,7 @@ api.interceptors.request.use(
     return config;
   },
   (error) => {
-    console.error("API Request Error:", error);
+    devError("API Request Error:", error);
     return Promise.reject(error);
   }
 );

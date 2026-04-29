@@ -224,13 +224,15 @@ def task_prerun_handler(sender=None, task_id=None, task=None, args=None, kwargs=
     if task_id is not None:
         _task_started_at[task_id] = monotonic()
     celery_task_started_total.labels(task_name=task_name).inc()
+    args_count = len(args) if args is not None else 0
+    kwargs_keys = sorted(kwargs.keys()) if isinstance(kwargs, dict) else []
     logger.info(
         f"Task started: {task_name}",
         extra={
             'task_id': task_id,
             'task_name': task_name,
-            'task_args': str(args)[:100],  # Limit arg length in logs
-            'task_kwargs': str(kwargs)[:100],
+            'args_count': args_count,
+            'kwargs_keys': kwargs_keys,
         }
     )
 
@@ -261,7 +263,7 @@ def task_postrun_handler(
             'task_id': task_id,
             'task_name': task_name,
             'state': state,
-            'result': str(retval)[:100] if retval else None,
+            'result_type': type(retval).__name__ if retval is not None else None,
         }
     )
 
@@ -271,16 +273,17 @@ def task_failure_handler(sender=None, task_id=None, exception=None, args=None, k
     """Log when task fails."""
     task_name = _resolve_task_name(sender=sender)
     celery_task_failed_total.labels(task_name=task_name).inc()
+    args_count = len(args) if args is not None else 0
+    kwargs_keys = sorted(kwargs.keys()) if isinstance(kwargs, dict) else []
     logger.error(
         f"Task failed: {task_name}",
         extra={
             'task_id': task_id,
             'task_name': task_name,
-            'exception': str(exception),
-            'task_args': str(args)[:100],
-            'task_kwargs': str(kwargs)[:100],
+            'exception_type': type(exception).__name__ if exception else None,
+            'args_count': args_count,
+            'kwargs_keys': kwargs_keys,
         },
-        exc_info=exception,
     )
 
 
@@ -296,7 +299,7 @@ def task_retry_handler(sender=None, task_id=None, reason=None, **extra):
         extra={
             'task_id': task_id,
             'task_name': task_name,
-            'reason': str(reason),
+            'reason_type': type(reason).__name__ if reason is not None else None,
             'retry_count': retry_count,
         }
     )

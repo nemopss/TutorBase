@@ -13,6 +13,7 @@ import { useAuth } from '../auth/AuthProvider';
 import { useResponsive } from '../hooks/useResponsive';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
+import { devError } from '../utils/safeLogging';
 
 const { Text } = Typography;
 
@@ -47,7 +48,7 @@ const TutorRegistrationForm: React.FC = () => {
                 privacy_accepted: values.privacy_accepted,
             });
         } catch (err: any) {
-            console.error('Registration failed:', err);
+            devError('Registration failed:', err);
             setError(err.response?.data?.detail || t('pages.tutorRegistration.genericError'));
         } finally {
             setLoading(false);

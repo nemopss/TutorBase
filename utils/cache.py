@@ -11,6 +11,7 @@ from dataclasses import is_dataclass, asdict
 from functools import wraps
 from typing import Any, Callable, Optional, TypeVar
 from hashlib import md5
+from urllib.parse import urlsplit, urlunsplit
 
 import redis.asyncio as redis
 
@@ -20,6 +21,17 @@ logger = logging.getLogger(__name__)
 cache_client: Optional[redis.Redis] = None
 
 T = TypeVar("T")
+
+
+def _redact_url_password(url: str) -> str:
+    parts = urlsplit(url)
+    if parts.password is None:
+        return url
+    username = parts.username or ""
+    hostname = parts.hostname or ""
+    port = f":{parts.port}" if parts.port else ""
+    netloc = f"{username}:***@{hostname}{port}" if username else f"***@{hostname}{port}"
+    return urlunsplit((parts.scheme, netloc, parts.path, parts.query, parts.fragment))
 
 
 async def init_cache(redis_url: str, max_connections: int = 50) -> None:
@@ -46,9 +58,13 @@ async def init_cache(redis_url: str, max_connections: int = 50) -> None:
         )
         # Test connection
         await cache_client.ping()
-        logger.info(f"Redis cache initialized successfully: {redis_url} (max_connections={max_connections})")
+        logger.info(
+            "Redis cache initialized successfully: %s (max_connections=%s)",
+            _redact_url_password(redis_url),
+            max_connections,
+        )
     except Exception as e:
-        logger.warning(f"Failed to initialize Redis cache: {e}. Caching will be disabled.")
+        logger.warning("Failed to initialize Redis cache: %s. Caching will be disabled.", type(e).__name__)
         cache_client = None
 
 

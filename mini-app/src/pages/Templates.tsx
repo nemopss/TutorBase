@@ -5,6 +5,7 @@ import type { TableProps } from 'antd';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import { appEnv } from '../env';
+import { devError, devLog } from '../utils/safeLogging';
 import TemplateForm from '../components/forms/TemplateForm';
 import PageHeader from '../components/common/PageHeader';
 import ResponsiveDataView from '../components/common/ResponsiveDataView';
@@ -71,7 +72,7 @@ const Templates: React.FC = () => {
   // Debug logging for Android
   React.useEffect(() => {
     if (appEnv.isDev) {
-      console.log('Templates Debug:', { 
+      devLog('Templates Debug:', { 
         isLoading, 
         isError, 
         error: error?.message,
@@ -118,7 +119,7 @@ const Templates: React.FC = () => {
       message.success(t('pages.templates.templateDeleted'));
     },
     onError: (error: any) => {
-      console.error('Delete error:', error);
+      devError('Delete error:', error);
       message.error(t('errors.deleteFailed', { message: error.response?.data?.detail || error.message }));
     }
   });

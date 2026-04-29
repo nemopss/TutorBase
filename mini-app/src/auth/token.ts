@@ -1,3 +1,5 @@
+import { devError } from '../utils/safeLogging';
+
 export type JwtPayload = {
   exp?: number;
   tenant_id?: number | null;
@@ -15,7 +17,7 @@ export const parseJwt = (token: string): JwtPayload | null => {
     );
     return JSON.parse(jsonPayload);
   } catch (e) {
-    console.error('Failed to parse JWT:', e);
+    devError('Failed to parse JWT:', e);
     return null;
   }
 };

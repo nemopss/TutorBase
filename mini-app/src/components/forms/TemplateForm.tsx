@@ -4,6 +4,7 @@ import { MinusCircleOutlined, PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import dayjs from 'dayjs';
 import { appEnv } from '../../env';
+import { devLog } from '../../utils/safeLogging';
 import ResponsiveModal from '../common/ResponsiveModal';
 
 interface TemplateFormProps {
@@ -67,7 +68,7 @@ const TemplateForm: React.FC<TemplateFormProps> = ({ open, onCancel, onFinish, i
       onCancel={onCancel}
       onOk={() => form.validateFields().then(handleFinish).catch(info => {
         if (appEnv.isDev) {
-          console.log('Validate Failed:', info);
+          devLog('Validate Failed:', info);
         }
       })}
       confirmLoading={isLoading}

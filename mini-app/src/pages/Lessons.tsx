@@ -15,6 +15,7 @@ import CalendarContainer from '../components/common/CalendarContainer';
 import TenantContextRequired from '../components/common/TenantContextRequired';
 import type { CalendarVisibleRange } from '../components/common/CalendarContainer';
 import { DEFAULT_TIMEZONE } from '../utils/datetime';
+import { devError } from '../utils/safeLogging';
 import { useAuth } from '../auth/AuthProvider';
 
 dayjs.extend(updateLocale);
@@ -160,7 +161,7 @@ const Lessons: React.FC = () => {
       message.success(t('success.deleted'));
     },
     onError: (error: Error) => {
-      console.error('Delete lesson error:', error);
+      devError('Delete lesson error:', error);
       message.error(t('errors.deleteFailed', { message: error.message }));
     }
   });

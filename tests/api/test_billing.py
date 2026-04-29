@@ -309,6 +309,7 @@ async def test_billing_checkout_creates_yookassa_payment(
         assert idempotence_key
         assert json["amount"] == {"value": "349.00", "currency": "RUB"}
         assert json["capture"] is True
+        assert json["save_payment_method"] is False
         assert json["metadata"]["tenant_id"] == str(current_tenant.tenant_id)
         assert json["metadata"]["plan_code"] == billing_service.PLAN_BASIC
         return {
@@ -334,6 +335,31 @@ async def test_billing_checkout_creates_yookassa_payment(
         "amount_due": "349.00",
         "billing_action": "new",
     }
+
+
+@pytest.mark.asyncio
+async def test_billing_checkout_redacts_yookassa_provider_error(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_request(method, path, *, json=None, idempotence_key=None):
+        raise yookassa_service.YooKassaError(
+            "YooKassa API error: {'description': 'secret provider payload'}"
+        )
+
+    monkeypatch.setattr(yookassa_service, "_request_yookassa", fake_request)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.post(
+        "/api/v1/billing/checkout",
+        json={"plan_code": billing_service.PLAN_BASIC, "billing_period": "month"},
+        headers=headers,
+    )
+
+    assert response.status_code == 502
+    assert response.json()["detail"] == "Payment provider request failed"
 
 
 @pytest.mark.asyncio

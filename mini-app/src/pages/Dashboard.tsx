@@ -33,6 +33,7 @@ import { useResponsive } from '../hooks/useResponsive';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
 import { DEFAULT_TIMEZONE } from '../utils/datetime';
+import { devError } from '../utils/safeLogging';
 import { useAuth } from '../auth/AuthProvider';
 import type { Lesson as CalendarLesson } from '../components/common/calendar-types';
 import { statusColors } from '../components/common/calendar-types';
@@ -462,7 +463,7 @@ const Dashboard: React.FC = () => {
     onError: (error: Error) => {
       // Keep the dismiss action quiet but not silent.
       // The dashboard should stay usable even if the acknowledge call fails.
-      console.error('Dismiss dashboard attention item failed:', error);
+      devError('Dismiss dashboard attention item failed:', error);
     },
   });
 

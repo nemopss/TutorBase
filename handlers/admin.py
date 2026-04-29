@@ -359,7 +359,7 @@ async def cmd_admin_denied(message: types.Message):
 
 @router.callback_query(F.data == 'admin_list', IsAdmin())
 async def cb_admin_list(query: CallbackQuery, session: AsyncSession):
-    logging.info(f"Admin {query.from_user.id} (@{query.from_user.username}) requested application list.")
+    logging.info("Admin requested application list: admin_id=%s", query.from_user.id)
     try:
         rows = await crud.fetch_last_n_applications(session, 10)
     except Exception as e:
@@ -386,7 +386,7 @@ async def cb_admin_list(query: CallbackQuery, session: AsyncSession):
 
 @router.callback_query(F.data == 'admin_stats', IsAdmin())
 async def cb_admin_stats(query: CallbackQuery, session: AsyncSession):
-    logging.info(f"Admin {query.from_user.id} (@{query.from_user.username}) requested stats.")
+    logging.info("Admin requested stats: admin_id=%s", query.from_user.id)
     try:
         stats = await crud.fetch_applications_stats(session)
     except Exception as e:
@@ -402,7 +402,7 @@ async def cb_admin_stats(query: CallbackQuery, session: AsyncSession):
 
 @router.callback_query(F.data == 'admin_export_csv', IsAdmin())
 async def cb_admin_export(query: CallbackQuery, session: AsyncSession):
-    logging.info(f"Admin {query.from_user.id} (@{query.from_user.username}) requested CSV export.")
+    logging.info("Admin requested CSV export: admin_id=%s", query.from_user.id)
     try:
         rows = await crud.fetch_all_applications(session)
     except Exception as e:

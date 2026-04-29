@@ -15,6 +15,7 @@ import type { AuthMode } from './modes';
 import { parseJwt } from './token';
 import { cacheUser, clearCachedUser, readCachedUser } from './userCache';
 import { appEnv } from '../env';
+import { devError, devLog } from '../utils/safeLogging';
 
 const DEV_MODE = appEnv.devMode;
 const DEV_INIT_DATA = appEnv.devInitData;
@@ -162,7 +163,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       const response = await api.get<TenantAccess>('/tenant-access/current');
       setTenantAccess(response.data);
     } catch (error) {
-      console.error('[AuthProvider] Failed to load tenant access state:', error);
+      devError('[AuthProvider] Failed to load tenant access state:', error);
     } finally {
       setIsTenantAccessLoading(false);
     }
@@ -215,7 +216,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     const payload = parseJwt(access_token);
     const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
 
-    console.log('[AuthProvider] Session applied:', {
+    devLog('[AuthProvider] Session applied:', {
       user: nextUser.display_name,
       role: nextUser.role,
       tenant_id: extractedTenantId,
@@ -259,7 +260,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         const existingRefreshToken = localStorage.getItem('refreshToken');
 
         if (existingToken && existingRefreshToken) {
-          console.log('[AuthProvider] Found existing token, checking validity...');
+          devLog('[AuthProvider] Found existing token, checking validity...');
 
           // Try to decode and check expiration
           const payload = parseJwt(existingToken);
@@ -267,7 +268,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
           if (payload?.exp && payload.exp > now) {
             // Token is still valid, use it
-            console.log('[AuthProvider] Using existing valid token:', {
+            devLog('[AuthProvider] Using existing valid token:', {
               tenant_id: payload.tenant_id,
               role: payload.role,
               expires_in: payload.exp - now
@@ -279,7 +280,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
             const cachedUser = readCachedUser<User>(currentAuthMode);
 
             if (cachedUser) {
-              console.log('[AuthProvider] Restoring session from cached user');
+              devLog('[AuthProvider] Restoring session from cached user');
               setUser(cachedUser);
               setTenantId(extractedTenantId);
               void loadTenantAccess(extractedTenantId);
@@ -292,7 +293,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
                 cacheUser(userResponse.data, currentAuthMode);
                 setUser(userResponse.data);
               }).catch((err) => {
-                console.log('[AuthProvider] Background user refresh failed:', err);
+                devLog('[AuthProvider] Background user refresh failed:', err);
               });
               return;
             }
@@ -306,7 +307,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
               const user = userResponse.data;
               cacheUser(user, currentAuthMode);
 
-              console.log('[AuthProvider] Restored session:', {
+              devLog('[AuthProvider] Restored session:', {
                 user: user.display_name,
                 role: user.role,
                 tenant_id: extractedTenantId
@@ -321,14 +322,14 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
               setupTokenRefresh(existingToken, currentAuthMode);
               return;
             } catch (err) {
-              console.log('[AuthProvider] Failed to restore session, will re-login:', err);
+              devLog('[AuthProvider] Failed to restore session, will re-login:', err);
               // Token might be invalid, continue with normal login
               localStorage.removeItem('accessToken');
               localStorage.removeItem('refreshToken');
               clearCachedUser();
             }
           } else {
-            console.log('[AuthProvider] Existing token expired, will re-login');
+            devLog('[AuthProvider] Existing token expired, will re-login');
             localStorage.removeItem('accessToken');
             localStorage.removeItem('refreshToken');
             clearCachedUser();
@@ -381,7 +382,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         const payload = parseJwt(access_token);
         const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
 
-        console.log('[AuthProvider] Login successful:', {
+        devLog('[AuthProvider] Login successful:', {
           user: user.display_name,
           role: user.role,
           tenant_id: extractedTenantId,
@@ -396,11 +397,11 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         // Setup auto-refresh 5 minutes before expiration
         setupTokenRefresh(access_token, currentAuthMode);
       } catch (err: any) {
-        console.error('Authentication failed:', err);
+        devError('Authentication failed:', err);
 
         // Check if this is a "user not registered" error (404)
         if (err?.response?.status === 404) {
-          console.log('[AuthProvider] User not registered, showing registration flow');
+          devLog('[AuthProvider] User not registered, showing registration flow');
           // User needs to register - don't show error, just set loading to false
           setUser(null);
           setIsLoading(false);
@@ -474,7 +475,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         const payload = parseJwt(access_token);
         const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
 
-        console.log('[AuthProvider] Token refreshed:', {
+        devLog('[AuthProvider] Token refreshed:', {
           user: updatedUser.display_name,
           tenant_id: extractedTenantId,
           jwt_payload: payload
@@ -487,7 +488,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         // Schedule next refresh
         setupTokenRefresh(access_token, mode);
       } catch (err) {
-        console.error('Auto-refresh failed:', err);
+        devError('Auto-refresh failed:', err);
         // On failure, user will be logged out on next 401
       }
     }, refreshIn * 1000);
@@ -495,7 +496,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
   // Switch tenant context (super-admin only)
   const switchTenant = async (targetTenantId: number | null) => {
-    console.log('[AuthProvider] Switching tenant:', { from: tenantId, to: targetTenantId });
+    devLog('[AuthProvider] Switching tenant:', { from: tenantId, to: targetTenantId });
 
     if (authMode === 'browser') {
       throw new Error('Tenant switching is not available in browser mode yet');
@@ -512,7 +513,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       const payload = parseJwt(access_token);
       const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
 
-      console.log('[AuthProvider] Tenant switch successful:', {
+      devLog('[AuthProvider] Tenant switch successful:', {
         requested: targetTenantId,
         jwt_tenant_id: extractedTenantId,
         jwt_payload: payload,
@@ -534,14 +535,14 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       // Setup new refresh timer
       setupTokenRefresh(access_token, authMode);
     } catch (err: any) {
-      console.error('[AuthProvider] Tenant switch failed:', err);
+      devError('[AuthProvider] Tenant switch failed:', err);
       throw new Error(err?.response?.data?.detail || 'Failed to switch tenant');
     }
   };
 
   // Register tutor (creates new school)
   const registerTutor = async (data: TutorRegistrationData) => {
-    console.log('[AuthProvider] Registering tutor:', { school_name: data.school_name });
+    devLog('[AuthProvider] Registering tutor:', { school_name: data.school_name });
 
     // Get Telegram init data
     let initData: string | undefined = undefined;
@@ -576,7 +577,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       const payload = parseJwt(access_token);
       const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
 
-      console.log('[AuthProvider] Tutor registration successful:', {
+      devLog('[AuthProvider] Tutor registration successful:', {
         user: registeredUser.display_name,
         role: registeredUser.role,
         tenant_id: extractedTenantId,
@@ -592,14 +593,14 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       // Reload to apply new context
       window.location.href = '/';
     } catch (error: any) {
-      console.error('[AuthProvider] Tutor registration failed:', error);
+      devError('[AuthProvider] Tutor registration failed:', error);
       throw error;
     }
   };
 
   // Register student (joins existing school with invite code)
   const registerStudent = async (data: StudentRegistrationData) => {
-    console.log('[AuthProvider] Registering student with invite token');
+    devLog('[AuthProvider] Registering student with invite token');
 
     // Get Telegram init data
     let initData: string | undefined = undefined;
@@ -634,7 +635,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       const payload = parseJwt(access_token);
       const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
 
-      console.log('[AuthProvider] Student registration successful:', {
+      devLog('[AuthProvider] Student registration successful:', {
         user: registeredUser.display_name,
         role: registeredUser.role,
         tenant_id: extractedTenantId,
@@ -650,7 +651,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       // Reload to apply new context
       window.location.href = '/';
     } catch (error: any) {
-      console.error('[AuthProvider] Student registration failed:', error);
+      devError('[AuthProvider] Student registration failed:', error);
       throw error;
     }
   };
@@ -677,7 +678,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       const authResponse = await loginWithTelegramWidget(payload);
       applyAuthenticatedSession(authResponse, 'browser', { persistLegacyTokens: false });
     } catch (err: any) {
-      console.error('[AuthProvider] Browser Telegram login failed:', err);
+      devError('[AuthProvider] Browser Telegram login failed:', err);
       setBrowserLoginError(getBrowserErrorMessage(err));
       clearAuthState();
     } finally {
@@ -687,7 +688,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
   // Logout function
   const logout = () => {
-    console.log('[AuthProvider] Logging out');
+    devLog('[AuthProvider] Logging out');
 
     // Clear refresh timer
     if (refreshTimerRef.current) {

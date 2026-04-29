@@ -4,6 +4,7 @@ import uuid
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
+import logging
 from typing import Any
 
 import httpx
@@ -12,9 +13,11 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import CurrentTenant
 from config import config
-from database.models import BillingEvent, Tenant
+from database.models import BillingEvent
 from services import billing_service
 from services.exceptions import ServiceError, ValidationError
+
+logger = logging.getLogger(__name__)
 
 
 class YooKassaError(ServiceError):
@@ -296,13 +299,30 @@ async def _request_yookassa(
             response = await client.request(method, path, json=json, headers=headers)
             response.raise_for_status()
         except httpx.HTTPStatusError as exc:
-            detail: Any
+            detail: Any = None
             try:
                 detail = exc.response.json()
             except ValueError:
-                detail = exc.response.text
-            raise YooKassaError(f"YooKassa API error: {detail}") from exc
+                detail = {"body_length": len(exc.response.text)}
+
+            provider_code = detail.get("code") if isinstance(detail, dict) else None
+            provider_type = detail.get("type") if isinstance(detail, dict) else None
+            logger.warning(
+                "YooKassa API error",
+                extra={
+                    "status_code": exc.response.status_code,
+                    "method": method,
+                    "path": path,
+                    "provider_code": provider_code,
+                    "provider_type": provider_type,
+                },
+            )
+            raise YooKassaError("YooKassa API returned an error") from exc
         except httpx.HTTPError as exc:
+            logger.warning(
+                "YooKassa API request failed",
+                extra={"method": method, "path": path, "error_type": type(exc).__name__},
+            )
             raise YooKassaError("YooKassa API request failed") from exc
 
     try:
@@ -325,8 +345,6 @@ async def create_checkout_payment(
         billing_period=billing_period,
     )
 
-    tenant = current_tenant.tenant or await session.get(Tenant, current_tenant.tenant_id)
-    tenant_name = tenant.name if tenant is not None else f"tenant #{current_tenant.tenant_id}"
     return_url = config.YOOKASSA_RETURN_URL or config.MINI_APP_URL
     description = f"TutorBase: тариф {quote.plan_name}, 30 дней"
 
@@ -337,11 +355,11 @@ async def create_checkout_payment(
         json={
             "amount": {"value": _amount_value(quote.amount_due), "currency": "RUB"},
             "capture": True,
+            "save_payment_method": False,
             "confirmation": {"type": "redirect", "return_url": return_url},
             "description": description[:128],
             "metadata": {
                 "tenant_id": str(current_tenant.tenant_id),
-                "tenant_name": tenant_name[:128],
                 "plan_code": quote.plan_code,
                 "billing_period": quote.billing_period,
                 "billing_action": quote.billing_action,

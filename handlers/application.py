@@ -18,7 +18,7 @@ router = Router()
 
 @router.callback_query(F.data == "to_menu")
 async def cb_to_menu(query: CallbackQuery, state: FSMContext):
-    logging.info(f"User {query.from_user.id} (@{query.from_user.username}) cancelled application process.")
+    logging.info("User cancelled application process: user_id=%s", query.from_user.id)
     
     # Удаляем предыдущее сообщение бота (если есть)
     data = await state.get_data()
@@ -90,7 +90,7 @@ async def cb_back(query: CallbackQuery, state: FSMContext):
 
 @router.callback_query(F.data == "start_apply")
 async def cb_start_apply(query: CallbackQuery, state: FSMContext):
-    logging.info(f"User {query.from_user.id} (@{query.from_user.username}) started application process.")
+    logging.info("User started application process: user_id=%s", query.from_user.id)
 
     menu_button_builder = InlineKeyboardBuilder()
     menu_button_builder.button(text='⬅️ В меню', callback_data='to_menu')
@@ -183,7 +183,7 @@ async def state_time(message: types.Message, state: FSMContext, session: AsyncSe
         await session.commit()  # Commit the transaction
     except Exception as exc:
         await session.rollback()  # Rollback on error
-        logging.error(f"Database error when saving application for user {user.id}: {exc}")
+        logging.error("Database error when saving application: user_id=%s error_type=%s", user.id, type(exc).__name__)
         await message.answer(texts.DATABASE_ERROR)
         prompt_msg = await message.answer(texts.PROMPT_FOR_TIME, reply_markup=back_with_menu_keyboard())
         await state.update_data(last_bot_msg_id=prompt_msg.message_id)
@@ -196,7 +196,7 @@ async def state_time(message: types.Message, state: FSMContext, session: AsyncSe
         except Exception as exc:
             logging.warning(f"Failed to delete prompt message {last_bot_msg_id} after submission: {exc}")
 
-    logging.info(f"User {user.id} successfully submitted application for language '{app_data['language']}'.")
+    logging.info("User successfully submitted application: user_id=%s", user.id)
 
     # Re-format the date for the notification message
     app_data_formatted = app_data.copy()
@@ -206,7 +206,7 @@ async def state_time(message: types.Message, state: FSMContext, session: AsyncSe
     try:
         await message.bot.send_message(config.ADMIN_CHAT_ID, text)
     except Exception as e:
-        logging.error(f"Failed to send notification to admin {config.ADMIN_CHAT_ID}: {e}")
+        logging.error("Failed to send application notification: error_type=%s", type(e).__name__)
 
     await message.answer(
         texts.APPLICATION_SUBMITTED,
