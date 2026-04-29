@@ -14,7 +14,7 @@ export const aquaTheme: ThemeConfig = {
     textTertiary: "#b2bec3",
     accentPrimary: "#00b4d8",
     accentSuccess: "#06d6a0",
-    accentWarning: "#ffd166",
+    accentWarning: "#e16259",
     accentError: "#ef476f",
     accentInfo: "#00b4d8",
     borderPrimary: "#dfe6e9",
