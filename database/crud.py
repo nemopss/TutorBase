@@ -774,6 +774,23 @@ async def get_active_learner_account_link(
     return result.scalars().first()
 
 
+async def user_has_active_learner_account_link(session: AsyncSession, user: User) -> bool:
+    """Return whether a user is currently linked to a learner account."""
+    predicates = [LearnerAccountLink.user_id == user.id]
+    if user.telegram_id is not None:
+        predicates.append(LearnerAccountLink.telegram_id == user.telegram_id)
+
+    result = await session.execute(
+        select(LearnerAccountLink.id)
+        .where(
+            LearnerAccountLink.unlinked_at.is_(None),
+            or_(*predicates),
+        )
+        .limit(1)
+    )
+    return result.scalar_one_or_none() is not None
+
+
 async def unlink_learner_account(
     session: AsyncSession,
     current_tenant: CurrentTenant,

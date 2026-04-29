@@ -1,14 +1,5 @@
-import React, { useState } from 'react';
-import { Card, Button, Avatar, Space, Typography, Tag, Select, message } from 'antd';
-import {
-  BellOutlined,
-  BgColorsOutlined,
-  CreditCardOutlined,
-  FieldTimeOutlined,
-  GlobalOutlined,
-  TeamOutlined,
-  UserOutlined,
-} from '@ant-design/icons';
+import React, { useEffect, useState } from 'react';
+import { Avatar, Button, Card, Typography, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
 import PageIntro from '../components/common/PageIntro';
@@ -21,10 +12,24 @@ import api from '../services/api';
 const { Title, Text } = Typography;
 
 const PAID_PLAN_OPTIONS = [
-  { value: 'basic', label: 'Базовый · 349 ₽ · до 10 учеников' },
-  { value: 'pro', label: 'Про · 649 ₽ · до 20 учеников' },
-  { value: 'studio', label: 'Бизнес · 1190 ₽ · до 50 учеников' },
+  { value: 'basic', name: 'Базовый', price: 349, limit: 10, order: 20 },
+  { value: 'pro', name: 'Про', price: 649, limit: 20, order: 30 },
+  { value: 'studio', name: 'Бизнес', price: 1190, limit: 50, order: 40 },
 ];
+
+type CheckoutPreview = {
+  plan_code: string;
+  plan_name: string;
+  billing_action: 'new' | 'renewal' | 'upgrade' | string;
+  amount_due: string;
+  full_amount: string;
+  credit_amount: string;
+  current_plan_name?: string | null;
+  resulting_period_end: string;
+  message: string;
+};
+
+const planOrderByCode = Object.fromEntries(PAID_PLAN_OPTIONS.map((plan) => [plan.value, plan.order]));
 
 const Settings: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -33,10 +38,22 @@ const Settings: React.FC = () => {
   const colors = resolvedTheme.colors;
   const isStaff = user?.role === 'teacher' || user?.is_platform_admin;
   const shouldShowAccess = isStaff && tenantAccess && tenantAccess.status !== 'global';
+  const tileRadius = 10;
+  const tileStyle = {
+    background: colors.bgSecondary,
+    border: `0px solid ${colors.borderPrimary}`,
+    borderRadius: tileRadius,
+    boxShadow: 'none',
+  };
+  const cardHeaderStyle = { borderBottom: 0 };
+
   const [checkoutPlanCode, setCheckoutPlanCode] = useState('basic');
   const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
+  const [checkoutPreview, setCheckoutPreview] = useState<CheckoutPreview | null>(null);
+  const [isPreviewLoading, setIsPreviewLoading] = useState(false);
+  const [checkoutPreviewError, setCheckoutPreviewError] = useState<string | null>(null);
 
-  const formatAccessDate = (value?: string | null) => {
+  const formatDate = (value?: string | null) => {
     if (!value) return null;
     return new Intl.DateTimeFormat(i18n.language || 'ru', {
       day: '2-digit',
@@ -45,16 +62,18 @@ const Settings: React.FC = () => {
     }).format(new Date(value));
   };
 
-  const accessUntil = formatAccessDate(tenantAccess?.access_until);
-  const graceUntil = formatAccessDate(tenantAccess?.grace_until);
+  const formatCurrency = (value: string | number) => (
+    `${new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 2 }).format(Number(value))} ₽`
+  );
+
+  const accessUntil = formatDate(tenantAccess?.access_until);
+  const graceUntil = formatDate(tenantAccess?.grace_until);
   const accessDaysLeft = tenantAccess?.access_until
     ? Math.ceil((new Date(tenantAccess.access_until).getTime() - Date.now()) / (1000 * 60 * 60 * 24))
     : null;
 
   const accessStatusConfig = (() => {
-    if (!shouldShowAccess) {
-      return null;
-    }
+    if (!shouldShowAccess) return null;
 
     if (tenantAccess.is_lifetime || tenantAccess.status === 'lifetime') {
       return {
@@ -131,9 +150,71 @@ const Settings: React.FC = () => {
   const learnerUsagePercent = billing?.active_learners_limit
     ? Math.min(100, Math.round((billing.active_learners_count / billing.active_learners_limit) * 100))
     : 0;
-  const learnerUsageColor = !billing?.can_create_learner
-    ? '#fa8c16'
-    : colors.accentPrimary;
+  const activePaidPlanCode = billing?.plan_code && billing.plan_code !== 'start' ? billing.plan_code : null;
+  const activePaidPlanOrder = activePaidPlanCode ? planOrderByCode[activePaidPlanCode] : undefined;
+  const selectedPlan = PAID_PLAN_OPTIONS.find((plan) => plan.value === checkoutPlanCode) ?? PAID_PLAN_OPTIONS[0];
+  const selectedPlanOrder = planOrderByCode[checkoutPlanCode];
+  const hasActivePaidPeriod = Boolean(
+    activePaidPlanCode
+    && billing?.current_period_end
+    && new Date(billing.current_period_end).getTime() > Date.now(),
+  );
+  const isDowngradeBlocked = Boolean(
+    hasActivePaidPeriod
+    && activePaidPlanOrder
+    && selectedPlanOrder
+    && selectedPlanOrder < activePaidPlanOrder,
+  );
+
+  useEffect(() => {
+    if (!billing) return;
+    setCheckoutPlanCode(billing.plan_code && billing.plan_code !== 'start' ? billing.plan_code : 'basic');
+  }, [billing]);
+
+  useEffect(() => {
+    if (!isStaff || !billing || isDowngradeBlocked) {
+      setCheckoutPreview(null);
+      setCheckoutPreviewError(isDowngradeBlocked ? 'Переход на тариф ниже доступен после окончания текущего оплаченного периода.' : null);
+      return;
+    }
+
+    let cancelled = false;
+    setIsPreviewLoading(true);
+    setCheckoutPreviewError(null);
+    api.post<CheckoutPreview>('/billing/checkout/preview', {
+      plan_code: checkoutPlanCode,
+      billing_period: 'month',
+    })
+      .then((response) => {
+        if (!cancelled) setCheckoutPreview(response.data);
+      })
+      .catch((error: any) => {
+        if (!cancelled) {
+          const detail = error?.response?.data?.detail;
+          setCheckoutPreview(null);
+          setCheckoutPreviewError(typeof detail === 'string' ? detail : 'Не удалось рассчитать оплату');
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setIsPreviewLoading(false);
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [billing, checkoutPlanCode, isDowngradeBlocked, isStaff]);
+
+  const ctaText = (() => {
+    if (checkoutPreview?.billing_action === 'renewal') return 'Продлить на 30 дней';
+    if (checkoutPreview?.billing_action === 'upgrade') return `Перейти на ${checkoutPreview.plan_name}`;
+    return `Оплатить ${selectedPlan.name}`;
+  })();
+
+  const actionLabel = (() => {
+    if (checkoutPreview?.billing_action === 'upgrade') return 'Переход';
+    if (checkoutPreview?.billing_action === 'renewal') return 'Продление';
+    return 'Новый период';
+  })();
 
   const handleCheckout = async () => {
     setIsCheckoutLoading(true);
@@ -142,6 +223,8 @@ const Settings: React.FC = () => {
         payment_id: string;
         status: string;
         confirmation_url: string;
+        amount_due: string;
+        billing_action: string;
       }>('/billing/checkout', {
         plan_code: checkoutPlanCode,
         billing_period: 'month',
@@ -162,281 +245,254 @@ const Settings: React.FC = () => {
         subtitle={t('pages.settings.subtitle')}
       />
 
-      {/* Profile Section */}
-      <Card
-        title={
-          <Space>
-            <UserOutlined />
-            <span>{t('pages.settings.profile')}</span>
-          </Space>
-        }
-        style={{ marginBottom: spacing.lg }}
-      >
-        <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
-          <Avatar size={64} icon={<UserOutlined />} />
-          <div>
-            <Title level={4} style={{ margin: 0 }}>{user?.display_name || 'User'}</Title>
-            <Text type="secondary">{t('pages.settings.role')}: {user?.role || 'viewer'}</Text>
-          </div>
-        </div>
-        <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 16 }}>
-          {t('pages.settings.profileSyncNote')}
-        </Text>
-      </Card>
-
-      {isStaff && (accessStatusConfig || billing) && (
-        <Card
-          bordered={false}
-          style={{
-            marginBottom: spacing.lg,
-            background: `linear-gradient(135deg, ${colors.bgSecondary} 0%, ${colors.bgPrimary} 100%)`,
-            borderRadius: 8,
-            border: `1px solid ${colors.borderPrimary}`,
-          }}
-        >
-          <div style={{
-            display: 'flex',
-            alignItems: 'flex-start',
-            justifyContent: 'space-between',
-            gap: spacing.md,
-          }}>
-            <Space align="start" size={spacing.md}>
-              <div style={{
-                width: 44,
-                height: 44,
-                borderRadius: 8,
+      <div style={{ display: 'grid', gap: spacing.lg }}>
+        <Card bordered={false} style={tileStyle} styles={{ header: cardHeaderStyle }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: spacing.md }}>
+            <Avatar
+              size={56}
+              style={{
                 background: colors.bgTertiary,
-                color: colors.accentPrimary,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                fontSize: 22,
-                flex: '0 0 auto',
-              }}>
-                <FieldTimeOutlined />
-              </div>
+                color: colors.textPrimary,
+                fontWeight: 600,
+              }}
+            >
+              {(user?.display_name || 'U').slice(0, 1).toUpperCase()}
+            </Avatar>
+            <div>
+              <Title level={4} style={{ margin: 0, color: colors.textPrimary }}>
+                {user?.display_name || 'User'}
+              </Title>
+              <Text type="secondary">{t('pages.settings.role')}: {user?.role || 'viewer'}</Text>
+            </div>
+          </div>
+          <Text type="secondary" style={{ display: 'block', marginTop: spacing.md, fontSize: 12 }}>
+            {t('pages.settings.profileSyncNote')}
+          </Text>
+        </Card>
+
+        {isStaff && (accessStatusConfig || billing) && (
+          <Card bordered={false} style={tileStyle} styles={{ header: cardHeaderStyle }}>
+            <div style={{
+              display: 'flex',
+              justifyContent: 'space-between',
+              gap: spacing.md,
+              alignItems: 'flex-start',
+              flexWrap: 'wrap',
+            }}>
               <div>
-                <Text style={{
-                  display: 'block',
-                  color: colors.textSecondary,
-                  marginBottom: spacing.xs,
-                }}>
+                <Text type="secondary" style={{ display: 'block', marginBottom: spacing.xs }}>
                   Доступ к сервису
                 </Text>
+                <Title level={4} style={{ margin: 0, color: colors.textPrimary }}>
+                  {accessStatusConfig?.title || billing?.plan_name}
+                </Title>
                 {accessStatusConfig && (
-                  <>
-                    <Title level={4} style={{ margin: 0, color: colors.textPrimary }}>
-                      {accessStatusConfig.title}
-                    </Title>
-                    <Text style={{
-                      display: 'block',
-                      color: colors.textSecondary,
-                      marginTop: spacing.xs,
-                    }}>
-                      {accessStatusConfig.description}
-                    </Text>
-                  </>
+                  <Text type="secondary" style={{ display: 'block', marginTop: spacing.xs }}>
+                    {accessStatusConfig.description}
+                  </Text>
                 )}
               </div>
-            </Space>
-            <Space wrap size={8} style={{ justifyContent: 'flex-end' }}>
-              {accessStatusConfig && (
-                <Tag color={accessStatusConfig.color} style={{ margin: 0 }}>
-                  {accessStatusConfig.label}
-                </Tag>
-              )}
-              {billing && (
-                <Tag color={billing.notifications_allowed ? 'green' : 'gold'} style={{ margin: 0 }}>
-                  {billing.plan_name}
-                </Tag>
-              )}
-            </Space>
-          </div>
+            </div>
 
-          {billing && (
-            <>
-              <div style={{
-                display: 'grid',
-                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
-                gap: spacing.md,
-                marginTop: spacing.lg,
-              }}>
+            {billing && (
+              <>
                 <div style={{
-                  padding: spacing.md,
-                  borderRadius: 8,
-                  background: colors.bgSecondary,
-                  border: `1px solid ${colors.borderPrimary}`,
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                  gap: spacing.md,
+                  marginTop: spacing.lg,
                 }}>
-                  <Space align="start" size={spacing.sm}>
-                    <CreditCardOutlined style={{ color: colors.accentPrimary, fontSize: 18, marginTop: 2 }} />
-                    <div>
-                      <Text type="secondary" style={{ display: 'block' }}>Тариф</Text>
-                      <Text strong style={{ display: 'block', color: colors.textPrimary }}>{billing.plan_name}</Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        {billing.monthly_price_rub > 0 ? `${billing.monthly_price_rub} ₽/мес.` : 'Бесплатно'}
+                  {[
+                    ['Тариф', billing.plan_name, billing.monthly_price_rub > 0 ? `${billing.monthly_price_rub} ₽ / 30 дней` : 'Бесплатно'],
+                    ['Ученики', `${billing.active_learners_count}/${billing.active_learners_limit} активных`, `${learnerUsagePercent}% лимита занято`],
+                    ['Уведомления', billing.notifications_allowed ? 'Работают' : 'Отключены', 'Telegram-сценарии'],
+                  ].map(([label, value, hint]) => (
+                    <div key={label} style={{ padding: spacing.md, borderRadius: tileRadius, background: colors.bgTertiary }}>
+                      <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>{label}</Text>
+                      <Text strong style={{ display: 'block', marginTop: spacing.xs, color: colors.textPrimary }}>
+                        {value}
+                      </Text>
+                      <Text type="secondary" style={{ display: 'block', marginTop: spacing.xs, fontSize: 12 }}>
+                        {hint}
                       </Text>
                     </div>
-                  </Space>
+                  ))}
                 </div>
-                <div style={{
-                  padding: spacing.md,
-                  borderRadius: 8,
-                  background: colors.bgSecondary,
-                  border: `1px solid ${colors.borderPrimary}`,
-                }}>
-                  <Space align="start" size={spacing.sm}>
-                    <TeamOutlined style={{ color: learnerUsageColor, fontSize: 18, marginTop: 2 }} />
-                    <div style={{ width: '100%' }}>
-                      <Text type="secondary" style={{ display: 'block' }}>Ученики</Text>
-                      <Text strong style={{ display: 'block', color: colors.textPrimary }}>
-                        {billing.active_learners_count}/{billing.active_learners_limit} активных
-                      </Text>
-                      <div style={{
-                        height: 6,
-                        borderRadius: 6,
-                        background: colors.bgTertiary,
-                        overflow: 'hidden',
-                        marginTop: 8,
-                      }}>
-                        <div style={{
-                          width: `${learnerUsagePercent}%`,
-                          height: '100%',
-                          borderRadius: 6,
-                          background: learnerUsageColor,
-                        }} />
+
+                {!billing.notifications_allowed && (
+                  <div style={{ marginTop: spacing.md, padding: spacing.md, borderRadius: tileRadius, background: colors.bgTertiary }}>
+                    <Text type="warning">
+                      Подписка не действует, а активных учеников больше бесплатного лимита. Данные доступны, но Telegram-уведомления отключены.
+                    </Text>
+                  </div>
+                )}
+
+                <div style={{ marginTop: spacing.lg }}>
+                  <div style={{ marginBottom: spacing.md }}>
+                    <Title level={5} style={{ margin: 0, color: colors.textPrimary }}>Оплата тарифа</Title>
+                    <Text type="secondary" style={{ display: 'block', marginTop: spacing.xs }}>
+                      Сумма и срок доступа рассчитываются до перехода в ЮKassa.
+                    </Text>
+                  </div>
+
+                  <div style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                    gap: spacing.sm,
+                  }}>
+                    {PAID_PLAN_OPTIONS.map((plan) => {
+                      const isSelected = checkoutPlanCode === plan.value;
+                      const isCurrent = billing.plan_code === plan.value;
+                      const isBlocked = Boolean(hasActivePaidPeriod && activePaidPlanOrder && plan.order < activePaidPlanOrder);
+                      return (
+                        <button
+                          key={plan.value}
+                          type="button"
+                          onClick={() => !isBlocked && setCheckoutPlanCode(plan.value)}
+                          disabled={isBlocked}
+                          style={{
+                            textAlign: 'left',
+                            padding: spacing.md,
+                            borderRadius: tileRadius,
+                            border: 0,
+                            background: isSelected ? colors.textPrimary : colors.bgTertiary,
+                            color: isSelected ? colors.bgPrimary : colors.textPrimary,
+                            cursor: isBlocked ? 'not-allowed' : 'pointer',
+                            opacity: isBlocked ? 0.45 : 1,
+                          }}
+                        >
+                          <span style={{ display: 'flex', justifyContent: 'space-between', gap: spacing.sm, alignItems: 'center' }}>
+                            <span style={{ fontWeight: 700 }}>{plan.name}</span>
+                            {isCurrent && (
+                              <span style={{
+                                fontSize: 11,
+                                color: isSelected ? colors.bgPrimary : colors.textSecondary,
+                                opacity: 0.8,
+                              }}>
+                                текущий
+                              </span>
+                            )}
+                          </span>
+                          <span style={{
+                            display: 'block',
+                            marginTop: spacing.xs,
+                            color: isSelected ? colors.bgPrimary : colors.textSecondary,
+                            opacity: isSelected ? 0.85 : 1,
+                          }}>
+                            до {plan.limit} активных
+                          </span>
+                          <span style={{ display: 'block', marginTop: spacing.sm, fontWeight: 600 }}>
+                            {formatCurrency(plan.price)}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  <div style={{
+                    marginTop: spacing.md,
+                    padding: spacing.md,
+                    borderRadius: tileRadius,
+                    background: colors.bgTertiary,
+                    display: 'grid',
+                    gap: spacing.sm,
+                  }}>
+                    <div style={{ display: 'flex', justifyContent: 'space-between', gap: spacing.md, alignItems: 'baseline' }}>
+                      <div>
+                        <Text type="secondary" style={{ display: 'block' }}>К оплате</Text>
+                        <Title level={3} style={{ margin: 0, color: colors.textPrimary }}>
+                          {checkoutPreview ? formatCurrency(checkoutPreview.amount_due) : formatCurrency(selectedPlan.price)}
+                        </Title>
                       </div>
+                      <Text type="secondary">{actionLabel}</Text>
                     </div>
-                  </Space>
-                </div>
-                <div style={{
-                  padding: spacing.md,
-                  borderRadius: 8,
-                  background: colors.bgSecondary,
-                  border: `1px solid ${colors.borderPrimary}`,
-                }}>
-                  <Space align="start" size={spacing.sm}>
-                    <BellOutlined
+
+                    <div style={{ display: 'grid', gap: 4 }}>
+                      {checkoutPreview?.billing_action === 'upgrade' && (
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          Зачтём неиспользованный остаток текущего тарифа: {formatCurrency(checkoutPreview.credit_amount)}.
+                        </Text>
+                      )}
+                      <Text type={checkoutPreviewError ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>
+                        {checkoutPreviewError
+                          || checkoutPreview?.message
+                          || `Тариф «${selectedPlan.name}» включится после подтверждения платежа.`}
+                      </Text>
+                      {checkoutPreview && (
+                        <Text type="secondary" style={{ fontSize: 12 }}>
+                          Доступ будет действовать до {formatDate(checkoutPreview.resulting_period_end)}.
+                        </Text>
+                      )}
+                    </div>
+
+                    <Button
+                      loading={isCheckoutLoading || isPreviewLoading}
+                      disabled={Boolean(checkoutPreviewError) || isPreviewLoading}
+                      onClick={handleCheckout}
                       style={{
-                        color: billing.notifications_allowed ? colors.accentPrimary : '#fa8c16',
-                        fontSize: 18,
-                        marginTop: 2,
+                        width: 'fit-content',
+                        minWidth: 190,
+                        height: 40,
+                        borderRadius: 8,
+                        background: colors.textPrimary,
+                        borderColor: colors.textPrimary,
+                        color: colors.bgPrimary,
+                        fontWeight: 700,
                       }}
-                    />
-                    <div>
-                      <Text type="secondary" style={{ display: 'block' }}>Уведомления</Text>
-                      <Text strong style={{ display: 'block', color: colors.textPrimary }}>
-                        {billing.notifications_allowed ? 'Работают' : 'Отключены'}
-                      </Text>
-                      <Text type="secondary" style={{ fontSize: 12 }}>
-                        Telegram-сценарии
-                      </Text>
-                    </div>
-                  </Space>
+                    >
+                      {ctaText}
+                    </Button>
+                  </div>
                 </div>
-              </div>
-              {!billing.notifications_allowed && (
-                <div style={{
-                  marginTop: spacing.md,
-                  padding: spacing.md,
-                  borderRadius: 8,
-                  background: 'rgba(250, 173, 20, 0.12)',
-                  border: '1px solid #faad14',
-                }}>
-                  <Text type="warning">
-                    Подписка не действует, а активных учеников больше бесплатного лимита. Данные доступны, но Telegram-уведомления отключены.
-                  </Text>
-                </div>
-              )}
-              <Text type="secondary" style={{ display: 'block', marginTop: spacing.md, fontSize: 12 }}>
-                Онлайн-оплата проходит через ЮKassa. Подписка включится после подтверждения платежа.
-              </Text>
-              <div style={{
-                display: 'flex',
-                flexWrap: 'wrap',
-                gap: spacing.sm,
-                alignItems: 'center',
-                marginTop: spacing.md,
-              }}>
-                <Select
-                  value={checkoutPlanCode}
-                  options={PAID_PLAN_OPTIONS}
-                  onChange={setCheckoutPlanCode}
-                  style={{ minWidth: 280, maxWidth: '100%' }}
-                />
-                <Button
-                  type="primary"
-                  icon={<CreditCardOutlined />}
-                  loading={isCheckoutLoading}
-                  onClick={handleCheckout}
-                >
-                  Оплатить 30 дней
-                </Button>
-              </div>
-            </>
-          )}
-        </Card>
-      )}
-      {/* Preferences Section */}
-      <div
-        style={{
+              </>
+            )}
+          </Card>
+        )}
+
+        <div style={{
           display: 'grid',
           gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-          gap: spacing.md,
-          marginBottom: spacing.lg,
-        }}
-      >
-        <Card
-          title={
-            <Space>
-              <GlobalOutlined />
-              <span>{t('pages.settings.preferences')}</span>
-            </Space>
-          }
-        >
-          <div>
-            <Text strong style={{ display: 'block', marginBottom: 8 }}>
+          gap: spacing.lg,
+        }}>
+          <Card bordered={false} style={tileStyle} styles={{ header: cardHeaderStyle }}>
+            <Title level={5} style={{ marginTop: 0, color: colors.textPrimary }}>
+              {t('pages.settings.preferences')}
+            </Title>
+            <Text strong style={{ display: 'block', marginBottom: spacing.sm }}>
               {t('pages.settings.language')}
             </Text>
             <LanguageSelector />
-            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 4 }}>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: spacing.sm }}>
               {t('pages.settings.languageHelp')}
             </Text>
-          </div>
-        </Card>
+          </Card>
 
-        {/* Appearance Section */}
-        <Card
-          title={
-            <Space>
-              <BgColorsOutlined />
-              <span>{t('pages.settings.appearance')}</span>
-            </Space>
-          }
-        >
-          <div>
-            <Text strong style={{ display: 'block', marginBottom: 12 }}>
+          <Card bordered={false} style={tileStyle} styles={{ header: cardHeaderStyle }}>
+            <Title level={5} style={{ marginTop: 0, color: colors.textPrimary }}>
+              {t('pages.settings.appearance')}
+            </Title>
+            <Text strong style={{ display: 'block', marginBottom: spacing.md }}>
               {t('pages.settings.theme')}
             </Text>
             <ThemeSelector />
-            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: 8 }}>
+            <Text type="secondary" style={{ fontSize: 12, display: 'block', marginTop: spacing.sm }}>
               {t('pages.settings.themeHelp')}
             </Text>
-          </div>
-        </Card>
-      </div>
+          </Card>
+        </div>
 
-      {/* Account Section */}
-      <Card title={t('pages.settings.account')}>
-        <div>
-          <Title level={5} style={{ marginBottom: 8 }}>{t('pages.settings.signOut')}</Title>
-          <Text type="secondary" style={{ display: 'block', marginBottom: 16 }}>
+        <Card bordered={false} style={tileStyle} styles={{ header: cardHeaderStyle }}>
+          <Title level={5} style={{ marginTop: 0, color: colors.textPrimary }}>
+            {t('pages.settings.account')}
+          </Title>
+          <Text type="secondary" style={{ display: 'block', marginBottom: spacing.md }}>
             {t('pages.settings.signOutDescription')}
           </Text>
           <Button danger onClick={logout}>
             {t('pages.settings.signOut')}
           </Button>
-        </div>
-      </Card>
+        </Card>
+      </div>
     </div>
   );
 };

@@ -42,6 +42,7 @@ from api.schemas.auth import (
 )
 from api.schemas.billing import (
     BillingCheckoutRequest,
+    BillingCheckoutPreviewResponse,
     BillingCheckoutResponse,
     BillingPlanResponse,
     BillingSnapshotResponse,
@@ -193,6 +194,7 @@ __all__ = [
     'TokenPairResponse',
     # Billing
     'BillingCheckoutRequest',
+    'BillingCheckoutPreviewResponse',
     'BillingCheckoutResponse',
     'BillingPlanResponse',
     'BillingSnapshotResponse',

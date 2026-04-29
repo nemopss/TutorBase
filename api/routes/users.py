@@ -27,6 +27,7 @@ def _to_response(user) -> UserResponse:
         username=user.username,
         display_name=user.display_name,
         role=user.role,
+        tenant_id=user.tenant_id,
         is_platform_admin=is_platform_admin(user),
         created_at=user.created_at,
         updated_at=user.updated_at,
@@ -114,6 +115,9 @@ async def update_user_role(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
 
+    if current_tenant.tenant_id is not None and user.tenant_id != current_tenant.tenant_id:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
     if payload.role == "admin":
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
@@ -124,6 +128,12 @@ async def update_user_role(
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Platform admin role is managed by the ADMINS allowlist",
+        )
+
+    if payload.role != "viewer" and await crud.user_has_active_learner_account_link(session, user):
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Linked learner accounts cannot be promoted to staff roles. Unlink the learner account first.",
         )
 
     user.role = payload.role

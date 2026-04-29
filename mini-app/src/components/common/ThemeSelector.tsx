@@ -3,122 +3,207 @@ import { CheckOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
 import type { ThemeConfig, ThemeId } from '../../theme/types';
-import { allThemeIds, themes } from '../../theme/themes';
+import { themes } from '../../theme/themes';
 
-interface ThemeCardProps {
-  theme: ThemeConfig | null; // null for 'auto'
+interface ThemeOptionProps {
+  theme: ThemeConfig | null;
   themeId: ThemeId;
   isSelected: boolean;
   onClick: () => void;
 }
 
-const ThemeCard: React.FC<ThemeCardProps> = ({ theme, themeId, isSelected, onClick }) => {
+interface ThemePreviewPalette {
+  background: string;
+  surface: string;
+  surfaceAlt: string;
+  text: string;
+  muted: string;
+  accent: string;
+  accentAlt: string;
+}
+
+const previewPalettes: Partial<Record<ThemeId, ThemePreviewPalette>> = {
+  light: {
+    background: '#ffffff',
+    surface: '#f7f7f5',
+    surfaceAlt: '#ececea',
+    text: '#37352f',
+    muted: '#b7b4ad',
+    accent: '#2383e2',
+    accentAlt: '#0f7b6c',
+  },
+  aqua: {
+    background: '#f0fdff',
+    surface: '#dff8fb',
+    surfaceAlt: '#c4f1f6',
+    text: '#164e63',
+    muted: '#67c6d1',
+    accent: '#00b4d8',
+    accentAlt: '#06d6a0',
+  },
+  dark: {
+    background: '#191919',
+    surface: '#232323',
+    surfaceAlt: '#2f2f2f',
+    text: '#f8f8f8',
+    muted: '#777777',
+    accent: '#2383e2',
+    accentAlt: '#0f7b6c',
+  },
+  darkplus: {
+    background: '#1e1e1e',
+    surface: '#252526',
+    surfaceAlt: '#333333',
+    text: '#d4d4d4',
+    muted: '#6a9955',
+    accent: '#0078d4',
+    accentAlt: '#ce9178',
+  },
+  gruvbox: {
+    background: '#282828',
+    surface: '#32302f',
+    surfaceAlt: '#3c3836',
+    text: '#d5c6a0',
+    muted: '#a89984',
+    accent: '#fe8019',
+    accentAlt: '#b8bb26',
+  },
+  tokyonight: {
+    background: '#1f202e',
+    surface: '#24283b',
+    surfaceAlt: '#292f44',
+    text: '#a9b1d6',
+    muted: '#565f89',
+    accent: '#7dcfff',
+    accentAlt: '#bb9af7',
+  },
+};
+
+const getPreviewPalette = (themeId: ThemeId, displayTheme: ThemeConfig): ThemePreviewPalette => {
+  if (themeId === 'auto') {
+    return {
+      background: displayTheme.colorScheme === 'dark' ? '#191919' : '#ffffff',
+      surface: displayTheme.colorScheme === 'dark' ? '#242424' : '#f7f7f5',
+      surfaceAlt: displayTheme.colorScheme === 'dark' ? '#303030' : '#e8f6f8',
+      text: displayTheme.colorScheme === 'dark' ? '#f8f8f8' : '#37352f',
+      muted: displayTheme.colorScheme === 'dark' ? '#777777' : '#9fb7bd',
+      accent: '#2383e2',
+      accentAlt: '#00b4d8',
+    };
+  }
+
+  return previewPalettes[themeId] ?? {
+    background: displayTheme.colors.bgPrimary,
+    surface: displayTheme.colors.bgSecondary,
+    surfaceAlt: displayTheme.colors.bgTertiary,
+    text: displayTheme.colors.textPrimary,
+    muted: displayTheme.colors.textTertiary,
+    accent: displayTheme.colors.accentPrimary,
+    accentAlt: displayTheme.colors.accentSuccess,
+  };
+};
+
+const ThemeOption: React.FC<ThemeOptionProps> = ({ theme, themeId, isSelected, onClick }) => {
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
-
-  // For auto theme, show resolved theme's preview colors and background
   const displayTheme = theme ?? resolvedTheme;
-  const previewColors = displayTheme.previewColors;
-  const previewBg = displayTheme.colors.bgPrimary;
-
+  const preview = getPreviewPalette(themeId, displayTheme);
   const themeName = t(`pages.settings.themes.${themeId}`);
 
   return (
-    <div
+    <button
+      type="button"
       onClick={onClick}
+      aria-pressed={isSelected}
       style={{
-        padding: 12,
-        borderRadius: 8,
-        border: isSelected
-          ? `2px solid ${resolvedTheme.colors.accentPrimary}`
-          : `1px solid ${resolvedTheme.colors.borderPrimary}`,
-        backgroundColor: resolvedTheme.colors.bgSecondary,
+        width: '100%',
+        display: 'grid',
+        gridTemplateColumns: '72px 1fr 20px',
+        alignItems: 'center',
+        gap: 12,
+        padding: 10,
+        border: 0,
+        borderRadius: 10,
+        background: isSelected ? resolvedTheme.colors.bgTertiary : 'transparent',
+        color: resolvedTheme.colors.textPrimary,
         cursor: 'pointer',
-        transition: 'all 0.2s ease',
-        position: 'relative',
+        textAlign: 'left',
       }}
     >
-      {/* Selection indicator */}
-      {isSelected && (
-        <div
-          style={{
-            position: 'absolute',
-            top: 8,
-            right: 8,
-            width: 20,
-            height: 20,
-            borderRadius: '50%',
-            backgroundColor: resolvedTheme.colors.accentPrimary,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-          }}
-        >
-          <CheckOutlined style={{ color: '#fff', fontSize: 12 }} />
-        </div>
-      )}
-
-      {/* Color preview */}
-      <div
+      <span
+        aria-hidden
         style={{
-          display: 'flex',
-          justifyContent: 'center',
+          height: 44,
+          borderRadius: 8,
+          background: preview.background,
+          padding: 6,
+          display: 'grid',
           gap: 4,
-          marginBottom: 8,
-          padding: 8,
-          borderRadius: 6,
-          backgroundColor: previewBg,
-          border: `1px solid ${resolvedTheme.colors.borderSecondary}`,
-          overflow: 'hidden',
+          boxShadow: `inset 0 0 0 1px ${preview.surfaceAlt}`,
         }}
       >
-        {previewColors.slice(0, 3).map((color, index) => (
-          <div
-            key={index}
+        <span
+          style={{
+            height: 7,
+            borderRadius: 4,
+            background: `linear-gradient(90deg, ${preview.accent} 0 38%, ${preview.surface} 38% 100%)`,
+            display: 'block',
+          }}
+        />
+        <span style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 4, minHeight: 20 }}>
+          <span
             style={{
-              width: 16,
-              height: 16,
-              minWidth: 16,
-              flexShrink: 0,
-              borderRadius: '50%',
-              backgroundColor: color,
-              border: '1px solid rgba(128,128,128,0.3)',
+              borderRadius: 5,
+              background: preview.surface,
+              display: 'grid',
+              alignContent: 'center',
+              gap: 3,
+              padding: '4px 5px',
             }}
-          />
-        ))}
-      </div>
-
-      {/* Theme name */}
-      <div
-        style={{
-          fontSize: 12,
-          fontWeight: 500,
-          color: resolvedTheme.colors.textPrimary,
-          textAlign: 'center',
-          whiteSpace: 'nowrap',
-          overflow: 'hidden',
-          textOverflow: 'ellipsis',
-        }}
-      >
-        {themeName}
-      </div>
-    </div>
+          >
+            <span style={{ height: 3, borderRadius: 3, background: preview.text, opacity: 0.82 }} />
+            <span style={{ height: 3, width: '68%', borderRadius: 3, background: preview.muted }} />
+          </span>
+          <span
+            style={{
+              borderRadius: 5,
+              background: preview.surfaceAlt,
+              display: 'grid',
+              gridTemplateColumns: '7px 1fr',
+              gap: 4,
+              padding: 4,
+            }}
+          >
+            <span style={{ borderRadius: 4, background: preview.accentAlt }} />
+            <span style={{ borderRadius: 4, background: preview.accent, opacity: 0.86 }} />
+          </span>
+        </span>
+      </span>
+      <span>
+        <span style={{ display: 'block', fontWeight: 600 }}>{themeName}</span>
+      </span>
+      <span style={{
+        width: 20,
+        height: 20,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: isSelected ? resolvedTheme.colors.textPrimary : 'transparent',
+      }}>
+        <CheckOutlined style={{ fontSize: 13 }} />
+      </span>
+    </button>
   );
 };
 
 const ThemeSelector: React.FC = () => {
   const { themeId, setThemeId } = useTheme();
+  const themeOrder: ThemeId[] = ['auto', 'light', 'aqua', 'dark', 'darkplus', 'gruvbox', 'tokyonight'];
 
   return (
-    <div
-      style={{
-        display: 'grid',
-        gridTemplateColumns: 'repeat(auto-fill, minmax(100px, 1fr))',
-        gap: 10,
-      }}
-    >
-      {allThemeIds.map((id) => (
-        <ThemeCard
+    <div style={{ display: 'grid', gap: 4 }}>
+      {themeOrder.map((id) => (
+        <ThemeOption
           key={id}
           themeId={id}
           theme={id === 'auto' ? null : themes[id]}

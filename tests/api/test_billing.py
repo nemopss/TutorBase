@@ -186,7 +186,161 @@ async def test_billing_checkout_creates_yookassa_payment(
         "payment_id": "test-payment-id",
         "status": "pending",
         "confirmation_url": "https://yoomoney.ru/checkout/payments/test",
+        "amount_due": "349.00",
+        "billing_action": "new",
     }
+
+
+@pytest.mark.asyncio
+async def test_billing_checkout_prorates_upgrade(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fixed_now = datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc)
+    period_start = fixed_now - timedelta(days=15)
+    period_end = fixed_now + timedelta(days=15)
+    await billing_service.grant_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        plan_code=billing_service.PLAN_BASIC,
+        status=billing_service.SUBSCRIPTION_STATUS_ACTIVE,
+        current_period_start=period_start,
+        current_period_end=period_end,
+        actor_user_id=None,
+        notes="active basic subscription",
+    )
+    await db_session.commit()
+    monkeypatch.setattr(billing_service, "utc_now", lambda: fixed_now)
+
+    async def fake_request(method, path, *, json=None, idempotence_key=None):
+        assert json["amount"] == {"value": "474.50", "currency": "RUB"}
+        assert json["metadata"]["billing_action"] == "upgrade"
+        assert json["metadata"]["previous_plan_code"] == billing_service.PLAN_BASIC
+        assert json["metadata"]["credit_amount"] == "174.50"
+        assert json["metadata"]["charged_amount"] == "474.50"
+        assert json["metadata"]["period_end"] == period_end.isoformat()
+        return {
+            "id": "upgrade-payment-id",
+            "status": "pending",
+            "confirmation": {"confirmation_url": "https://yoomoney.ru/checkout/payments/upgrade"},
+        }
+
+    monkeypatch.setattr(yookassa_service, "_request_yookassa", fake_request)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    preview_response = await client.post(
+        "/api/v1/billing/checkout/preview",
+        json={"plan_code": billing_service.PLAN_PRO, "billing_period": "month"},
+        headers=headers,
+    )
+    checkout_response = await client.post(
+        "/api/v1/billing/checkout",
+        json={"plan_code": billing_service.PLAN_PRO, "billing_period": "month"},
+        headers=headers,
+    )
+
+    assert preview_response.status_code == 200
+    assert preview_response.json()["billing_action"] == "upgrade"
+    assert preview_response.json()["amount_due"] == "474.50"
+    assert preview_response.json()["credit_amount"] == "174.50"
+    assert checkout_response.status_code == 200
+    assert checkout_response.json()["amount_due"] == "474.50"
+    assert checkout_response.json()["billing_action"] == "upgrade"
+
+
+@pytest.mark.asyncio
+async def test_billing_checkout_rejects_downgrade_during_active_paid_period(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    now = datetime.now(timezone.utc)
+    await billing_service.grant_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        plan_code=billing_service.PLAN_PRO,
+        status=billing_service.SUBSCRIPTION_STATUS_ACTIVE,
+        current_period_start=now - timedelta(days=1),
+        current_period_end=now + timedelta(days=29),
+        actor_user_id=None,
+        notes="active pro subscription",
+    )
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.post(
+        "/api/v1/billing/checkout/preview",
+        json={"plan_code": billing_service.PLAN_BASIC, "billing_period": "month"},
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert "тариф ниже" in response.json()["detail"]
+
+
+@pytest.mark.asyncio
+async def test_yookassa_upgrade_webhook_keeps_existing_period_end(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fixed_now = datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc)
+    period_start = fixed_now - timedelta(days=15)
+    period_end = fixed_now + timedelta(days=15)
+    await billing_service.grant_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        plan_code=billing_service.PLAN_BASIC,
+        status=billing_service.SUBSCRIPTION_STATUS_ACTIVE,
+        current_period_start=period_start,
+        current_period_end=period_end,
+        actor_user_id=None,
+        notes="active basic subscription",
+    )
+    await db_session.commit()
+    payment_id = "upgrade-payment-id"
+
+    async def fake_get_payment(payment_id_arg: str):
+        assert payment_id_arg == payment_id
+        return {
+            "id": payment_id,
+            "status": "succeeded",
+            "paid": True,
+            "amount": {"value": "474.50", "currency": "RUB"},
+            "metadata": {
+                "tenant_id": str(current_tenant.tenant_id),
+                "plan_code": billing_service.PLAN_PRO,
+                "billing_period": "month",
+                "billing_action": "upgrade",
+                "duration_days": "30",
+                "charged_amount": "474.50",
+                "full_amount": "649.00",
+                "credit_amount": "174.50",
+                "period_start": fixed_now.isoformat(),
+                "period_end": period_end.isoformat(),
+                "previous_plan_code": billing_service.PLAN_BASIC,
+            },
+        }
+
+    monkeypatch.setattr(yookassa_service, "get_payment", fake_get_payment)
+
+    response = await client.post(
+        "/api/v1/billing/yookassa/webhook",
+        json={
+            "type": "notification",
+            "event": "payment.succeeded",
+            "object": {"id": payment_id},
+        },
+    )
+
+    assert response.status_code == 200
+    subscription = await billing_service.get_subscription(db_session, current_tenant.tenant_id)
+    assert subscription.plan_code == billing_service.PLAN_PRO
+    assert subscription.provider_payment_id == payment_id
+    assert subscription.current_period_end == period_end
 
 
 @pytest.mark.asyncio

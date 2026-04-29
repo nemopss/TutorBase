@@ -70,9 +70,11 @@ class TestGetCurrentUserCaching:
         mock_credentials.credentials = "valid_token"
         
         with patch("api.dependencies.decode_token") as mock_decode, \
-             patch("api.dependencies._get_user_cached") as mock_cached:
+             patch("api.dependencies._get_user_cached") as mock_cached, \
+             patch("api.dependencies.crud.user_has_active_learner_account_link") as mock_has_link:
             mock_decode.return_value = {"sub": "1"}
             mock_cached.return_value = mock_user
+            mock_has_link.return_value = False
             
             result = await get_current_user(mock_credentials, mock_session)
             
@@ -129,6 +131,7 @@ class TestUserCacheInvalidation:
         mock_session = AsyncMock()
         mock_session.add = MagicMock()
         mock_tenant = MagicMock()
+        mock_tenant.tenant_id = mock_user.tenant_id
         mock_payload = UserRoleUpdateRequest(role="viewer")
         monkeypatch.setattr(config, "ADMINS", [])
         
@@ -159,6 +162,7 @@ class TestUserCacheInvalidation:
         mock_session = AsyncMock()
         mock_session.add = MagicMock()
         mock_tenant = MagicMock()
+        mock_tenant.tenant_id = mock_user.tenant_id
         mock_payload = UserRoleUpdateRequest(role="admin")
         monkeypatch.setattr(config, "ADMINS", [])
 

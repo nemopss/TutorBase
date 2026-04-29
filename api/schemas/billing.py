@@ -61,6 +61,23 @@ class BillingCheckoutResponse(BaseModel):
     payment_id: str
     status: str
     confirmation_url: str
+    amount_due: str
+    billing_action: str
+
+
+class BillingCheckoutPreviewResponse(BaseModel):
+    plan_code: str
+    plan_name: str
+    billing_period: Literal["month", "year"]
+    billing_action: str
+    amount_due: str
+    full_amount: str
+    credit_amount: str
+    current_plan_code: Optional[str] = None
+    current_plan_name: Optional[str] = None
+    resulting_period_start: datetime
+    resulting_period_end: datetime
+    message: str
 
 
 class YooKassaWebhookPayload(BaseModel):

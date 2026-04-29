@@ -2,8 +2,8 @@ from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
-from datetime import timedelta
-from decimal import Decimal, InvalidOperation
+from datetime import datetime, timedelta
+from decimal import Decimal, InvalidOperation, ROUND_HALF_UP
 from typing import Any
 
 import httpx
@@ -26,6 +26,24 @@ class CheckoutPayment:
     payment_id: str
     status: str
     confirmation_url: str
+    amount_due: str
+    billing_action: str
+
+
+@dataclass(frozen=True)
+class CheckoutQuote:
+    plan_code: str
+    plan_name: str
+    billing_period: str
+    billing_action: str
+    amount_due: Decimal
+    full_amount: Decimal
+    credit_amount: Decimal
+    current_plan_code: str | None
+    current_plan_name: str | None
+    resulting_period_start: datetime
+    resulting_period_end: datetime
+    message: str
 
 
 def is_configured() -> bool:
@@ -38,8 +56,12 @@ def _require_settings() -> tuple[str, str]:
     return str(config.YOOKASSA_SHOP_ID), str(config.YOOKASSA_SECRET_KEY)
 
 
-def _amount_value(amount_rub: int) -> str:
-    return f"{Decimal(amount_rub):.2f}"
+def _money(value: Decimal | int) -> Decimal:
+    return Decimal(value).quantize(Decimal("0.01"), rounding=ROUND_HALF_UP)
+
+
+def _amount_value(amount_rub: Decimal | int) -> str:
+    return f"{_money(amount_rub):.2f}"
 
 
 def _period_days(billing_period: str) -> int:
@@ -56,6 +78,123 @@ def _plan_price(plan, billing_period: str) -> int:
     if billing_period == "year" and plan.yearly_price_rub is not None:
         return int(plan.yearly_price_rub)
     raise ValidationError("Selected billing period is not available for this plan")
+
+
+def _plan_amount(plan, billing_period: str) -> Decimal:
+    return _money(_plan_price(plan, billing_period))
+
+
+def _is_active_paid_subscription(subscription, now) -> bool:
+    if subscription is None or subscription.plan_code == billing_service.PLAN_START:
+        return False
+    if subscription.status not in {
+        billing_service.SUBSCRIPTION_STATUS_ACTIVE,
+        billing_service.SUBSCRIPTION_STATUS_MANUAL,
+    }:
+        return False
+    period_end = billing_service._as_aware(subscription.current_period_end)
+    return period_end is not None and period_end > now
+
+
+def _prorated_credit(*, current_amount: Decimal, period_start, period_end, now) -> Decimal:
+    period_seconds = int((period_end - period_start).total_seconds())
+    remaining_seconds = int((period_end - now).total_seconds())
+    if period_seconds <= 0 or remaining_seconds <= 0:
+        return Decimal("0.00")
+    credit = current_amount * Decimal(remaining_seconds) / Decimal(period_seconds)
+    return min(current_amount, _money(credit))
+
+
+async def create_checkout_quote(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    *,
+    plan_code: str,
+    billing_period: str,
+) -> CheckoutQuote:
+    if current_tenant.tenant_id is None:
+        raise ValidationError("Tenant context required for checkout")
+
+    await billing_service.ensure_default_plans(session)
+    plan = await billing_service.get_plan(session, plan_code)
+    if plan.code == billing_service.PLAN_START:
+        raise ValidationError("The start plan does not require payment")
+    if not plan.is_public:
+        raise ValidationError("Selected plan is not available for checkout")
+
+    days = _period_days(billing_period)
+    now = billing_service.utc_now()
+    full_amount = _plan_amount(plan, billing_period)
+    if full_amount <= 0:
+        raise ValidationError("Selected plan does not require payment")
+
+    subscription = await billing_service.get_subscription(session, current_tenant.tenant_id)
+    if not _is_active_paid_subscription(subscription, now):
+        return CheckoutQuote(
+            plan_code=plan.code,
+            plan_name=plan.name,
+            billing_period=billing_period,
+            billing_action="new",
+            amount_due=full_amount,
+            full_amount=full_amount,
+            credit_amount=Decimal("0.00"),
+            current_plan_code=None,
+            current_plan_name=None,
+            resulting_period_start=now,
+            resulting_period_end=now + timedelta(days=days),
+            message=f"Тариф «{plan.name}» включится на 30 дней после оплаты.",
+        )
+
+    current_plan = await billing_service.get_plan(session, subscription.plan_code)
+    current_period_end = billing_service._as_aware(subscription.current_period_end)
+    if subscription.plan_code == plan.code:
+        return CheckoutQuote(
+            plan_code=plan.code,
+            plan_name=plan.name,
+            billing_period=billing_period,
+            billing_action="renewal",
+            amount_due=full_amount,
+            full_amount=full_amount,
+            credit_amount=Decimal("0.00"),
+            current_plan_code=current_plan.code,
+            current_plan_name=current_plan.name,
+            resulting_period_start=current_period_end,
+            resulting_period_end=current_period_end + timedelta(days=days),
+            message=f"Продлим тариф «{plan.name}» ещё на 30 дней от текущей даты окончания.",
+        )
+
+    if plan.display_order < current_plan.display_order:
+        raise ValidationError("Переход на тариф ниже доступен после окончания текущего оплаченного периода")
+
+    current_period_start = billing_service._as_aware(subscription.current_period_start)
+    if current_period_start is None or current_period_end is None:
+        raise ValidationError("Cannot calculate prorated upgrade for the current subscription")
+
+    current_amount = _plan_amount(current_plan, billing_period)
+    credit_amount = _prorated_credit(
+        current_amount=current_amount,
+        period_start=current_period_start,
+        period_end=current_period_end,
+        now=now,
+    )
+    amount_due = max(Decimal("1.00"), _money(full_amount - credit_amount))
+    return CheckoutQuote(
+        plan_code=plan.code,
+        plan_name=plan.name,
+        billing_period=billing_period,
+        billing_action="upgrade",
+        amount_due=amount_due,
+        full_amount=full_amount,
+        credit_amount=credit_amount,
+        current_plan_code=current_plan.code,
+        current_plan_name=current_plan.name,
+        resulting_period_start=now,
+        resulting_period_end=current_period_end,
+        message=(
+            f"Перейдём с «{current_plan.name}» на «{plan.name}» сразу. "
+            f"Неиспользованный остаток зачтён в сумме оплаты."
+        ),
+    )
 
 
 def _metadata_value(metadata: dict[str, Any], key: str) -> str:
@@ -75,6 +214,14 @@ def _decimal_from_payment(payment: dict[str, Any]) -> Decimal:
 def _int_metadata_value(metadata: dict[str, Any], key: str) -> int:
     try:
         return int(_metadata_value(metadata, key))
+    except ValueError as exc:
+        raise ValidationError(f"YooKassa payment metadata {key} is invalid") from exc
+
+
+def _datetime_metadata_value(metadata: dict[str, Any], key: str) -> datetime:
+    value = _metadata_value(metadata, key)
+    try:
+        return datetime.fromisoformat(value)
     except ValueError as exc:
         raise ValidationError(f"YooKassa payment metadata {key} is invalid") from exc
 
@@ -143,41 +290,40 @@ async def create_checkout_payment(
     plan_code: str,
     billing_period: str,
 ) -> CheckoutPayment:
-    if current_tenant.tenant_id is None:
-        raise ValidationError("Tenant context required for checkout")
-
-    await billing_service.ensure_default_plans(session)
-    plan = await billing_service.get_plan(session, plan_code)
-    if plan.code == billing_service.PLAN_START:
-        raise ValidationError("The start plan does not require payment")
-    if not plan.is_public:
-        raise ValidationError("Selected plan is not available for checkout")
-
-    amount_rub = _plan_price(plan, billing_period)
-    if amount_rub <= 0:
-        raise ValidationError("Selected plan does not require payment")
+    quote = await create_checkout_quote(
+        session,
+        current_tenant,
+        plan_code=plan_code,
+        billing_period=billing_period,
+    )
 
     tenant = current_tenant.tenant or await session.get(Tenant, current_tenant.tenant_id)
     tenant_name = tenant.name if tenant is not None else f"tenant #{current_tenant.tenant_id}"
-    days = _period_days(billing_period)
     return_url = config.YOOKASSA_RETURN_URL or config.MINI_APP_URL
-    description = f"TutorBase: тариф {plan.name}, {days} дней"
+    description = f"TutorBase: тариф {quote.plan_name}, 30 дней"
 
     payment = await _request_yookassa(
         "POST",
         "/payments",
         idempotence_key=str(uuid.uuid4()),
         json={
-            "amount": {"value": _amount_value(amount_rub), "currency": "RUB"},
+            "amount": {"value": _amount_value(quote.amount_due), "currency": "RUB"},
             "capture": True,
             "confirmation": {"type": "redirect", "return_url": return_url},
             "description": description[:128],
             "metadata": {
                 "tenant_id": str(current_tenant.tenant_id),
                 "tenant_name": tenant_name[:128],
-                "plan_code": plan.code,
-                "billing_period": billing_period,
-                "duration_days": str(days),
+                "plan_code": quote.plan_code,
+                "billing_period": quote.billing_period,
+                "billing_action": quote.billing_action,
+                "duration_days": str(_period_days(quote.billing_period)),
+                "charged_amount": _amount_value(quote.amount_due),
+                "full_amount": _amount_value(quote.full_amount),
+                "credit_amount": _amount_value(quote.credit_amount),
+                "period_start": quote.resulting_period_start.isoformat(),
+                "period_end": quote.resulting_period_end.isoformat(),
+                "previous_plan_code": quote.current_plan_code or "",
             },
         },
     )
@@ -190,6 +336,8 @@ async def create_checkout_payment(
         payment_id=str(payment["id"]),
         status=str(payment["status"]),
         confirmation_url=str(confirmation_url),
+        amount_due=_amount_value(quote.amount_due),
+        billing_action=quote.billing_action,
     )
 
 
@@ -227,13 +375,14 @@ async def process_webhook(session: AsyncSession, payload: dict[str, Any]) -> Non
     tenant_id = _int_metadata_value(metadata, "tenant_id")
     plan_code = _metadata_value(metadata, "plan_code")
     billing_period = _metadata_value(metadata, "billing_period")
+    billing_action = metadata.get("billing_action") or "new"
     days = _int_metadata_value(metadata, "duration_days")
     if days != _period_days(billing_period):
         raise ValidationError("YooKassa payment period metadata is inconsistent")
 
     await billing_service.ensure_default_plans(session)
     plan = await billing_service.get_plan(session, plan_code)
-    expected_amount = Decimal(_amount_value(_plan_price(plan, billing_period)))
+    expected_amount = Decimal(str(metadata.get("charged_amount") or _amount_value(_plan_price(plan, billing_period))))
     if _decimal_from_payment(payment) != expected_amount:
         raise ValidationError("YooKassa payment amount does not match the selected plan")
 
@@ -247,16 +396,21 @@ async def process_webhook(session: AsyncSession, payload: dict[str, Any]) -> Non
     if await _payment_already_processed(session, tenant_id=tenant_id, payment_id=str(payment_id)):
         return
 
-    now = billing_service.utc_now()
-    period_start = now
-    if (
-        subscription is not None
+    period_start = billing_service.utc_now()
+    period_end = period_start + timedelta(days=days)
+    if isinstance(metadata.get("period_start"), str) and isinstance(metadata.get("period_end"), str):
+        period_start = billing_service._as_aware(_datetime_metadata_value(metadata, "period_start"))
+        period_end = billing_service._as_aware(_datetime_metadata_value(metadata, "period_end"))
+    elif (
+        billing_action == "renewal"
+        and subscription is not None
         and subscription.plan_code == plan_code
         and subscription.current_period_end is not None
     ):
         current_end = billing_service._as_aware(subscription.current_period_end)
-        if current_end is not None and current_end > now:
+        if current_end is not None and current_end > period_start:
             period_start = current_end
+            period_end = period_start + timedelta(days=days)
 
     await billing_service.grant_subscription(
         session,
@@ -264,7 +418,7 @@ async def process_webhook(session: AsyncSession, payload: dict[str, Any]) -> Non
         plan_code=plan_code,
         status=billing_service.SUBSCRIPTION_STATUS_ACTIVE,
         current_period_start=period_start,
-        current_period_end=period_start + timedelta(days=days),
+        current_period_end=period_end,
         provider=billing_service.PROVIDER_YOOKASSA,
         provider_payment_id=str(payment_id),
         actor_user_id=None,

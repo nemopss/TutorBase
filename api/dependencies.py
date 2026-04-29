@@ -48,8 +48,9 @@ from database.engine import async_session
 from api.security import TokenType, TokenVerificationError, decode_token
 from config import config
 from database import crud
+from database.models import User
 from services import tenant_access_service
-from utils.cache import cached
+from utils.cache import cached, invalidate_cache
 
 _http_bearer = HTTPBearer(auto_error=False)
 
@@ -132,17 +133,28 @@ async def get_current_user(
     user = await _get_user_cached(session, int(subject))
     if not user:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
-    
+
     # Handle both User model and dict (from cache)
     if isinstance(user, dict):
         # Cache returned dict, convert to User model for compatibility
-        from database.models import User
         user_obj = User()
         for key, value in user.items():
             if not key.startswith('_'):
                 setattr(user_obj, key, value)
-        return user_obj
-    
+        user = user_obj
+
+    if (
+        getattr(user, "role", None) != "viewer"
+        and not is_platform_admin(user)
+        and await crud.user_has_active_learner_account_link(session, user)
+    ):
+        user.role = "viewer"
+        db_user = await session.get(User, user.id)
+        if db_user is not None and db_user.role != "viewer":
+            db_user.role = "viewer"
+            session.add(db_user)
+            await invalidate_cache("users:_get_user_cached:*")
+
     return user
 
 
@@ -213,7 +225,7 @@ admin_or_teacher_required = require_roles("admin", "teacher")
 
 
 from dataclasses import dataclass
-from database.models import User, Tenant
+from database.models import Tenant
 
 @dataclass
 class CurrentTenant:
