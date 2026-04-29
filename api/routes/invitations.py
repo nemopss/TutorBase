@@ -86,7 +86,7 @@ async def create_invite_token(
         session=session,
         current_tenant=current_tenant,
         created_by_user_id=current_user.id,
-        expires_in_days=request_data.expires_in_days or 30,
+        expires_in_days=request_data.expires_in_days or 7,
         learner_id=learner.id if learner else None,
     )
     

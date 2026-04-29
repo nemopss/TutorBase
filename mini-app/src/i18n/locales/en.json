@@ -136,6 +136,20 @@
       "activePackages": "Active Packages",
       "upcomingLessons": "Upcoming Lessons",
       "learner": "Learner",
+      "finance": {
+        "title": "Finance",
+        "open": "Open finance",
+        "monthIncome": "Income this month",
+        "outstanding": "Outstanding",
+        "debtors": "Learners with debt",
+        "unavailable": "Finance is unavailable right now",
+        "noAccess": "Your role does not have access to finance."
+      },
+      "notifications": {
+        "title": "Upcoming notifications",
+        "open": "Open notifications",
+        "empty": "There are no scheduled deliveries yet"
+      },
       "attention": {
         "title": "Needs attention",
         "empty": "There are no critical tasks right now",

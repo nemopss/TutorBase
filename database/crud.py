@@ -2703,7 +2703,7 @@ async def create_invite_token(
     session: AsyncSession,
     current_tenant: CurrentTenant,
     created_by_user_id: int,
-    expires_in_days: int = 30,
+    expires_in_days: int = 7,
     learner_id: int | None = None,
 ) -> InviteToken:
     """Create new invite token for tenant.
@@ -2715,7 +2715,7 @@ async def create_invite_token(
         session: Async database session
         current_tenant: Current tenant context
         created_by_user_id: User creating the token
-        expires_in_days: Token validity period (default: 30 days)
+        expires_in_days: Token validity period (default: 7 days)
         
     Returns:
         Created InviteToken object

@@ -181,6 +181,31 @@ class User(Base):
         foreign_keys='LearnerAccountLink.user_id',
         back_populates='user',
     )
+    legal_acceptances = relationship('LegalAcceptance', back_populates='user')
+
+
+class LegalAcceptance(Base):
+    """Audit record for legal document acceptance during registration."""
+    __tablename__ = 'legal_acceptances'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=True, index=True)
+    role = Column(String(32), nullable=False)
+    offer_version = Column(String(32), nullable=False)
+    privacy_version = Column(String(32), nullable=False)
+    accepted_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    ip_address = Column(String(128), nullable=True)
+    user_agent = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    user = relationship('User', back_populates='legal_acceptances')
+    tenant = relationship('Tenant', back_populates='legal_acceptances')
+
+    __table_args__ = (
+        Index('ix_legal_acceptances_user_accepted', 'user_id', 'accepted_at'),
+        Index('ix_legal_acceptances_tenant_accepted', 'tenant_id', 'accepted_at'),
+    )
 
 
 class TenantAccess(Base):
@@ -219,6 +244,78 @@ class TenantAccessEvent(Base):
     created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
 
     tenant = relationship('Tenant', back_populates='access_events')
+    actor = relationship('User', foreign_keys=[actor_user_id])
+
+
+class BillingPlan(Base):
+    """Public billing plan and its learner limit."""
+    __tablename__ = 'billing_plans'
+
+    code = Column(String(32), primary_key=True)
+    name = Column(String(64), nullable=False)
+    active_learners_limit = Column(Integer, nullable=False)
+    monthly_price_rub = Column(Integer, nullable=False, default=0)
+    yearly_price_rub = Column(Integer, nullable=True)
+    is_public = Column(Boolean, nullable=False, default=True)
+    display_order = Column(Integer, nullable=False, default=0)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    subscriptions = relationship('TenantSubscription', back_populates='plan')
+
+
+class TenantSubscription(Base):
+    """Billing subscription state for a tenant.
+
+    This controls plan limits and billing-driven feature flags. It does not
+    replace TenantAccess, which remains the manual hard-block mechanism.
+    """
+    __tablename__ = 'tenant_subscriptions'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False, unique=True, index=True)
+    plan_code = Column(String(32), ForeignKey('billing_plans.code'), nullable=False, default='start', index=True)
+    status = Column(String(32), nullable=False, default='active', index=True)
+    provider = Column(String(32), nullable=False, default='manual')
+    current_period_start = Column(DateTime(timezone=True), nullable=True)
+    current_period_end = Column(DateTime(timezone=True), nullable=True)
+    grace_until = Column(DateTime(timezone=True), nullable=True)
+    cancel_at_period_end = Column(Boolean, nullable=False, default=False)
+    provider_customer_id = Column(String, nullable=True)
+    provider_payment_id = Column(String, nullable=True)
+    provider_subscription_id = Column(String, nullable=True)
+    notes = Column(Text, nullable=True)
+    updated_by_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+    updated_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant', back_populates='subscription')
+    plan = relationship('BillingPlan', back_populates='subscriptions')
+    updated_by = relationship('User', foreign_keys=[updated_by_user_id])
+    events = relationship('BillingEvent', back_populates='subscription', cascade='all, delete-orphan')
+
+    __table_args__ = (
+        Index('ix_tenant_subscriptions_status_period', 'status', 'current_period_end'),
+        Index('ix_tenant_subscriptions_provider_subscription', 'provider', 'provider_subscription_id'),
+    )
+
+
+class BillingEvent(Base):
+    """Audit log for billing and subscription changes."""
+    __tablename__ = 'billing_events'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    tenant_id = Column(Integer, ForeignKey('tenants.id', ondelete='CASCADE'), nullable=False, index=True)
+    subscription_id = Column(Integer, ForeignKey('tenant_subscriptions.id', ondelete='SET NULL'), nullable=True, index=True)
+    actor_user_id = Column(Integer, ForeignKey('users.id', ondelete='SET NULL'), nullable=True, index=True)
+    action = Column(String(64), nullable=False)
+    previous_state = Column(JSON, nullable=True)
+    new_state = Column(JSON, nullable=True)
+    notes = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    tenant = relationship('Tenant', back_populates='billing_events')
+    subscription = relationship('TenantSubscription', back_populates='events')
     actor = relationship('User', foreign_keys=[actor_user_id])
 
 class Application(Base):
@@ -883,6 +980,9 @@ class Tenant(Base):
     learner_account_links = relationship('LearnerAccountLink', back_populates='tenant')
     access = relationship('TenantAccess', back_populates='tenant', uselist=False, cascade='all, delete-orphan')
     access_events = relationship('TenantAccessEvent', back_populates='tenant', cascade='all, delete-orphan')
+    subscription = relationship('TenantSubscription', back_populates='tenant', uselist=False, cascade='all, delete-orphan')
+    billing_events = relationship('BillingEvent', back_populates='tenant', cascade='all, delete-orphan')
+    legal_acceptances = relationship('LegalAcceptance', back_populates='tenant', cascade='all, delete-orphan')
 
 
 # Import models from the new notification bounded context so they share the same

@@ -42,6 +42,7 @@ interface LearnerCardProps {
   onRestore?: (learner: Learner) => void;
   onClick?: (learner: Learner) => void;
   isToggling?: boolean;
+  notificationsGloballyAllowed?: boolean;
 }
 
 const LearnerCard: React.FC<LearnerCardProps> = ({
@@ -55,6 +56,7 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
   onRestore,
   onClick,
   isToggling = false,
+  notificationsGloballyAllowed = true,
 }) => {
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
@@ -145,7 +147,7 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
 
   const handleNotificationClick = (e: React.MouseEvent) => {
     e.stopPropagation();
-    if (!isToggling && !learner.is_archived) {
+    if (!isToggling && !learner.is_archived && notificationsGloballyAllowed) {
       onNotificationToggle(learner.id, learner.notifications_enabled);
     }
   };
@@ -235,6 +237,8 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
         <Tooltip 
           title={learner.is_archived
             ? t('pages.learners.archivedNotificationsOff', { defaultValue: 'У архивного ученика уведомления отключены' })
+            : !notificationsGloballyAllowed
+            ? t('pages.learners.notificationsBillingDisabled', { defaultValue: 'Уведомления отключены до продления подписки' })
             : learner.notifications_enabled
             ? t('pages.learners.notificationsOn') 
             : t('pages.learners.notificationsOff')
@@ -244,12 +248,12 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
             onClick={handleNotificationClick}
             style={{
               padding: 6,
-              cursor: isToggling ? 'wait' : learner.is_archived ? 'not-allowed' : 'pointer',
+              cursor: isToggling ? 'wait' : (learner.is_archived || !notificationsGloballyAllowed) ? 'not-allowed' : 'pointer',
               borderRadius: 4,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              opacity: isToggling ? 0.5 : 1,
+              opacity: isToggling || !notificationsGloballyAllowed ? 0.5 : 1,
             }}
           >
             {learner.notifications_enabled ? (

@@ -1,6 +1,14 @@
 import React from 'react';
 import { Card, Button, Avatar, Space, Typography, Tag } from 'antd';
-import { UserOutlined, GlobalOutlined, BgColorsOutlined, FieldTimeOutlined } from '@ant-design/icons';
+import {
+  BellOutlined,
+  BgColorsOutlined,
+  CreditCardOutlined,
+  FieldTimeOutlined,
+  GlobalOutlined,
+  TeamOutlined,
+  UserOutlined,
+} from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
 import PageIntro from '../components/common/PageIntro';
@@ -13,7 +21,7 @@ const { Title, Text } = Typography;
 
 const Settings: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const { user, tenantAccess, logout } = useAuth();
+  const { user, tenantAccess, billing, logout } = useAuth();
   const { resolvedTheme } = useTheme();
   const colors = resolvedTheme.colors;
   const isStaff = user?.role === 'teacher' || user?.is_platform_admin;
@@ -35,7 +43,7 @@ const Settings: React.FC = () => {
     : null;
 
   const accessStatusConfig = (() => {
-    if (!tenantAccess) {
+    if (!shouldShowAccess) {
       return null;
     }
 
@@ -111,6 +119,13 @@ const Settings: React.FC = () => {
     };
   })();
 
+  const learnerUsagePercent = billing?.active_learners_limit
+    ? Math.min(100, Math.round((billing.active_learners_count / billing.active_learners_limit) * 100))
+    : 0;
+  const learnerUsageColor = !billing?.can_create_learner
+    ? '#fa8c16'
+    : colors.accentPrimary;
+
   return (
     <div>
       <PageIntro
@@ -140,13 +155,14 @@ const Settings: React.FC = () => {
         </Text>
       </Card>
 
-      {shouldShowAccess && accessStatusConfig && (
+      {isStaff && (accessStatusConfig || billing) && (
         <Card
           bordered={false}
           style={{
             marginBottom: spacing.lg,
-            background: colors.bgSecondary,
+            background: `linear-gradient(135deg, ${colors.bgSecondary} 0%, ${colors.bgPrimary} 100%)`,
             borderRadius: 8,
+            border: `1px solid ${colors.borderPrimary}`,
           }}
         >
           <div style={{
@@ -176,27 +192,139 @@ const Settings: React.FC = () => {
                   color: colors.textSecondary,
                   marginBottom: spacing.xs,
                 }}>
-                  {t('pages.settings.access.title')}
+                  Доступ к сервису
                 </Text>
-                <Title level={4} style={{ margin: 0, color: colors.textPrimary }}>
-                  {accessStatusConfig.title}
-                </Title>
-                <Text style={{
-                  display: 'block',
-                  color: colors.textSecondary,
-                  marginTop: spacing.xs,
-                }}>
-                  {accessStatusConfig.description}
-                </Text>
+                {accessStatusConfig && (
+                  <>
+                    <Title level={4} style={{ margin: 0, color: colors.textPrimary }}>
+                      {accessStatusConfig.title}
+                    </Title>
+                    <Text style={{
+                      display: 'block',
+                      color: colors.textSecondary,
+                      marginTop: spacing.xs,
+                    }}>
+                      {accessStatusConfig.description}
+                    </Text>
+                  </>
+                )}
               </div>
             </Space>
-            <Tag color={accessStatusConfig.color} style={{ margin: 0 }}>
-              {accessStatusConfig.label}
-            </Tag>
+            <Space wrap size={8} style={{ justifyContent: 'flex-end' }}>
+              {accessStatusConfig && (
+                <Tag color={accessStatusConfig.color} style={{ margin: 0 }}>
+                  {accessStatusConfig.label}
+                </Tag>
+              )}
+              {billing && (
+                <Tag color={billing.notifications_allowed ? 'green' : 'gold'} style={{ margin: 0 }}>
+                  {billing.plan_name}
+                </Tag>
+              )}
+            </Space>
           </div>
+
+          {billing && (
+            <>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+                gap: spacing.md,
+                marginTop: spacing.lg,
+              }}>
+                <div style={{
+                  padding: spacing.md,
+                  borderRadius: 8,
+                  background: colors.bgSecondary,
+                  border: `1px solid ${colors.borderPrimary}`,
+                }}>
+                  <Space align="start" size={spacing.sm}>
+                    <CreditCardOutlined style={{ color: colors.accentPrimary, fontSize: 18, marginTop: 2 }} />
+                    <div>
+                      <Text type="secondary" style={{ display: 'block' }}>Тариф</Text>
+                      <Text strong style={{ display: 'block', color: colors.textPrimary }}>{billing.plan_name}</Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        {billing.monthly_price_rub > 0 ? `${billing.monthly_price_rub} ₽/мес.` : 'Бесплатно'}
+                      </Text>
+                    </div>
+                  </Space>
+                </div>
+                <div style={{
+                  padding: spacing.md,
+                  borderRadius: 8,
+                  background: colors.bgSecondary,
+                  border: `1px solid ${colors.borderPrimary}`,
+                }}>
+                  <Space align="start" size={spacing.sm}>
+                    <TeamOutlined style={{ color: learnerUsageColor, fontSize: 18, marginTop: 2 }} />
+                    <div style={{ width: '100%' }}>
+                      <Text type="secondary" style={{ display: 'block' }}>Ученики</Text>
+                      <Text strong style={{ display: 'block', color: colors.textPrimary }}>
+                        {billing.active_learners_count}/{billing.active_learners_limit} активных
+                      </Text>
+                      <div style={{
+                        height: 6,
+                        borderRadius: 6,
+                        background: colors.bgTertiary,
+                        overflow: 'hidden',
+                        marginTop: 8,
+                      }}>
+                        <div style={{
+                          width: `${learnerUsagePercent}%`,
+                          height: '100%',
+                          borderRadius: 6,
+                          background: learnerUsageColor,
+                        }} />
+                      </div>
+                    </div>
+                  </Space>
+                </div>
+                <div style={{
+                  padding: spacing.md,
+                  borderRadius: 8,
+                  background: colors.bgSecondary,
+                  border: `1px solid ${colors.borderPrimary}`,
+                }}>
+                  <Space align="start" size={spacing.sm}>
+                    <BellOutlined
+                      style={{
+                        color: billing.notifications_allowed ? colors.accentPrimary : '#fa8c16',
+                        fontSize: 18,
+                        marginTop: 2,
+                      }}
+                    />
+                    <div>
+                      <Text type="secondary" style={{ display: 'block' }}>Уведомления</Text>
+                      <Text strong style={{ display: 'block', color: colors.textPrimary }}>
+                        {billing.notifications_allowed ? 'Работают' : 'Отключены'}
+                      </Text>
+                      <Text type="secondary" style={{ fontSize: 12 }}>
+                        Telegram-сценарии
+                      </Text>
+                    </div>
+                  </Space>
+                </div>
+              </div>
+              {!billing.notifications_allowed && (
+                <div style={{
+                  marginTop: spacing.md,
+                  padding: spacing.md,
+                  borderRadius: 8,
+                  background: 'rgba(250, 173, 20, 0.12)',
+                  border: '1px solid #faad14',
+                }}>
+                  <Text type="warning">
+                    Подписка не действует, а активных учеников больше бесплатного лимита. Данные доступны, но Telegram-уведомления отключены.
+                  </Text>
+                </div>
+              )}
+              <Text type="secondary" style={{ display: 'block', marginTop: spacing.md, fontSize: 12 }}>
+                Онлайн-оплата платных тарифов пока не подключена. Сейчас тарифы показываются справочно, доступ управляется сервисной поддержкой.
+              </Text>
+            </>
+          )}
         </Card>
       )}
-
       {/* Preferences Section */}
       <div
         style={{

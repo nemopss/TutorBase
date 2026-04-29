@@ -52,10 +52,11 @@ services:
     image: node:22-alpine
     working_dir: /app
     environment:
-      VITE_API_BASE_URL: http://localhost:8001/api/v1
+      VITE_API_BASE_URL: /api/v1
+      VITE_API_PROXY_TARGET: http://api:8001
       VITE_DEV_MODE: "true"
       VITE_DEV_INIT_DATA: dev
-      VITE_TELEGRAM_BOT_USERNAME: xpyrkova23_bot
+      VITE_TELEGRAM_BOT_USERNAME: tutorbaserobot
     volumes:
       - ./mini-app:/app
     command: sh -c "npm install && npm run dev -- --host 0.0.0.0 --port 5173"

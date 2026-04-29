@@ -5,6 +5,8 @@ from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
 
+from api.schemas.billing import BillingSnapshotResponse
+
 
 class TenantAccessResponse(BaseModel):
     tenant_id: Optional[int]
@@ -27,6 +29,7 @@ class PlatformTenantResponse(BaseModel):
     created_at: datetime
     updated_at: datetime
     access: TenantAccessResponse
+    billing: Optional[BillingSnapshotResponse] = None
 
 
 class TenantAccessSyncResponse(BaseModel):

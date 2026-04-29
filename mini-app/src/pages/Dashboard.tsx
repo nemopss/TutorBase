@@ -91,6 +91,7 @@ interface NotificationInstance {
   learner_display_name?: string | null;
   effective_scheduled_for: string;
   status: string;
+  delivery_enabled?: boolean;
   latest_attempt?: NotificationDeliveryAttempt | null;
 }
 
@@ -149,8 +150,20 @@ interface InviteTokenListResponse {
   items: unknown[];
 }
 
+interface DashboardMetrics {
+  current_month_income: number;
+  previous_month_income: number;
+  total_outstanding: number;
+  unpaid_learners_count: number;
+}
+
 const DASHBOARD_LESSON_HISTORY_DAYS = 14;
 const DASHBOARD_LESSON_FUTURE_DAYS = 365;
+const EMPTY_LESSONS: Lesson[] = [];
+const EMPTY_ACTIVE_PACKAGES: ActivePackage[] = [];
+const EMPTY_NOTIFICATION_ACTIVITY: NotificationActivity[] = [];
+const EMPTY_NOTIFICATION_INSTANCES: NotificationInstance[] = [];
+const EMPTY_ATTENTION_DISMISSALS: DashboardAttentionDismissal[] = [];
 
 const getDashboardLessonRange = () => {
   const now = dayjs().tz(DEFAULT_TIMEZONE);
@@ -301,6 +314,18 @@ const fetchInviteTokensSummary = async (tenantId: number): Promise<InviteTokenLi
   return data;
 };
 
+const fetchDashboardMetrics = async (): Promise<DashboardMetrics> => {
+  const { data } = await api.get('/finance/dashboard');
+  return data;
+};
+
+const formatCurrency = (value: number): string => new Intl.NumberFormat('ru-RU', {
+  style: 'currency',
+  currency: 'RUB',
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 0,
+}).format(value);
+
 const Dashboard: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
@@ -331,6 +356,7 @@ const Dashboard: React.FC = () => {
     display: 'flex',
     flexDirection: 'column' as const,
   };
+  const dashboardCardHeaderStyle = { borderBottom: 0 };
 
   const {
     data: lessonsData,
@@ -408,6 +434,17 @@ const Dashboard: React.FC = () => {
     enabled: !requiresTenantContext && !!tenantId,
   });
 
+  const {
+    data: financeMetrics,
+    isLoading: isLoadingFinanceMetrics,
+    isError: isErrorFinanceMetrics,
+    error: financeMetricsError,
+  } = useQuery<DashboardMetrics, Error>({
+    queryKey: ['financeDashboard'],
+    queryFn: fetchDashboardMetrics,
+    enabled: !requiresTenantContext && loadDeferredPanels,
+  });
+
   const dismissAttentionMutation = useMutation({
     mutationFn: dismissDashboardAttentionItem,
     onSuccess: (dismissal) => {
@@ -425,7 +462,6 @@ const Dashboard: React.FC = () => {
     onError: (error: Error) => {
       // Keep the dismiss action quiet but not silent.
       // The dashboard should stay usable even if the acknowledge call fails.
-      // eslint-disable-next-line no-console
       console.error('Dismiss dashboard attention item failed:', error);
     },
   });
@@ -440,16 +476,12 @@ const Dashboard: React.FC = () => {
     };
   }, []);
 
-  if (requiresTenantContext) {
-    return <TenantContextRequired sectionLabel={t('pages.dashboard.title')} />;
-  }
-
-  const allLessons = lessonsData?.items || [];
-  const activePackages = activePackagesData?.items || [];
-  const notificationActivity = notificationActivityData || [];
-  const failedNotificationInstances = failedNotificationInstancesData || [];
-  const queuedNotificationInstances = queuedNotificationInstancesData || [];
-  const attentionDismissals = attentionDismissalsData || [];
+  const allLessons = lessonsData?.items ?? EMPTY_LESSONS;
+  const activePackages = activePackagesData?.items ?? EMPTY_ACTIVE_PACKAGES;
+  const notificationActivity = notificationActivityData ?? EMPTY_NOTIFICATION_ACTIVITY;
+  const failedNotificationInstances = failedNotificationInstancesData ?? EMPTY_NOTIFICATION_INSTANCES;
+  const queuedNotificationInstances = queuedNotificationInstancesData ?? EMPTY_NOTIFICATION_INSTANCES;
+  const attentionDismissals = attentionDismissalsData ?? EMPTY_ATTENTION_DISMISSALS;
   const nonCancelledLessons = useMemo(
     () => allLessons.filter((lesson) => lesson.status !== 'cancelled'),
     [allLessons],
@@ -594,6 +626,18 @@ const Dashboard: React.FC = () => {
       (a, b) => dayjs(a.effective_scheduled_for).valueOf() - dayjs(b.effective_scheduled_for).valueOf(),
     );
   }, [failedNotificationInstances, queuedNotificationInstances]);
+
+  const upcomingNotificationItems = useMemo(() => (
+    queuedNotificationInstances
+      .filter((instance) => {
+        if (instance.status !== 'scheduled' || instance.delivery_enabled === false) {
+          return false;
+        }
+        return dayjs(instance.effective_scheduled_for).tz(DEFAULT_TIMEZONE).isSameOrAfter(attentionNow);
+      })
+      .sort((a, b) => dayjs(a.effective_scheduled_for).valueOf() - dayjs(b.effective_scheduled_for).valueOf())
+      .slice(0, 5)
+  ), [attentionNow, queuedNotificationInstances]);
 
   const isLoadingAttention =
     !loadDeferredPanels
@@ -760,6 +804,7 @@ const Dashboard: React.FC = () => {
     boxShadow: 'none',
   };
   const historyTileStyle = attentionTileStyle;
+  const secondaryTileStyle = attentionTileStyle;
 
   const formatAttentionDateTime = (value: string | dayjs.Dayjs) =>
     (dayjs.isDayjs(value) ? value : dayjs(value).tz(DEFAULT_TIMEZONE)).format('D MMM, HH:mm');
@@ -816,7 +861,10 @@ const Dashboard: React.FC = () => {
       title={t('pages.dashboard.upcomingLessons')}
       variant="borderless"
       style={dashboardTileStyle}
-      styles={{ body: { height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 } }}
+      styles={{
+        header: dashboardCardHeaderStyle,
+        body: { height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 },
+      }}
     >
       {isLoadingLessons ? (
         <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.md }}>
@@ -889,7 +937,10 @@ const Dashboard: React.FC = () => {
       title={t('pages.dashboard.kpiTitle')}
       variant="borderless"
       style={dashboardTileStyle}
-      styles={{ body: { height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 } }}
+      styles={{
+        header: dashboardCardHeaderStyle,
+        body: { height: '100%', display: 'flex', flexDirection: 'column', minHeight: 0 },
+      }}
     >
       <div style={{ display: 'grid', gridTemplateRows: 'repeat(4, minmax(0, 1fr))', gap: 6, height: '100%', minHeight: 0 }}>
         {kpiItems.map((item) => (
@@ -996,6 +1047,7 @@ const Dashboard: React.FC = () => {
       variant="borderless"
       style={attentionTileStyle}
       styles={{
+        header: dashboardCardHeaderStyle,
         body: {
           padding: isLoadingAttention || hasAttentionItems ? (isMobile ? 12 : 16) : 12,
         },
@@ -1031,12 +1083,152 @@ const Dashboard: React.FC = () => {
     </Card>
   );
 
+  const financeTile = (
+    <Card
+      title={t('pages.dashboard.finance.title')}
+      variant="borderless"
+      style={secondaryTileStyle}
+      extra={(
+        <Button type="text" size="small" onClick={() => navigate('/finance/dashboard')}>
+          {t('pages.dashboard.finance.open')}
+        </Button>
+      )}
+      styles={{
+        header: dashboardCardHeaderStyle,
+        body: { padding: isMobile ? 12 : 16 },
+      }}
+    >
+      {!loadDeferredPanels || isLoadingFinanceMetrics ? (
+        <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: spacing.md }}>
+          <Spin size="small" />
+        </div>
+      ) : isErrorFinanceMetrics ? (
+        <Alert
+          type="warning"
+          showIcon
+          message={t('pages.dashboard.finance.unavailable')}
+          description={
+            financeMetricsError instanceof AxiosError && financeMetricsError.response?.status === 403
+              ? t('pages.dashboard.finance.noAccess')
+              : financeMetricsError.message
+          }
+        />
+      ) : (
+        <div style={{ display: 'grid', gridTemplateColumns: isMobile ? '1fr' : 'repeat(3, minmax(0, 1fr))', gap: 10 }}>
+          {[
+            {
+              label: t('pages.dashboard.finance.monthIncome'),
+              value: formatCurrency(financeMetrics?.current_month_income || 0),
+              color: colors.accentSuccess,
+            },
+            {
+              label: t('pages.dashboard.finance.outstanding'),
+              value: formatCurrency(financeMetrics?.total_outstanding || 0),
+              color: (financeMetrics?.total_outstanding || 0) > 0 ? '#faad14' : textColor,
+            },
+            {
+              label: t('pages.dashboard.finance.debtors'),
+              value: String(financeMetrics?.unpaid_learners_count || 0),
+              color: (financeMetrics?.unpaid_learners_count || 0) > 0 ? '#ff4d4f' : textColor,
+            },
+          ].map((item) => (
+            <div
+              key={item.label}
+              style={{
+                minHeight: 92,
+                padding: 14,
+                borderRadius: tileRadius,
+                background: colors.bgTertiary,
+                display: 'flex',
+                flexDirection: 'column',
+                justifyContent: 'space-between',
+                gap: 10,
+              }}
+            >
+              <Text type="secondary" style={{ fontSize: 12, lineHeight: 1.25 }}>
+                {item.label}
+              </Text>
+              <Text strong style={{ color: item.color, fontSize: 20, lineHeight: 1.1 }}>
+                {item.value}
+              </Text>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+
+  const notificationsTile = (
+    <Card
+      title={t('pages.dashboard.notifications.title')}
+      variant="borderless"
+      style={secondaryTileStyle}
+      extra={(
+        <Button type="text" size="small" onClick={() => navigate('/notifications')}>
+          {t('pages.dashboard.notifications.open')}
+        </Button>
+      )}
+      styles={{
+        header: dashboardCardHeaderStyle,
+        body: { padding: isMobile ? 12 : 16 },
+      }}
+    >
+      {!loadDeferredPanels || isLoadingQueuedNotificationInstances ? (
+        <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: spacing.md }}>
+          <Spin size="small" />
+        </div>
+      ) : upcomingNotificationItems.length === 0 ? (
+        <div
+          style={{
+            padding: '10px 12px',
+            borderRadius: tileRadius,
+            background: colors.bgTertiary,
+          }}
+        >
+          <Text type="secondary">{t('pages.dashboard.notifications.empty')}</Text>
+        </div>
+      ) : (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+          {upcomingNotificationItems.map((item) => (
+            <div
+              key={item.id}
+              style={{
+                display: 'grid',
+                gridTemplateColumns: 'minmax(0, 1fr) auto',
+                gap: 10,
+                alignItems: 'center',
+                padding: '10px 12px',
+                borderRadius: tileRadius,
+                background: colors.bgTertiary,
+              }}
+            >
+              <div style={{ minWidth: 0 }}>
+                <Text strong style={{ display: 'block', lineHeight: 1.2 }}>
+                  {item.learner_display_name || t('pages.dashboard.learner')}
+                </Text>
+                <Text type="secondary" style={{ display: 'block', fontSize: 12, lineHeight: 1.3 }}>
+                  {t(`pages.notifications.categories.${item.category}`, { defaultValue: item.category })}
+                </Text>
+              </div>
+              <Text style={{ color: textColor, fontSize: 12, whiteSpace: 'nowrap' }}>
+                {formatAttentionDateTime(item.effective_scheduled_for)}
+              </Text>
+            </div>
+          ))}
+        </div>
+      )}
+    </Card>
+  );
+
   const heatmapTile = (
     <Card
       title={t('pages.dashboard.level3.heatmap.title')}
       variant="borderless"
       style={historyTileStyle}
-      styles={{ body: { padding: isMobile ? 12 : 16 } }}
+      styles={{
+        header: dashboardCardHeaderStyle,
+        body: { padding: isMobile ? 12 : 16 },
+      }}
     >
       {!loadDeferredPanels || isLoadingDashboardHistory ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: spacing.lg }}>
@@ -1064,7 +1256,10 @@ const Dashboard: React.FC = () => {
       title={t('pages.dashboard.level3.weeklyLoad.title')}
       variant="borderless"
       style={historyTileStyle}
-      styles={{ body: { padding: isMobile ? 12 : 16 } }}
+      styles={{
+        header: dashboardCardHeaderStyle,
+        body: { padding: isMobile ? 12 : 16 },
+      }}
     >
       {!loadDeferredPanels || isLoadingDashboardHistory ? (
         <div style={{ display: 'flex', justifyContent: 'center', paddingBlock: spacing.lg }}>
@@ -1083,6 +1278,10 @@ const Dashboard: React.FC = () => {
     </Card>
   );
 
+  if (requiresTenantContext) {
+    return <TenantContextRequired sectionLabel={t('pages.dashboard.title')} />;
+  }
+
   if (isErrorLessons) {
     return <Alert message={t('errors.fetchLessons')} description={errorLessons?.message} type="error" />;
   }
@@ -1094,6 +1293,7 @@ const Dashboard: React.FC = () => {
           title={t('pages.dashboard.onboarding.title')}
           variant="borderless"
           style={{ ...cardStyle, marginBottom: 24 }}
+          styles={{ header: dashboardCardHeaderStyle }}
           extra={
             <span style={{ color: subtitleColor, fontSize: 13 }}>
               {t('pages.dashboard.onboarding.progress', {
@@ -1146,6 +1346,8 @@ const Dashboard: React.FC = () => {
           {upcomingTile}
           {attentionTile}
           {miniCalendarTile}
+          {financeTile}
+          {notificationsTile}
           {kpiTile}
           {heatmapTile}
           {weeklyLoadTile}
@@ -1164,6 +1366,14 @@ const Dashboard: React.FC = () => {
             </Col>
           </Row>
           {attentionTile}
+          <Row gutter={[16, 16]}>
+            <Col xs={24} lg={12} style={{ display: 'flex' }}>
+              {financeTile}
+            </Col>
+            <Col xs={24} lg={12} style={{ display: 'flex' }}>
+              {notificationsTile}
+            </Col>
+          </Row>
           <Row gutter={[16, 16]}>
             <Col xs={24} style={{ display: 'flex' }}>
               {heatmapTile}

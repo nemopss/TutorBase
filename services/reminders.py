@@ -45,6 +45,7 @@ from config import config
 from database import crud
 from database.engine import async_session
 from notifications.infrastructure.modes import should_suppress_legacy_reminder_for_learner
+from services import billing_service
 from utils import texts
 from utils.formatters import escape_html_text, split_chat_identifier
 
@@ -169,6 +170,24 @@ class ReminderScheduler:
             instance: ReminderInstance to process
             now_utc: Current UTC time for status updates
         """
+        if instance.tenant_id is not None and not await billing_service.notifications_allowed_for_tenant(
+            session,
+            instance.tenant_id,
+        ):
+            logging.info(
+                "Skipping reminder instance #%s: notifications disabled by billing for tenant #%s",
+                instance.id,
+                instance.tenant_id,
+            )
+            await crud.set_reminder_instance_status(
+                session,
+                instance,
+                status='skipped',
+                active=False,
+                comment='Notifications disabled by billing',
+            )
+            return
+
         if await self._should_suppress_legacy_instance(session, instance):
             logging.info(
                 "Skipping legacy reminder instance #%s: learner #%s uses new notification system",

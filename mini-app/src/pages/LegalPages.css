@@ -1,0 +1,137 @@
+.legal-page {
+  min-height: 100vh;
+}
+
+.legal-header {
+  position: static;
+  grid-template-columns: auto auto;
+  justify-content: space-between;
+}
+
+.legal-nav {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 18px;
+  color: var(--landing-text-soft);
+  font-size: 14px;
+  font-weight: 680;
+}
+
+.legal-nav a:hover {
+  color: var(--landing-text);
+}
+
+.legal-document {
+  max-width: 980px;
+  padding: 56px 0 72px;
+}
+
+.legal-kicker {
+  margin: 0 0 14px;
+  color: var(--landing-accent);
+  font-size: 12px;
+  font-weight: 780;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.legal-document h1 {
+  margin: 0 0 24px;
+  color: var(--landing-text);
+  font-size: clamp(34px, 4.5vw, 58px);
+  line-height: 1.02;
+  font-weight: 820;
+  letter-spacing: 0;
+}
+
+.legal-document h2 {
+  margin: 0 0 14px;
+  color: var(--landing-text);
+  font-size: 24px;
+  line-height: 1.2;
+  font-weight: 760;
+  letter-spacing: 0;
+}
+
+.legal-document section {
+  padding: 28px 0;
+  border-top: 1px solid var(--landing-border);
+}
+
+.legal-document p {
+  margin: 0 0 12px;
+  color: var(--landing-text-soft);
+  font-size: 17px;
+  line-height: 1.68;
+}
+
+.legal-document ul {
+  display: grid;
+  gap: 8px;
+  margin: 0 0 16px;
+  padding-left: 22px;
+  color: var(--landing-text-soft);
+  font-size: 17px;
+  line-height: 1.6;
+  list-style: disc;
+}
+
+.legal-document a {
+  color: var(--landing-accent);
+  font-weight: 650;
+}
+
+.legal-document a:hover {
+  color: var(--landing-accent-strong);
+}
+
+.legal-details {
+  display: grid;
+  gap: 10px;
+  margin: 0;
+}
+
+.legal-details div {
+  display: grid;
+  grid-template-columns: 180px minmax(0, 1fr);
+  gap: 18px;
+  padding: 12px 0;
+  border-top: 1px solid var(--landing-border);
+}
+
+.legal-details div:first-child {
+  border-top: 0;
+}
+
+.legal-details dt {
+  color: var(--landing-text-muted);
+  font-size: 14px;
+  font-weight: 720;
+}
+
+.legal-details dd {
+  margin: 0;
+  color: var(--landing-text);
+  font-size: 16px;
+  line-height: 1.45;
+}
+
+.legal-footer {
+  padding-top: 28px;
+}
+
+@media (max-width: 720px) {
+  .legal-header {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .legal-document {
+    padding: 36px 0 54px;
+  }
+
+  .legal-details div {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+}

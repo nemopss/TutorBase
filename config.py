@@ -33,7 +33,7 @@ class Settings(BaseSettings):
     BROWSER_REFRESH_COOKIE_SECURE: bool = True
     BROWSER_REFRESH_COOKIE_SAMESITE: str = "lax"
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
-    MINI_APP_URL: str = "https://app.xpyrkova23.ru/mini-app"
+    MINI_APP_URL: str = "https://app.tutorbase.su/"
 
     POSTGRESQL_HOST: Optional[str] = None
     POSTGRESQL_PORT: Optional[int] = None

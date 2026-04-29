@@ -43,6 +43,7 @@ from slowapi.errors import RateLimitExceeded
 from config import config
 from api.routes import (
     auth,
+    billing,
     finance,
     groups,
     health,
@@ -124,6 +125,7 @@ def create_app() -> FastAPI:
     
     # API routes
     app.include_router(auth.router, prefix=f"{API_PREFIX}/auth", tags=["auth"])
+    app.include_router(billing.router, prefix=f"{API_PREFIX}/billing", tags=["billing"])
     app.include_router(lessons.router, prefix=f"{API_PREFIX}/lessons", tags=["lessons"])
     app.include_router(packages.router, prefix=f"{API_PREFIX}/packages", tags=["packages"])
     app.include_router(templates.router, prefix=f"{API_PREFIX}/templates", tags=["templates"])

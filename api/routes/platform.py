@@ -20,9 +20,13 @@ from api.schemas import (
     TenantAccessGrantRequest,
     TenantAccessResponse,
     TenantAccessSyncResponse,
+    TenantSubscriptionCancelRequest,
+    TenantSubscriptionGrantRequest,
+    BillingSnapshotResponse,
 )
 from database.models import BroadcastCampaign, BroadcastRecipient, Tenant, TenantAccess, User
 from services import broadcast_service
+from services import billing_service
 from services import tenant_access_service
 from services.exceptions import NotFoundError, ValidationError
 from utils.tasks.broadcasts import send_broadcast_campaign_task
@@ -49,7 +53,11 @@ def _access_response(
     )
 
 
-def _tenant_response(tenant: Tenant, access: TenantAccess | None) -> PlatformTenantResponse:
+def _tenant_response(
+    tenant: Tenant,
+    access: TenantAccess | None,
+    billing: BillingSnapshotResponse | None = None,
+) -> PlatformTenantResponse:
     return PlatformTenantResponse(
         id=tenant.id,
         name=tenant.name,
@@ -59,7 +67,13 @@ def _tenant_response(tenant: Tenant, access: TenantAccess | None) -> PlatformTen
         created_at=tenant.created_at,
         updated_at=tenant.updated_at,
         access=_access_response(access, tenant_id=tenant.id),
+        billing=billing,
     )
+
+
+async def _billing_response(session: AsyncSession, tenant_id: int) -> BillingSnapshotResponse:
+    snapshot = await billing_service.get_billing_snapshot_for_tenant(session, tenant_id)
+    return BillingSnapshotResponse(**snapshot.__dict__)
 
 
 def _broadcast_campaign_response(campaign: BroadcastCampaign) -> BroadcastCampaignResponse:
@@ -148,10 +162,15 @@ async def list_platform_tenants(
             access.tenant_id: access for access in access_result.scalars().all()
         }
 
-    items = [
-        _tenant_response(tenant, access_by_tenant_id.get(tenant.id))
-        for tenant in tenants
-    ]
+    items = []
+    for tenant in tenants:
+        items.append(
+            _tenant_response(
+                tenant,
+                access_by_tenant_id.get(tenant.id),
+                await _billing_response(session, tenant.id),
+            )
+        )
     return PaginatedResponse.create(items, total, pagination.limit, pagination.offset)
 
 
@@ -329,7 +348,11 @@ async def get_platform_tenant(
     access_result = await session.execute(
         select(TenantAccess).where(TenantAccess.tenant_id == tenant_id)
     )
-    return _tenant_response(tenant, access_result.scalar_one_or_none())
+    return _tenant_response(
+        tenant,
+        access_result.scalar_one_or_none(),
+        await _billing_response(session, tenant.id),
+    )
 
 
 @router.post("/access/sync", response_model=TenantAccessSyncResponse)
@@ -420,7 +443,7 @@ async def suspend_tenant_access(
 @router.post("/tenants/{tenant_id}/access/resume", response_model=TenantAccessResponse)
 async def resume_tenant_access(
     tenant_id: int,
-    payload: TenantAccessGrantRequest,
+    payload: TenantAccessActionRequest | None = None,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
     _=Depends(admin_required),
@@ -430,11 +453,73 @@ async def resume_tenant_access(
             session,
             tenant_id,
             actor_user_id=current_user.id,
-            days=payload.days,
-            notes=payload.notes,
+            notes=payload.notes if payload else None,
         )
         await session.commit()
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
 
     return _access_response(access, tenant_id=tenant_id)
+
+
+@router.get("/tenants/{tenant_id}/billing", response_model=BillingSnapshotResponse)
+async def get_tenant_billing(
+    tenant_id: int,
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_required),
+) -> BillingSnapshotResponse:
+    tenant = await session.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+    return await _billing_response(session, tenant_id)
+
+
+@router.post("/tenants/{tenant_id}/billing/grant", response_model=BillingSnapshotResponse)
+async def grant_tenant_subscription(
+    tenant_id: int,
+    payload: TenantSubscriptionGrantRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _=Depends(admin_required),
+) -> BillingSnapshotResponse:
+    try:
+        await billing_service.grant_subscription(
+            session,
+            tenant_id,
+            plan_code=payload.plan_code,
+            status=payload.status,
+            current_period_start=payload.current_period_start,
+            current_period_end=payload.current_period_end,
+            grace_until=payload.grace_until,
+            actor_user_id=current_user.id,
+            notes=payload.notes,
+        )
+        await session.commit()
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+
+    return await _billing_response(session, tenant_id)
+
+
+@router.post("/tenants/{tenant_id}/billing/cancel", response_model=BillingSnapshotResponse)
+async def cancel_tenant_subscription(
+    tenant_id: int,
+    payload: TenantSubscriptionCancelRequest | None = None,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _=Depends(admin_required),
+) -> BillingSnapshotResponse:
+    try:
+        await billing_service.cancel_subscription(
+            session,
+            tenant_id,
+            actor_user_id=current_user.id,
+            notes=payload.notes if payload else None,
+        )
+        await session.commit()
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return await _billing_response(session, tenant_id)

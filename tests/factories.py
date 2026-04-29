@@ -293,7 +293,7 @@ async def create_invite_token(
         tenant_id=tenant_id,
         learner_id=learner_id,
         token=token or secrets.token_urlsafe(32),
-        expires_at=expires_at or (now + timedelta(days=30)),
+        expires_at=expires_at or (now + timedelta(days=7)),
         used_at=used_at,
         created_by_user_id=created_by_user_id,
         created_at=now,

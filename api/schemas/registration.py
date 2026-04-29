@@ -12,6 +12,8 @@ class TutorRegistrationRequest(BaseModel):
     school_name: str = Field(..., min_length=2, max_length=100, description="Name of the school or tutoring business")
     contact_email: Optional[str] = Field(None, description="Optional contact email for the tutor/school")
     tutor_name: Optional[str] = Field(None, max_length=100, description="Tutor's display name (optional, will use Telegram name if not provided)")
+    offer_accepted: bool = Field(False, description="User accepted the public offer")
+    privacy_accepted: bool = Field(False, description="User accepted personal data processing policy")
     
     @validator('school_name')
     def validate_school_name(cls, v):
@@ -32,11 +34,25 @@ class TutorRegistrationRequest(BaseModel):
             raise ValueError('Invalid email format')
         return email
 
+    @validator('offer_accepted')
+    def validate_offer_accepted(cls, v):
+        if v is not True:
+            raise ValueError('Public offer acceptance is required')
+        return v
+
+    @validator('privacy_accepted')
+    def validate_privacy_accepted(cls, v):
+        if v is not True:
+            raise ValueError('Personal data processing consent is required')
+        return v
+
 
 class StudentRegistrationRequest(BaseModel):
     """Request schema for student registration via invite."""
     invite_token: str = Field(..., min_length=10, description="Invite token from tutor")
     student_name: Optional[str] = Field(None, max_length=100, description="Student's display name (optional, will use Telegram name if not provided)")
+    offer_accepted: bool = Field(False, description="User accepted the public offer")
+    privacy_accepted: bool = Field(False, description="User accepted personal data processing policy")
     
     @validator('invite_token')
     def validate_invite_token(cls, v):
@@ -44,10 +60,22 @@ class StudentRegistrationRequest(BaseModel):
             raise ValueError('Invite token cannot be empty')
         return v.strip()
 
+    @validator('offer_accepted')
+    def validate_offer_accepted(cls, v):
+        if v is not True:
+            raise ValueError('Public offer acceptance is required')
+        return v
+
+    @validator('privacy_accepted')
+    def validate_privacy_accepted(cls, v):
+        if v is not True:
+            raise ValueError('Personal data processing consent is required')
+        return v
+
 
 class InviteTokenRequest(BaseModel):
     """Request schema for generating invite tokens."""
-    expires_in_days: Optional[int] = Field(30, ge=1, le=365, description="Number of days until token expires (default: 30)")
+    expires_in_days: Optional[int] = Field(7, ge=1, le=365, description="Number of days until token expires (default: 7)")
     note: Optional[str] = Field(None, max_length=200, description="Optional note for the invite")
     learner_id: Optional[int] = Field(None, gt=0, description="Optional learner ID for a personal invite")
 

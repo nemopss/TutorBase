@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import pytest
 from httpx import AsyncClient
@@ -215,6 +215,65 @@ async def test_platform_access_actions_update_state_and_audit(
     )
     actions = [event.action for event in events_result.scalars().all()]
     assert actions == ["grant", "suspend", "grant_lifetime"]
+
+
+@pytest.mark.asyncio
+async def test_platform_resume_does_not_extend_access_period(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    super_admin_user: User,
+    tenant_1: Tenant,
+):
+    now = utc_now()
+    original_access_until = now + timedelta(days=10)
+    db_session.add(
+        TenantAccess(
+            tenant_id=tenant_1.id,
+            status=ACCESS_STATUS_SUSPENDED,
+            access_until=original_access_until,
+            grace_until=original_access_until + timedelta(days=7),
+        )
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        f"/api/v1/platform/tenants/{tenant_1.id}/access/resume",
+        json={"notes": "resume support"},
+        headers=auth_headers(super_admin_user),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["status"] == ACCESS_STATUS_ACTIVE
+    assert datetime.fromisoformat(body["access_until"].replace("Z", "+00:00")) == original_access_until
+
+
+@pytest.mark.asyncio
+async def test_platform_can_grant_tenant_subscription(
+    client: AsyncClient,
+    super_admin_user: User,
+    tenant_1: Tenant,
+):
+    now = utc_now()
+
+    response = await client.post(
+        f"/api/v1/platform/tenants/{tenant_1.id}/billing/grant",
+        json={
+            "plan_code": "basic",
+            "status": "manual",
+            "current_period_start": now.isoformat(),
+            "current_period_end": (now + timedelta(days=30)).isoformat(),
+            "notes": "manual test grant",
+        },
+        headers=auth_headers(super_admin_user),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan_code"] == "basic"
+    assert body["plan_name"] == "Базовый"
+    assert body["active_learners_limit"] == 10
+    assert body["notifications_allowed"] is True
 
 
 @pytest.mark.asyncio

@@ -40,6 +40,12 @@ from api.schemas.auth import (
     BrowserTokenResponse,
     TokenPairResponse,
 )
+from api.schemas.billing import (
+    BillingPlanResponse,
+    BillingSnapshotResponse,
+    TenantSubscriptionCancelRequest,
+    TenantSubscriptionGrantRequest,
+)
 from api.schemas.registration import (
     TutorRegistrationRequest,
     StudentRegistrationRequest,
@@ -182,6 +188,11 @@ __all__ = [
     'UserPayload',
     'BrowserTokenResponse',
     'TokenPairResponse',
+    # Billing
+    'BillingPlanResponse',
+    'BillingSnapshotResponse',
+    'TenantSubscriptionCancelRequest',
+    'TenantSubscriptionGrantRequest',
     # Registration
     'TutorRegistrationRequest',
     'StudentRegistrationRequest',

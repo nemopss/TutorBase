@@ -36,6 +36,7 @@ from api.prometheus_metrics import (
     notification_jobs_claimed_total,
     notification_jobs_processed_total,
 )
+from services import billing_service
 from utils.celery_app import celery_app
 from utils.formatters import escape_html_text, format_timestamp_msk
 from utils.telegram_bot import build_telegram_bot
@@ -339,6 +340,13 @@ async def _deliver_for_tenant(
     tenant_id: int,
     limit: int,
 ) -> dict:
+    if not await billing_service.notifications_allowed_for_tenant(session, tenant_id):
+        logger.info(
+            "Notification delivery skipped by billing restrictions",
+            extra={"tenant_id": tenant_id},
+        )
+        return {"tenant_id": tenant_id, "claimed": 0, "sent": 0, "failed": 0}
+
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
     claim_result = await ClaimDueNotificationsUseCase(uow).execute(
         limit=limit,

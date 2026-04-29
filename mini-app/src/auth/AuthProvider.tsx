@@ -45,6 +45,29 @@ export interface TenantAccess {
   bypass_access_restrictions?: boolean;
 }
 
+export interface BillingSnapshot {
+  tenant_id: number;
+  plan_code: string;
+  plan_name: string;
+  subscription_plan_code?: string | null;
+  subscription_status?: string | null;
+  provider?: string | null;
+  active_learners_limit: number;
+  active_learners_count: number;
+  monthly_price_rub: number;
+  yearly_price_rub?: number | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  grace_until?: string | null;
+  cancel_at_period_end: boolean;
+  is_effective_free_plan: boolean;
+  is_over_limit: boolean;
+  can_create_learner: boolean;
+  can_restore_learner: boolean;
+  notifications_allowed: boolean;
+  billing_restriction_reason?: string | null;
+}
+
 interface AuthResponse {
   access_token: string;
   refresh_token?: string;
@@ -55,11 +78,15 @@ interface AuthResponse {
 interface TutorRegistrationData {
   school_name: string;
   tutor_name?: string;
+  offer_accepted: boolean;
+  privacy_accepted: boolean;
 }
 
 interface StudentRegistrationData {
   invite_token: string;
   student_name?: string;
+  offer_accepted: boolean;
+  privacy_accepted: boolean;
 }
 
 interface AuthContextType {
@@ -67,11 +94,14 @@ interface AuthContextType {
   isLoading: boolean;
   user: User | null;
   tenantAccess: TenantAccess | null;
+  billing: BillingSnapshot | null;
   tenantId: number | null;
   isSuperAdmin: boolean;
   canSwitchTenant: boolean;
   isTenantAccessLoading: boolean;
+  isBillingLoading: boolean;
   refreshTenantAccess: () => Promise<void>;
+  refreshBilling: () => Promise<void>;
   switchTenant: (tenantId: number | null) => Promise<void>;
   registerTutor: (data: TutorRegistrationData) => Promise<void>;
   registerStudent: (data: StudentRegistrationData) => Promise<void>;
@@ -93,7 +123,9 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tenantId, setTenantId] = useState<number | null>(null);
   const [tenantAccess, setTenantAccess] = useState<TenantAccess | null>(null);
+  const [billing, setBilling] = useState<BillingSnapshot | null>(null);
   const [isTenantAccessLoading, setIsTenantAccessLoading] = useState(false);
+  const [isBillingLoading, setIsBillingLoading] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [browserLoginError, setBrowserLoginError] = useState<string | null>(null);
@@ -109,18 +141,23 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     setUser(null);
     setTenantId(null);
     setTenantAccess(null);
+    setBilling(null);
     setIsTenantAccessLoading(false);
+    setIsBillingLoading(false);
   };
 
   const loadTenantAccess = async (nextTenantId: number | null) => {
     setTenantAccess(null);
+    setBilling(null);
 
     if (nextTenantId === null) {
       setIsTenantAccessLoading(false);
+      setIsBillingLoading(false);
       return;
     }
 
     setIsTenantAccessLoading(true);
+    setIsBillingLoading(true);
     try {
       const response = await api.get<TenantAccess>('/tenant-access/current');
       setTenantAccess(response.data);
@@ -129,10 +166,35 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     } finally {
       setIsTenantAccessLoading(false);
     }
+
+    try {
+      const response = await api.get<BillingSnapshot>('/billing/current');
+      setBilling(response.data);
+    } catch {
+      setBilling(null);
+    } finally {
+      setIsBillingLoading(false);
+    }
   };
 
   const refreshTenantAccess = async () => {
     await loadTenantAccess(tenantId);
+  };
+
+  const refreshBilling = async () => {
+    if (tenantId === null) {
+      setBilling(null);
+      return;
+    }
+    setIsBillingLoading(true);
+    try {
+      const response = await api.get<BillingSnapshot>('/billing/current');
+      setBilling(response.data);
+    } catch {
+      setBilling(null);
+    } finally {
+      setIsBillingLoading(false);
+    }
   };
 
   const applyAuthenticatedSession = (
@@ -290,7 +352,6 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
               'Debug Info:',
               `• Telegram object: ${window.Telegram ? 'Found' : 'Not found'}`,
               `• WebApp object: ${window.Telegram?.WebApp ? 'Found' : 'Not found'}`,
-              `• InitData: ${initData ? `"${initData.substring(0, 50)}..."` : 'Empty'}`,
               `• InitData length: ${initData?.length || 0}`,
             ].join('\n');
 
@@ -660,11 +721,14 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     isLoading,
     user,
     tenantAccess,
+    billing,
     tenantId,
     isSuperAdmin,
     canSwitchTenant,
     isTenantAccessLoading,
+    isBillingLoading,
     refreshTenantAccess,
+    refreshBilling,
     switchTenant,
     registerTutor,
     registerStudent,

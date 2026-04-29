@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from api.dependencies import CurrentTenant
 from config import config
 from database import crud
-from database.models import InviteToken, Learner, LearnerAccountLink, Tenant, User
+from database.models import InviteToken, Learner, LearnerAccountLink, LegalAcceptance, Tenant, User
 from tests import factories
 from tests.api.utils import get_auth_headers
 
@@ -23,7 +23,9 @@ async def test_register_tutor_success(client: AsyncClient, db_session: AsyncSess
     """Test successful tutor registration."""
     registration_data = {
         "school_name": "Test Tutoring School",
-        "tutor_name": "John Doe"
+        "tutor_name": "John Doe",
+        "offer_accepted": True,
+        "privacy_accepted": True,
     }
     
     # Mock Telegram init data
@@ -55,6 +57,14 @@ async def test_register_tutor_success(client: AsyncClient, db_session: AsyncSess
     assert tenant_data["name"] == "Test Tutoring School"
     assert "slug" in tenant_data
 
+    acceptance = (
+        await db_session.execute(
+            select(LegalAcceptance).where(LegalAcceptance.user_id == user_data["id"])
+        )
+    ).scalar_one()
+    assert acceptance.offer_version == "2026-04-29"
+    assert acceptance.privacy_version == "2026-04-29"
+
 
 @pytest.mark.asyncio
 async def test_register_student_success(client: AsyncClient, db_session: AsyncSession, tenant_1: Tenant):
@@ -67,7 +77,9 @@ async def test_register_student_success(client: AsyncClient, db_session: AsyncSe
     
     registration_data = {
         "invite_token": invite_token.token,
-        "student_name": "Jane Student"
+        "student_name": "Jane Student",
+        "offer_accepted": True,
+        "privacy_accepted": True,
     }
     
     headers = {"X-Telegram-Init-Data": "dev"}
@@ -126,7 +138,12 @@ async def test_register_student_personal_invite_links_existing_learner(
 
     response = await client.post(
         "/api/v1/auth/register-student",
-        json={"invite_token": invite_token.token, "student_name": "Student Own Name"},
+        json={
+            "invite_token": invite_token.token,
+            "student_name": "Student Own Name",
+            "offer_accepted": True,
+            "privacy_accepted": True,
+        },
         headers={"X-Telegram-Init-Data": "dev"},
     )
 
@@ -152,7 +169,9 @@ async def test_register_student_invalid_token(client: AsyncClient, db_session: A
     """Test student registration with invalid invite token."""
     registration_data = {
         "invite_token": "invalid-token-12345",
-        "student_name": "Jane Student"
+        "student_name": "Jane Student",
+        "offer_accepted": True,
+        "privacy_accepted": True,
     }
     
     headers = {"X-Telegram-Init-Data": "dev"}
@@ -181,7 +200,12 @@ async def test_register_student_used_token_returns_409(
 
     response = await client.post(
         "/api/v1/auth/register-student",
-        json={"invite_token": invite_token.token, "student_name": "Jane Student"},
+        json={
+            "invite_token": invite_token.token,
+            "student_name": "Jane Student",
+            "offer_accepted": True,
+            "privacy_accepted": True,
+        },
         headers={"X-Telegram-Init-Data": "dev"},
     )
 
@@ -207,7 +231,12 @@ async def test_register_student_expired_token_returns_410(
 
     response = await client.post(
         "/api/v1/auth/register-student",
-        json={"invite_token": invite_token.token, "student_name": "Jane Student"},
+        json={
+            "invite_token": invite_token.token,
+            "student_name": "Jane Student",
+            "offer_accepted": True,
+            "privacy_accepted": True,
+        },
         headers={"X-Telegram-Init-Data": "dev"},
     )
 
@@ -355,7 +384,12 @@ async def test_unlink_student_registration_preserves_history_and_allows_reregist
 
     register_response = await client.post(
         "/api/v1/auth/register-student",
-        json={"invite_token": invite_token.token, "student_name": "Debug Student Again"},
+        json={
+            "invite_token": invite_token.token,
+            "student_name": "Debug Student Again",
+            "offer_accepted": True,
+            "privacy_accepted": True,
+        },
         headers={"X-Telegram-Init-Data": "dev"},
     )
 

@@ -136,6 +136,20 @@
       "activePackages": "활성 패키지",
       "upcomingLessons": "예정된 수업",
       "learner": "학생",
+      "finance": {
+        "title": "재정",
+        "open": "재정 열기",
+        "monthIncome": "이번 달 수입",
+        "outstanding": "미결제",
+        "debtors": "미결제 학생",
+        "unavailable": "지금은 재정을 불러올 수 없습니다",
+        "noAccess": "현재 역할에는 재정 접근 권한이 없습니다."
+      },
+      "notifications": {
+        "title": "다가오는 알림",
+        "open": "알림 열기",
+        "empty": "아직 예정된 전송이 없습니다"
+      },
       "attention": {
         "title": "주의가 필요함",
         "empty": "지금은 긴급한 작업이 없습니다",

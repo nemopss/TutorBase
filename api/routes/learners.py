@@ -33,7 +33,9 @@ from api.schemas.schedule import (
 from api.schemas import PaginatedResponse, PaginationParams
 from database.models import Lesson, LessonPackage
 from services import learner_service
+from services import billing_service
 from services import schedule_service
+from services.exceptions import ValidationError
 from database import crud
 from notifications.infrastructure.repositories import SqlAlchemySessionNotificationUnitOfWork
 
@@ -151,6 +153,11 @@ async def create_learner_from_chat_id(
     __=Depends(require_full_tenant_access),
 ) -> LearnerResponse:
     """Create a new learner from Telegram chat_id."""
+    try:
+        await billing_service.assert_can_create_learner(session, current_tenant)
+    except ValidationError as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+
     learner = await learner_service.create_learner_from_chat_id(
         session,
         current_tenant,
@@ -265,6 +272,11 @@ async def restore_learner(
     __=Depends(require_full_tenant_access),
 ) -> LearnerResponse:
     """Restore learner to active lists without re-enabling notifications."""
+    try:
+        await billing_service.assert_can_restore_learner(session, current_tenant)
+    except ValidationError as exc:
+        raise HTTPException(status_code=402, detail=str(exc)) from exc
+
     learner = await learner_service.restore_learner(
         session,
         current_tenant,
@@ -340,7 +352,7 @@ async def create_learner_invite(
         session=session,
         current_tenant=current_tenant,
         created_by_user_id=current_user.id,
-        expires_in_days=30,
+        expires_in_days=7,
         learner_id=learner.id,
     )
     await session.flush()

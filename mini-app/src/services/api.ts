@@ -38,6 +38,28 @@ const clearStoredTokens = () => {
   delete api.defaults.headers.common.Authorization;
 };
 
+const redactHeaders = (headers: AxiosRequestConfig["headers"]) => {
+  if (!headers) {
+    return headers;
+  }
+
+  return Object.fromEntries(
+    Object.entries(headers).map(([key, value]) => {
+      const normalized = key.toLowerCase();
+      if (
+        normalized === "authorization" ||
+        normalized === "cookie" ||
+        normalized === "set-cookie" ||
+        normalized.includes("token") ||
+        normalized.includes("telegram-init-data")
+      ) {
+        return [key, "[redacted]"];
+      }
+      return [key, value];
+    })
+  );
+};
+
 const refreshAccessToken = async (): Promise<string | null> => {
   if (browserRefreshHandler) {
     return browserRefreshHandler();
@@ -66,7 +88,7 @@ api.interceptors.request.use(
       console.log(
         `API Request: ${config.method?.toUpperCase()} ${config.url}`,
         {
-          headers: config.headers,
+          headers: redactHeaders(config.headers),
           params: config.params,
         }
       );

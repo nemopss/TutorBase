@@ -14,7 +14,7 @@ from api.dependencies import (
     get_session,
     is_platform_admin,
 )
-from database.models import Tenant, User
+from database.models import LegalAcceptance, Tenant, User
 from api.schemas import (
     BrowserTokenResponse,
     RefreshRequest,
@@ -40,12 +40,14 @@ from api.security import (
 )
 from config import config
 from database import crud
-from services import notification_bootstrap_service, tenant_access_service
+from services import billing_service, notification_bootstrap_service, tenant_access_service
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
 BROWSER_REFRESH_COOKIE_PATH = "/api/v1/auth/browser"
 _TOKEN_TENANT_UNSET = object()
+OFFER_VERSION = "2026-04-29"
+PRIVACY_VERSION = "2026-04-29"
 
 # Helper function to apply rate limiting conditionally
 def rate_limit(limit_string: str):
@@ -71,6 +73,34 @@ def _build_display_name(user_payload: Dict[str, object]) -> str:
         return str(username)
     telegram_id = user_payload.get("id")
     return f"tg:{telegram_id}" if telegram_id is not None else "Telegram User"
+
+
+def _client_ip(request: Request) -> str | None:
+    forwarded_for = request.headers.get("x-forwarded-for")
+    if forwarded_for:
+        return forwarded_for.split(",", 1)[0].strip() or None
+    return request.client.host if request.client else None
+
+
+def _record_legal_acceptance(
+    session: AsyncSession,
+    request: Request,
+    *,
+    user: User,
+    tenant_id: int | None,
+) -> None:
+    session.add(
+        LegalAcceptance(
+            user_id=user.id,
+            tenant_id=tenant_id,
+            role=user.role,
+            offer_version=OFFER_VERSION,
+            privacy_version=PRIVACY_VERSION,
+            accepted_at=datetime.now(timezone.utc),
+            ip_address=_client_ip(request),
+            user_agent=request.headers.get("user-agent"),
+        )
+    )
 
 
 def _build_user_payload(user: User) -> UserPayload:
@@ -492,6 +522,11 @@ async def register_tutor(
     session.add(tenant)
     await session.flush()  # Get tenant.id
     await tenant_access_service.create_trial_access(session, tenant.id)
+    await billing_service.ensure_subscription(
+        session,
+        tenant.id,
+        notes="Created during tutor registration",
+    )
     await notification_bootstrap_service.ensure_recommended_notification_rules(session, tenant.id)
     
     # Create user with teacher role
@@ -507,6 +542,7 @@ async def register_tutor(
     )
     session.add(user)
     await session.flush()
+    _record_legal_acceptance(session, request, user=user, tenant_id=tenant.id)
     
     try:
         await session.commit()
@@ -722,6 +758,7 @@ async def register_student(
         user_id=user.id,
         telegram_id=telegram_id,
     )
+    _record_legal_acceptance(session, request, user=user, tenant_id=invite_token.tenant_id)
     
     try:
         await session.commit()

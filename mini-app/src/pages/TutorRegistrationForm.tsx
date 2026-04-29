@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Alert, Button, Form, Input, Space, Typography } from 'antd';
+import { Alert, Button, Checkbox, Form, Input, Space, Typography } from 'antd';
 import {
     ArrowLeftOutlined,
     BellOutlined,
@@ -19,6 +19,8 @@ const { Text } = Typography;
 interface FormData {
     school_name: string;
     tutor_name?: string;
+    offer_accepted: boolean;
+    privacy_accepted: boolean;
 }
 
 const TutorRegistrationForm: React.FC = () => {
@@ -41,6 +43,8 @@ const TutorRegistrationForm: React.FC = () => {
             await registerTutor({
                 school_name: values.school_name.trim(),
                 tutor_name: values.tutor_name?.trim() || undefined,
+                offer_accepted: values.offer_accepted,
+                privacy_accepted: values.privacy_accepted,
             });
         } catch (err: any) {
             console.error('Registration failed:', err);
@@ -205,13 +209,43 @@ const TutorRegistrationForm: React.FC = () => {
                                 />
                             </Form.Item>
 
-                            <Form.Item style={{ marginBottom: spacing.md }}>
-                                <Text type="secondary" style={{ fontSize: 12 }}>
-                                    {t('pages.tutorRegistration.termsText')}{' '}
-                                    <a href="/terms">{t('pages.tutorRegistration.termsOfService')}</a>
-                                    {' '}{t('pages.tutorRegistration.and')}{' '}
-                                    <a href="/privacy">{t('pages.tutorRegistration.privacyPolicy')}</a>
-                                </Text>
+                            <Form.Item
+                                name="offer_accepted"
+                                valuePropName="checked"
+                                rules={[
+                                    {
+                                        validator: (_, value) => value
+                                            ? Promise.resolve()
+                                            : Promise.reject(new Error('Необходимо принять оферту')),
+                                    },
+                                ]}
+                                style={{ marginBottom: spacing.xs }}
+                            >
+                                <Checkbox>
+                                    <Text type="secondary" style={{ fontSize: 12 }}>
+                                        Принимаю <a href="/offer" target="_blank" rel="noreferrer">Публичную оферту</a>
+                                    </Text>
+                                </Checkbox>
+                            </Form.Item>
+
+                            <Form.Item
+                                name="privacy_accepted"
+                                valuePropName="checked"
+                                rules={[
+                                    {
+                                        validator: (_, value) => value
+                                            ? Promise.resolve()
+                                            : Promise.reject(new Error('Необходимо согласие на обработку персональных данных')),
+                                    },
+                                ]}
+                                style={{ marginBottom: spacing.md }}
+                            >
+                                <Checkbox>
+                                    <Text type="secondary" style={{ fontSize: 12 }}>
+                                        Согласен на обработку персональных данных и ознакомлен с{' '}
+                                        <a href="/privacy" target="_blank" rel="noreferrer">Политикой обработки персональных данных</a>
+                                    </Text>
+                                </Checkbox>
                             </Form.Item>
 
                             {error && (

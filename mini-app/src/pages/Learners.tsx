@@ -1,8 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Input, message, Modal, Space, Typography } from 'antd';
+import { Alert, Button, Card, Input, message, Modal, notification, Space, Typography } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
+import { isAxiosError } from 'axios';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import LearnerForm from '../components/forms/LearnerForm';
@@ -93,16 +94,32 @@ const createLearnerInvite = async (learnerId: number): Promise<InviteTokenRespon
   return data;
 };
 
+const getApiErrorDetail = (error: unknown, fallback: string) => {
+  if (!isAxiosError<{ detail?: unknown }>(error)) {
+    return fallback;
+  }
+  const detail = error.response?.data?.detail;
+  return typeof detail === 'string' ? detail : fallback;
+};
+
+const getApiErrorStatus = (error: unknown) => (
+  isAxiosError(error) ? error.response?.status : undefined
+);
+
 // --- Component --- //
 const Learners: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
-  const { tenantAccess, tenantId } = useAuth();
+  const { tenantAccess, billing, tenantId, refreshBilling } = useAuth();
+  const [notificationApi, notificationContextHolder] = notification.useNotification();
   const requiresTenantContext = tenantId === null;
   const isDark = resolvedTheme.colorScheme === 'dark';
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
+  const canCreateLearner = canUseFullActions && (billing?.can_create_learner ?? true);
+  const canRestoreLearner = canUseFullActions && (billing?.can_restore_learner ?? true);
+  const notificationsAllowed = billing?.notifications_allowed ?? true;
   
   // Modal states
   const [isCreateModalOpen, setIsCreateModalOpen] = useState(false);
@@ -131,11 +148,20 @@ const Learners: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
+      refreshBilling();
       message.success(t('pages.learners.createSuccess'));
       setIsCreateModalOpen(false);
     },
     onError: (error: Error) => {
-      message.error(t('errors.createFailed', { message: error.message }));
+      if (getApiErrorStatus(error) === 402) {
+        showLearnerLimitNotice('create');
+        return;
+      }
+      notificationApi.error({
+        message: 'Не удалось добавить ученика',
+        description: getApiErrorDetail(error, t('errors.createFailed', { message: error.message })),
+        placement: 'topRight',
+      });
     },
   });
 
@@ -148,7 +174,7 @@ const Learners: React.FC = () => {
       setEditingLearner(null);
     },
     onError: (error: Error) => {
-      message.error(t('errors.updateFailed', { message: error.message }));
+      message.error(getApiErrorDetail(error, t('errors.updateFailed', { message: error.message })));
     },
   });
 
@@ -164,7 +190,7 @@ const Learners: React.FC = () => {
       setTogglingLearnerId(null);
     },
     onError: (error: Error) => {
-      message.error(t('errors.updateFailed', { message: error.message }));
+      message.error(getApiErrorDetail(error, t('errors.updateFailed', { message: error.message })));
       setTogglingLearnerId(null);
     },
   });
@@ -174,10 +200,11 @@ const Learners: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
+      refreshBilling();
       message.success(t('pages.learners.archiveSuccess', { defaultValue: 'Ученик перемещён в архив' }));
     },
     onError: (error: Error) => {
-      message.error(t('errors.updateFailed', { message: error.message }));
+      message.error(getApiErrorDetail(error, t('errors.updateFailed', { message: error.message })));
     },
   });
 
@@ -186,10 +213,19 @@ const Learners: React.FC = () => {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
+      refreshBilling();
       message.success(t('pages.learners.restoreSuccess', { defaultValue: 'Ученик возвращён в активные' }));
     },
     onError: (error: Error) => {
-      message.error(t('errors.updateFailed', { message: error.message }));
+      if (getApiErrorStatus(error) === 402) {
+        showLearnerLimitNotice('restore');
+        return;
+      }
+      notificationApi.error({
+        message: 'Не удалось вернуть ученика',
+        description: getApiErrorDetail(error, t('errors.updateFailed', { message: error.message })),
+        placement: 'topRight',
+      });
     },
   });
 
@@ -248,11 +284,46 @@ const Learners: React.FC = () => {
   }, [data?.items, debouncedSearch, statusView]);
 
   const handleNotificationToggle = (learnerId: number, currentValue: boolean) => {
+    if (!notificationsAllowed) {
+      message.warning('Уведомления отключены до продления подписки.');
+      return;
+    }
     setTogglingLearnerId(learnerId);
     notificationsMutation.mutate({
       learnerId,
       enabled: !currentValue,
     });
+  };
+
+  const showLearnerLimitNotice = (action: 'create' | 'restore') => {
+    const actionText = action === 'create'
+      ? 'добавить нового ученика'
+      : 'вернуть ученика из архива';
+    if (!billing) {
+      notificationApi.warning({
+        message: 'Пока нет места для активного ученика',
+        description: `Сейчас не получается ${actionText}: лимит активных учеников уже заполнен. Можно освободить место, архивировав неактивного ученика.`,
+        placement: 'topRight',
+      });
+      return;
+    }
+    notificationApi.warning({
+      message: 'Пока нет места для активного ученика',
+      description: `На тарифе «${billing.plan_name}» доступно ${billing.active_learners_limit} активных учеников, сейчас уже ${billing.active_learners_count}. Чтобы ${actionText}, архивируйте неактивного ученика. Данные в архиве сохранятся.`,
+      placement: 'topRight',
+    });
+  };
+
+  const handleOpenCreate = () => {
+    if (!canUseFullActions) {
+      message.warning('Создание учеников недоступно в grace-периоде.');
+      return;
+    }
+    if (!canCreateLearner) {
+      showLearnerLimitNotice('create');
+      return;
+    }
+    setIsCreateModalOpen(true);
   };
 
   const handleEdit = (learner: Learner) => {
@@ -310,6 +381,10 @@ const Learners: React.FC = () => {
       message.warning('Возврат учеников из архива недоступен в grace-периоде.');
       return;
     }
+    if (!canRestoreLearner) {
+      showLearnerLimitNotice('restore');
+      return;
+    }
     restoreMutation.mutate(learner.id);
   };
 
@@ -336,6 +411,7 @@ const Learners: React.FC = () => {
   if (requiresTenantContext) {
     return (
       <div>
+        {notificationContextHolder}
         <PageHeader
           title={t('pages.learners.title')}
           subtitle={t('pages.learners.subtitle')}
@@ -347,6 +423,7 @@ const Learners: React.FC = () => {
 
   return (
     <div>
+      {notificationContextHolder}
       <PageHeader
         title={t('pages.learners.title')}
         subtitle={t('pages.learners.subtitle')}
@@ -451,7 +528,7 @@ const Learners: React.FC = () => {
         <LearnerGrid>
           <Card
             hoverable={canUseFullActions}
-            onClick={() => canUseFullActions && setIsCreateModalOpen(true)}
+            onClick={handleOpenCreate}
             style={{
               minHeight: 120,
               display: 'flex',
@@ -460,7 +537,8 @@ const Learners: React.FC = () => {
               border: '2px dashed',
               borderColor: isDark ? '#3a3a3a' : '#d9d9d9',
               background: 'transparent',
-              opacity: canUseFullActions ? 1 : 0.5,
+              opacity: canCreateLearner ? 1 : 0.65,
+              cursor: canUseFullActions ? 'pointer' : 'not-allowed',
             }}
             styles={{
               body: {
@@ -503,16 +581,17 @@ const Learners: React.FC = () => {
               onRestore={handleRestore}
               onClick={handleCardClick}
               isToggling={togglingLearnerId === learner.id && notificationsMutation.isPending}
+              notificationsGloballyAllowed={notificationsAllowed}
             />
           ))}
         </LearnerGrid>
       )}
 
       {/* FAB - only show when there are learners */}
-      {hasLearners && !isArchiveView && canUseFullActions && (
+      {hasLearners && !isArchiveView && (
         <FloatingActionButton
           icon={<PlusOutlined />}
-          onClick={() => setIsCreateModalOpen(true)}
+          onClick={handleOpenCreate}
         />
       )}
 
@@ -522,6 +601,10 @@ const Learners: React.FC = () => {
         onSubmit={(values) => {
           if (!canUseFullActions) {
             message.warning('Создание учеников недоступно в grace-периоде.');
+            return Promise.resolve();
+          }
+          if (!canCreateLearner) {
+            showLearnerLimitNotice('create');
             return Promise.resolve();
           }
           return createMutation.mutateAsync(values);

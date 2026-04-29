@@ -19,12 +19,14 @@ import {
 } from 'antd';
 import {
   ArrowLeftOutlined,
+  CreditCardOutlined,
   EyeOutlined,
   GlobalOutlined,
   LoginOutlined,
   PlusOutlined,
   ReloadOutlined,
   SendOutlined,
+  SettingOutlined,
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
 import api from '../services/api';
@@ -44,6 +46,7 @@ interface Tenant {
   contact_email?: string | null;
   is_active: boolean;
   access: TenantAccess;
+  billing?: BillingSnapshot | null;
 }
 
 interface TenantAccess {
@@ -55,6 +58,28 @@ interface TenantAccess {
   is_lifetime: boolean;
   reason?: string | null;
   notes?: string | null;
+}
+
+interface BillingSnapshot {
+  plan_code: string;
+  plan_name: string;
+  subscription_plan_code?: string | null;
+  subscription_status?: string | null;
+  provider?: string | null;
+  active_learners_limit: number;
+  active_learners_count: number;
+  monthly_price_rub: number;
+  yearly_price_rub?: number | null;
+  current_period_start?: string | null;
+  current_period_end?: string | null;
+  grace_until?: string | null;
+  cancel_at_period_end: boolean;
+  is_effective_free_plan: boolean;
+  is_over_limit: boolean;
+  notifications_allowed: boolean;
+  can_create_learner: boolean;
+  can_restore_learner: boolean;
+  billing_restriction_reason?: string | null;
 }
 
 interface TenantListResponse {
@@ -140,6 +165,12 @@ interface BroadcastFormValues {
   rate_limit_per_second: number;
 }
 
+interface BillingGrantFormValues {
+  plan_code: string;
+  duration_days: number;
+  notes?: string;
+}
+
 interface TenantActionConfig {
   key: string;
   label: string;
@@ -154,6 +185,13 @@ interface TenantActionConfig {
 
 type ConsoleSection = 'broadcasts' | 'tenants' | 'users';
 
+const BILLING_PLAN_OPTIONS = [
+  { value: 'start', label: 'Старт · 0-3 ученика' },
+  { value: 'basic', label: 'Базовый · 4-10 учеников' },
+  { value: 'pro', label: 'Про · 11-20 учеников' },
+  { value: 'studio', label: 'Бизнес · 21+ учеников' },
+];
+
 const PlatformConsole = () => {
   const { tenantId, canSwitchTenant, switchTenant, logout } = useAuth();
   const { resolvedTheme } = useTheme();
@@ -161,6 +199,7 @@ const PlatformConsole = () => {
   const colors = resolvedTheme.colors;
   const isDark = resolvedTheme.colorScheme === 'dark';
   const [broadcastForm] = Form.useForm<BroadcastFormValues>();
+  const [billingForm] = Form.useForm<BillingGrantFormValues>();
   const selectedBroadcastAudience = Form.useWatch('audience', broadcastForm) ?? 'platform_admins';
   const [activeSection, setActiveSection] = useState<ConsoleSection>('broadcasts');
   const [isBroadcastComposerOpen, setIsBroadcastComposerOpen] = useState(false);
@@ -169,6 +208,8 @@ const PlatformConsole = () => {
   const [loading, setLoading] = useState(false);
   const [switchingTenantId, setSwitchingTenantId] = useState<number | 'global' | null>(null);
   const [accessActionKey, setAccessActionKey] = useState<string | null>(null);
+  const [billingActionKey, setBillingActionKey] = useState<string | null>(null);
+  const [managingTenantId, setManagingTenantId] = useState<number | null>(null);
   const [isSyncingAccess, setIsSyncingAccess] = useState(false);
   const [broadcastPreview, setBroadcastPreview] = useState<BroadcastPreview | null>(null);
   const [broadcasts, setBroadcasts] = useState<BroadcastCampaign[]>([]);
@@ -189,6 +230,19 @@ const PlatformConsole = () => {
     () => tenants.find((tenant) => tenant.id === tenantId) ?? null,
     [tenantId, tenants],
   );
+  const managingTenant = useMemo(
+    () => tenants.find((tenant) => tenant.id === managingTenantId) ?? null,
+    [managingTenantId, tenants],
+  );
+
+  useEffect(() => {
+    if (!managingTenant) return;
+    billingForm.setFieldsValue({
+      plan_code: managingTenant.billing?.subscription_plan_code ?? managingTenant.billing?.plan_code ?? 'basic',
+      duration_days: 30,
+      notes: '',
+    });
+  }, [billingForm, managingTenant]);
 
   const surfaceStyle = {
     background: colors.bgSecondary,
@@ -316,6 +370,15 @@ const PlatformConsole = () => {
     return accessUntil ? `до ${accessUntil}` : 'срок не указан';
   };
 
+  const billingTag = (billing?: BillingSnapshot | null) => {
+    if (!billing) return null;
+    return (
+      <Tag color={billing.notifications_allowed ? 'green' : 'gold'}>
+        {billing.plan_name} {billing.active_learners_count}/{billing.active_learners_limit}
+      </Tag>
+    );
+  };
+
   const broadcastStatusTag = (statusValue: string) => {
     const statusMap: Record<string, { label: string; color: string }> = {
       draft: { label: 'Черновик', color: 'default' },
@@ -367,7 +430,7 @@ const PlatformConsole = () => {
     const key = `${tenant.id}:${action}`;
     setAccessActionKey(key);
     try {
-      const payload = action === 'grant' || action === 'resume'
+      const payload = action === 'grant'
         ? { days: 30 }
         : {};
       const response = await api.post<TenantAccess>(
@@ -383,6 +446,57 @@ const PlatformConsole = () => {
       message.error(typeof detail === 'string' ? detail : 'Не удалось обновить доступ');
     } finally {
       setAccessActionKey(null);
+    }
+  };
+
+  const handleGrantBilling = async (tenant: Tenant) => {
+    const values = await billingForm.validateFields();
+    const key = `${tenant.id}:billing-grant`;
+    setBillingActionKey(key);
+    try {
+      const now = new Date();
+      const periodEnd = new Date(now);
+      periodEnd.setDate(periodEnd.getDate() + values.duration_days);
+      const isStartPlan = values.plan_code === 'start';
+      const response = await api.post<BillingSnapshot>(
+        `/platform/tenants/${tenant.id}/billing/grant`,
+        {
+          plan_code: values.plan_code,
+          status: isStartPlan ? 'active' : 'manual',
+          current_period_start: isStartPlan ? null : now.toISOString(),
+          current_period_end: isStartPlan ? null : periodEnd.toISOString(),
+          notes: values.notes || null,
+        },
+      );
+      setTenants((items) => items.map((item) => (
+        item.id === tenant.id ? { ...item, billing: response.data } : item
+      )));
+      message.success('Подписка обновлена');
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      message.error(typeof detail === 'string' ? detail : 'Не удалось обновить подписку');
+    } finally {
+      setBillingActionKey(null);
+    }
+  };
+
+  const handleCancelBilling = async (tenant: Tenant) => {
+    const key = `${tenant.id}:billing-cancel`;
+    setBillingActionKey(key);
+    try {
+      const response = await api.post<BillingSnapshot>(
+        `/platform/tenants/${tenant.id}/billing/cancel`,
+        { notes: 'Cancelled from platform console' },
+      );
+      setTenants((items) => items.map((item) => (
+        item.id === tenant.id ? { ...item, billing: response.data } : item
+      )));
+      message.success('Автопродление отключено');
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      message.error(typeof detail === 'string' ? detail : 'Не удалось отменить подписку');
+    } finally {
+      setBillingActionKey(null);
     }
   };
 
@@ -484,29 +598,10 @@ const PlatformConsole = () => {
   };
 
   const tenantActions = useCallback((tenant: Tenant): TenantActionConfig[] => {
-    const actions: TenantActionConfig[] = [];
-
-    if (tenant.access.mode === 'blocked') {
-      actions.push(
-        {
-          key: 'preview-teacher',
-          label: 'Экран репетитора',
-          icon: <EyeOutlined />,
-          href: `/platform/tenants/${tenant.id}/access-preview/teacher`,
-        },
-        {
-          key: 'preview-student',
-          label: 'Экран ученика',
-          icon: <EyeOutlined />,
-          href: `/platform/tenants/${tenant.id}/access-preview/student`,
-        },
-      );
-    }
-
-    actions.push(
+    return [
       {
         key: 'open',
-        label: tenant.id === tenantId ? 'Открыт' : 'Открыть кабинет',
+        label: tenant.id === tenantId ? 'Открыт' : 'Открыть',
         icon: <LoginOutlined />,
         type: tenant.id === tenantId ? 'default' : 'primary',
         disabled: !tenant.is_active || !canSwitchTenant || tenant.id === tenantId,
@@ -514,34 +609,13 @@ const PlatformConsole = () => {
         onClick: () => handleSwitchTenant(tenant.id),
       },
       {
-        key: 'grant',
-        label: '+30 дней',
-        loading: accessActionKey === `${tenant.id}:grant`,
-        onClick: () => handleAccessAction(tenant, 'grant'),
+        key: 'manage',
+        label: 'Управлять',
+        icon: <SettingOutlined />,
+        onClick: () => setManagingTenantId(tenant.id),
       },
-      {
-        key: 'lifetime',
-        label: 'Вечный',
-        disabled: tenant.access.is_lifetime,
-        loading: accessActionKey === `${tenant.id}:lifetime`,
-        onClick: () => handleAccessAction(tenant, 'lifetime'),
-      },
-      tenant.access.status === 'suspended' ? {
-        key: 'resume',
-        label: 'Resume',
-        loading: accessActionKey === `${tenant.id}:resume`,
-        onClick: () => handleAccessAction(tenant, 'resume'),
-      } : {
-        key: 'suspend',
-        label: 'Suspend',
-        danger: true,
-        loading: accessActionKey === `${tenant.id}:suspend`,
-        onClick: () => handleAccessAction(tenant, 'suspend'),
-      },
-    );
-
-    return actions;
-  }, [accessActionKey, canSwitchTenant, switchingTenantId, tenantId]);
+    ];
+  }, [canSwitchTenant, switchingTenantId, tenantId]);
 
   const activeBroadcasts = useMemo(
     () => broadcasts.filter((campaign) => campaign.status !== 'completed'),
@@ -783,11 +857,15 @@ const PlatformConsole = () => {
                       {tenant.is_active ? 'Активен' : 'Отключён'}
                     </Tag>
                     {accessTag(tenant.access)}
+                    {billingTag(tenant.billing)}
                     {tenant.id === tenantId && <Tag color="blue">Текущий</Tag>}
                   </Space>
                   <div style={{ marginTop: 8, display: 'flex', flexDirection: 'column', gap: 4 }}>
                     <Text type="secondary">ID: {tenant.id} · {tenant.slug}</Text>
                     <Text type="secondary">Доступ: {accessText(tenant.access)}</Text>
+                    {tenant.billing && !tenant.billing.notifications_allowed && (
+                      <Text type="warning">Уведомления отключены биллингом</Text>
+                    )}
                     <Text type="secondary">{tenant.contact_email ?? 'Email не указан'}</Text>
                   </div>
                 </div>
@@ -856,6 +934,7 @@ const PlatformConsole = () => {
                     {tenant.is_active ? 'Активен' : 'Отключён'}
                   </Tag>
                   {accessTag(tenant.access)}
+                  {billingTag(tenant.billing)}
                   {tenant.id === tenantId && <Tag color="blue">Текущий</Tag>}
                 </Space>
               )}
@@ -863,6 +942,9 @@ const PlatformConsole = () => {
                 <Space direction="vertical" size={0}>
                   <Text type="secondary">ID: {tenant.id} · {tenant.slug}</Text>
                   <Text type="secondary">Доступ: {accessText(tenant.access)}</Text>
+                  {tenant.billing && !tenant.billing.notifications_allowed && (
+                    <Text type="warning">Уведомления отключены биллингом</Text>
+                  )}
                   <Text type="secondary">{tenant.contact_email ?? 'Email не указан'}</Text>
                 </Space>
               )}
@@ -1131,6 +1213,167 @@ const PlatformConsole = () => {
               )}
             />
           </>
+        )}
+      </ResponsiveModal>
+
+      <ResponsiveModal
+        title={managingTenant ? `Кабинет: ${managingTenant.name}` : 'Кабинет'}
+        open={managingTenant !== null}
+        footer={null}
+        onCancel={() => setManagingTenantId(null)}
+      >
+        {managingTenant && (
+          <Space direction="vertical" size={18} style={{ width: '100%' }}>
+            <div style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))',
+              gap: 12,
+            }}>
+              <div style={{
+                padding: 14,
+                borderRadius: 12,
+                background: colors.bgSecondary,
+                border: `1px solid ${colors.borderPrimary}`,
+              }}>
+                <Text type="secondary" style={{ display: 'block' }}>Кабинет</Text>
+                <Text strong style={{ display: 'block' }}>{managingTenant.slug}</Text>
+                <Text type="secondary">{managingTenant.contact_email ?? 'Email не указан'}</Text>
+              </div>
+              <div style={{
+                padding: 14,
+                borderRadius: 12,
+                background: colors.bgSecondary,
+                border: `1px solid ${colors.borderPrimary}`,
+              }}>
+                <Text type="secondary" style={{ display: 'block' }}>Доступ</Text>
+                <Space wrap size={6}>
+                  {accessTag(managingTenant.access)}
+                  <Text>{accessText(managingTenant.access)}</Text>
+                </Space>
+              </div>
+              <div style={{
+                padding: 14,
+                borderRadius: 12,
+                background: colors.bgSecondary,
+                border: `1px solid ${colors.borderPrimary}`,
+              }}>
+                <Text type="secondary" style={{ display: 'block' }}>Тариф</Text>
+                {billingTag(managingTenant.billing)}
+                {managingTenant.billing?.current_period_end && (
+                  <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
+                    До {formatDateTime(managingTenant.billing.current_period_end)}
+                  </Text>
+                )}
+              </div>
+            </div>
+
+            {managingTenant.billing && !managingTenant.billing.notifications_allowed && (
+              <Alert
+                type="warning"
+                showIcon
+                message="Уведомления отключены биллингом"
+                description="Активных учеников больше бесплатного лимита, а платная подписка не действует."
+              />
+            )}
+
+            <div>
+              <Title level={5} style={{ marginTop: 0 }}>Подписка</Title>
+              <Form<BillingGrantFormValues>
+                form={billingForm}
+                layout="vertical"
+                initialValues={{ plan_code: 'basic', duration_days: 30 }}
+              >
+                <Form.Item
+                  name="plan_code"
+                  label="Тариф"
+                  rules={[{ required: true, message: 'Выберите тариф' }]}
+                >
+                  <Select options={BILLING_PLAN_OPTIONS} />
+                </Form.Item>
+                <Form.Item
+                  name="duration_days"
+                  label="Срок"
+                  rules={[{ required: true, message: 'Укажите срок' }]}
+                >
+                  <InputNumber min={1} max={3650} addonAfter="дней" style={{ width: '100%' }} />
+                </Form.Item>
+                <Form.Item name="notes" label="Комментарий">
+                  <Input.TextArea rows={2} maxLength={1000} />
+                </Form.Item>
+                <Space wrap>
+                  <Button
+                    type="primary"
+                    icon={<CreditCardOutlined />}
+                    loading={billingActionKey === `${managingTenant.id}:billing-grant`}
+                    onClick={() => handleGrantBilling(managingTenant)}
+                  >
+                    Выдать подписку
+                  </Button>
+                  <Button
+                    danger
+                    loading={billingActionKey === `${managingTenant.id}:billing-cancel`}
+                    onClick={() => handleCancelBilling(managingTenant)}
+                  >
+                    Отменить продление
+                  </Button>
+                </Space>
+              </Form>
+            </div>
+
+            <Divider style={{ margin: 0 }} />
+
+            <div>
+              <Title level={5} style={{ marginTop: 0 }}>Доступ к сервису</Title>
+              <Space wrap>
+                <Button
+                  onClick={() => handleAccessAction(managingTenant, 'grant')}
+                  loading={accessActionKey === `${managingTenant.id}:grant`}
+                >
+                  +30 дней
+                </Button>
+                <Button
+                  disabled={managingTenant.access.is_lifetime}
+                  onClick={() => handleAccessAction(managingTenant, 'lifetime')}
+                  loading={accessActionKey === `${managingTenant.id}:lifetime`}
+                >
+                  Вечный доступ
+                </Button>
+                {managingTenant.access.status === 'suspended' ? (
+                  <Button
+                    onClick={() => handleAccessAction(managingTenant, 'resume')}
+                    loading={accessActionKey === `${managingTenant.id}:resume`}
+                  >
+                    Возобновить
+                  </Button>
+                ) : (
+                  <Button
+                    danger
+                    onClick={() => handleAccessAction(managingTenant, 'suspend')}
+                    loading={accessActionKey === `${managingTenant.id}:suspend`}
+                  >
+                    Приостановить
+                  </Button>
+                )}
+              </Space>
+              <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
+                Возобновление после приостановки не продлевает оплаченный период.
+              </Text>
+            </div>
+
+            {managingTenant.access.mode === 'blocked' && (
+              <>
+                <Divider style={{ margin: 0 }} />
+                <Space wrap>
+                  <Link to={`/platform/tenants/${managingTenant.id}/access-preview/teacher`}>
+                    <Button icon={<EyeOutlined />}>Экран репетитора</Button>
+                  </Link>
+                  <Link to={`/platform/tenants/${managingTenant.id}/access-preview/student`}>
+                    <Button icon={<EyeOutlined />}>Экран ученика</Button>
+                  </Link>
+                </Space>
+              </>
+            )}
+          </Space>
         )}
       </ResponsiveModal>
     </div>

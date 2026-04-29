@@ -36,7 +36,7 @@ const TenantIndicator: React.FC = () => {
 
             setLoading(true);
             try {
-                const response = await api.get<Tenant>(`/tenants/${tenantId}`);
+                const response = await api.get<Tenant>(`/platform/tenants/${tenantId}`);
                 setTenantName(response.data.name);
             } catch (error) {
                 console.error('Failed to fetch tenant name:', error);

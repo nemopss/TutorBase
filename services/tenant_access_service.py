@@ -403,13 +403,34 @@ async def resume_access(
     tenant_id: int,
     *,
     actor_user_id: int | None,
-    days: int = DEFAULT_GRANT_DAYS,
     notes: str | None = None,
 ) -> TenantAccess:
-    return await grant_access(
+    await _get_tenant_or_404(session, tenant_id)
+    access = await ensure_access(session, tenant_id)
+    previous_state = _serialize_state(access)
+    now = utc_now()
+    access_until = _as_aware(access.access_until)
+    grace_until = _as_aware(access.grace_until)
+
+    if access_until is None and grace_until is None:
+        access.status = ACCESS_STATUS_LIFETIME
+    elif access_until and now <= access_until:
+        access.status = ACCESS_STATUS_ACTIVE
+    elif grace_until and now <= grace_until:
+        access.status = ACCESS_STATUS_GRACE
+    else:
+        access.status = ACCESS_STATUS_EXPIRED
+
+    access.updated_by_user_id = actor_user_id
+    access.notes = notes
+    access.updated_at = now
+    await _record_event(
         session,
-        tenant_id,
-        days=days,
+        access=access,
         actor_user_id=actor_user_id,
+        action="resume",
+        previous_state=previous_state,
         notes=notes,
     )
+    await session.flush()
+    return access

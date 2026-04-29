@@ -13,6 +13,7 @@ import {
   Typography,
   Tag,
   message,
+  notification,
   Dropdown,
   Input,
   Form,
@@ -33,6 +34,7 @@ import {
   RollbackOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { isAxiosError } from 'axios';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
@@ -152,10 +154,12 @@ const LearnerProfile: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
-  const { tenantAccess, tenantId } = useAuth();
+  const { tenantAccess, billing, tenantId, refreshBilling } = useAuth();
+  const [notificationApi, notificationContextHolder] = notification.useNotification();
   const requiresTenantContext = tenantId === null;
   const colors = resolvedTheme.colors;
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
+  const canRestoreLearner = canUseFullActions && (billing?.can_restore_learner ?? true);
   
   const learnerId = parseInt(id || '0');
   
@@ -328,6 +332,7 @@ const LearnerProfile: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
+      refreshBilling();
       message.success(t('pages.learners.archiveSuccess', { defaultValue: 'Ученик перемещён в архив' }));
       setIsArchiveModalOpen(false);
     },
@@ -345,10 +350,16 @@ const LearnerProfile: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['learnerDetail', learnerId] });
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
+      refreshBilling();
       message.success(t('pages.learners.restoreSuccess', { defaultValue: 'Ученик возвращён в активные' }));
     },
     onError: (err: Error) => {
-      message.error(t('errors.updateFailed', { message: err.message }));
+      const detail = isAxiosError<{ detail?: unknown }>(err) ? err.response?.data?.detail : null;
+      notificationApi.error({
+        message: 'Не удалось вернуть ученика',
+        description: typeof detail === 'string' ? detail : t('errors.updateFailed', { message: err.message }),
+        placement: 'topRight',
+      });
     },
   });
 
@@ -521,13 +532,29 @@ const LearnerProfile: React.FC = () => {
     message.success(t('common.copied'));
   };
 
+  const showLearnerLimitWarning = () => {
+    notificationApi.warning({
+      message: 'Пока нет места для активного ученика',
+      description: billing
+        ? `На тарифе «${billing.plan_name}» доступно ${billing.active_learners_limit} активных учеников, сейчас уже ${billing.active_learners_count}. Чтобы вернуть ученика, архивируйте неактивного ученика. Данные в архиве сохранятся.`
+        : 'Сейчас не получается вернуть ученика: лимит активных учеников уже заполнен. Можно освободить место, архивировав неактивного ученика.',
+      placement: 'topRight',
+    });
+  };
+
   const menuItems = canUseFullActions ? [
     learner?.is_archived
       ? {
           key: 'restore',
           label: t('pages.learners.restoreAction', { defaultValue: 'Вернуть из архива' }),
           icon: <RollbackOutlined />,
-          onClick: () => restoreMutation.mutate(),
+          onClick: () => {
+            if (!canRestoreLearner) {
+              showLearnerLimitWarning();
+              return;
+            }
+            restoreMutation.mutate();
+          },
         }
       : {
           key: 'archive',
@@ -539,7 +566,12 @@ const LearnerProfile: React.FC = () => {
   ] : [];
 
   if (requiresTenantContext) {
-    return <TenantContextRequired sectionLabel={t('pages.learners.title')} />;
+    return (
+      <>
+        {notificationContextHolder}
+        <TenantContextRequired sectionLabel={t('pages.learners.title')} />
+      </>
+    );
   }
 
   if (isLoading) {
@@ -563,6 +595,7 @@ const LearnerProfile: React.FC = () => {
 
   return (
     <div>
+      {notificationContextHolder}
       <PageHeader
         title={learner.display_name}
         variant="compact"

@@ -1016,7 +1016,7 @@ const getRuleWizardValidation = (values: RuleWizardValues): { step: number; tran
 
 const Notifications: React.FC = () => {
   const { t } = useTranslation();
-  const { tenantId, isSuperAdmin } = useAuth();
+  const { tenantId, isSuperAdmin, billing } = useAuth();
   const queryClient = useQueryClient();
   const [activeTab, setActiveTab] = useState<NotificationsTabKey>('rules');
   const [templateModalOpen, setTemplateModalOpen] = useState(false);
@@ -1029,6 +1029,7 @@ const Notifications: React.FC = () => {
   const [settingsForm] = Form.useForm<NotificationSettingsFormValues>();
   const requiresTenantContext = tenantId === null;
   const isOwnerDebug = isSuperAdmin;
+  const notificationsAllowed = billing?.notifications_allowed ?? true;
 
   useEffect(() => {
     if (!isOwnerDebug && activeTab === 'settings') {
@@ -1440,6 +1441,16 @@ const Notifications: React.FC = () => {
           showIcon
           message={t('pages.notifications.pilotNoticeTitle')}
           description={t('pages.notifications.pilotNoticeDescription')}
+          style={{ marginBottom: 16 }}
+        />
+      )}
+
+      {!notificationsAllowed && (
+        <Alert
+          type="warning"
+          showIcon
+          message="Telegram-уведомления отключены"
+          description="Подписка закончилась, а активных учеников больше бесплатного лимита. Правила и история доступны, но отправка возобновится после продления подписки."
           style={{ marginBottom: 16 }}
         />
       )}

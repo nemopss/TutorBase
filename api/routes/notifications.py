@@ -50,6 +50,7 @@ from api.schemas.notifications import (
 )
 from database import crud
 from database.models import User
+from services import billing_service
 from notifications.application.dto import (
     AudienceSelector,
     CombinedPreviewInstance,
@@ -120,6 +121,15 @@ QUEUE_INSTANCE_STATUSES = (
 )
 
 
+async def _require_notifications_allowed(session: AsyncSession, tenant_id: int) -> None:
+    if await billing_service.notifications_allowed_for_tenant(session, tenant_id):
+        return
+    raise HTTPException(
+        status_code=status.HTTP_402_PAYMENT_REQUIRED,
+        detail="Telegram-уведомления отключены: подписка закончилась, а активных учеников больше лимита тарифа «Старт».",
+    )
+
+
 @router.get("/settings", response_model=NotificationSettingsResponse)
 async def get_notification_settings(
     session: AsyncSession = Depends(get_session),
@@ -170,11 +180,13 @@ async def trigger_notification_job_processing(
 @router.post("/pilot/deliver-now", response_model=NotificationTaskTriggerResponse)
 async def trigger_notification_delivery_tick(
     payload: NotificationTaskTriggerRequest = Body(default=NotificationTaskTriggerRequest()),
+    session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
     __=Depends(require_full_tenant_access),
 ) -> NotificationTaskTriggerResponse:
     tenant_id = _require_tenant_id(current_tenant)
+    await _require_notifications_allowed(session, tenant_id)
     task = deliver_due_notifications_task.delay(tenant_id=tenant_id, limit=payload.limit)
     return NotificationTaskTriggerResponse(
         task_id=task.id,
@@ -309,6 +321,7 @@ async def send_notification_instance_now(
     __=Depends(require_full_tenant_access),
 ) -> NotificationInstanceResponse:
     tenant_id = _require_tenant_id(current_tenant)
+    await _require_notifications_allowed(session, tenant_id)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
     try:
         instance = await ScheduleNotificationInstanceNowUseCase(uow).execute(
