@@ -23,6 +23,7 @@ SUBSCRIPTION_STATUS_PAST_DUE = "past_due"
 SUBSCRIPTION_STATUS_SUSPENDED = "suspended"
 
 PROVIDER_MANUAL = "manual"
+PROVIDER_YOOKASSA = "yookassa"
 
 REASON_ACTIVE = "active"
 REASON_FREE_PLAN = "free_plan"
@@ -356,6 +357,9 @@ async def grant_subscription(
     current_period_end: datetime | None = None,
     grace_until: datetime | None = None,
     provider: str = PROVIDER_MANUAL,
+    provider_customer_id: str | None = None,
+    provider_payment_id: str | None = None,
+    provider_subscription_id: str | None = None,
     actor_user_id: int | None,
     notes: str | None = None,
 ) -> TenantSubscription:
@@ -372,6 +376,9 @@ async def grant_subscription(
     subscription.current_period_end = current_period_end
     subscription.grace_until = grace_until
     subscription.cancel_at_period_end = False
+    subscription.provider_customer_id = provider_customer_id
+    subscription.provider_payment_id = provider_payment_id
+    subscription.provider_subscription_id = provider_subscription_id
     subscription.updated_by_user_id = actor_user_id
     subscription.notes = notes
     subscription.updated_at = now
@@ -429,6 +436,9 @@ def _serialize_subscription(subscription: TenantSubscription | None) -> dict[str
         "plan_code": subscription.plan_code,
         "status": subscription.status,
         "provider": subscription.provider,
+        "provider_customer_id": subscription.provider_customer_id,
+        "provider_payment_id": subscription.provider_payment_id,
+        "provider_subscription_id": subscription.provider_subscription_id,
         "current_period_start": subscription.current_period_start.isoformat() if subscription.current_period_start else None,
         "current_period_end": subscription.current_period_end.isoformat() if subscription.current_period_end else None,
         "grace_until": subscription.grace_until.isoformat() if subscription.grace_until else None,

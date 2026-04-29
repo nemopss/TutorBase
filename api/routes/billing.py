@@ -4,8 +4,15 @@ from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import CurrentTenant, admin_or_teacher_required, get_current_tenant, get_session
-from api.schemas.billing import BillingPlanResponse, BillingSnapshotResponse
-from services import billing_service
+from api.schemas.billing import (
+    BillingCheckoutRequest,
+    BillingCheckoutResponse,
+    BillingPlanResponse,
+    BillingSnapshotResponse,
+    YooKassaWebhookPayload,
+)
+from services import billing_service, yookassa_service
+from services.exceptions import NotFoundError, ServiceError, ValidationError
 
 router = APIRouter()
 
@@ -46,3 +53,47 @@ async def list_billing_plans(
         )
         for plan in plans
     ]
+
+
+@router.post("/checkout", response_model=BillingCheckoutResponse)
+async def create_billing_checkout(
+    payload: BillingCheckoutRequest,
+    session: AsyncSession = Depends(get_session),
+    current_tenant: CurrentTenant = Depends(get_current_tenant),
+    _=Depends(admin_or_teacher_required),
+) -> BillingCheckoutResponse:
+    try:
+        payment = await yookassa_service.create_checkout_payment(
+            session,
+            current_tenant,
+            plan_code=payload.plan_code,
+            billing_period=payload.billing_period,
+        )
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+
+    return BillingCheckoutResponse(
+        payment_id=payment.payment_id,
+        status=payment.status,
+        confirmation_url=payment.confirmation_url,
+    )
+
+
+@router.post("/yookassa/webhook")
+async def receive_yookassa_webhook(
+    payload: YooKassaWebhookPayload,
+    session: AsyncSession = Depends(get_session),
+) -> dict[str, bool]:
+    try:
+        await yookassa_service.process_webhook(session, payload.model_dump())
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+    except ServiceError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return {"ok": True}

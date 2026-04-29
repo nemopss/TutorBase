@@ -35,6 +35,13 @@ class Settings(BaseSettings):
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     MINI_APP_URL: str = "https://app.tutorbase.su/"
 
+    YOOKASSA_SHOP_ID: Optional[str] = None
+    YOOKASSA_SECRET_KEY: Optional[str] = None
+    YOOKASSA_API_URL: str = "https://api.yookassa.ru/v3"
+    YOOKASSA_RETURN_URL: Optional[str] = None
+    YOOKASSA_TEST_MODE: bool = False
+    YOOKASSA_TIMEOUT_SECONDS: float = 15.0
+
     POSTGRESQL_HOST: Optional[str] = None
     POSTGRESQL_PORT: Optional[int] = None
     POSTGRESQL_USER: Optional[str] = None
@@ -100,6 +107,7 @@ class Settings(BaseSettings):
         "NOTIFICATIONS_DELIVERY_GRACE_SECONDS",
         "TENANT_ACCESS_SYNC_INTERVAL_SECONDS",
         "TELEGRAM_REQUEST_TIMEOUT_SECONDS",
+        "YOOKASSA_TIMEOUT_SECONDS",
     )
     @classmethod
     def validate_positive_interval(cls, value):

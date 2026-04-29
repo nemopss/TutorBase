@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -50,3 +50,20 @@ class TenantSubscriptionGrantRequest(BaseModel):
 
 class TenantSubscriptionCancelRequest(BaseModel):
     notes: Optional[str] = Field(None, max_length=1000)
+
+
+class BillingCheckoutRequest(BaseModel):
+    plan_code: str = Field(..., min_length=1, max_length=32)
+    billing_period: Literal["month", "year"] = "month"
+
+
+class BillingCheckoutResponse(BaseModel):
+    payment_id: str
+    status: str
+    confirmation_url: str
+
+
+class YooKassaWebhookPayload(BaseModel):
+    type: str
+    event: str
+    object: dict[str, Any]

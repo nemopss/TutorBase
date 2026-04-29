@@ -1,5 +1,5 @@
-import React from 'react';
-import { Card, Button, Avatar, Space, Typography, Tag } from 'antd';
+import React, { useState } from 'react';
+import { Card, Button, Avatar, Space, Typography, Tag, Select, message } from 'antd';
 import {
   BellOutlined,
   BgColorsOutlined,
@@ -16,8 +16,15 @@ import LanguageSelector from '../components/common/LanguageSelector';
 import ThemeSelector from '../components/common/ThemeSelector';
 import { spacing } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
+import api from '../services/api';
 
 const { Title, Text } = Typography;
+
+const PAID_PLAN_OPTIONS = [
+  { value: 'basic', label: 'Базовый · 349 ₽ · до 10 учеников' },
+  { value: 'pro', label: 'Про · 649 ₽ · до 20 учеников' },
+  { value: 'studio', label: 'Бизнес · 1190 ₽ · до 50 учеников' },
+];
 
 const Settings: React.FC = () => {
   const { t, i18n } = useTranslation();
@@ -26,6 +33,8 @@ const Settings: React.FC = () => {
   const colors = resolvedTheme.colors;
   const isStaff = user?.role === 'teacher' || user?.is_platform_admin;
   const shouldShowAccess = isStaff && tenantAccess && tenantAccess.status !== 'global';
+  const [checkoutPlanCode, setCheckoutPlanCode] = useState('basic');
+  const [isCheckoutLoading, setIsCheckoutLoading] = useState(false);
 
   const formatAccessDate = (value?: string | null) => {
     if (!value) return null;
@@ -125,6 +134,26 @@ const Settings: React.FC = () => {
   const learnerUsageColor = !billing?.can_create_learner
     ? '#fa8c16'
     : colors.accentPrimary;
+
+  const handleCheckout = async () => {
+    setIsCheckoutLoading(true);
+    try {
+      const response = await api.post<{
+        payment_id: string;
+        status: string;
+        confirmation_url: string;
+      }>('/billing/checkout', {
+        plan_code: checkoutPlanCode,
+        billing_period: 'month',
+      });
+      window.location.assign(response.data.confirmation_url);
+    } catch (error: any) {
+      const detail = error?.response?.data?.detail;
+      message.error(typeof detail === 'string' ? detail : 'Не удалось создать платёж');
+    } finally {
+      setIsCheckoutLoading(false);
+    }
+  };
 
   return (
     <div>
@@ -319,8 +348,30 @@ const Settings: React.FC = () => {
                 </div>
               )}
               <Text type="secondary" style={{ display: 'block', marginTop: spacing.md, fontSize: 12 }}>
-                Онлайн-оплата платных тарифов пока не подключена. Сейчас тарифы показываются справочно, доступ управляется сервисной поддержкой.
+                Онлайн-оплата проходит через ЮKassa. Подписка включится после подтверждения платежа.
               </Text>
+              <div style={{
+                display: 'flex',
+                flexWrap: 'wrap',
+                gap: spacing.sm,
+                alignItems: 'center',
+                marginTop: spacing.md,
+              }}>
+                <Select
+                  value={checkoutPlanCode}
+                  options={PAID_PLAN_OPTIONS}
+                  onChange={setCheckoutPlanCode}
+                  style={{ minWidth: 280, maxWidth: '100%' }}
+                />
+                <Button
+                  type="primary"
+                  icon={<CreditCardOutlined />}
+                  loading={isCheckoutLoading}
+                  onClick={handleCheckout}
+                >
+                  Оплатить 30 дней
+                </Button>
+              </div>
             </>
           )}
         </Card>

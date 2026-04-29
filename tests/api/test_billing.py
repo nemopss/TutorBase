@@ -7,7 +7,7 @@ from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import CurrentTenant
-from services import billing_service
+from services import billing_service, yookassa_service
 from tests import factories
 from tests.api.utils import get_auth_headers
 
@@ -149,3 +149,100 @@ async def test_active_paid_subscription_uses_paid_limit(
     assert body["active_learners_limit"] == 10
     assert body["can_create_learner"] is True
     assert body["notifications_allowed"] is True
+
+
+@pytest.mark.asyncio
+async def test_billing_checkout_creates_yookassa_payment(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    async def fake_request(method, path, *, json=None, idempotence_key=None):
+        assert method == "POST"
+        assert path == "/payments"
+        assert idempotence_key
+        assert json["amount"] == {"value": "349.00", "currency": "RUB"}
+        assert json["capture"] is True
+        assert json["metadata"]["tenant_id"] == str(current_tenant.tenant_id)
+        assert json["metadata"]["plan_code"] == billing_service.PLAN_BASIC
+        return {
+            "id": "test-payment-id",
+            "status": "pending",
+            "confirmation": {"confirmation_url": "https://yoomoney.ru/checkout/payments/test"},
+        }
+
+    monkeypatch.setattr(yookassa_service, "_request_yookassa", fake_request)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.post(
+        "/api/v1/billing/checkout",
+        json={"plan_code": billing_service.PLAN_BASIC, "billing_period": "month"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json() == {
+        "payment_id": "test-payment-id",
+        "status": "pending",
+        "confirmation_url": "https://yoomoney.ru/checkout/payments/test",
+    }
+
+
+@pytest.mark.asyncio
+async def test_yookassa_payment_succeeded_webhook_activates_subscription(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    payment_id = "test-payment-id"
+
+    async def fake_get_payment(payment_id_arg: str):
+        assert payment_id_arg == payment_id
+        return {
+            "id": payment_id,
+            "status": "succeeded",
+            "paid": True,
+            "amount": {"value": "349.00", "currency": "RUB"},
+            "metadata": {
+                "tenant_id": str(current_tenant.tenant_id),
+                "plan_code": billing_service.PLAN_BASIC,
+                "billing_period": "month",
+                "duration_days": "30",
+            },
+        }
+
+    monkeypatch.setattr(yookassa_service, "get_payment", fake_get_payment)
+
+    response = await client.post(
+        "/api/v1/billing/yookassa/webhook",
+        json={
+            "type": "notification",
+            "event": "payment.succeeded",
+            "object": {"id": payment_id},
+        },
+    )
+
+    assert response.status_code == 200
+    subscription = await billing_service.get_subscription(db_session, current_tenant.tenant_id)
+    assert subscription is not None
+    assert subscription.plan_code == billing_service.PLAN_BASIC
+    assert subscription.status == billing_service.SUBSCRIPTION_STATUS_ACTIVE
+    assert subscription.provider == billing_service.PROVIDER_YOOKASSA
+    assert subscription.provider_payment_id == payment_id
+    assert subscription.current_period_end is not None
+    period_end = subscription.current_period_end
+
+    duplicate_response = await client.post(
+        "/api/v1/billing/yookassa/webhook",
+        json={
+            "type": "notification",
+            "event": "payment.succeeded",
+            "object": {"id": payment_id},
+        },
+    )
+
+    assert duplicate_response.status_code == 200
+    duplicate_subscription = await billing_service.get_subscription(db_session, current_tenant.tenant_id)
+    assert duplicate_subscription.current_period_end == period_end
