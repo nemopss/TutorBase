@@ -410,7 +410,7 @@ const Settings: React.FC = () => {
                     <div style={{ display: 'grid', gap: 4 }}>
                       {checkoutPreview?.billing_action === 'upgrade' && (
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          Зачтём неиспользованный остаток текущего тарифа: {formatCurrency(checkoutPreview.credit_amount)}.
+                          Остаток текущего тарифа учтён: {formatCurrency(checkoutPreview.credit_amount)}. Доплата считается за оставшиеся оплаченные дни.
                         </Text>
                       )}
                       <Text type={checkoutPreviewError ? 'danger' : 'secondary'} style={{ fontSize: 12 }}>

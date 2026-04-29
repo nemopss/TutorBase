@@ -215,11 +215,11 @@ async def test_billing_checkout_prorates_upgrade(
     monkeypatch.setattr(billing_service, "utc_now", lambda: fixed_now)
 
     async def fake_request(method, path, *, json=None, idempotence_key=None):
-        assert json["amount"] == {"value": "474.50", "currency": "RUB"}
+        assert json["amount"] == {"value": "150.00", "currency": "RUB"}
         assert json["metadata"]["billing_action"] == "upgrade"
         assert json["metadata"]["previous_plan_code"] == billing_service.PLAN_BASIC
         assert json["metadata"]["credit_amount"] == "174.50"
-        assert json["metadata"]["charged_amount"] == "474.50"
+        assert json["metadata"]["charged_amount"] == "150.00"
         assert json["metadata"]["period_end"] == period_end.isoformat()
         return {
             "id": "upgrade-payment-id",
@@ -243,11 +243,118 @@ async def test_billing_checkout_prorates_upgrade(
 
     assert preview_response.status_code == 200
     assert preview_response.json()["billing_action"] == "upgrade"
-    assert preview_response.json()["amount_due"] == "474.50"
+    assert preview_response.json()["amount_due"] == "150.00"
     assert preview_response.json()["credit_amount"] == "174.50"
     assert checkout_response.status_code == 200
-    assert checkout_response.json()["amount_due"] == "474.50"
+    assert checkout_response.json()["amount_due"] == "150.00"
     assert checkout_response.json()["billing_action"] == "upgrade"
+
+
+@pytest.mark.asyncio
+async def test_billing_checkout_charges_upgrade_difference_for_extended_paid_period(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fixed_now = datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc)
+    period_start = fixed_now - timedelta(days=15)
+    period_end = fixed_now + timedelta(days=45)
+    await billing_service.grant_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        plan_code=billing_service.PLAN_BASIC,
+        status=billing_service.SUBSCRIPTION_STATUS_ACTIVE,
+        current_period_start=period_start,
+        current_period_end=period_end,
+        actor_user_id=None,
+        notes="extended basic subscription",
+    )
+    await db_session.commit()
+    monkeypatch.setattr(billing_service, "utc_now", lambda: fixed_now)
+
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.post(
+        "/api/v1/billing/checkout/preview",
+        json={"plan_code": billing_service.PLAN_PRO, "billing_period": "month"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["billing_action"] == "upgrade"
+    assert body["amount_due"] == "450.00"
+    assert body["credit_amount"] == "523.50"
+    assert body["resulting_period_end"] == "2026-06-13T12:00:00Z"
+
+
+@pytest.mark.asyncio
+async def test_billing_checkout_allows_renewal_until_two_periods_ahead(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fixed_now = datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc)
+    current_period_end = fixed_now + timedelta(days=30)
+    await billing_service.grant_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        plan_code=billing_service.PLAN_BASIC,
+        status=billing_service.SUBSCRIPTION_STATUS_ACTIVE,
+        current_period_start=fixed_now,
+        current_period_end=current_period_end,
+        actor_user_id=None,
+        notes="active basic subscription",
+    )
+    await db_session.commit()
+    monkeypatch.setattr(billing_service, "utc_now", lambda: fixed_now)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.post(
+        "/api/v1/billing/checkout/preview",
+        json={"plan_code": billing_service.PLAN_BASIC, "billing_period": "month"},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["billing_action"] == "renewal"
+    assert body["amount_due"] == "349.00"
+    assert body["resulting_period_end"] == "2026-06-28T12:00:00Z"
+
+
+@pytest.mark.asyncio
+async def test_billing_checkout_rejects_renewal_more_than_two_periods_ahead(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+    monkeypatch: pytest.MonkeyPatch,
+):
+    fixed_now = datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc)
+    await billing_service.grant_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        plan_code=billing_service.PLAN_BASIC,
+        status=billing_service.SUBSCRIPTION_STATUS_ACTIVE,
+        current_period_start=fixed_now,
+        current_period_end=fixed_now + timedelta(days=31),
+        actor_user_id=None,
+        notes="active basic subscription",
+    )
+    await db_session.commit()
+    monkeypatch.setattr(billing_service, "utc_now", lambda: fixed_now)
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.post(
+        "/api/v1/billing/checkout/preview",
+        json={"plan_code": billing_service.PLAN_BASIC, "billing_period": "month"},
+        headers=headers,
+    )
+
+    assert response.status_code == 400
+    assert "Продление доступно ближе" in response.json()["detail"]
 
 
 @pytest.mark.asyncio
@@ -309,14 +416,14 @@ async def test_yookassa_upgrade_webhook_keeps_existing_period_end(
             "id": payment_id,
             "status": "succeeded",
             "paid": True,
-            "amount": {"value": "474.50", "currency": "RUB"},
+            "amount": {"value": "150.00", "currency": "RUB"},
             "metadata": {
                 "tenant_id": str(current_tenant.tenant_id),
                 "plan_code": billing_service.PLAN_PRO,
                 "billing_period": "month",
                 "billing_action": "upgrade",
                 "duration_days": "30",
-                "charged_amount": "474.50",
+                "charged_amount": "150.00",
                 "full_amount": "649.00",
                 "credit_amount": "174.50",
                 "period_start": fixed_now.isoformat(),

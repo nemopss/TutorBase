@@ -96,13 +96,13 @@ def _is_active_paid_subscription(subscription, now) -> bool:
     return period_end is not None and period_end > now
 
 
-def _prorated_credit(*, current_amount: Decimal, period_start, period_end, now) -> Decimal:
-    period_seconds = int((period_end - period_start).total_seconds())
+def _prorated_period_amount(*, amount: Decimal, billing_period: str, period_end, now) -> Decimal:
     remaining_seconds = int((period_end - now).total_seconds())
-    if period_seconds <= 0 or remaining_seconds <= 0:
+    if remaining_seconds <= 0:
         return Decimal("0.00")
-    credit = current_amount * Decimal(remaining_seconds) / Decimal(period_seconds)
-    return min(current_amount, _money(credit))
+    period_seconds = _period_days(billing_period) * 24 * 60 * 60
+    prorated_amount = amount * Decimal(remaining_seconds) / Decimal(period_seconds)
+    return _money(prorated_amount)
 
 
 async def create_checkout_quote(
@@ -148,6 +148,14 @@ async def create_checkout_quote(
     current_plan = await billing_service.get_plan(session, subscription.plan_code)
     current_period_end = billing_service._as_aware(subscription.current_period_end)
     if subscription.plan_code == plan.code:
+        resulting_period_start = current_period_end
+        resulting_period_end = current_period_end + timedelta(days=days)
+        max_renewal_period_end = now + timedelta(days=days * 2)
+        if resulting_period_end > max_renewal_period_end:
+            raise ValidationError(
+                "Продление доступно ближе к окончанию текущего периода. "
+                f"Сейчас подписку можно продлить максимум до {(max_renewal_period_end.date()).isoformat()}."
+            )
         return CheckoutQuote(
             plan_code=plan.code,
             plan_name=plan.name,
@@ -158,26 +166,31 @@ async def create_checkout_quote(
             credit_amount=Decimal("0.00"),
             current_plan_code=current_plan.code,
             current_plan_name=current_plan.name,
-            resulting_period_start=current_period_end,
-            resulting_period_end=current_period_end + timedelta(days=days),
+            resulting_period_start=resulting_period_start,
+            resulting_period_end=resulting_period_end,
             message=f"Продлим тариф «{plan.name}» ещё на 30 дней от текущей даты окончания.",
         )
 
     if plan.display_order < current_plan.display_order:
         raise ValidationError("Переход на тариф ниже доступен после окончания текущего оплаченного периода")
 
-    current_period_start = billing_service._as_aware(subscription.current_period_start)
-    if current_period_start is None or current_period_end is None:
+    if current_period_end is None:
         raise ValidationError("Cannot calculate prorated upgrade for the current subscription")
 
     current_amount = _plan_amount(current_plan, billing_period)
-    credit_amount = _prorated_credit(
-        current_amount=current_amount,
-        period_start=current_period_start,
+    target_remaining_amount = _prorated_period_amount(
+        amount=full_amount,
+        billing_period=billing_period,
         period_end=current_period_end,
         now=now,
     )
-    amount_due = max(Decimal("1.00"), _money(full_amount - credit_amount))
+    credit_amount = _prorated_period_amount(
+        amount=current_amount,
+        billing_period=billing_period,
+        period_end=current_period_end,
+        now=now,
+    )
+    amount_due = max(Decimal("1.00"), _money(target_remaining_amount - credit_amount))
     return CheckoutQuote(
         plan_code=plan.code,
         plan_name=plan.name,
@@ -192,7 +205,7 @@ async def create_checkout_quote(
         resulting_period_end=current_period_end,
         message=(
             f"Перейдём с «{current_plan.name}» на «{plan.name}» сразу. "
-            f"Неиспользованный остаток зачтён в сумме оплаты."
+            f"Доплата рассчитана за оставшиеся дни текущего оплаченного периода."
         ),
     )
 
