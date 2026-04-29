@@ -371,6 +371,41 @@ async def grant_lifetime_access(
     return access
 
 
+async def set_access_until(
+    session: AsyncSession,
+    tenant_id: int,
+    *,
+    days_from_now: int,
+    actor_user_id: int | None,
+    notes: str | None = None,
+) -> TenantAccess:
+    await _get_tenant_or_404(session, tenant_id)
+    access = await ensure_access(session, tenant_id, default_status=ACCESS_STATUS_ACTIVE)
+    previous_state = _serialize_state(access)
+    now = utc_now()
+    access_until = now + timedelta(days=days_from_now)
+    access.status = ACCESS_STATUS_ACTIVE if days_from_now >= 0 else ACCESS_STATUS_EXPIRED
+    access.access_until = access_until
+    access.grace_until = (
+        access_until + timedelta(days=DEFAULT_GRACE_DAYS)
+        if days_from_now >= 0
+        else access_until
+    )
+    access.updated_by_user_id = actor_user_id
+    access.notes = notes
+    access.updated_at = now
+    await _record_event(
+        session,
+        access=access,
+        actor_user_id=actor_user_id,
+        action="set_until",
+        previous_state=previous_state,
+        notes=notes,
+    )
+    await session.flush()
+    return access
+
+
 async def suspend_access(
     session: AsyncSession,
     tenant_id: int,

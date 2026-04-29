@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from datetime import datetime
-from typing import Optional
+from typing import Any, Optional
 
 from pydantic import BaseModel, Field, field_validator
 
@@ -32,6 +32,21 @@ class PlatformTenantResponse(BaseModel):
     billing: Optional[BillingSnapshotResponse] = None
 
 
+class PlatformTenantEventResponse(BaseModel):
+    id: int
+    domain: str
+    action: str
+    actor_user_id: Optional[int] = None
+    previous_state: Optional[dict[str, Any]] = None
+    new_state: Optional[dict[str, Any]] = None
+    notes: Optional[str] = None
+    created_at: datetime
+
+
+class PlatformTenantEventsResponse(BaseModel):
+    items: list[PlatformTenantEventResponse]
+
+
 class TenantAccessSyncResponse(BaseModel):
     grace_started: int
     expired: int
@@ -40,6 +55,11 @@ class TenantAccessSyncResponse(BaseModel):
 
 class TenantAccessGrantRequest(BaseModel):
     days: int = Field(30, ge=1, le=3650)
+    notes: Optional[str] = Field(None, max_length=1000)
+
+
+class TenantAccessSetRequest(BaseModel):
+    days_from_now: int = Field(..., ge=-3650, le=3650)
     notes: Optional[str] = Field(None, max_length=1000)
 
 

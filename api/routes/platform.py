@@ -15,16 +15,19 @@ from api.schemas import (
     BroadcastSendRequest,
     PaginatedResponse,
     PaginationParams,
+    PlatformTenantEventResponse,
+    PlatformTenantEventsResponse,
     PlatformTenantResponse,
     TenantAccessActionRequest,
     TenantAccessGrantRequest,
     TenantAccessResponse,
+    TenantAccessSetRequest,
     TenantAccessSyncResponse,
     TenantSubscriptionCancelRequest,
     TenantSubscriptionGrantRequest,
     BillingSnapshotResponse,
 )
-from database.models import BroadcastCampaign, BroadcastRecipient, Tenant, TenantAccess, User
+from database.models import BillingEvent, BroadcastCampaign, BroadcastRecipient, Tenant, TenantAccess, TenantAccessEvent, User
 from services import broadcast_service
 from services import billing_service
 from services import tenant_access_service
@@ -124,6 +127,19 @@ def _broadcast_audience_user_response(
         display_name=user.display_name,
         username=user.username,
         is_platform_admin=user.is_platform_admin,
+    )
+
+
+def _platform_event_response(event: BillingEvent | TenantAccessEvent, *, domain: str) -> PlatformTenantEventResponse:
+    return PlatformTenantEventResponse(
+        id=event.id,
+        domain=domain,
+        action=event.action,
+        actor_user_id=event.actor_user_id,
+        previous_state=event.previous_state,
+        new_state=event.new_state,
+        notes=event.notes,
+        created_at=event.created_at,
     )
 
 
@@ -355,6 +371,43 @@ async def get_platform_tenant(
     )
 
 
+@router.get("/tenants/{tenant_id}/events", response_model=PlatformTenantEventsResponse)
+async def get_platform_tenant_events(
+    tenant_id: int,
+    limit: int = Query(10, ge=1, le=50),
+    session: AsyncSession = Depends(get_session),
+    _=Depends(admin_required),
+) -> PlatformTenantEventsResponse:
+    tenant = await session.get(Tenant, tenant_id)
+    if not tenant:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Tenant not found")
+
+    access_result = await session.execute(
+        select(TenantAccessEvent)
+        .where(TenantAccessEvent.tenant_id == tenant_id)
+        .order_by(TenantAccessEvent.created_at.desc(), TenantAccessEvent.id.desc())
+        .limit(limit)
+    )
+    billing_result = await session.execute(
+        select(BillingEvent)
+        .where(BillingEvent.tenant_id == tenant_id)
+        .order_by(BillingEvent.created_at.desc(), BillingEvent.id.desc())
+        .limit(limit)
+    )
+    events = [
+        *[
+            _platform_event_response(event, domain="access")
+            for event in access_result.scalars().all()
+        ],
+        *[
+            _platform_event_response(event, domain="billing")
+            for event in billing_result.scalars().all()
+        ],
+    ]
+    events.sort(key=lambda event: event.created_at, reverse=True)
+    return PlatformTenantEventsResponse(items=events[:limit])
+
+
 @router.post("/access/sync", response_model=TenantAccessSyncResponse)
 async def sync_platform_tenant_access(
     session: AsyncSession = Depends(get_session),
@@ -386,6 +439,29 @@ async def grant_tenant_access(
             session,
             tenant_id,
             days=payload.days,
+            actor_user_id=current_user.id,
+            notes=payload.notes,
+        )
+        await session.commit()
+    except NotFoundError as exc:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
+
+    return _access_response(access, tenant_id=tenant_id)
+
+
+@router.post("/tenants/{tenant_id}/access/set", response_model=TenantAccessResponse)
+async def set_tenant_access_until(
+    tenant_id: int,
+    payload: TenantAccessSetRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+    _=Depends(admin_required),
+) -> TenantAccessResponse:
+    try:
+        access = await tenant_access_service.set_access_until(
+            session,
+            tenant_id,
+            days_from_now=payload.days_from_now,
             actor_user_id=current_user.id,
             notes=payload.notes,
         )

@@ -210,11 +210,20 @@ async def test_platform_access_actions_update_state_and_audit(
     assert lifetime_response.json()["status"] == ACCESS_STATUS_LIFETIME
     assert lifetime_response.json()["is_lifetime"] is True
 
+    set_response = await client.post(
+        f"/api/v1/platform/tenants/{tenant_1.id}/access/set",
+        json={"days_from_now": -1, "notes": "expired for test"},
+        headers=headers,
+    )
+    assert set_response.status_code == 200
+    assert set_response.json()["status"] == ACCESS_STATUS_EXPIRED
+    assert set_response.json()["is_lifetime"] is False
+
     events_result = await db_session.execute(
         select(TenantAccessEvent).where(TenantAccessEvent.tenant_id == tenant_1.id)
     )
     actions = [event.action for event in events_result.scalars().all()]
-    assert actions == ["grant", "suspend", "grant_lifetime"]
+    assert actions == ["grant", "suspend", "grant_lifetime", "set_until"]
 
 
 @pytest.mark.asyncio
@@ -274,6 +283,44 @@ async def test_platform_can_grant_tenant_subscription(
     assert body["plan_name"] == "Базовый"
     assert body["active_learners_limit"] == 10
     assert body["notifications_allowed"] is True
+
+
+@pytest.mark.asyncio
+async def test_platform_tenant_events_include_access_and_billing_changes(
+    client: AsyncClient,
+    super_admin_user: User,
+    tenant_1: Tenant,
+):
+    headers = auth_headers(super_admin_user)
+
+    await client.post(
+        f"/api/v1/platform/tenants/{tenant_1.id}/access/grant",
+        json={"days": 10, "notes": "access test"},
+        headers=headers,
+    )
+    await client.post(
+        f"/api/v1/platform/tenants/{tenant_1.id}/billing/grant",
+        json={
+            "plan_code": "pro",
+            "status": "manual",
+            "current_period_start": utc_now().isoformat(),
+            "current_period_end": (utc_now() + timedelta(days=15)).isoformat(),
+            "notes": "billing test",
+        },
+        headers=headers,
+    )
+
+    response = await client.get(
+        f"/api/v1/platform/tenants/{tenant_1.id}/events",
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    items = response.json()["items"]
+    assert {item["domain"] for item in items} == {"access", "billing"}
+    notes = {item["notes"] for item in items}
+    assert "access test" in notes
+    assert "billing test" in notes
 
 
 @pytest.mark.asyncio
