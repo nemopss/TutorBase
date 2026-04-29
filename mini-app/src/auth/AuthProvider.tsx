@@ -533,10 +533,6 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
 
       // Setup new refresh timer
       setupTokenRefresh(access_token, authMode);
-
-      // Reload the page to refresh all data
-      console.log('[AuthProvider] Reloading page to apply new tenant context...');
-      window.location.reload();
     } catch (err: any) {
       console.error('[AuthProvider] Tenant switch failed:', err);
       throw new Error(err?.response?.data?.detail || 'Failed to switch tenant');

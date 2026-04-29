@@ -321,6 +321,8 @@ const PlatformConsole = () => {
     setSwitchingTenantId(switchKey);
     try {
       await switchTenant(targetTenantId);
+      message.success(targetTenantId === null ? 'Контекст сброшен' : 'Контекст кабинета изменён');
+      setSwitchingTenantId(null);
     } catch (error: any) {
       message.error(error?.message ?? 'Не удалось сменить контекст');
       setSwitchingTenantId(null);

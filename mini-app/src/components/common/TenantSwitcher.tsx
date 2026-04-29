@@ -73,12 +73,12 @@ const TenantSwitcher: React.FC<TenantSwitcherProps> = ({ fullWidth = false }) =>
         setSwitching(true);
         try {
             await switchTenant(targetTenantId);
-            // Page will reload after successful switch
             message.success(
                 targetTenantId === null
                     ? 'Switched to global view'
                     : `Switched to ${tenants.find(t => t.id === targetTenantId)?.name}`
             );
+            setSwitching(false);
         } catch (error: any) {
             console.error('Tenant switch failed:', error);
             message.error(error.message || 'Failed to switch tenant');
