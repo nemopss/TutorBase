@@ -286,6 +286,32 @@ async def test_platform_can_grant_tenant_subscription(
 
 
 @pytest.mark.asyncio
+async def test_platform_can_grant_lifetime_paid_subscription(
+    client: AsyncClient,
+    super_admin_user: User,
+    tenant_1: Tenant,
+):
+    response = await client.post(
+        f"/api/v1/platform/tenants/{tenant_1.id}/billing/grant",
+        json={
+            "plan_code": "pro",
+            "status": "manual",
+            "current_period_start": utc_now().isoformat(),
+            "current_period_end": None,
+            "notes": "manual lifetime grant",
+        },
+        headers=auth_headers(super_admin_user),
+    )
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan_code"] == "pro"
+    assert body["subscription_status"] == "manual"
+    assert body["current_period_end"] is None
+    assert body["active_learners_limit"] == 20
+
+
+@pytest.mark.asyncio
 async def test_platform_tenant_events_include_access_and_billing_changes(
     client: AsyncClient,
     super_admin_user: User,

@@ -13,7 +13,6 @@ import {
   Select,
   Space,
   Spin,
-  Switch,
   Tag,
   Typography,
   message,
@@ -209,7 +208,7 @@ const BILLING_PLAN_OPTIONS = [
 ];
 
 const BILLING_STATUS_OPTIONS = [
-  { value: 'manual', label: 'manual · действует по дате окончания' },
+  { value: 'manual', label: 'manual · ручная подписка' },
   { value: 'active', label: 'active · активная подписка' },
   { value: 'canceled', label: 'canceled · действует до конца периода' },
   { value: 'past_due', label: 'past_due · льготный период' },
@@ -218,6 +217,7 @@ const BILLING_STATUS_OPTIONS = [
 
 const BILLING_SCENARIO_OPTIONS = [
   { value: 'active_custom', label: 'Активна до выбранной даты' },
+  { value: 'lifetime', label: 'Бессрочная подписка' },
   { value: 'expired_yesterday', label: 'Уже закончилась вчера' },
   { value: 'ends_today', label: 'Закончится сегодня' },
   { value: 'canceled_at_period_end', label: 'Отменена, доступ до конца периода' },
@@ -261,8 +261,6 @@ const PlatformConsole = () => {
   const [isLoadingAudienceUsers, setIsLoadingAudienceUsers] = useState(false);
   const [tenantEvents, setTenantEvents] = useState<PlatformTenantEvent[]>([]);
   const [isLoadingTenantEvents, setIsLoadingTenantEvents] = useState(false);
-  const [accessOffsetDays, setAccessOffsetDays] = useState(30);
-
   const activeTenant = useMemo(
     () => tenants.find((tenant) => tenant.id === tenantId) ?? null,
     [tenantId, tenants],
@@ -277,7 +275,7 @@ const PlatformConsole = () => {
     if (billing.subscription_status === 'suspended') return 'suspended';
     if (billing.subscription_status === 'past_due') return 'past_due';
     if (billing.subscription_status === 'canceled') return 'canceled_at_period_end';
-    if (!billing.current_period_end) return 'active_custom';
+    if (!billing.current_period_end) return 'lifetime';
 
     const daysLeft = Math.ceil((new Date(billing.current_period_end).getTime() - Date.now()) / (1000 * 60 * 60 * 24));
     if (daysLeft < 0) return 'expired_yesterday';
@@ -293,12 +291,6 @@ const PlatformConsole = () => {
     const periodEndOffsetDays = periodEnd
       ? Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
       : 30;
-    const accessEnd = managingTenant.access.access_until
-      ? new Date(managingTenant.access.access_until)
-      : null;
-    const accessEndOffsetDays = accessEnd
-      ? Math.ceil((accessEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-      : 30;
     billingForm.setFieldsValue({
       plan_code: managingTenant.billing?.subscription_plan_code ?? managingTenant.billing?.plan_code ?? 'basic',
       scenario: inferBillingScenario(managingTenant.billing),
@@ -306,7 +298,6 @@ const PlatformConsole = () => {
       period_end_offset_days: periodEndOffsetDays,
       notes: '',
     });
-    setAccessOffsetDays(managingTenant.access.is_lifetime ? 30 : accessEndOffsetDays);
   }, [billingForm, managingTenant]);
 
   const surfaceStyle = {
@@ -452,11 +443,11 @@ const PlatformConsole = () => {
 
   const accessTag = (access: TenantAccess) => {
     const statusMap: Record<string, { label: string; color: string }> = {
-      trial: { label: 'Триал', color: 'blue' },
-      active: { label: 'Оплачен', color: 'green' },
+      trial: { label: 'Legacy trial', color: 'blue' },
+      active: { label: 'Доступ активен', color: 'green' },
       grace: { label: 'Grace', color: 'gold' },
       expired: { label: 'Истёк', color: 'red' },
-      lifetime: { label: 'Вечный', color: 'purple' },
+      lifetime: { label: 'Открыт', color: 'purple' },
       suspended: { label: 'Suspended', color: 'volcano' },
     };
     const item = statusMap[access.status] ?? { label: access.status, color: 'default' };
@@ -464,7 +455,7 @@ const PlatformConsole = () => {
   };
 
   const accessText = (access: TenantAccess) => {
-    if (access.is_lifetime) return 'без срока';
+    if (access.is_lifetime) return 'без даты окончания';
     const accessUntil = formatAccessDate(access.access_until);
     const graceUntil = formatAccessDate(access.grace_until);
     if (access.status === 'expired') return accessUntil ? `истёк ${accessUntil}` : 'истёк';
@@ -489,9 +480,11 @@ const PlatformConsole = () => {
     const planOption = BILLING_PLAN_OPTIONS.find((plan) => plan.value === planCode);
     const scenario = values.scenario ?? 'active_custom';
     const offsetDays = Number(values.period_end_offset_days ?? 30);
+    const isLifetime = scenario === 'lifetime';
     const status = scenario === 'canceled_at_period_end' ? 'canceled'
       : scenario === 'past_due' ? 'past_due'
         : scenario === 'suspended' ? 'suspended'
+          : isLifetime ? 'manual'
           : scenario === 'active_custom' ? (values.status ?? 'manual')
             : 'manual';
     const periodEnd = new Date();
@@ -502,6 +495,7 @@ const PlatformConsole = () => {
       status,
       offsetDays,
       periodEnd,
+      isLifetime,
       effectiveText: willUsePaidPlan
         ? `Лимиты будут от тарифа ${planOption?.label.split(' · ')[0] ?? planCode}`
         : 'Эффективно будет бесплатный Старт / ограничения',
@@ -585,30 +579,6 @@ const PlatformConsole = () => {
     }
   };
 
-  const handleSetAccessUntil = async (tenant: Tenant, daysFromNow: number) => {
-    const key = `${tenant.id}:access-set`;
-    setAccessActionKey(key);
-    try {
-      const response = await api.post<TenantAccess>(
-        `/platform/tenants/${tenant.id}/access/set`,
-        {
-          days_from_now: daysFromNow,
-          notes: `Set from platform console: ${daysFromNow} days from now`,
-        },
-      );
-      setTenants((items) => items.map((item) => (
-        item.id === tenant.id ? { ...item, access: response.data } : item
-      )));
-      fetchTenantEvents(tenant.id);
-      message.success('Доступ обновлён');
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось обновить доступ');
-    } finally {
-      setAccessActionKey(null);
-    }
-  };
-
   const applyBillingScenario = (scenario: string) => {
     const updates: Partial<BillingGrantFormValues> = { scenario };
     if (scenario === 'expired_yesterday') {
@@ -617,6 +587,9 @@ const PlatformConsole = () => {
     } else if (scenario === 'ends_today') {
       updates.status = 'manual';
       updates.period_end_offset_days = 0;
+    } else if (scenario === 'lifetime') {
+      updates.status = 'manual';
+      updates.period_end_offset_days = 30;
     } else if (scenario === 'canceled_at_period_end') {
       updates.status = 'canceled';
       updates.period_end_offset_days = Math.max(billingForm.getFieldValue('period_end_offset_days') ?? 30, 1);
@@ -652,8 +625,10 @@ const PlatformConsole = () => {
     try {
       const now = new Date();
       const isStartPlan = values.plan_code === 'start';
+      const isLifetimeSubscription = !isStartPlan && values.scenario === 'lifetime';
       const status = values.scenario === 'active_custom' ? values.status : (
-        values.scenario === 'canceled_at_period_end' ? 'canceled'
+        values.scenario === 'lifetime' ? 'manual'
+          : values.scenario === 'canceled_at_period_end' ? 'canceled'
           : values.scenario === 'past_due' ? 'past_due'
             : values.scenario === 'suspended' ? 'suspended'
               : 'manual'
@@ -669,8 +644,8 @@ const PlatformConsole = () => {
         {
           plan_code: values.plan_code,
           status: isStartPlan ? 'active' : status,
-          current_period_start: isStartPlan ? null : periodStart.toISOString(),
-          current_period_end: isStartPlan ? null : periodEnd.toISOString(),
+          current_period_start: isStartPlan ? null : (isLifetimeSubscription ? now.toISOString() : periodStart.toISOString()),
+          current_period_end: isStartPlan || isLifetimeSubscription ? null : periodEnd.toISOString(),
           grace_until: !isStartPlan && status === 'past_due' ? graceUntil.toISOString() : null,
           notes: values.notes || null,
         },
@@ -1468,9 +1443,11 @@ const PlatformConsole = () => {
               }}>
                 <Text type="secondary" style={{ display: 'block' }}>Тариф</Text>
                 {billingTag(managingTenant.billing)}
-                {managingTenant.billing?.current_period_end && (
+                {managingTenant.billing && (
                   <Text type="secondary" style={{ display: 'block', marginTop: 4 }}>
-                    До {formatDateTime(managingTenant.billing.current_period_end)}
+                    {managingTenant.billing.current_period_end
+                      ? `До ${formatDateTime(managingTenant.billing.current_period_end)}`
+                      : 'Бессрочно'}
                   </Text>
                 )}
               </div>
@@ -1529,10 +1506,12 @@ const PlatformConsole = () => {
                   name="period_end_offset_days"
                   label="Когда закончится"
                   extra="10 = через 10 дней, 0 = сегодня, -1 = уже закончилась вчера."
-                  rules={[{ required: true, message: 'Укажите дату окончания относительно сегодня' }]}
+                  rules={billingFormValues?.scenario === 'lifetime' ? [] : [{ required: true, message: 'Укажите дату окончания относительно сегодня' }]}
+                  hidden={billingFormValues?.scenario === 'lifetime'}
                 >
                   <InputNumber min={-3650} max={3650} addonAfter="дней от сегодня" style={{ width: '100%' }} />
                 </Form.Item>
+                {billingFormValues?.scenario !== 'lifetime' && (
                 <Space wrap size={6} style={{ marginTop: -12, marginBottom: 16 }}>
                   {[
                     { label: 'Вчера', value: -1 },
@@ -1550,6 +1529,7 @@ const PlatformConsole = () => {
                     </Button>
                   ))}
                 </Space>
+                )}
                 <Collapse
                   ghost
                   size="small"
@@ -1581,7 +1561,9 @@ const PlatformConsole = () => {
                       {billingPreview.planLabel} · {billingPreview.status}
                     </Text>
                     <Text type="secondary" style={{ display: 'block' }}>
-                      Окончание: {formatDateTime(billingPreview.periodEnd.toISOString())} ({billingPreview.offsetDays} дней от сегодня)
+                      {billingPreview.isLifetime
+                        ? 'Окончание: бессрочно'
+                        : `Окончание: ${formatDateTime(billingPreview.periodEnd.toISOString())} (${billingPreview.offsetDays} дней от сегодня)`}
                     </Text>
                     <Text type="secondary" style={{ display: 'block' }}>
                       {billingPreview.effectiveText}
@@ -1605,7 +1587,7 @@ const PlatformConsole = () => {
                     loading={billingActionKey === `${managingTenant.id}:billing-cancel`}
                     onClick={() => handleCancelBilling(managingTenant)}
                   >
-                    Отменить продление
+                    {managingTenant.billing?.current_period_end ? 'Отменить продление' : 'Отменить подписку'}
                   </Button>
                 </Space>
               </Form>
@@ -1616,70 +1598,16 @@ const PlatformConsole = () => {
             <div>
               <Title level={5} style={{ marginTop: 0 }}>Доступ к сервису</Title>
               <Space direction="vertical" size="middle" style={{ width: '100%' }}>
-                <Space align="center">
-                  <Switch
-                    checked={managingTenant.access.is_lifetime}
-                    loading={
-                      accessActionKey === `${managingTenant.id}:lifetime`
-                      || accessActionKey === `${managingTenant.id}:access-set`
-                    }
-                    onChange={(checked) => (
-                      checked
-                        ? handleAccessAction(managingTenant, 'lifetime')
-                        : handleSetAccessUntil(managingTenant, accessOffsetDays)
-                    )}
-                  />
-                  <Text>Lifetime-доступ</Text>
-                </Space>
                 <div style={{
                   padding: 14,
                   borderRadius: 12,
                   background: colors.bgSecondary,
                 }}>
                   <Text type="secondary" style={{ display: 'block', marginBottom: 8 }}>
-                    Обычный доступ закончится через
+                    Доступ управляет только ручной блокировкой кабинета. Срок платного тарифа задаётся в блоке «Тариф и подписка».
                   </Text>
-                  <Space.Compact style={{ width: '100%' }}>
-                    <InputNumber
-                      min={-3650}
-                      max={3650}
-                      value={accessOffsetDays}
-                      onChange={(value) => setAccessOffsetDays(Number(value ?? 0))}
-                      addonAfter="дней"
-                      style={{ width: '100%' }}
-                    />
-                    <Button
-                      loading={accessActionKey === `${managingTenant.id}:access-set`}
-                      onClick={() => handleSetAccessUntil(managingTenant, accessOffsetDays)}
-                    >
-                      Применить
-                    </Button>
-                  </Space.Compact>
-                  <Space wrap size={6} style={{ marginTop: 10 }}>
-                    {[
-                      { label: 'Вчера', value: -1 },
-                      { label: 'Сегодня', value: 0 },
-                      { label: '+10', value: 10 },
-                      { label: '+15', value: 15 },
-                      { label: '+30', value: 30 },
-                    ].map((preset) => (
-                      <Button
-                        key={preset.value}
-                        size="small"
-                        onClick={() => setAccessOffsetDays(preset.value)}
-                      >
-                        {preset.label}
-                      </Button>
-                    ))}
-                  </Space>
                 </div>
                 <Space wrap>
-                <Button
-                  onClick={() => handleAccessAction(managingTenant, 'grant')}
-                  loading={accessActionKey === `${managingTenant.id}:grant`}
-                >
-                  +30 дней
-                </Button>
                 {managingTenant.access.status === 'suspended' ? (
                   <Button
                     onClick={() => handleAccessAction(managingTenant, 'resume')}
@@ -1699,7 +1627,7 @@ const PlatformConsole = () => {
                 </Space>
               </Space>
               <Text type="secondary" style={{ display: 'block', marginTop: 8 }}>
-                Выключение lifetime применяет выбранный срок обычного доступа. Возобновление после приостановки не продлевает оплаченный период.
+                Возобновление после приостановки не меняет тариф и не продлевает оплаченный период.
               </Text>
             </div>
 

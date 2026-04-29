@@ -13,7 +13,7 @@ from sqlalchemy import func, select
 from api.dependencies import CurrentTenant
 from config import config
 from database import crud
-from database.models import InviteToken, Learner, LearnerAccountLink, LegalAcceptance, Tenant, User
+from database.models import InviteToken, Learner, LearnerAccountLink, LegalAcceptance, Tenant, TenantAccess, TenantSubscription, User
 from tests import factories
 from tests.api.utils import get_auth_headers
 
@@ -56,6 +56,23 @@ async def test_register_tutor_success(client: AsyncClient, db_session: AsyncSess
     tenant_data = data["tenant"]
     assert tenant_data["name"] == "Test Tutoring School"
     assert "slug" in tenant_data
+
+    access = (
+        await db_session.execute(
+            select(TenantAccess).where(TenantAccess.tenant_id == tenant_data["id"])
+        )
+    ).scalar_one()
+    assert access.status == "lifetime"
+    assert access.access_until is None
+    assert access.grace_until is None
+
+    subscription = (
+        await db_session.execute(
+            select(TenantSubscription).where(TenantSubscription.tenant_id == tenant_data["id"])
+        )
+    ).scalar_one()
+    assert subscription.plan_code == "start"
+    assert subscription.current_period_end is None
 
     acceptance = (
         await db_session.execute(

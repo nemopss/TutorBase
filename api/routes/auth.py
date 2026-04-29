@@ -521,7 +521,7 @@ async def register_tutor(
     )
     session.add(tenant)
     await session.flush()  # Get tenant.id
-    await tenant_access_service.create_trial_access(session, tenant.id)
+    await tenant_access_service.create_default_free_access(session, tenant.id)
     await billing_service.ensure_subscription(
         session,
         tenant.id,

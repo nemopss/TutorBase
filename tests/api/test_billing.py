@@ -120,6 +120,112 @@ async def test_expired_paid_subscription_keeps_data_but_disables_notifications_o
 
 
 @pytest.mark.asyncio
+async def test_expired_paid_subscription_uses_start_without_over_limit_penalty(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    now = datetime.now(timezone.utc)
+    for index in range(2):
+        await factories.create_learner(db_session, display_name=f"Learner {index}")
+    await billing_service.grant_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        plan_code=billing_service.PLAN_BASIC,
+        status=billing_service.SUBSCRIPTION_STATUS_ACTIVE,
+        current_period_start=now - timedelta(days=40),
+        current_period_end=now - timedelta(days=1),
+        actor_user_id=None,
+        notes="expired under start limit",
+    )
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.get("/api/v1/billing/current", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan_code"] == "start"
+    assert body["subscription_plan_code"] == "basic"
+    assert body["active_learners_limit"] == 3
+    assert body["active_learners_count"] == 2
+    assert body["can_create_learner"] is True
+    assert body["notifications_allowed"] is True
+    assert body["billing_restriction_reason"] is None
+
+
+@pytest.mark.asyncio
+async def test_canceled_subscription_keeps_paid_limit_until_period_end(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    now = datetime.now(timezone.utc)
+    await billing_service.grant_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        plan_code=billing_service.PLAN_BASIC,
+        status=billing_service.SUBSCRIPTION_STATUS_ACTIVE,
+        current_period_start=now - timedelta(days=1),
+        current_period_end=now + timedelta(days=10),
+        actor_user_id=None,
+        notes="active before cancel",
+    )
+    await billing_service.cancel_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        actor_user_id=None,
+        notes="cancel at period end",
+    )
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.get("/api/v1/billing/current", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan_code"] == "basic"
+    assert body["subscription_status"] == "canceled"
+    assert body["cancel_at_period_end"] is True
+    assert body["active_learners_limit"] == 10
+
+
+@pytest.mark.asyncio
+async def test_past_due_subscription_uses_paid_limit_only_during_grace(
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    fixed_now = datetime(2026, 4, 29, 12, 0, tzinfo=timezone.utc)
+    await billing_service.grant_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        plan_code=billing_service.PLAN_PRO,
+        status=billing_service.SUBSCRIPTION_STATUS_PAST_DUE,
+        current_period_start=fixed_now - timedelta(days=31),
+        current_period_end=fixed_now - timedelta(days=1),
+        grace_until=fixed_now + timedelta(days=2),
+        actor_user_id=None,
+        notes="past due grace",
+    )
+
+    in_grace = await billing_service.get_billing_snapshot_for_tenant(
+        db_session,
+        current_tenant.tenant_id,
+        now=fixed_now,
+    )
+    after_grace = await billing_service.get_billing_snapshot_for_tenant(
+        db_session,
+        current_tenant.tenant_id,
+        now=fixed_now + timedelta(days=3),
+    )
+
+    assert in_grace.plan_code == "pro"
+    assert in_grace.active_learners_limit == 20
+    assert after_grace.plan_code == "start"
+    assert after_grace.active_learners_limit == 3
+
+
+@pytest.mark.asyncio
 async def test_active_paid_subscription_uses_paid_limit(
     client: AsyncClient,
     db_session: AsyncSession,
@@ -147,8 +253,47 @@ async def test_active_paid_subscription_uses_paid_limit(
     body = response.json()
     assert body["plan_code"] == "basic"
     assert body["active_learners_limit"] == 10
+
+
+@pytest.mark.asyncio
+async def test_manual_paid_subscription_without_period_end_is_lifetime(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    now = datetime.now(timezone.utc)
+    await billing_service.grant_subscription(
+        db_session,
+        current_tenant.tenant_id,
+        plan_code=billing_service.PLAN_PRO,
+        status=billing_service.SUBSCRIPTION_STATUS_MANUAL,
+        current_period_start=now,
+        current_period_end=None,
+        actor_user_id=None,
+        notes="lifetime pro subscription",
+    )
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.get("/api/v1/billing/current", headers=headers)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["plan_code"] == "pro"
+    assert body["subscription_plan_code"] == "pro"
+    assert body["subscription_status"] == "manual"
+    assert body["current_period_end"] is None
+    assert body["active_learners_limit"] == 20
     assert body["can_create_learner"] is True
     assert body["notifications_allowed"] is True
+
+    checkout_response = await client.post(
+        "/api/v1/billing/checkout/preview",
+        json={"plan_code": billing_service.PLAN_PRO, "billing_period": "month"},
+        headers=headers,
+    )
+    assert checkout_response.status_code == 400
+    assert "бессрочная платная подписка" in checkout_response.json()["detail"]
 
 
 @pytest.mark.asyncio

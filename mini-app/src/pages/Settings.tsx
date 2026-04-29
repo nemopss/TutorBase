@@ -159,6 +159,43 @@ const Settings: React.FC = () => {
     && billing?.current_period_end
     && new Date(billing.current_period_end).getTime() > Date.now(),
   );
+  const hasLifetimePaidSubscription = Boolean(
+    billing?.subscription_plan_code
+    && billing.subscription_plan_code !== 'start'
+    && !billing.current_period_end
+    && (billing.subscription_status === 'manual' || billing.subscription_status === 'active'),
+  );
+  const tariffPeriodConfig = (() => {
+    if (!billing) return null;
+
+    const hasPaidSubscription = Boolean(
+      billing.subscription_plan_code && billing.subscription_plan_code !== 'start',
+    );
+    const periodEnd = billing.current_period_end ? new Date(billing.current_period_end) : null;
+    const periodEndLabel = formatDate(billing.current_period_end);
+
+    if (!periodEnd) {
+      return {
+        value: 'Бессрочно',
+        hint: billing.plan_code === 'start'
+          ? 'Старт до 3 активных'
+          : 'Выдано владельцем сервиса',
+      };
+    }
+
+    const daysLeft = Math.ceil((periodEnd.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+    if (daysLeft >= 0 && billing.plan_code !== 'start') {
+      return {
+        value: `до ${periodEndLabel}`,
+        hint: `Осталось дней: ${Math.max(daysLeft, 0)}`,
+      };
+    }
+
+    return {
+      value: hasPaidSubscription && periodEndLabel ? `закончился ${periodEndLabel}` : 'Бессрочно',
+      hint: hasPaidSubscription ? 'Сейчас применяются условия Старт' : 'Старт до 3 активных',
+    };
+  })();
   const isDowngradeBlocked = Boolean(
     hasActivePaidPeriod
     && activePaidPlanOrder
@@ -172,7 +209,7 @@ const Settings: React.FC = () => {
   }, [billing]);
 
   useEffect(() => {
-    if (!isStaff || !billing || isDowngradeBlocked) {
+    if (!isStaff || !billing || isDowngradeBlocked || hasLifetimePaidSubscription) {
       setCheckoutPreview(null);
       setCheckoutPreviewError(isDowngradeBlocked ? 'Переход на тариф ниже доступен после окончания текущего оплаченного периода.' : null);
       return;
@@ -202,7 +239,7 @@ const Settings: React.FC = () => {
     return () => {
       cancelled = true;
     };
-  }, [billing, checkoutPlanCode, isDowngradeBlocked, isStaff]);
+  }, [billing, checkoutPlanCode, hasLifetimePaidSubscription, isDowngradeBlocked, isStaff]);
 
   const ctaText = (() => {
     if (checkoutPreview?.billing_action === 'renewal') return 'Продлить на 30 дней';
@@ -304,6 +341,7 @@ const Settings: React.FC = () => {
                 }}>
                   {[
                     ['Тариф', billing.plan_name, billing.monthly_price_rub > 0 ? `${billing.monthly_price_rub} ₽ / 30 дней` : 'Бесплатно'],
+                    ['Период', tariffPeriodConfig?.value ?? '—', tariffPeriodConfig?.hint ?? ''],
                     ['Ученики', `${billing.active_learners_count}/${billing.active_learners_limit} активных`, `${learnerUsagePercent}% лимита занято`],
                     ['Уведомления', billing.notifications_allowed ? 'Работают' : 'Отключены', 'Telegram-сценарии'],
                   ].map(([label, value, hint]) => (
@@ -327,11 +365,12 @@ const Settings: React.FC = () => {
                   </div>
                 )}
 
+                {!hasLifetimePaidSubscription && (
                 <div style={{ marginTop: spacing.lg }}>
                   <div style={{ marginBottom: spacing.md }}>
                     <Title level={5} style={{ margin: 0, color: colors.textPrimary }}>Оплата тарифа</Title>
                     <Text type="secondary" style={{ display: 'block', marginTop: spacing.xs }}>
-                      Сумма и срок доступа рассчитываются до перехода в ЮKassa.
+                      Сумма и срок тарифа рассчитываются до перехода в ЮKassa.
                     </Text>
                   </div>
 
@@ -420,7 +459,7 @@ const Settings: React.FC = () => {
                       </Text>
                       {checkoutPreview && (
                         <Text type="secondary" style={{ fontSize: 12 }}>
-                          Доступ будет действовать до {formatDate(checkoutPreview.resulting_period_end)}.
+                          Тариф будет действовать до {formatDate(checkoutPreview.resulting_period_end)}.
                         </Text>
                       )}
                     </div>
@@ -444,6 +483,7 @@ const Settings: React.FC = () => {
                     </Button>
                   </div>
                 </div>
+                )}
               </>
             )}
           </Card>

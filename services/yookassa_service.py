@@ -96,6 +96,18 @@ def _is_active_paid_subscription(subscription, now) -> bool:
     return period_end is not None and period_end > now
 
 
+def _is_lifetime_paid_subscription(subscription) -> bool:
+    return (
+        subscription is not None
+        and subscription.plan_code != billing_service.PLAN_START
+        and subscription.status in {
+            billing_service.SUBSCRIPTION_STATUS_ACTIVE,
+            billing_service.SUBSCRIPTION_STATUS_MANUAL,
+        }
+        and billing_service._as_aware(subscription.current_period_end) is None
+    )
+
+
 def _prorated_period_amount(*, amount: Decimal, billing_period: str, period_end, now) -> Decimal:
     remaining_seconds = int((period_end - now).total_seconds())
     if remaining_seconds <= 0:
@@ -129,6 +141,9 @@ async def create_checkout_quote(
         raise ValidationError("Selected plan does not require payment")
 
     subscription = await billing_service.get_subscription(session, current_tenant.tenant_id)
+    if _is_lifetime_paid_subscription(subscription):
+        raise ValidationError("У кабинета уже есть бессрочная платная подписка")
+
     if not _is_active_paid_subscription(subscription, now):
         return CheckoutQuote(
             plan_code=plan.code,

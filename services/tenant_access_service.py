@@ -21,7 +21,6 @@ ACCESS_MODE_FULL = "full"
 ACCESS_MODE_GRACE = "grace"
 ACCESS_MODE_BLOCKED = "blocked"
 
-DEFAULT_TRIAL_DAYS = 14
 DEFAULT_GRACE_DAYS = 7
 DEFAULT_GRANT_DAYS = 30
 
@@ -191,15 +190,15 @@ async def ensure_access(
     return access
 
 
-async def create_trial_access(session: AsyncSession, tenant_id: int) -> TenantAccess:
+async def create_default_free_access(session: AsyncSession, tenant_id: int) -> TenantAccess:
+    """Create the default non-expiring access row for the free Start model."""
     now = utc_now()
-    access_until = now + timedelta(days=DEFAULT_TRIAL_DAYS)
     access = TenantAccess(
         tenant_id=tenant_id,
-        status=ACCESS_STATUS_TRIAL,
-        access_until=access_until,
-        grace_until=access_until + timedelta(days=DEFAULT_GRACE_DAYS),
-        notes="Created during tutor registration",
+        status=ACCESS_STATUS_LIFETIME,
+        access_until=None,
+        grace_until=None,
+        notes="Created during tutor registration for free Start plan",
         created_at=now,
         updated_at=now,
     )
