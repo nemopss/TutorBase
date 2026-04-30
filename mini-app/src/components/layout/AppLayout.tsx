@@ -1,6 +1,6 @@
 import React, { startTransition, useEffect, useMemo, useRef, useState } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
-import { Alert, Layout, Menu, Drawer, Button, Space, Tag, Typography, type MenuProps } from 'antd';
+import { Alert, Layout, Menu, Drawer, Button, Typography, type MenuProps } from 'antd';
 import { flushSync } from 'react-dom';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import {
@@ -163,30 +163,10 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         },
       ],
     },
-    ...(isSuperAdmin ? [{
-      key: '/reminders',
-      icon: <BellOutlined />,
-      label: (
-        <Space size={6}>
-          <Link to="/reminders">{t('navigation.reminders')}</Link>
-          <Tag color="warning" style={{ marginInlineEnd: 0 }}>{t('navigation.legacyBadge')}</Tag>
-        </Space>
-      ),
-    }] : []),
     {
       key: '/notifications',
       icon: <BellOutlined />,
-      label: isSuperAdmin ? (
-        <Space size={6}>
-          <Link to="/notifications">{t('navigation.notifications')}</Link>
-          <Tag color="green" style={{ marginInlineEnd: 0 }}>{t('navigation.newBadge')}</Tag>
-        </Space>
-      ) : <Link to="/notifications">{t('navigation.notifications')}</Link>,
-    },
-    {
-      key: '/groups',
-      icon: <TeamOutlined />,
-      label: <Link to="/groups">{t('navigation.groups')}</Link>,
+      label: <Link to="/notifications">{t('navigation.notifications')}</Link>,
     },
     {
       key: '/analytics',
@@ -211,12 +191,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   const adminMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
     key: '/platform',
     icon: <CrownOutlined />,
-    label: (
-      <Space size={6}>
-        <Link to="/platform">{t('navigation.console', 'Консоль')}</Link>
-        <Tag color="gold" style={{ marginInlineEnd: 0 }}>{t('navigation.ndaBadge', 'NDA')}</Tag>
-      </Space>
-    ),
+    label: <Link to="/platform">{t('navigation.console', 'Консоль')}</Link>,
   }), [t]);
 
   const settingsMenuItem: NonNullable<MenuProps['items']>[number] = useMemo(() => ({
@@ -275,20 +250,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         key: '/notifications',
         label: t('navigation.notifications'),
         icon: <BellOutlined />,
-        badge: isSuperAdmin ? (
-          <Tag color="green" style={{ marginInlineEnd: 0 }}>{t('navigation.newBadge')}</Tag>
-        ) : null,
-      },
-      ...(isSuperAdmin ? [{
-        key: '/reminders',
-        label: t('navigation.reminders'),
-        icon: <BellOutlined />,
-        badge: <Tag color="warning" style={{ marginInlineEnd: 0 }}>{t('navigation.legacyBadge')}</Tag>,
-      }] : []),
-      {
-        key: '/groups',
-        label: t('navigation.groups'),
-        icon: <TeamOutlined />,
       },
       {
         key: '/analytics',
@@ -304,7 +265,6 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
         key: '/platform',
         label: t('navigation.console', 'Консоль'),
         icon: <CrownOutlined />,
-        badge: <Tag color="gold" style={{ marginInlineEnd: 0 }}>{t('navigation.ndaBadge', 'NDA')}</Tag>,
       }] : []),
     ];
   }, [isSuperAdmin, isStudent, t]);
@@ -969,14 +929,11 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
                         <span style={{
                           display: 'flex',
                           alignItems: 'center',
-                          gap: 8,
                           minWidth: 0,
-                          flexWrap: 'wrap',
                         }}>
                           <span style={{ fontSize: 15, fontWeight: 600 }}>
                             {item.label}
                           </span>
-                          {item.badge}
                         </span>
                       </span>
                     </button>
