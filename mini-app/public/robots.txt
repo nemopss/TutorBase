@@ -1,0 +1,18 @@
+User-agent: *
+Allow: /
+Disallow: /api/
+Disallow: /admin
+Disallow: /platform
+Disallow: /settings
+Disallow: /packages
+Disallow: /lessons
+Disallow: /learners
+Disallow: /finance
+Disallow: /notifications
+Disallow: /reminders
+Disallow: /groups
+Disallow: /analytics
+Disallow: /invite-codes
+Disallow: /register
+
+Sitemap: https://tutorbase.su/sitemap.xml
