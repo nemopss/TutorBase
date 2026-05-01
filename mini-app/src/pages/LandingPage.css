@@ -115,13 +115,15 @@ html {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 8px;
-  background: var(--landing-text);
-  color: var(--landing-bg);
-  font-size: 17px;
-  font-weight: 760;
+  width: 34px;
+  height: 34px;
+  flex: 0 0 34px;
+}
+
+.landing-brand-mark img {
+  display: block;
+  width: 100%;
+  height: 100%;
 }
 
 .landing-nav {

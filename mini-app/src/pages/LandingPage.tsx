@@ -473,7 +473,9 @@ const LandingPage: React.FC = () => {
       <div className="landing-page" data-theme={isDark ? 'dark' : 'light'}>
         <header className={`landing-header ${scrolled ? 'is-scrolled' : ''}`}>
           <a className="landing-brand" href="#top" aria-label="TutorBase" onClick={(event) => handleAnchorClick(event, 'top')}>
-            <span className="landing-brand-mark">T</span>
+            <span className="landing-brand-mark">
+              <img src="/favicon.svg" alt="" aria-hidden="true" />
+            </span>
             <span>TutorBase</span>
           </a>
 
@@ -795,7 +797,9 @@ const LandingPage: React.FC = () => {
           <div className="landing-shell landing-footer-grid">
             <div>
               <a className="landing-brand" href="#top" aria-label="TutorBase" onClick={(event) => handleAnchorClick(event, 'top')}>
-                <span className="landing-brand-mark">T</span>
+                <span className="landing-brand-mark">
+                  <img src="/favicon.svg" alt="" aria-hidden="true" />
+                </span>
                 <span>TutorBase</span>
               </a>
               <p>
