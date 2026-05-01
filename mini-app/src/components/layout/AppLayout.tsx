@@ -44,6 +44,8 @@ interface MobileNavItem {
 const SIDEBAR_COLLAPSED_KEY = 'tutorbase_sidebar_collapsed';
 const MOBILE_NAV_BOTTOM = 'calc(16px + env(safe-area-inset-bottom, 0px))';
 const MOBILE_CONTENT_BOTTOM = 'calc(112px + env(safe-area-inset-bottom, 0px))';
+const MOBILE_NAV_Z_INDEX = 900;
+const MOBILE_OVERLAY_Z_INDEX = 1300;
 const MOBILE_NAV_GAP = 8;
 const MOBILE_NAV_PADDING = 10;
 const MORE_SHEET_CLOSE_THRESHOLD = 84;
@@ -537,12 +539,12 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
   );
 
   const mobileBottomNav = isMobile ? (
-    <div style={{
+    <div className="mobile-bottom-nav" style={{
       position: 'fixed',
       left: 12,
       right: 12,
       bottom: MOBILE_NAV_BOTTOM,
-      zIndex: 1200,
+      zIndex: MOBILE_NAV_Z_INDEX,
       pointerEvents: 'none',
     }}>
       <div style={{
@@ -790,6 +792,7 @@ const AppLayout: React.FC<AppLayoutProps> = ({ children }) => {
           placement="bottom"
           open={moreSheetOpen}
           onClose={closeMoreSheet}
+          zIndex={MOBILE_OVERLAY_Z_INDEX}
           destroyOnHidden
           afterOpenChange={(open) => {
             if (!open) {

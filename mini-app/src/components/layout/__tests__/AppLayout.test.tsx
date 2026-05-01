@@ -79,11 +79,14 @@ describe('AppLayout', () => {
       isLoading: false,
       user: { id: 1, display_name: 'Teacher', role: 'teacher', tenant_id: 1 },
       tenantAccess: null,
+      billing: null,
       tenantId: 1,
       isSuperAdmin: false,
       canSwitchTenant: false,
       isTenantAccessLoading: false,
+      isBillingLoading: false,
       refreshTenantAccess: jest.fn(),
+      refreshBilling: jest.fn(),
       switchTenant: jest.fn(),
       registerTutor: jest.fn(),
       registerStudent: jest.fn(),
@@ -114,5 +117,23 @@ describe('AppLayout', () => {
     await waitFor(() => {
       expect(screen.queryByText('Остальные разделы и настройки кабинета.')).not.toBeInTheDocument();
     });
+  });
+
+  it('keeps mobile navigation below Ant Design modal overlays', () => {
+    const queryClient = createQueryClient();
+
+    render(
+      <MemoryRouter initialEntries={['/']}>
+        <QueryClientProvider client={queryClient}>
+          <AppLayout>
+            <div>Page content</div>
+          </AppLayout>
+        </QueryClientProvider>
+      </MemoryRouter>
+    );
+
+    const mobileBottomNav = document.querySelector('.mobile-bottom-nav') as HTMLElement | null;
+    expect(mobileBottomNav).not.toBeNull();
+    expect(mobileBottomNav?.style.zIndex).toBe('900');
   });
 });
