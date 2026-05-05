@@ -24,6 +24,9 @@ interface CalendarContainerProps {
   onDelete?: (lessonId: number) => void;
   defaultView?: CalendarView;
   onRangeChange?: (range: CalendarVisibleRange) => void;
+  calendarHeight?: React.CSSProperties['height'];
+  calendarMinHeight?: React.CSSProperties['minHeight'];
+  compact?: boolean;
 }
 
 const CalendarContainer: React.FC<CalendarContainerProps> = ({
@@ -37,6 +40,9 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   onDelete,
   defaultView = 'week',
   onRangeChange,
+  calendarHeight,
+  calendarMinHeight,
+  compact = false,
 }) => {
   const { t } = useTranslation();
   const [view, setView] = useState<CalendarView>(defaultView);
@@ -57,7 +63,7 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
   return (
     <div>
       {/* View switcher */}
-      <div style={{ marginBottom: spacing.md }}>
+      <div style={{ marginBottom: compact ? spacing.sm : spacing.md }}>
         <Segmented
           options={viewOptions}
           value={view}
@@ -77,6 +83,8 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
           onCancel={onCancel}
           onDelete={onDelete}
           onRangeChange={onRangeChange}
+          height={calendarHeight}
+          minHeight={calendarMinHeight}
         />
       ) : (
         <MonthCalendar
@@ -89,6 +97,8 @@ const CalendarContainer: React.FC<CalendarContainerProps> = ({
           onCancel={onCancel}
           onDelete={onDelete}
           onRangeChange={onRangeChange}
+          height={calendarHeight}
+          minHeight={calendarMinHeight}
         />
       )}
     </div>

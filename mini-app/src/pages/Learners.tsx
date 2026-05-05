@@ -1,7 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Input, message, Modal, notification, Space, Typography } from 'antd';
+import { Alert, Button, Input, message, Modal, notification, Space, Typography } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { isAxiosError } from 'axios';
 import { useTranslation } from 'react-i18next';
@@ -17,6 +17,7 @@ import { useTheme } from '../theme/ThemeProvider';
 import { useDebounce } from '../hooks/useDebounce';
 import { spacing } from '../theme/tokens';
 import { useAuth } from '../auth/AuthProvider';
+import { useResponsive } from '../hooks/useResponsive';
 
 const { Text } = Typography;
 
@@ -27,7 +28,7 @@ interface Learner {
   notifications_enabled: boolean;
   chat_id: number | null;
   notes?: string;
-  lesson_rate?: number;
+  lesson_rate?: number | null;
   next_lesson_date?: string | null;
   archived_at?: string | null;
   is_archived?: boolean;
@@ -112,10 +113,11 @@ const Learners: React.FC = () => {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
+  const { isMobile } = useResponsive();
   const { tenantAccess, billing, tenantId, refreshBilling } = useAuth();
   const [notificationApi, notificationContextHolder] = notification.useNotification();
   const requiresTenantContext = tenantId === null;
-  const isDark = resolvedTheme.colorScheme === 'dark';
+  const colors = resolvedTheme.colors;
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   const canCreateLearner = canUseFullActions && (billing?.can_create_learner ?? true);
   const canRestoreLearner = canUseFullActions && (billing?.can_restore_learner ?? true);
@@ -427,6 +429,11 @@ const Learners: React.FC = () => {
       <PageHeader
         title={t('pages.learners.title')}
         subtitle={t('pages.learners.subtitle')}
+        actions={!isMobile && !isArchiveView ? (
+          <Button type="primary" icon={<PlusOutlined />} onClick={handleOpenCreate}>
+            {t('pages.learners.addLearner')}
+          </Button>
+        ) : undefined}
       />
 
       {!canUseFullActions && (
@@ -440,117 +447,94 @@ const Learners: React.FC = () => {
       )}
 
       <div
-        role="tablist"
-        aria-label={t('pages.learners.title')}
         style={{
-          position: 'relative',
-          display: 'inline-grid',
-          gridTemplateColumns: '1fr 1fr',
-          minWidth: 220,
-          height: 40,
-          padding: 4,
+          display: 'flex',
+          alignItems: isMobile ? 'stretch' : 'center',
+          justifyContent: 'space-between',
+          flexDirection: isMobile ? 'column' : 'row',
+          gap: spacing.md,
           marginBottom: spacing.md,
-          borderRadius: 8,
-          border: `1px solid ${resolvedTheme.colors.borderPrimary}`,
-          background: resolvedTheme.colors.bgSecondary,
-          overflow: 'hidden',
         }}
       >
-        <span
-          aria-hidden="true"
+        <div
+          role="tablist"
+          aria-label={t('pages.learners.title')}
           style={{
-            position: 'absolute',
-            top: 4,
-            bottom: 4,
-            left: 4,
-            width: 'calc(50% - 4px)',
-            borderRadius: 6,
-            background: resolvedTheme.colors.bgPrimary,
-            boxShadow: isDark ? '0 1px 4px rgba(0,0,0,0.28)' : '0 1px 4px rgba(0,0,0,0.12)',
-            transform: statusView === 'archived' ? 'translateX(100%)' : 'translateX(0)',
-            transition: 'transform 180ms ease',
+            display: 'inline-flex',
+            alignItems: 'center',
+            gap: 4,
+            width: isMobile ? '100%' : undefined,
+            padding: 4,
+            borderRadius: 10,
+            background: colors.bgTertiary,
           }}
-        />
-        {[
-          { label: t('pages.learners.activeTab', { defaultValue: 'Активные' }), value: 'active' as const },
-          { label: t('pages.learners.archivedTab', { defaultValue: 'Архив' }), value: 'archived' as const },
-        ].map((option) => {
-          const selected = statusView === option.value;
-          return (
-            <button
-              key={option.value}
-              type="button"
-              role="tab"
-              aria-selected={selected}
-              onClick={() => setStatusView(option.value)}
-              style={{
-                position: 'relative',
-                zIndex: 1,
-                minWidth: 0,
-                height: 32,
-                padding: `0 ${spacing.sm}`,
-                border: 0,
-                borderRadius: 6,
-                background: 'transparent',
-                color: selected ? resolvedTheme.colors.textPrimary : resolvedTheme.colors.textSecondary,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                font: 'inherit',
-                fontWeight: selected ? 600 : 400,
-                lineHeight: 1,
-                cursor: 'pointer',
-              }}
-            >
-              {option.label}
-            </button>
-          );
-        })}
-      </div>
+        >
+          {[
+            { label: t('pages.learners.activeTab', { defaultValue: 'Активные' }), value: 'active' as const },
+            { label: t('pages.learners.archivedTab', { defaultValue: 'Архив' }), value: 'archived' as const },
+          ].map((option) => {
+            const selected = statusView === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                role="tab"
+                aria-selected={selected}
+                onClick={() => setStatusView(option.value)}
+                style={{
+                  flex: isMobile ? 1 : undefined,
+                  minWidth: isMobile ? 0 : 108,
+                  height: 32,
+                  padding: `0 ${spacing.md}px`,
+                  border: 0,
+                  borderRadius: 8,
+                  background: selected ? colors.bgSecondary : 'transparent',
+                  color: selected ? colors.textPrimary : colors.textSecondary,
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  font: 'inherit',
+                  fontWeight: selected ? 600 : 400,
+                  lineHeight: 1,
+                  cursor: 'pointer',
+                  boxShadow: 'none',
+                }}
+              >
+                {option.label}
+              </button>
+            );
+          })}
+        </div>
 
-      {/* Search input - only show when there are learners */}
-      {hasLearners && (
-        <Input
-          placeholder={t('common.search')}
-          prefix={<SearchOutlined style={{ color: resolvedTheme.colors.textTertiary }} />}
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          allowClear
-          style={{ marginBottom: spacing.md }}
-        />
-      )}
+        {hasLearners && (
+          <Input
+            placeholder={t('common.search')}
+            prefix={<SearchOutlined style={{ color: colors.textTertiary }} />}
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            allowClear
+            style={{
+              width: isMobile ? '100%' : 320,
+              background: colors.bgSecondary,
+              border: 0,
+              borderRadius: 10,
+              boxShadow: 'none',
+            }}
+          />
+        )}
+      </div>
 
       {/* Loading state */}
       {isLoading && <LearnerGrid loading />}
 
       {/* Empty state - no learners at all */}
       {!isLoading && !hasLearners && !isArchiveView && (
-        <LearnerGrid>
-          <Card
-            hoverable={canUseFullActions}
-            onClick={handleOpenCreate}
-            style={{
-              minHeight: 120,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '2px dashed',
-              borderColor: isDark ? '#3a3a3a' : '#d9d9d9',
-              background: 'transparent',
-              opacity: canCreateLearner ? 1 : 0.65,
-              cursor: canUseFullActions ? 'pointer' : 'not-allowed',
-            }}
-            styles={{
-              body: {
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              },
-            }}
-          >
-            <PlusOutlined style={{ fontSize: 32, color: '#8c8c8c' }} />
-          </Card>
-        </LearnerGrid>
+        <EmptyState
+          title={t('pages.learners.noLearners')}
+          description={t('pages.learners.noLearnersDescription')}
+          actionText={canUseFullActions ? t('pages.learners.addLearner') : undefined}
+          onAction={canUseFullActions ? handleOpenCreate : undefined}
+        />
       )}
 
       {!isLoading && !hasLearners && isArchiveView && (
@@ -588,7 +572,7 @@ const Learners: React.FC = () => {
       )}
 
       {/* FAB - only show when there are learners */}
-      {hasLearners && !isArchiveView && (
+      {hasLearners && !isArchiveView && isMobile && (
         <FloatingActionButton
           icon={<PlusOutlined />}
           onClick={handleOpenCreate}
@@ -627,7 +611,7 @@ const Learners: React.FC = () => {
         initialValues={editingLearner ? {
           display_name: editingLearner.display_name,
           notes: editingLearner.notes,
-          lesson_rate: editingLearner.lesson_rate,
+          lesson_rate: editingLearner.lesson_rate ?? undefined,
         } : undefined}
       />
 

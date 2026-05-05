@@ -1148,6 +1148,11 @@
   },
   "packageDetail": {
     "details": "상세 정보",
+    "summary": "요약",
+    "nextLesson": "다음 수업",
+    "scheduleSource": "학생 일정",
+    "scheduleSourceDescription": "새 패키지를 만들 때 사용됩니다. 이 패키지의 수업은 이미 고정되어 있습니다.",
+    "openLearnerSchedule": "일정 열기",
     "deletePackageConfirm": "이 패키지를 삭제하시겠습니까?"
   },
   "lessonCard": {
@@ -1321,6 +1326,7 @@
     "learnerCalendar": "학습자 캘린더",
     "noCalendarLessons": "아직 캘린더에 수업이 없습니다",
     "noCalendarLessonsDescription": "수업 패키지나 일회성 수업을 만들면 학습자 일정이 표시됩니다.",
+    "scheduleRequiredForPackages": "일정 기반 패키지를 만들려면 일정이 필요합니다.",
     "noLessons": "아직 수업이 없습니다",
     "noLessonsDescription": "수업 패키지를 만들거나 일회성 수업을 예약하세요.",
     "noOneOffLessons": "아직 일회성 수업이 없습니다",

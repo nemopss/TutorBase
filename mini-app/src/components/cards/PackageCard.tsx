@@ -98,11 +98,11 @@ const PackageCard: React.FC<PackageCardProps> = ({
     : 0;
 
   const isActive = pkg.status === 'active';
-  const statusColor = getStatusAccentColor(pkg.status, colors);
   const isDesktopHovered = isHovered && !isMobile;
-  const hoverBorderColor = isDesktopHovered
-    ? `color-mix(in srgb, ${statusColor} 58%, ${colors.borderPrimary})`
-    : colors.borderPrimary;
+  const statusColor = getStatusAccentColor(pkg.status, colors);
+  const surfaceColor = isDesktopHovered
+    ? `color-mix(in srgb, ${colors.bgTertiary} 82%, ${statusColor})`
+    : colors.bgTertiary;
   const handleAction = (action: PackageCardAction) => {
     if (onAction) {
       onAction(action, pkg);
@@ -171,13 +171,13 @@ const PackageCard: React.FC<PackageCardProps> = ({
       tabIndex={0}
       style={{
         cursor: 'pointer',
-        background: isDesktopHovered ? colors.bgTertiary : colors.bgSecondary,
-        border: `1px solid ${hoverBorderColor}`,
+        background: surfaceColor,
+        border: 0,
         borderRadius: 10,
         boxShadow: 'none',
         minHeight: 132,
         padding: spacing.md,
-        transition: 'background 0.16s ease, border-color 0.16s ease',
+        transition: 'background 0.16s ease',
         outline: 'none',
       }}
       onClick={onClick}

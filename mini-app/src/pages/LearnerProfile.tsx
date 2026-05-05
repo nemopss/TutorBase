@@ -1,9 +1,7 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { useParams, useNavigate, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Card,
-  Tabs,
   Spin,
   Alert,
   Button,
@@ -11,7 +9,6 @@ import {
   Space,
   Modal,
   Typography,
-  Tag,
   message,
   notification,
   Dropdown,
@@ -49,9 +46,11 @@ import CalendarContainer from '../components/common/CalendarContainer';
 import ScheduleTab from '../components/learner/ScheduleTab';
 import { DetailPageSkeleton } from '../components/common/PageSkeletons';
 import TenantContextRequired from '../components/common/TenantContextRequired';
+import ResponsiveModal from '../components/common/ResponsiveModal';
 import { useTheme } from '../theme/ThemeProvider';
 import { spacing } from '../theme/tokens';
 import { useAuth } from '../auth/AuthProvider';
+import { useResponsive } from '../hooks/useResponsive';
 
 const { Text, Title } = Typography;
 
@@ -117,6 +116,18 @@ interface LearnerFinance {
   payment_history: Payment[];
 }
 
+interface ScheduleSlot {
+  day: number;
+  time: string;
+  duration: number;
+}
+
+interface ScheduleData {
+  learner_id: number;
+  slots: ScheduleSlot[];
+  timezone: string;
+}
+
 // --- Helpers --- //
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('ru-RU', {
@@ -153,8 +164,10 @@ const LearnerProfile: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
+  const { isMobile } = useResponsive();
   const { tenantAccess, billing, tenantId, refreshBilling } = useAuth();
   const [notificationApi, notificationContextHolder] = notification.useNotification();
   const requiresTenantContext = tenantId === null;
@@ -165,7 +178,6 @@ const LearnerProfile: React.FC = () => {
   const learnerId = parseInt(id || '0');
   
   // State
-  const [activeTab, setActiveTab] = useState('overview');
   const [isEditModalOpen, setIsEditModalOpen] = useState(false);
   const [isArchiveModalOpen, setIsArchiveModalOpen] = useState(false);
   const [isPackageModalOpen, setIsPackageModalOpen] = useState(false);
@@ -173,6 +185,7 @@ const LearnerProfile: React.FC = () => {
   const [isLessonModalOpen, setIsLessonModalOpen] = useState(false);
   const [isRescheduleModalOpen, setIsRescheduleModalOpen] = useState(false);
   const [isUnlinkModalOpen, setIsUnlinkModalOpen] = useState(false);
+  const [isScheduleModalOpen, setIsScheduleModalOpen] = useState(false);
   const [createdInviteToken, setCreatedInviteToken] = useState<string | null>(null);
   const [editingLesson, setEditingLesson] = useState<Lesson | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
@@ -251,6 +264,15 @@ const LearnerProfile: React.FC = () => {
     queryKey: ['learnerFinance', learnerId],
     queryFn: async () => {
       const { data } = await api.get(`/learners/${learnerId}/finance`);
+      return data;
+    },
+    enabled: !!learnerId && !requiresTenantContext,
+  });
+
+  const { data: scheduleData, isLoading: isLoadingSchedule } = useQuery<ScheduleData>({
+    queryKey: ['learnerSchedule', learnerId],
+    queryFn: async () => {
+      const { data } = await api.get(`/learners/${learnerId}/schedule`);
       return data;
     },
     enabled: !!learnerId && !requiresTenantContext,
@@ -489,7 +511,6 @@ const LearnerProfile: React.FC = () => {
       queryClient.invalidateQueries({ queryKey: ['learners'] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       queryClient.invalidateQueries({ queryKey: ['lessons'] });
-      setActiveTab('packages');
       message.success(t('learnerProfile.oneOffLessonCreatedInList'));
       oneOffLessonForm.resetFields();
       setIsOneOffLessonModalOpen(false);
@@ -656,6 +677,14 @@ const LearnerProfile: React.FC = () => {
         },
   ] : [];
 
+  useEffect(() => {
+    if (isLoading || new URLSearchParams(location.search).get('section') !== 'schedule') {
+      return;
+    }
+
+    setIsScheduleModalOpen(true);
+  }, [isLoading, location.search]);
+
   if (requiresTenantContext) {
     return (
       <>
@@ -678,11 +707,76 @@ const LearnerProfile: React.FC = () => {
   const learnerLessons = learnerLessonsData?.items || [];
   const payments = finance?.payment_history || [];
 
-  const cardStyle = {
+  const panelStyle: React.CSSProperties = {
+    background: colors.bgTertiary,
+    border: 0,
+    borderRadius: 10,
+    boxShadow: 'none',
+  };
+
+  const panelBodyStyle: React.CSSProperties = {
+    padding: spacing.md,
+  };
+
+  const innerSurfaceStyle: React.CSSProperties = {
     background: colors.bgSecondary,
-    borderColor: colors.borderPrimary,
+    borderRadius: 10,
+    padding: spacing.sm,
+  };
+
+  const sectionHeaderStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
     marginBottom: spacing.md,
   };
+
+  const valueRowStyle: React.CSSProperties = {
+    display: 'flex',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    padding: isMobile ? '7px 0' : '5px 0',
+  };
+
+  const mutedIconStyle: React.CSSProperties = {
+    color: colors.textSecondary,
+    fontSize: 16,
+  };
+
+  const packageGridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
+    gap: spacing.md,
+  };
+
+  const oneOffGridStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))',
+    gap: spacing.md,
+  };
+
+  const latestPayments = payments.slice(0, 5);
+  const totalOutstanding = finance?.outstanding_balance || 0;
+  const totalPaid = finance?.total_paid || 0;
+  const lessonRate = finance?.lesson_rate ?? learner.lesson_rate;
+  const scheduleSlots = [...(scheduleData?.slots || [])].sort((a, b) => (
+    a.day === b.day ? a.time.localeCompare(b.time) : a.day - b.day
+  ));
+  const schedulePreviewSlots = scheduleSlots.slice(0, 3);
+  const scheduleDayLabels = [
+    t('schedule.days.mon'),
+    t('schedule.days.tue'),
+    t('schedule.days.wed'),
+    t('schedule.days.thu'),
+    t('schedule.days.fri'),
+    t('schedule.days.sat'),
+    t('schedule.days.sun'),
+  ];
+  const formatScheduleSlot = (slot: ScheduleSlot) => (
+    `${scheduleDayLabels[slot.day]} ${slot.time}`
+  );
 
   return (
     <div>
@@ -696,7 +790,22 @@ const LearnerProfile: React.FC = () => {
           </Button>
         )}
         actions={
-          <Space>
+          <Space wrap>
+            <Button
+              type="primary"
+              icon={<PlusOutlined />}
+              disabled={!canUseFullActions}
+              onClick={() => setIsPackageModalOpen(true)}
+            >
+              {t('learnerProfile.createPackage')}
+            </Button>
+            <Button
+              icon={<CalendarOutlined />}
+              disabled={!canUseFullActions}
+              onClick={handleOpenOneOffLessonModal}
+            >
+              {t('learnerProfile.createOneOffLesson')}
+            </Button>
             <Button icon={<EditOutlined />} disabled={!canUseFullActions} onClick={() => setIsEditModalOpen(true)}>
               {t('common.edit')}
             </Button>
@@ -707,362 +816,382 @@ const LearnerProfile: React.FC = () => {
         }
       />
 
-      <Tabs
-        activeKey={activeTab}
-        onChange={setActiveTab}
-        items={[
-          {
-            key: 'overview',
-            label: t('learnerProfile.tabs.overview'),
-            children: (
+      {learner.is_archived && (
+        <Alert
+          type="warning"
+          showIcon
+          style={{ marginBottom: spacing.md }}
+          message={t('pages.learners.archivedTab', { defaultValue: 'Архив' })}
+          description={t('pages.learners.archivedNotificationsOff', { defaultValue: 'У архивного ученика уведомления отключены' })}
+        />
+      )}
+
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(300px, 360px)',
+          gap: spacing.md,
+          alignItems: 'start',
+          marginBottom: spacing.lg,
+        }}
+      >
+        <div style={panelStyle}>
+          <div style={{ ...panelBodyStyle, paddingBottom: 0 }}>
+            <div style={sectionHeaderStyle}>
               <div>
-                {/* Basic Info */}
-                <Card style={cardStyle}>
-                  <Title level={5} style={{ marginTop: 0, marginBottom: spacing.md }}>
-                    {t('learnerProfile.basicInfo')}
-                  </Title>
-                  
-                  <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.sm }}>
-                    <div>
-                      <Text type="secondary">{t('forms.learner.displayNameLabel')}</Text>
-                      <div><Text strong>{learner.display_name}</Text></div>
-                    </div>
-                    
-                    {learner.notes && (
-                      <div>
-                        <Text type="secondary">{t('forms.learner.notesLabel')}</Text>
-                        <div><Text>{learner.notes}</Text></div>
-                      </div>
-                    )}
-                    
-                    {learner.lesson_rate && (
-                      <div>
-                        <Text type="secondary">{t('pages.finance.lessonRate')}</Text>
-                        <div><Text strong>{formatCurrency(learner.lesson_rate)}</Text></div>
-                      </div>
-                    )}
-
-                    <div>
-                      <Text type="secondary">{t('learnerProfile.telegramAccount')}</Text>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
-                        <Text>{learner.chat_id ? String(learner.chat_id) : t('learnerProfile.notLinked')}</Text>
-                        {learner.chat_id && (
-                          <Button
-                            size="small"
-                            danger
-                            icon={<DisconnectOutlined />}
-                            loading={unlinkAccountMutation.isPending}
-                            onClick={handleUnlinkAccount}
-                          >
-                            {t('learnerProfile.unlinkAccountAction')}
-                          </Button>
-                        )}
-                        {!learner.chat_id && (
-                          <Button
-                            size="small"
-                            icon={<LinkOutlined />}
-                            loading={createInviteMutation.isPending}
-                            onClick={handleCreateInvite}
-                          >
-                            {t('learnerProfile.createInviteAction')}
-                          </Button>
-                        )}
-                      </div>
-                    </div>
-                    
-                    {learner.first_package_date && (
-                      <div>
-                        <Text type="secondary">{t('learnerProfile.studiesSince')}</Text>
-                        <div><Text>{dayjs(learner.first_package_date).format('D MMMM YYYY')}</Text></div>
-                      </div>
-                    )}
-                  </div>
-                </Card>
-
-                {/* Notifications */}
-                <Card style={cardStyle}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                      <BellOutlined />
-                      <Text>{t('pages.learners.notifications')}</Text>
-                    </div>
-                    <Switch
-                      checked={learner.notifications_enabled}
-                      onChange={(checked) => notificationsMutation.mutate(checked)}
-                      loading={notificationsMutation.isPending}
-                      disabled={learner.is_archived}
-                    />
-                  </div>
-                </Card>
-
-                {/* Next Lesson */}
-                <Card style={cardStyle}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                    <CalendarOutlined />
-                    <div>
-                      <Text type="secondary">{t('learnerProfile.nextLesson')}</Text>
-                      <div><Text strong>{formatNextLessonDate(learner.next_lesson_date, t)}</Text></div>
-                    </div>
-                  </div>
-                </Card>
-              </div>
-            ),
-          },
-          {
-            key: 'packages',
-            label: t('learnerProfile.tabs.packages'),
-            children: (
-              <div>
-                <Space wrap style={{ marginBottom: spacing.md }}>
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    disabled={!canUseFullActions}
-                    onClick={() => setIsPackageModalOpen(true)}
-                  >
-                    {t('learnerProfile.createPackage')}
-                  </Button>
-                  <Button
-                    icon={<CalendarOutlined />}
-                    disabled={!canUseFullActions}
-                    onClick={handleOpenOneOffLessonModal}
-                  >
-                    {t('learnerProfile.createOneOffLesson')}
-                  </Button>
-                </Space>
-
-                <Card
-                  title={t('learnerProfile.learnerCalendar')}
-                  style={cardStyle}
-                >
-                  {isLoadingLearnerLessons ? (
-                    <Spin />
-                  ) : learnerLessons.length === 0 ? (
-                    <EmptyState
-                      title={t('learnerProfile.noCalendarLessons')}
-                      description={t('learnerProfile.noCalendarLessonsDescription')}
-                    />
-                  ) : (
-                    <CalendarContainer
-                      lessons={learnerLessons}
-                      timezone="Europe/Moscow"
-                      onLessonClick={handleLessonClick}
-                      onReschedule={handleRescheduleLesson}
-                    />
-                  )}
-                </Card>
-
-                {packages.length === 0 && oneOffPackages.length === 0 ? (
-                  <EmptyState
-                    title={t('learnerProfile.noLessons')}
-                    description={t('learnerProfile.noLessonsDescription')}
-                    actionText={canUseFullActions ? t('learnerProfile.createPackage') : undefined}
-                    onAction={canUseFullActions ? () => setIsPackageModalOpen(true) : undefined}
-                  />
-                ) : (
-                  <Space direction="vertical" size={spacing.lg} style={{ width: '100%' }}>
-                    <section>
-                      <Title level={5} style={{ marginTop: 0, marginBottom: spacing.md }}>
-                        {t('learnerProfile.lessonPackages')}
-                      </Title>
-                      {packages.length === 0 ? (
-                        <EmptyState
-                          title={t('pages.packages.noPackages')}
-                          description={t('pages.packages.noPackagesDescription')}
-                          actionText={canUseFullActions ? t('learnerProfile.createPackage') : undefined}
-                          onAction={canUseFullActions ? () => setIsPackageModalOpen(true) : undefined}
-                        />
-                      ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))', gap: spacing.md }}>
-                          {packages.map((pkg) => (
-                            <PackageCard
-                              key={pkg.id}
-                              package={pkg}
-                              showStatus
-                              onClick={() => navigate(`/packages/${pkg.id}`)}
-                              onAction={handlePackageCardAction}
-                            />
-                          ))}
-                        </div>
-                      )}
-                    </section>
-
-                    <section>
-                      <Title level={5} style={{ marginTop: 0, marginBottom: spacing.md }}>
-                        {t('learnerProfile.oneOffLessons')}
-                      </Title>
-                      {oneOffPackages.length === 0 ? (
-                        <EmptyState
-                          title={t('learnerProfile.noOneOffLessons')}
-                          description={t('learnerProfile.noOneOffLessonsDescription')}
-                          actionText={canUseFullActions ? t('learnerProfile.createOneOffLesson') : undefined}
-                          onAction={canUseFullActions ? handleOpenOneOffLessonModal : undefined}
-                        />
-                      ) : (
-                        <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(260px, 1fr))', gap: spacing.md }}>
-                          {oneOffPackages.map((lesson) => {
-                            const lessonDate = lesson.next_lesson_date || lesson.start_date;
-                            const price = Number(lesson.price || 0);
-                            return (
-                              <Card
-                                key={lesson.id}
-                                hoverable
-                                style={{ background: colors.bgSecondary, borderColor: colors.borderPrimary }}
-                                styles={{ body: { padding: spacing.md } }}
-                                onClick={() => navigate(`/packages/${lesson.id}`)}
-                              >
-                                <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>
-                                  <div style={{ display: 'flex', justifyContent: 'space-between', gap: spacing.sm }}>
-                                    <Text strong ellipsis style={{ fontSize: 16 }}>
-                                      {lesson.title}
-                                    </Text>
-                                  </div>
-                                  {lessonDate && (
-                                    <Text type="secondary">
-                                      <CalendarOutlined style={{ marginRight: spacing.xs }} />
-                                      {formatLessonDate(lessonDate)}
-                                    </Text>
-                                  )}
-                                  {price > 0 && (
-                                    <Text type="secondary">
-                                      {t('pages.finance.price')}: {formatCurrency(price)}
-                                    </Text>
-                                  )}
-                                </Space>
-                              </Card>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </section>
-                  </Space>
-                )}
-              </div>
-            ),
-          },
-          {
-            key: 'schedule',
-            label: t('learnerProfile.tabs.schedule'),
-            children: <ScheduleTab learnerId={learnerId} />,
-          },
-          {
-            key: 'finance',
-            label: t('learnerProfile.tabs.finance'),
-            children: (
-              <div>
-                {/* Total Payments */}
-                <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(180px, 1fr))', gap: spacing.md }}>
-                  <Card style={cardStyle}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                      <DollarOutlined
-                        style={{
-                          fontSize: 24,
-                          color: (finance?.outstanding_balance || 0) > 0 ? '#faad14' : colors.accentSuccess,
-                        }}
-                      />
-                      <div>
-                        <Text type="secondary">{t('pages.finance.outstanding')}</Text>
-                        <div>
-                          <Text strong style={{ fontSize: 20 }}>
-                            {formatCurrency(finance?.outstanding_balance || 0)}
-                          </Text>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                  <Card style={cardStyle}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                      <DollarOutlined style={{ fontSize: 24, color: colors.accentSuccess }} />
-                      <div>
-                        <Text type="secondary">{t('pages.finance.totalPaid')}</Text>
-                        <div>
-                          <Text strong style={{ fontSize: 20 }}>
-                            {formatCurrency(finance?.total_paid || 0)}
-                          </Text>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
-                  <Card style={cardStyle}>
-                    <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
-                      <DollarOutlined style={{ fontSize: 24, color: colors.accentPrimary }} />
-                      <div>
-                        <Text type="secondary">{t('pages.finance.lessonRate')}</Text>
-                        <div>
-                          <Text strong style={{ fontSize: 20 }}>
-                            {finance?.lesson_rate ? formatCurrency(finance.lesson_rate) : t('pages.finance.notSet')}
-                          </Text>
-                        </div>
-                      </div>
-                    </div>
-                  </Card>
+                <Text strong style={{ fontSize: 16 }}>{t('learnerProfile.learnerCalendar')}</Text>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    {formatNextLessonDate(learner.next_lesson_date, t)}
+                  </Text>
                 </div>
-
-                <Space wrap style={{ marginBottom: spacing.md }}>
-                  <Button
-                    onClick={() => navigate(`/learners/${learnerId}/finance`)}
-                  >
-                    {t('learnerProfile.openFullFinance')}
-                  </Button>
-                  <Button
-                    type="primary"
-                    icon={<PlusOutlined />}
-                    onClick={() => navigate(`/learners/${learnerId}/finance?recordPayment=1`)}
-                  >
-                    {t('pages.finance.recordPayment')}
-                  </Button>
-                </Space>
-
-                {/* Payment History */}
-                <Card title={t('pages.finance.paymentHistory')} style={cardStyle}>
-                  {payments.length === 0 ? (
-                    <EmptyState
-                      title={t('pages.finance.noPayments')}
-                      description={t('pages.finance.noPaymentsDescription')}
-                    />
-                  ) : (
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.sm }}>
-                      {payments.slice(0, 10).map((payment) => (
-                        <div
-                          key={payment.id}
-                          style={{
-                            display: 'flex',
-                            justifyContent: 'space-between',
-                            alignItems: 'center',
-                            padding: spacing.sm,
-                            background: colors.bgPrimary,
-                            borderRadius: 8,
-                          }}
-                        >
-                          <div>
-                            <Text>{dayjs(payment.paid_at).format('DD.MM.YYYY')}</Text>
-                            {payment.package_title && (
-                              <Text type="secondary" style={{ display: 'block', fontSize: 12 }}>
-                                {payment.package_title}
-                              </Text>
-                            )}
-                            {payment.notes && (
-                              <Text type="secondary" style={{ display: 'block', fontSize: 12, fontStyle: 'italic' }}>
-                                {payment.notes}
-                              </Text>
-                            )}
-                          </div>
-                          <Tag color="green">{formatCurrency(payment.amount)}</Tag>
-                        </div>
-                      ))}
-                      {payments.length > 10 && (
-                        <Button type="link" onClick={() => navigate(`/learners/${learnerId}/finance`)}>
-                          {t('common.viewAll')}
-                        </Button>
-                      )}
-                    </div>
-                  )}
-                </Card>
               </div>
-            ),
-          },
-        ]}
-      />
+              <Button
+                icon={<CalendarOutlined />}
+                disabled={!canUseFullActions}
+                onClick={handleOpenOneOffLessonModal}
+              >
+                {t('learnerProfile.createOneOffLesson')}
+              </Button>
+            </div>
+          </div>
+          <div style={{ ...panelBodyStyle, paddingTop: 0 }}>
+            {isLoadingLearnerLessons ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: spacing.xl }}>
+                <Spin />
+              </div>
+            ) : learnerLessons.length === 0 ? (
+              <EmptyState
+                title={t('learnerProfile.noCalendarLessons')}
+                description={t('learnerProfile.noCalendarLessonsDescription')}
+              />
+            ) : (
+              <CalendarContainer
+                lessons={learnerLessons}
+                timezone="Europe/Moscow"
+                onLessonClick={handleLessonClick}
+                onReschedule={handleRescheduleLesson}
+                calendarHeight={isMobile ? undefined : 'calc(100vh - 430px)'}
+                calendarMinHeight={isMobile ? undefined : 300}
+                compact={!isMobile}
+              />
+            )}
+          </div>
+        </div>
+
+        <Space direction="vertical" size={spacing.md} style={{ width: '100%' }}>
+          <div style={{ ...panelStyle, ...panelBodyStyle }}>
+            <div style={sectionHeaderStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                <CalendarOutlined style={mutedIconStyle} />
+                <Text strong>{t('learnerProfile.basicInfo')}</Text>
+              </div>
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                disabled={!canUseFullActions}
+                onClick={() => setIsEditModalOpen(true)}
+              />
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('learnerProfile.nextLesson')}</Text>
+              <Text style={{ textAlign: 'right' }}>{formatNextLessonDate(learner.next_lesson_date, t)}</Text>
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('pages.finance.lessonRate')}</Text>
+              <Text>{lessonRate ? formatCurrency(lessonRate) : t('pages.finance.notSet')}</Text>
+            </div>
+            {learner.first_package_date && (
+              <div style={valueRowStyle}>
+                <Text type="secondary">{t('learnerProfile.studiesSince')}</Text>
+                <Text>{dayjs(learner.first_package_date).format('D MMMM YYYY')}</Text>
+              </div>
+            )}
+            {learner.notes && (
+              <div style={{ marginTop: spacing.sm, ...innerSurfaceStyle }}>
+                <Text type="secondary" style={{ display: 'block', fontSize: 12, marginBottom: 4 }}>
+                  {t('forms.learner.notesLabel')}
+                </Text>
+                <Text style={{ whiteSpace: 'pre-wrap' }}>{learner.notes}</Text>
+              </div>
+            )}
+          </div>
+
+          <div style={{ ...panelStyle, ...panelBodyStyle }}>
+            <div style={sectionHeaderStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                <CalendarOutlined style={mutedIconStyle} />
+                <Text strong>{t('schedule.currentSchedule')}</Text>
+              </div>
+              <Button
+                type={scheduleSlots.length === 0 ? 'primary' : 'default'}
+                size="small"
+                disabled={!canUseFullActions}
+                onClick={() => setIsScheduleModalOpen(true)}
+              >
+                {scheduleSlots.length === 0 ? t('schedule.addSlot') : t('common.edit')}
+              </Button>
+            </div>
+            {isLoadingSchedule ? (
+              <Spin size="small" />
+            ) : scheduleSlots.length === 0 ? (
+              <div style={innerSurfaceStyle}>
+                <Text strong style={{ display: 'block', marginBottom: 4 }}>
+                  {t('schedule.noSlots')}
+                </Text>
+                <Text type="secondary" style={{ display: 'block', fontSize: 12, lineHeight: 1.35 }}>
+                  {t('learnerProfile.scheduleRequiredForPackages')}
+                </Text>
+              </div>
+            ) : (
+              <>
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: spacing.xs }}>
+                  {schedulePreviewSlots.map((slot) => (
+                    <span
+                      key={`${slot.day}-${slot.time}-${slot.duration}`}
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        minHeight: 26,
+                        padding: '4px 8px',
+                        borderRadius: 10,
+                        background: colors.bgSecondary,
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                      }}
+                    >
+                      {formatScheduleSlot(slot)}
+                    </span>
+                  ))}
+                  {scheduleSlots.length > schedulePreviewSlots.length && (
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        minHeight: 26,
+                        padding: '4px 8px',
+                        borderRadius: 10,
+                        background: colors.bgSecondary,
+                        color: colors.textSecondary,
+                        fontSize: 12,
+                      }}
+                    >
+                      +{scheduleSlots.length - schedulePreviewSlots.length}
+                    </span>
+                  )}
+                </div>
+                <Text type="secondary" style={{ display: 'block', fontSize: 12, lineHeight: 1.35, marginTop: spacing.sm }}>
+                  {t('schedule.templateInfoDescription')}
+                </Text>
+              </>
+            )}
+          </div>
+
+          <div style={{ ...panelStyle, ...panelBodyStyle }}>
+            <div style={sectionHeaderStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                <DollarOutlined style={mutedIconStyle} />
+                <Text strong>{t('pages.finance.title')}</Text>
+              </div>
+              <Button type="link" size="small" onClick={() => navigate(`/learners/${learnerId}/finance`)}>
+                {t('learnerProfile.openFullFinance')}
+              </Button>
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('pages.finance.outstanding')}</Text>
+              <Text strong>{formatCurrency(totalOutstanding)}</Text>
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('pages.finance.totalPaid')}</Text>
+              <Text>{formatCurrency(totalPaid)}</Text>
+            </div>
+            <Space wrap style={{ marginTop: spacing.sm }}>
+              <Button
+                type="primary"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={() => navigate(`/learners/${learnerId}/finance?recordPayment=1`)}
+              >
+                {t('pages.finance.recordPayment')}
+              </Button>
+            </Space>
+
+            <div style={{ display: 'flex', flexDirection: 'column', gap: spacing.xs, marginTop: spacing.md }}>
+              <Text type="secondary" style={{ fontSize: 12 }}>{t('pages.finance.paymentHistory')}</Text>
+              {latestPayments.length === 0 ? (
+                <div style={innerSurfaceStyle}>
+                  <Text type="secondary">{t('pages.finance.noPayments')}</Text>
+                </div>
+              ) : latestPayments.map((payment) => (
+                <div key={payment.id} style={{ ...innerSurfaceStyle, display: 'flex', justifyContent: 'space-between', gap: spacing.sm }}>
+                  <div style={{ minWidth: 0 }}>
+                    <Text>{dayjs(payment.paid_at).format('DD.MM.YYYY')}</Text>
+                    {payment.package_title && (
+                      <Text type="secondary" style={{ display: 'block', fontSize: 12 }} ellipsis>
+                        {payment.package_title}
+                      </Text>
+                    )}
+                  </div>
+                  <Text strong style={{ whiteSpace: 'nowrap' }}>{formatCurrency(payment.amount)}</Text>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div style={{ ...panelStyle, ...panelBodyStyle }}>
+            <div style={sectionHeaderStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                <BellOutlined style={mutedIconStyle} />
+                <Text strong>{t('pages.learners.notifications')}</Text>
+              </div>
+              <Switch
+                checked={learner.notifications_enabled}
+                onChange={(checked) => notificationsMutation.mutate(checked)}
+                loading={notificationsMutation.isPending}
+                disabled={learner.is_archived}
+              />
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('learnerProfile.telegramAccount')}</Text>
+              <Text>{learner.chat_id ? String(learner.chat_id) : t('learnerProfile.notLinked')}</Text>
+            </div>
+            <Space wrap style={{ marginTop: spacing.sm }}>
+              {learner.chat_id ? (
+                <Button
+                  size="small"
+                  danger
+                  icon={<DisconnectOutlined />}
+                  loading={unlinkAccountMutation.isPending}
+                  disabled={!canUseFullActions}
+                  onClick={handleUnlinkAccount}
+                >
+                  {t('learnerProfile.unlinkAccountAction')}
+                </Button>
+              ) : (
+                <Button
+                  size="small"
+                  icon={<LinkOutlined />}
+                  loading={createInviteMutation.isPending}
+                  disabled={!canUseFullActions}
+                  onClick={handleCreateInvite}
+                >
+                  {t('learnerProfile.createInviteAction')}
+                </Button>
+              )}
+            </Space>
+          </div>
+        </Space>
+      </div>
+
+      <section style={{ marginBottom: spacing.lg }}>
+        <div style={sectionHeaderStyle}>
+          <Title level={4} style={{ margin: 0 }}>{t('learnerProfile.lessonPackages')}</Title>
+          <Button
+            type="primary"
+            icon={<PlusOutlined />}
+            disabled={!canUseFullActions}
+            onClick={() => setIsPackageModalOpen(true)}
+          >
+            {t('learnerProfile.createPackage')}
+          </Button>
+        </div>
+        {packages.length === 0 ? (
+          <EmptyState
+            title={t('pages.packages.noPackages')}
+            description={t('pages.packages.noPackagesDescription')}
+            actionText={canUseFullActions ? t('learnerProfile.createPackage') : undefined}
+            onAction={canUseFullActions ? () => setIsPackageModalOpen(true) : undefined}
+          />
+        ) : (
+          <div style={packageGridStyle}>
+            {packages.map((pkg) => (
+              <PackageCard
+                key={pkg.id}
+                package={pkg}
+                showStatus
+                onClick={() => navigate(`/packages/${pkg.id}`)}
+                onAction={handlePackageCardAction}
+              />
+            ))}
+          </div>
+        )}
+      </section>
+
+      <section style={{ marginBottom: spacing.lg }}>
+        <div style={sectionHeaderStyle}>
+          <Title level={4} style={{ margin: 0 }}>{t('learnerProfile.oneOffLessons')}</Title>
+          <Button
+            icon={<CalendarOutlined />}
+            disabled={!canUseFullActions}
+            onClick={handleOpenOneOffLessonModal}
+          >
+            {t('learnerProfile.createOneOffLesson')}
+          </Button>
+        </div>
+        {oneOffPackages.length === 0 ? (
+          <EmptyState
+            title={t('learnerProfile.noOneOffLessons')}
+            description={t('learnerProfile.noOneOffLessonsDescription')}
+            actionText={canUseFullActions ? t('learnerProfile.createOneOffLesson') : undefined}
+            onAction={canUseFullActions ? handleOpenOneOffLessonModal : undefined}
+          />
+        ) : (
+          <div style={oneOffGridStyle}>
+            {oneOffPackages.map((lesson) => {
+              const lessonDate = lesson.next_lesson_date || lesson.start_date;
+              const price = Number(lesson.price || 0);
+              return (
+                <div
+                  key={lesson.id}
+                  role="button"
+                  tabIndex={0}
+                  onClick={() => navigate(`/packages/${lesson.id}`)}
+                  onKeyDown={(event) => {
+                    if (event.key === 'Enter' || event.key === ' ') {
+                      event.preventDefault();
+                      navigate(`/packages/${lesson.id}`);
+                    }
+                  }}
+                  style={{
+                    cursor: 'pointer',
+                    background: colors.bgTertiary,
+                    borderRadius: 10,
+                    padding: spacing.md,
+                    minHeight: 112,
+                    outline: 'none',
+                  }}
+                >
+                  <Text strong ellipsis style={{ display: 'block', fontSize: 16 }}>
+                    {lesson.title}
+                  </Text>
+                  {lessonDate && (
+                    <Text type="secondary" style={{ display: 'block', marginTop: spacing.sm }}>
+                      <CalendarOutlined style={{ marginRight: spacing.xs }} />
+                      {formatLessonDate(lessonDate)}
+                    </Text>
+                  )}
+                  {price > 0 && (
+                    <Text type="secondary" style={{ display: 'block', marginTop: spacing.xs }}>
+                      {t('pages.finance.price')}: {formatCurrency(price)}
+                    </Text>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
+      <ResponsiveModal
+        open={isScheduleModalOpen}
+        title={t('learnerProfile.tabs.schedule')}
+        onCancel={() => setIsScheduleModalOpen(false)}
+        footer={null}
+        width={760}
+      >
+        <ScheduleTab learnerId={learnerId} />
+      </ResponsiveModal>
 
       {/* Edit Modal */}
       <LearnerForm

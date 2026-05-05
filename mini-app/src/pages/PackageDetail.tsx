@@ -4,40 +4,44 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Spin,
   Alert,
-  Tag,
   Button,
   message,
-  Tabs,
+  notification,
   Typography,
   Modal,
   Form,
   InputNumber,
   DatePicker,
   Input,
+  Dropdown,
+  Progress,
+  Space,
 } from 'antd';
+import type { MenuProps } from 'antd';
 import {
   ArrowLeftOutlined,
+  CalendarOutlined,
   EditOutlined,
   PlusOutlined,
-  CalendarOutlined,
   BookOutlined,
   DollarOutlined,
   FileTextOutlined,
-  CheckCircleOutlined,
-  CloseCircleOutlined,
-  ClockCircleOutlined,
+  DeleteOutlined,
+  MoreOutlined,
+  PlayCircleOutlined,
+  StopOutlined,
+  UserOutlined,
 } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
-import SegmentedProgress from '../components/common/SegmentedProgress';
 import CalendarContainer from '../components/common/CalendarContainer';
 import PackageForm from '../components/forms/PackageForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
 import LessonForm from '../components/forms/LessonForm';
 import { DetailPageSkeleton } from '../components/common/PageSkeletons';
 import TenantContextRequired from '../components/common/TenantContextRequired';
-import { formatDate } from '../utils/datetime';
+import { formatDate, formatNextLessonDate } from '../utils/datetime';
 import { spacing } from '../theme/tokens';
 import { useTheme } from '../theme/ThemeProvider';
 import { useAuth } from '../auth/AuthProvider';
@@ -126,17 +130,23 @@ const formatCurrency = (value: number): string => {
   }).format(value);
 };
 
-const getPaymentStatusColor = (status?: string): string => {
+const getPaymentStatusLabelKey = (status?: string): string => {
   switch (status) {
-    case 'paid': return 'green';
-    case 'partial': return 'orange';
-    case 'unpaid': return 'red';
-    default: return 'default';
+    case 'paid': return 'pages.finance.paid';
+    case 'partial': return 'pages.finance.partial';
+    case 'unpaid': return 'pages.finance.unpaid';
+    default: return 'pages.finance.unpaid';
   }
 };
 
-const getStatusColor = (status: string): string => {
-  return status === 'active' ? 'green' : 'volcano';
+const getStatusAccentKey = (status: string): 'accentSuccess' | 'accentPrimary' | 'accentWarning' | 'accentError' | 'borderPrimary' => {
+  switch (status) {
+    case 'active': return 'accentSuccess';
+    case 'completed': return 'accentPrimary';
+    case 'draft': return 'accentWarning';
+    case 'cancelled': return 'accentError';
+    default: return 'borderPrimary';
+  }
 };
 
 // --- Component --- //
@@ -150,8 +160,9 @@ const PackageDetail: React.FC = () => {
   const { tenantAccess, tenantId } = useAuth();
   const requiresTenantContext = tenantId === null;
   const { isMobile } = useResponsive();
-  const isDark = resolvedTheme.colorScheme === 'dark';
+  const colors = resolvedTheme.colors;
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
+  const [notificationApi, notificationContextHolder] = notification.useNotification();
   const [paymentForm] = Form.useForm();
   const handledRouteActionRef = useRef<string | null>(null);
 
@@ -164,6 +175,7 @@ const PackageDetail: React.FC = () => {
   const [isCompleteLessonModalOpen, setIsCompleteLessonModalOpen] = useState(false);
   const [isCancelLessonModalOpen, setIsCancelLessonModalOpen] = useState(false);
   const [isAddLessonModalOpen, setIsAddLessonModalOpen] = useState(false);
+  const [statusAction, setStatusAction] = useState<'active' | 'completed' | null>(null);
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [newLessonDate, setNewLessonDate] = useState<string | null>(null);
@@ -193,7 +205,7 @@ const PackageDetail: React.FC = () => {
       return data;
     },
     onSuccess: () => {
-      message.success(t('success.created'));
+      notificationApi.success({ message: t('success.created'), placement: 'topRight' });
       queryClient.invalidateQueries({ queryKey: ['packageLessons', id] });
       queryClient.invalidateQueries({ queryKey: ['package', id] });
       setIsAddLessonModalOpen(false);
@@ -218,7 +230,7 @@ const PackageDetail: React.FC = () => {
   const deleteLessonMutation = useMutation({
     mutationFn: deleteLesson,
     onSuccess: () => {
-      message.success(t('success.deleted'));
+      notificationApi.success({ message: t('success.deleted'), placement: 'topRight' });
       queryClient.invalidateQueries({ queryKey: ['packageLessons', id] });
       queryClient.invalidateQueries({ queryKey: ['package', id] });
       setIsDeleteLessonModalOpen(false);
@@ -232,7 +244,7 @@ const PackageDetail: React.FC = () => {
   const deletePackageMutation = useMutation({
     mutationFn: deletePackage,
     onSuccess: () => {
-      message.success(t('success.deleted'));
+      notificationApi.success({ message: t('success.deleted'), placement: 'topRight' });
       navigate('/packages');
     },
     onError: (error: Error) => {
@@ -252,8 +264,9 @@ const PackageDetail: React.FC = () => {
       return data;
     },
     onSuccess: () => {
-      message.success(t('pages.finance.paymentRecorded'));
+      notificationApi.success({ message: t('pages.finance.paymentRecorded'), placement: 'topRight' });
       queryClient.invalidateQueries({ queryKey: ['package', id] });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
       setIsPaymentModalOpen(false);
       paymentForm.resetFields();
     },
@@ -273,11 +286,19 @@ const PackageDetail: React.FC = () => {
       const { data } = await api.patch(`/packages/${id}`, values);
       return data;
     },
-    onSuccess: () => {
-      message.success(t('success.updated'));
+    onSuccess: (_, variables) => {
+      notificationApi.success({
+        message: variables?.status === 'active'
+          ? t('packageCard.actions.activatedToast')
+          : variables?.status === 'completed'
+            ? t('packageCard.actions.completedToast')
+            : t('success.updated'),
+        placement: 'topRight',
+      });
       queryClient.invalidateQueries({ queryKey: ['package', id] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       setIsEditModalOpen(false);
+      setStatusAction(null);
       clearRouteAction();
     },
     onError: (error: Error) => {
@@ -291,7 +312,8 @@ const PackageDetail: React.FC = () => {
       clearRouteAction();
       return;
     }
-    updatePackageMutation.mutate({ status: nextStatus });
+    setStatusAction(nextStatus);
+    clearRouteAction();
   };
 
   // Handlers
@@ -339,7 +361,7 @@ const PackageDetail: React.FC = () => {
       { lessonId: selectedLessonId, values: updateValues },
       {
         onSuccess: () => {
-          message.success(t('pages.lessons.lessonRescheduled'));
+          notificationApi.success({ message: t('pages.lessons.lessonRescheduled'), placement: 'topRight' });
           setIsRescheduleModalOpen(false);
           setSelectedLessonId(null);
           setSelectedLesson(null);
@@ -359,7 +381,7 @@ const PackageDetail: React.FC = () => {
       { lessonId: selectedLessonId, values: { status: 'completed' } },
       {
         onSuccess: () => {
-          message.success(t('pages.lessons.lessonCompleted'));
+          notificationApi.success({ message: t('pages.lessons.lessonCompleted'), placement: 'topRight' });
           setIsCompleteLessonModalOpen(false);
           setSelectedLessonId(null);
         },
@@ -378,7 +400,7 @@ const PackageDetail: React.FC = () => {
       { lessonId: selectedLessonId, values: { status: 'cancelled' } },
       {
         onSuccess: () => {
-          message.success(t('pages.lessons.lessonCancelled'));
+          notificationApi.success({ message: t('pages.lessons.lessonCancelled'), placement: 'topRight' });
           setIsCancelLessonModalOpen(false);
           setSelectedLessonId(null);
         },
@@ -480,177 +502,58 @@ const PackageDetail: React.FC = () => {
 
   const progress = packageData?.progress || { total: 0, completed: 0, cancelled: 0 };
   const remaining = progress.total - progress.completed - progress.cancelled;
+  const completedOrClosed = progress.completed + progress.cancelled;
+  const progressPercent = progress.total > 0
+    ? Math.round((completedOrClosed / progress.total) * 100)
+    : 0;
+  const price = Number(packageData?.price || 0);
+  const totalPaid = Number(packageData?.total_paid || 0);
+  const outstanding = Math.max(0, price - totalPaid);
+  const statusAccent = colors[getStatusAccentKey(packageData?.status || '')];
+  const upcomingLesson = lessonsData?.items
+    .filter((lesson) => (
+      (lesson.status === 'scheduled' || lesson.status === 'rescheduled') &&
+      dayjs(lesson.scheduled_at).isAfter(dayjs().subtract(1, 'minute'))
+    ))
+    .sort((a, b) => dayjs(a.scheduled_at).valueOf() - dayjs(b.scheduled_at).valueOf())[0];
 
-  // Card style for details sections
-  const cardStyle: React.CSSProperties = {
-    background: isDark ? '#1f1f1f' : '#ffffff',
-    borderRadius: 12,
-    padding: spacing.md,
-    border: `1px solid ${isDark ? '#3a3a3a' : '#f0f0f0'}`,
+  const panelStyle: React.CSSProperties = {
+    background: colors.bgTertiary,
+    border: 0,
+    borderRadius: 10,
+    boxShadow: 'none',
   };
 
-  const cardHeaderStyle: React.CSSProperties = {
+  const panelBodyStyle: React.CSSProperties = {
+    padding: spacing.md,
+  };
+
+  const sectionHeaderStyle: React.CSSProperties = {
     display: 'flex',
     alignItems: 'center',
     justifyContent: 'space-between',
-    marginBottom: spacing.sm,
+    gap: spacing.sm,
+    marginBottom: isMobile ? spacing.md : spacing.sm,
   };
 
-  const cardTitleStyle: React.CSSProperties = {
+  const subtleIconStyle: React.CSSProperties = {
+    color: colors.textSecondary,
+    fontSize: 16,
+  };
+
+  const innerSurfaceStyle: React.CSSProperties = {
+    background: colors.bgSecondary,
+    borderRadius: 10,
+    padding: spacing.sm,
+  };
+
+  const valueRowStyle: React.CSSProperties = {
     display: 'flex',
-    alignItems: 'center',
-    gap: spacing.xs,
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: spacing.sm,
+    padding: isMobile ? '7px 0' : '5px 0',
   };
-
-  const iconStyle: React.CSSProperties = {
-    fontSize: 18,
-    color: '#0f7b6c',
-  };
-
-  const rowStyle: React.CSSProperties = {
-    display: 'flex',
-    alignItems: 'center',
-    gap: spacing.xs,
-    padding: '6px 0',
-  };
-
-  // Tab content
-  const detailsContent = (
-    <div>
-      {/* Two-column grid for desktop, single column for mobile */}
-      <div style={{ 
-        display: 'grid', 
-        gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))',
-        gap: spacing.md,
-      }}>
-        {/* Dates Card */}
-        <div style={cardStyle}>
-          <div style={cardHeaderStyle}>
-            <div style={cardTitleStyle}>
-              <CalendarOutlined style={iconStyle} />
-              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                {t('pages.finance.dates')}
-              </Text>
-            </div>
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              disabled={!canUseFullActions}
-              onClick={() => setIsEditModalOpen(true)}
-            />
-          </div>
-          <div style={rowStyle}>
-            <Text type="secondary">{t('pages.finance.start')}:</Text>
-            <Text>{packageData?.start_date ? formatDate(packageData.start_date, { timezone: packageData.timezone }) : '—'}</Text>
-          </div>
-          <div style={rowStyle}>
-            <Text type="secondary">{t('pages.finance.end')}:</Text>
-            <Text>{packageData?.end_date ? formatDate(packageData.end_date, { timezone: packageData.timezone }) : '—'}</Text>
-          </div>
-        </div>
-
-        {/* Lessons Card */}
-        <div style={cardStyle}>
-          <div style={cardHeaderStyle}>
-            <div style={cardTitleStyle}>
-              <BookOutlined style={iconStyle} />
-              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                {t('pages.finance.lessons')}
-              </Text>
-            </div>
-            <Text type="secondary" style={{ fontSize: 13 }}>
-              {progress.total} {t('pages.finance.total')}
-            </Text>
-          </div>
-          <div style={rowStyle}>
-            <CheckCircleOutlined style={{ color: '#52c41a', fontSize: 16 }} />
-            <Text>{progress.completed} {t('pages.finance.completed')}</Text>
-          </div>
-          <div style={rowStyle}>
-            <CloseCircleOutlined style={{ color: '#ff4d4f', fontSize: 16 }} />
-            <Text>{progress.cancelled} {t('pages.finance.cancelled')}</Text>
-          </div>
-          <div style={rowStyle}>
-            <ClockCircleOutlined style={{ color: '#faad14', fontSize: 16 }} />
-            <Text>{remaining} {t('pages.finance.remaining')}</Text>
-          </div>
-        </div>
-
-        {/* Payment Card */}
-        <div style={cardStyle}>
-          <div style={cardHeaderStyle}>
-            <div style={cardTitleStyle}>
-              <DollarOutlined style={iconStyle} />
-              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                {t('pages.finance.payment')}
-              </Text>
-            </div>
-            <Button
-              type="primary"
-              size="small"
-              icon={<PlusOutlined />}
-              onClick={openPaymentModal}
-              disabled={!packageData?.price}
-            >
-              {t('pages.finance.add')}
-            </Button>
-          </div>
-          <div style={rowStyle}>
-            <Text type="secondary">{t('pages.finance.price')}:</Text>
-            <Text strong>{packageData?.price ? formatCurrency(packageData.price) : '—'}</Text>
-          </div>
-          {packageData?.total_paid !== undefined && packageData.total_paid > 0 && (
-            <div style={rowStyle}>
-              <Text type="secondary">{t('pages.finance.paid')}:</Text>
-              <Text style={{ color: '#52c41a' }}>{formatCurrency(packageData.total_paid)}</Text>
-            </div>
-          )}
-          <div style={{ ...rowStyle, marginTop: 4 }}>
-            <Tag color={getPaymentStatusColor(packageData?.payment_status)} style={{ margin: 0 }}>
-              {packageData?.payment_status === 'paid' ? t('pages.finance.paid') : 
-               packageData?.payment_status === 'partial' ? t('pages.finance.partial') : t('pages.finance.unpaid')}
-            </Tag>
-          </div>
-        </div>
-
-        {/* Notes Card */}
-        <div style={cardStyle}>
-          <div style={cardHeaderStyle}>
-            <div style={cardTitleStyle}>
-              <FileTextOutlined style={iconStyle} />
-              <Text strong style={{ fontSize: 14, textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                {t('pages.finance.notes')}
-              </Text>
-            </div>
-            <Button
-              type="text"
-              size="small"
-              icon={<EditOutlined />}
-              disabled={!canUseFullActions}
-              onClick={() => setIsEditModalOpen(true)}
-            />
-          </div>
-          <Text type={packageData?.notes ? undefined : 'secondary'} style={{ whiteSpace: 'pre-wrap' }}>
-            {packageData?.notes || t('pages.finance.noNotes')}
-          </Text>
-        </div>
-      </div>
-
-      {/* Delete link */}
-      <div style={{ textAlign: 'center', marginTop: spacing.lg }}>
-        <Button
-          type="link"
-          danger
-          style={{ fontSize: 12 }}
-          disabled={!canUseFullActions}
-          onClick={() => setIsDeletePackageModalOpen(true)}
-        >
-          {t('pages.finance.deletePackage')}
-        </Button>
-      </div>
-    </div>
-  );
 
   // Handle lesson click from calendar
   const handleLessonClick = (lessonId: number) => {
@@ -671,32 +574,70 @@ const PackageDetail: React.FC = () => {
     setIsAddLessonModalOpen(true);
   };
 
-  const lessonsContent = (
-    <div>
-      {isLoadingLessons ? (
-        <Spin />
-      ) : (
-        <CalendarContainer
-          lessons={lessonsData?.items || []}
-          timezone={packageData?.timezone || 'UTC'}
-          onLessonClick={handleLessonClick}
-          onAddLesson={handleAddLesson}
-          onReschedule={handleReschedule}
-          onComplete={handleComplete}
-          onCancel={handleCancel}
-          onDelete={handleDelete}
-        />
-      )}
-    </div>
-  );
-
-  const tabItems = [
-    { key: 'lessons', label: t('navigation.lessons'), children: lessonsContent },
-    { key: 'details', label: t('packageDetail.details'), children: detailsContent },
+  const actionMenuItems: MenuProps['items'] = [
+    {
+      key: 'edit',
+      icon: <EditOutlined />,
+      label: t('common.edit'),
+      disabled: !canUseFullActions,
+    },
+    {
+      key: 'payment',
+      icon: <DollarOutlined />,
+      label: t('pages.finance.recordPayment'),
+      disabled: !packageData?.price,
+    },
+    ...(packageData?.status === 'active'
+      ? [{
+          key: 'complete',
+          icon: <StopOutlined />,
+          label: t('packageCard.actions.complete'),
+          disabled: !canUseFullActions,
+        } as const]
+      : [{
+          key: 'activate',
+          icon: <PlayCircleOutlined />,
+          label: t('packageCard.actions.activate'),
+          disabled: !canUseFullActions,
+        } as const]),
+    {
+      type: 'divider',
+    },
+    {
+      key: 'delete',
+      icon: <DeleteOutlined />,
+      label: t('common.delete'),
+      danger: true,
+      disabled: !canUseFullActions,
+    },
   ];
+
+  const handleActionMenuClick: MenuProps['onClick'] = ({ key }) => {
+    if (key === 'edit') {
+      setIsEditModalOpen(true);
+      return;
+    }
+    if (key === 'payment') {
+      openPaymentModal();
+      return;
+    }
+    if (key === 'activate') {
+      updatePackageStatus('active');
+      return;
+    }
+    if (key === 'complete') {
+      updatePackageStatus('completed');
+      return;
+    }
+    if (key === 'delete') {
+      setIsDeletePackageModalOpen(true);
+    }
+  };
 
   return (
     <div>
+      {notificationContextHolder}
+
       {!canUseFullActions && (
         <Alert
           type="warning"
@@ -707,83 +648,312 @@ const PackageDetail: React.FC = () => {
         />
       )}
 
-      {/* Header */}
       <div
         style={{
           display: 'flex',
           flexDirection: isMobile ? 'column' : 'row',
-          alignItems: isMobile ? 'stretch' : 'center',
-          gap: spacing.md,
-          marginBottom: isMobile ? spacing.md : spacing.lg,
-        }}
-      >
-        <div style={{
-          display: 'flex',
-          alignItems: 'center',
+          alignItems: isMobile ? 'stretch' : 'flex-start',
           justifyContent: 'space-between',
           gap: spacing.sm,
-          flexWrap: 'wrap',
-        }}>
-          <Button type="text" icon={<ArrowLeftOutlined />} onClick={() => navigate('/packages')}>
+          marginBottom: isMobile ? spacing.md : spacing.sm,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <Button
+            type="text"
+            icon={<ArrowLeftOutlined />}
+            onClick={() => navigate('/packages')}
+            style={{ marginLeft: -spacing.sm, marginBottom: spacing.xs }}
+          >
             {t('common.back')}
           </Button>
-          <SegmentedProgress
-            total={progress.total}
-            completed={progress.completed}
-            cancelled={progress.cancelled}
-            size={80}
-          />
-        </div>
-        <div style={{ flex: 1, minWidth: 200 }}>
-          <Title level={4} style={{ margin: 0 }}>
+          <Title level={3} style={{ margin: 0, lineHeight: 1.2 }}>
             {packageData?.title}
           </Title>
-          <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap' }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm, flexWrap: 'wrap', marginTop: spacing.xs }}>
             <Link to={`/learners/${packageData?.learner_id}`}>
-              <Text type="secondary" style={{ textDecoration: 'underline' }}>
+              <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6, color: colors.textSecondary }}>
+                <UserOutlined style={{ fontSize: 12 }} />
                 {packageData?.learner_name}
-              </Text>
+              </span>
             </Link>
             <Text type="secondary">•</Text>
-            <Tag color={getStatusColor(packageData?.status || '')}>
-              {packageData?.status?.toUpperCase()}
-            </Tag>
+            <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: statusAccent,
+                }}
+              />
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                {t(`pages.packages.status.${packageData?.status}`)}
+              </Text>
+            </span>
           </div>
         </div>
+        <Space size={spacing.sm} wrap style={{ justifyContent: isMobile ? 'flex-start' : 'flex-end' }}>
+          {canUseFullActions && (
+            <Button icon={<EditOutlined />} onClick={() => setIsEditModalOpen(true)}>
+              {t('common.edit')}
+            </Button>
+          )}
+          <Dropdown
+            menu={{ items: actionMenuItems, onClick: handleActionMenuClick }}
+            placement="bottomRight"
+            trigger={['click']}
+          >
+            <Button icon={<MoreOutlined />} aria-label={t('packageCard.actions.menu')} />
+          </Dropdown>
+        </Space>
       </div>
 
-      {/* Tabs */}
-      <Tabs items={tabItems} defaultActiveKey="lessons" />
+      <div
+        style={{
+          display: 'grid',
+          gridTemplateColumns: isMobile ? '1fr' : 'minmax(0, 1fr) minmax(300px, 360px)',
+          gap: spacing.md,
+          alignItems: 'start',
+        }}
+      >
+        <div style={panelStyle}>
+          <div style={{ ...panelBodyStyle, paddingBottom: 0 }}>
+            <div style={sectionHeaderStyle}>
+              <div>
+                <Text strong style={{ fontSize: 16 }}>{t('navigation.lessons')}</Text>
+                <div>
+                  <Text type="secondary" style={{ fontSize: 13 }}>
+                    {progress.total} {t('pages.finance.total')}
+                  </Text>
+                </div>
+              </div>
+              {canUseFullActions && (
+                <Button
+                  icon={<PlusOutlined />}
+                  onClick={() => {
+                    setNewLessonDate(null);
+                    setIsAddLessonModalOpen(true);
+                  }}
+                >
+                  {t('pages.lessons.addLesson')}
+                </Button>
+              )}
+            </div>
+          </div>
+          <div style={{ ...panelBodyStyle, paddingTop: 0 }}>
+            {isLoadingLessons ? (
+              <div style={{ display: 'flex', justifyContent: 'center', padding: spacing.xl }}>
+                <Spin />
+              </div>
+            ) : (
+              <CalendarContainer
+                lessons={lessonsData?.items || []}
+                timezone={packageData?.timezone || 'UTC'}
+                onLessonClick={handleLessonClick}
+                onAddLesson={handleAddLesson}
+                onReschedule={handleReschedule}
+                onComplete={handleComplete}
+                onCancel={handleCancel}
+                onDelete={handleDelete}
+                calendarHeight={isMobile ? undefined : 'calc(100vh - 430px)'}
+                calendarMinHeight={isMobile ? undefined : 300}
+                compact={!isMobile}
+              />
+            )}
+          </div>
+        </div>
+
+        <Space direction="vertical" size={spacing.md} style={{ width: '100%' }}>
+          <div style={{ ...panelStyle, ...panelBodyStyle }}>
+            <div style={sectionHeaderStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                <BookOutlined style={subtleIconStyle} />
+                <Text strong>{t('packageDetail.summary')}</Text>
+              </div>
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                disabled={!canUseFullActions}
+                onClick={() => setIsEditModalOpen(true)}
+              />
+            </div>
+            <div style={{ marginBottom: spacing.sm }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: spacing.sm, marginBottom: 6 }}>
+                <Text type="secondary">{t('pages.packages.progress')}</Text>
+                <Text strong>{completedOrClosed}/{progress.total}</Text>
+              </div>
+              <Progress
+                percent={progressPercent}
+                showInfo={false}
+                size="small"
+                strokeColor={colors.accentPrimary}
+                trailColor={colors.borderPrimary}
+              />
+              <Text type="secondary" style={{ display: 'block', fontSize: 12, marginTop: spacing.xs }}>
+                {progress.completed} {t('pages.finance.completed')} · {progress.cancelled} {t('pages.finance.cancelled')} · {remaining} {t('pages.finance.remaining')}
+              </Text>
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('packageDetail.nextLesson')}</Text>
+              <Text style={{ textAlign: 'right' }}>
+                {upcomingLesson
+                  ? formatNextLessonDate(upcomingLesson.scheduled_at, t, packageData?.timezone)
+                  : t('packageCard.noScheduled')}
+              </Text>
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('pages.finance.start')}</Text>
+              <Text>{packageData?.start_date ? formatDate(packageData.start_date, { timezone: packageData.timezone }) : '—'}</Text>
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('pages.finance.end')}</Text>
+              <Text>{packageData?.end_date ? formatDate(packageData.end_date, { timezone: packageData.timezone }) : '—'}</Text>
+            </div>
+            <div style={{ ...innerSurfaceStyle, marginTop: spacing.sm }}>
+              <div style={{ display: 'flex', alignItems: 'flex-start', gap: spacing.sm }}>
+                <CalendarOutlined style={{ ...subtleIconStyle, marginTop: 2 }} />
+                <div style={{ minWidth: 0, flex: 1 }}>
+                  <Text strong style={{ display: 'block', fontSize: 13 }}>
+                    {t('packageDetail.scheduleSource')}
+                  </Text>
+                  <Text type="secondary" style={{ display: 'block', fontSize: 12, lineHeight: 1.35 }}>
+                    {t('packageDetail.scheduleSourceDescription')}
+                  </Text>
+                  <Button
+                    type="link"
+                    size="small"
+                    style={{ padding: 0, height: 'auto', marginTop: spacing.xs }}
+                    onClick={() => navigate(`/learners/${packageData?.learner_id}?section=schedule`)}
+                  >
+                    {t('packageDetail.openLearnerSchedule')}
+                  </Button>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div style={{ ...panelStyle, ...panelBodyStyle }}>
+            <div style={sectionHeaderStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                <DollarOutlined style={subtleIconStyle} />
+                <Text strong>{t('pages.finance.payment')}</Text>
+              </div>
+              <Button
+                type="text"
+                size="small"
+                icon={<PlusOutlined />}
+                onClick={openPaymentModal}
+                disabled={!packageData?.price}
+              />
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('pages.finance.price')}</Text>
+              <Text>{price > 0 ? formatCurrency(price) : '—'}</Text>
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('pages.finance.paid')}</Text>
+              <Text>{formatCurrency(totalPaid)}</Text>
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('pages.finance.outstanding')}</Text>
+              <Text strong>{price > 0 ? formatCurrency(outstanding) : '—'}</Text>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: spacing.xs }}>
+              <span
+                style={{
+                  width: 8,
+                  height: 8,
+                  borderRadius: '50%',
+                  background: outstanding > 0 ? colors.accentWarning : colors.accentPrimary,
+                }}
+              />
+              <Text type="secondary" style={{ fontSize: 13 }}>
+                {t(getPaymentStatusLabelKey(packageData?.payment_status))}
+              </Text>
+            </div>
+          </div>
+
+          <div style={{ ...panelStyle, ...panelBodyStyle }}>
+            <div style={sectionHeaderStyle}>
+              <div style={{ display: 'flex', alignItems: 'center', gap: spacing.sm }}>
+                <FileTextOutlined style={subtleIconStyle} />
+                <Text strong>{t('pages.finance.notes')}</Text>
+              </div>
+              <Button
+                type="text"
+                size="small"
+                icon={<EditOutlined />}
+                disabled={!canUseFullActions}
+                onClick={() => setIsEditModalOpen(true)}
+              />
+            </div>
+            <Text type={packageData?.notes ? undefined : 'secondary'} style={{ whiteSpace: 'pre-wrap' }}>
+              {packageData?.notes || t('pages.finance.noNotes')}
+            </Text>
+          </div>
+
+          <Button
+            danger
+            type="text"
+            icon={<DeleteOutlined />}
+            disabled={!canUseFullActions}
+            onClick={() => setIsDeletePackageModalOpen(true)}
+            style={{ alignSelf: 'flex-start', paddingLeft: 0 }}
+          >
+            {t('pages.finance.deletePackage')}
+          </Button>
+        </Space>
+      </div>
 
       {/* Payment Modal */}
       <Modal
         title={t('pages.finance.recordPayment')}
         open={isPaymentModalOpen}
         onOk={() => paymentForm.validateFields().then((values) => createPaymentMutation.mutate(values))}
-        onCancel={() => setIsPaymentModalOpen(false)}
+        onCancel={() => {
+          setIsPaymentModalOpen(false);
+          paymentForm.resetFields();
+        }}
         confirmLoading={createPaymentMutation.isPending}
-        okText={t('common.add')}
+        okText={t('pages.finance.recordPayment')}
         cancelText={t('common.cancel')}
       >
-        <Form form={paymentForm} layout="vertical">
-          <Form.Item
-            name="amount"
-            label={t('pages.finance.amount')}
-            rules={[{ required: true, message: t('common.required') }]}
-          >
-            <InputNumber style={{ width: '100%' }} min={1} />
-          </Form.Item>
-          <Form.Item
-            name="paid_at"
-            label={t('pages.finance.date')}
-            rules={[{ required: true, message: t('common.required') }]}
-          >
-            <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
-          </Form.Item>
-          <Form.Item name="notes" label={t('pages.finance.notes')}>
-            <Input.TextArea rows={2} />
-          </Form.Item>
-        </Form>
+        <Space direction="vertical" size={spacing.md} style={{ width: '100%' }}>
+          <div>
+            <Text strong>{packageData?.title}</Text>
+            <div>
+              <Text type="secondary">
+                {t('pages.finance.price')}: {price > 0 ? formatCurrency(price) : '—'}
+              </Text>
+            </div>
+            <div>
+              <Text type="secondary">
+                {t('pages.finance.outstanding')}: {price > 0 ? formatCurrency(outstanding) : '—'}
+              </Text>
+            </div>
+          </div>
+          <Form form={paymentForm} layout="vertical">
+            <Form.Item
+              name="amount"
+              label={t('pages.finance.amount')}
+              rules={[{ required: true, message: t('common.required') }]}
+            >
+              <InputNumber style={{ width: '100%' }} min={1} />
+            </Form.Item>
+            <Form.Item
+              name="paid_at"
+              label={t('pages.finance.date')}
+              rules={[{ required: true, message: t('common.required') }]}
+            >
+              <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+            </Form.Item>
+            <Form.Item name="notes" label={t('pages.finance.notes')}>
+              <Input.TextArea rows={2} />
+            </Form.Item>
+          </Form>
+        </Space>
       </Modal>
 
       {/* Edit Package Modal */}
@@ -809,6 +979,35 @@ const PackageDetail: React.FC = () => {
           learner_id: packageData?.learner_id,
         }}
       />
+
+      {/* Package Status Modal */}
+      <Modal
+        open={!!statusAction}
+        title={
+          statusAction === 'active'
+            ? t('packageCard.actions.activateConfirmTitle')
+            : t('packageCard.actions.completeConfirmTitle')
+        }
+        onCancel={() => setStatusAction(null)}
+        onOk={() => {
+          if (statusAction) {
+            updatePackageMutation.mutate({ status: statusAction });
+          }
+        }}
+        okText={
+          statusAction === 'active'
+            ? t('packageCard.actions.activate')
+            : t('packageCard.actions.complete')
+        }
+        cancelText={t('common.cancel')}
+        confirmLoading={updatePackageMutation.isPending}
+      >
+        <p>
+          {statusAction === 'active'
+            ? t('packageCard.actions.activateConfirmDescription', { title: packageData?.title })
+            : t('packageCard.actions.completeConfirmDescription', { title: packageData?.title })}
+        </p>
+      </Modal>
 
       {/* Reschedule Modal */}
       <RescheduleForm

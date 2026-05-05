@@ -1149,6 +1149,11 @@
   },
   "packageDetail": {
     "details": "Details",
+    "summary": "Summary",
+    "nextLesson": "Next lesson",
+    "scheduleSource": "Learner schedule",
+    "scheduleSourceDescription": "Used for creating new packages. Lessons in this package are already fixed.",
+    "openLearnerSchedule": "Open schedule",
     "deletePackageConfirm": "Are you sure you want to delete this package?"
   },
   "lessonCard": {
@@ -1322,6 +1327,7 @@
     "learnerCalendar": "Learner calendar",
     "noCalendarLessons": "No lessons on the calendar yet",
     "noCalendarLessonsDescription": "Create a lesson package or one-off lesson to see the learner's schedule.",
+    "scheduleRequiredForPackages": "A schedule is required to create packages from the schedule.",
     "noLessons": "No lessons yet",
     "noLessonsDescription": "Create a lesson package or schedule a one-off lesson.",
     "noOneOffLessons": "No one-off lessons yet",

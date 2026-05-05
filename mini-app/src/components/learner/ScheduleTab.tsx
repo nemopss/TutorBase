@@ -1,7 +1,6 @@
 import React, { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
-  Card,
   Button,
   Space,
   Typography,
@@ -121,10 +120,31 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
     }
   };
 
-  const cardStyle = {
+  const panelStyle: React.CSSProperties = {
+    background: colors.bgTertiary,
+    borderRadius: 10,
+    padding: spacing.md,
+  };
+
+  const dayRowStyle: React.CSSProperties = {
+    display: 'grid',
+    gridTemplateColumns: 'minmax(108px, 0.28fr) minmax(0, 1fr)',
+    gap: spacing.md,
+    alignItems: 'start',
+    padding: spacing.sm,
+    borderRadius: 10,
     background: colors.bgSecondary,
-    borderColor: colors.borderPrimary,
-    marginBottom: spacing.md,
+  };
+
+  const slotPillStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: spacing.xs,
+    minHeight: 30,
+    padding: `4px ${spacing.sm}px`,
+    borderRadius: 10,
+    background: colors.bgTertiary,
   };
 
   if (isLoading) {
@@ -160,7 +180,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
         style={{ marginBottom: spacing.md }}
       />
 
-      <Card style={cardStyle}>
+      <div style={panelStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
           <Text strong>{t('schedule.currentSchedule')}</Text>
           {!showForm && (
@@ -186,68 +206,49 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
         ) : (
           <div
             style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              display: 'flex',
+              flexDirection: 'column',
               gap: spacing.sm,
             }}
           >
-            {slotsByDay.map((day) => (
+            {slotsByDay.filter((day) => day.slots.length > 0).map((day) => (
               <div
                 key={day.value}
-                style={{
-                  minHeight: 118,
-                  padding: spacing.sm,
-                  border: `1px solid ${colors.borderPrimary}`,
-                  borderRadius: 8,
-                  background: colors.bgPrimary,
-                }}
+                style={dayRowStyle}
               >
-                <Text strong style={{ display: 'block', marginBottom: spacing.xs }}>
+                <Text strong style={{ display: 'block' }}>
                   {t(day.labelKey)}
                 </Text>
-                {day.slots.length === 0 ? (
-                  <Text type="secondary" style={{ fontSize: 12 }}>
-                    {t('schedule.noLessonsThisDay')}
-                  </Text>
-                ) : (
-                  <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>
-                    {day.slots.map(({ slot, index }) => (
-                      <div
-                        key={`${slot.day}-${slot.time}-${index}`}
-                        style={{
-                          display: 'flex',
-                          alignItems: 'center',
-                          justifyContent: 'space-between',
-                          gap: spacing.xs,
-                          padding: `${spacing.xs}px ${spacing.sm}px`,
-                          borderRadius: 8,
-                          background: colors.bgSecondary,
-                        }}
-                      >
-                        <Space size={spacing.xs}>
-                          <ClockCircleOutlined style={{ color: colors.accentPrimary }} />
-                          <Text style={{ fontSize: 13 }}>
-                            {slot.time} · {slot.duration} {t('schedule.min')}
-                          </Text>
-                        </Space>
-                        <Button
-                          type="text"
-                          danger
-                          size="small"
-                          icon={<DeleteOutlined />}
-                          disabled={!canUseFullActions}
-                          onClick={() => deleteSlotMutation.mutate(index)}
-                          loading={deleteSlotMutation.isPending}
-                        />
-                      </div>
-                    ))}
-                  </Space>
-                )}
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: spacing.xs }}>
+                  {day.slots.map(({ slot, index }) => (
+                    <span
+                      key={`${slot.day}-${slot.time}-${index}`}
+                      style={slotPillStyle}
+                    >
+                      <Space size={spacing.xs}>
+                        <ClockCircleOutlined style={{ color: colors.textSecondary }} />
+                        <Text style={{ fontSize: 13 }}>
+                          {slot.time} · {slot.duration} {t('schedule.min')}
+                        </Text>
+                      </Space>
+                      <Button
+                        type="text"
+                        danger
+                        size="small"
+                        icon={<DeleteOutlined />}
+                        disabled={!canUseFullActions}
+                        onClick={() => deleteSlotMutation.mutate(index)}
+                        loading={deleteSlotMutation.isPending}
+                        style={{ width: 24, height: 24 }}
+                      />
+                    </span>
+                  ))}
+                </div>
               </div>
             ))}
           </div>
         )}
-      </Card>
+      </div>
 
       <ResponsiveModal
         open={showForm}

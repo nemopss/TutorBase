@@ -51,8 +51,9 @@ const PackageGrid: React.FC<PackageGridProps> = ({
               minHeight: 132,
               padding: spacing.md,
               borderRadius: 10,
-              background: colors.bgSecondary,
-              border: `1px solid ${colors.borderPrimary}`,
+              background: colors.bgTertiary,
+              border: 0,
+              boxShadow: 'none',
             }}
           >
             <Skeleton active paragraph={{ rows: 2 }} />

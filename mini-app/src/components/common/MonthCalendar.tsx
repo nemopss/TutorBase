@@ -31,6 +31,8 @@ interface MonthCalendarProps {
   onCancel?: (lessonId: number) => void;
   onDelete?: (lessonId: number) => void;
   onRangeChange?: (range: CalendarVisibleRange) => void;
+  height?: React.CSSProperties['height'];
+  minHeight?: React.CSSProperties['minHeight'];
 }
 
 const MonthCalendar: React.FC<MonthCalendarProps> = ({
@@ -43,6 +45,8 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
   onCancel,
   onDelete,
   onRangeChange,
+  height = 'calc(100vh - 280px)',
+  minHeight = 400,
 }) => {
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
@@ -190,7 +194,7 @@ const MonthCalendar: React.FC<MonthCalendarProps> = ({
   }, [onRangeChange, visibleRange]);
 
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', height: 'calc(100vh - 280px)', minHeight: 400 }}>
+    <div style={{ display: 'flex', flexDirection: 'column', height, minHeight }}>
       {/* Header with navigation */}
       <div style={{
         display: 'flex',

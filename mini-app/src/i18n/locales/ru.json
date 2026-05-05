@@ -1150,6 +1150,11 @@
   },
   "packageDetail": {
     "details": "Детали",
+    "summary": "Сводка",
+    "nextLesson": "Следующий урок",
+    "scheduleSource": "Расписание ученика",
+    "scheduleSourceDescription": "Используется для создания новых пакетов. Уроки этого пакета уже зафиксированы.",
+    "openLearnerSchedule": "Открыть расписание",
     "deletePackageConfirm": "Вы уверены, что хотите удалить этот пакет?"
   },
   "lessonCard": {
@@ -1323,6 +1328,7 @@
     "learnerCalendar": "Календарь ученика",
     "noCalendarLessons": "В календаре пока нет уроков",
     "noCalendarLessonsDescription": "Создайте пакет занятий или разовый урок, чтобы увидеть расписание ученика.",
+    "scheduleRequiredForPackages": "Без расписания не получится создать пакет по расписанию.",
     "noLessons": "Уроков пока нет",
     "noLessonsDescription": "Создайте пакет занятий или запланируйте разовый урок.",
     "noOneOffLessons": "Разовых уроков пока нет",

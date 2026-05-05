@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Card, Typography, Dropdown, Tooltip, message } from 'antd';
+import { Typography, Dropdown, Tooltip, message } from 'antd';
 import type { MenuProps } from 'antd';
 import {
   BellOutlined,
@@ -9,6 +9,7 @@ import {
   CopyOutlined,
   DeleteOutlined,
   CalendarOutlined,
+  DollarOutlined,
   StopOutlined,
   DisconnectOutlined,
   LinkOutlined,
@@ -19,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 import { formatNextLessonDate } from '../../utils/datetime';
+import { useResponsive } from '../../hooks/useResponsive';
 
 const { Text } = Typography;
 
@@ -27,6 +29,7 @@ interface Learner {
   display_name: string;
   notifications_enabled: boolean;
   chat_id: number | null;
+  lesson_rate?: number | null;
   next_lesson_date?: string | null;
   is_archived?: boolean;
 }
@@ -60,8 +63,9 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
 }) => {
   const { t } = useTranslation();
   const { resolvedTheme } = useTheme();
+  const { isMobile } = useResponsive();
   const colors = resolvedTheme.colors;
-  const [isPressed, setIsPressed] = useState(false);
+  const [isHovered, setIsHovered] = useState(false);
 
   const handleCopyChatId = () => {
     if (learner.chat_id) {
@@ -153,30 +157,56 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
   };
 
   const nextLessonText = formatNextLessonDate(learner.next_lesson_date, t);
+  const isDesktopHovered = isHovered && !isMobile;
+  const surfaceColor = isDesktopHovered
+    ? `color-mix(in srgb, ${colors.bgTertiary} 82%, ${colors.accentPrimary})`
+    : colors.bgTertiary;
+  const isNotificationDisabled = learner.is_archived || !notificationsGloballyAllowed;
+  const formatCurrency = (value: number): string => new Intl.NumberFormat('ru-RU', {
+    style: 'currency',
+    currency: 'RUB',
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  }).format(value);
+  const statusPillStyle: React.CSSProperties = {
+    display: 'inline-flex',
+    alignItems: 'center',
+    gap: 6,
+    minHeight: 26,
+    padding: '4px 8px',
+    borderRadius: 10,
+    background: colors.bgSecondary,
+    color: colors.textSecondary,
+    fontSize: 12,
+    lineHeight: 1.2,
+    whiteSpace: 'nowrap',
+  };
 
   return (
-    <Card
-      hoverable
+    <div
+      role="button"
+      tabIndex={0}
       style={{
         cursor: onClick ? 'pointer' : 'default',
-        background: colors.bgSecondary,
-        borderColor: colors.borderPrimary,
-        transform: isPressed ? 'scale(0.98)' : 'scale(1)',
-        transition: 'transform 0.1s ease-out',
-      }}
-      styles={{
-        body: {
-          padding: spacing.md,
-        },
+        background: surfaceColor,
+        border: 0,
+        borderRadius: 10,
+        boxShadow: 'none',
+        minHeight: 136,
+        padding: spacing.md,
+        transition: 'background 0.16s ease',
+        outline: 'none',
       }}
       onClick={handleCardClick}
-      onMouseDown={() => setIsPressed(true)}
-      onMouseUp={() => setIsPressed(false)}
-      onMouseLeave={() => setIsPressed(false)}
-      onTouchStart={() => setIsPressed(true)}
-      onTouchEnd={() => setIsPressed(false)}
+      onKeyDown={(event) => {
+        if ((event.key === 'Enter' || event.key === ' ') && onClick) {
+          event.preventDefault();
+          handleCardClick();
+        }
+      }}
+      onMouseEnter={() => setIsHovered(true)}
+      onMouseLeave={() => setIsHovered(false)}
     >
-      {/* Row 1: Name + Menu */}
       <div style={{ 
         display: 'flex', 
         justifyContent: 'space-between', 
@@ -187,7 +217,7 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
           <UserOutlined style={{ color: colors.textSecondary, fontSize: 16 }} />
           <Text
             strong
-            style={{ fontSize: 15 }}
+            style={{ fontSize: 16, lineHeight: 1.3 }}
             ellipsis
           >
             {learner.display_name}
@@ -199,23 +229,28 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
           trigger={['click']}
           placement="bottomRight"
         >
-          <div
+          <button
+            type="button"
+            aria-label={t('packageCard.actions.menu')}
             onClick={(e) => e.stopPropagation()}
             style={{
-              padding: 4,
+              width: 28,
+              height: 28,
+              border: 0,
               cursor: 'pointer',
-              borderRadius: 4,
+              borderRadius: 8,
+              background: 'transparent',
+              color: colors.textSecondary,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
             }}
           >
-            <MoreOutlined style={{ fontSize: 18, color: colors.textSecondary }} />
-          </div>
+            <MoreOutlined />
+          </button>
         </Dropdown>
       </div>
 
-      {/* Row 2: Next lesson date */}
       <div style={{ 
         display: 'flex', 
         alignItems: 'center', 
@@ -228,12 +263,33 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
         </Text>
       </div>
 
-      {/* Row 3: Notification toggle */}
       <div style={{ 
         display: 'flex', 
-        justifyContent: 'flex-end',
+        justifyContent: 'space-between',
         alignItems: 'center',
+        gap: spacing.sm,
+        flexWrap: 'wrap',
       }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: spacing.xs, flexWrap: 'wrap', minWidth: 0 }}>
+          <span style={statusPillStyle}>
+            <LinkOutlined style={{ fontSize: 12 }} />
+            {learner.chat_id
+              ? t('pages.learners.telegramLinked', { defaultValue: 'Telegram' })
+              : t('pages.learners.telegramNotLinked', { defaultValue: 'Без Telegram' })}
+          </span>
+          {learner.lesson_rate ? (
+            <span style={statusPillStyle}>
+              <DollarOutlined style={{ fontSize: 12 }} />
+              {formatCurrency(learner.lesson_rate)}
+            </span>
+          ) : null}
+          {learner.is_archived ? (
+            <span style={statusPillStyle}>
+              <InboxOutlined style={{ fontSize: 12 }} />
+              {t('pages.learners.archivedTab', { defaultValue: 'Архив' })}
+            </span>
+          ) : null}
+        </div>
         <Tooltip 
           title={learner.is_archived
             ? t('pages.learners.archivedNotificationsOff', { defaultValue: 'У архивного ученика уведомления отключены' })
@@ -248,12 +304,13 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
             onClick={handleNotificationClick}
             style={{
               padding: 6,
-              cursor: isToggling ? 'wait' : (learner.is_archived || !notificationsGloballyAllowed) ? 'not-allowed' : 'pointer',
-              borderRadius: 4,
+              cursor: isToggling ? 'wait' : isNotificationDisabled ? 'not-allowed' : 'pointer',
+              borderRadius: 8,
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
               opacity: isToggling || !notificationsGloballyAllowed ? 0.5 : 1,
+              background: colors.bgSecondary,
             }}
           >
             {learner.notifications_enabled ? (
@@ -275,7 +332,7 @@ const LearnerCard: React.FC<LearnerCardProps> = ({
           </div>
         </Tooltip>
       </div>
-    </Card>
+    </div>
   );
 };
 

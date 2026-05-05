@@ -1,6 +1,7 @@
 import React from 'react';
-import { Card, Skeleton } from 'antd';
+import { Skeleton } from 'antd';
 import { spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeProvider';
 
 interface LearnerGridProps {
   children?: React.ReactNode;
@@ -19,6 +20,8 @@ const LearnerGrid: React.FC<LearnerGridProps> = ({
   loading = false,
   skeletonCount = 6,
 }) => {
+  const { resolvedTheme } = useTheme();
+  const colors = resolvedTheme.colors;
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: 'repeat(auto-fill, minmax(280px, 1fr))',
@@ -29,14 +32,24 @@ const LearnerGrid: React.FC<LearnerGridProps> = ({
     return (
       <div style={gridStyle}>
         {Array.from({ length: skeletonCount }).map((_, index) => (
-          <Card key={index} style={{ minHeight: 180 }}>
+          <div
+            key={index}
+            style={{
+              minHeight: 136,
+              padding: spacing.md,
+              borderRadius: 10,
+              background: colors.bgTertiary,
+              border: 0,
+              boxShadow: 'none',
+            }}
+          >
             <Skeleton
               active
               avatar
               title={{ width: '54%' }}
               paragraph={{ rows: 3 }}
             />
-          </Card>
+          </div>
         ))}
       </div>
     );
