@@ -40,6 +40,7 @@ import api from '../services/api';
 import PageHeader from '../components/common/PageHeader';
 import LearnerForm from '../components/forms/LearnerForm';
 import PackageCard from '../components/cards/PackageCard';
+import type { PackageCardAction } from '../components/cards/PackageCard';
 import PackageForm from '../components/forms/PackageForm';
 import LessonForm from '../components/forms/LessonForm';
 import RescheduleForm from '../components/forms/RescheduleForm';
@@ -177,6 +178,9 @@ const LearnerProfile: React.FC = () => {
   const [selectedLessonId, setSelectedLessonId] = useState<number | null>(null);
   const [selectedLesson, setSelectedLesson] = useState<Lesson | null>(null);
   const [oneOffLessonForm] = Form.useForm();
+  const [packagePaymentForm] = Form.useForm();
+  const [paymentPackage, setPaymentPackage] = useState<Package | null>(null);
+  const [statusActionPackage, setStatusActionPackage] = useState<{ package: Package; status: 'active' | 'completed' } | null>(null);
 
   // Fetch learner detail
   const { data: learner, isLoading, isError, error } = useQuery<LearnerDetail, Error>({
@@ -369,14 +373,78 @@ const LearnerProfile: React.FC = () => {
       const { data } = await api.post('/packages', values);
       return data;
     },
-    onSuccess: () => {
+    onSuccess: (createdPackage, variables) => {
       queryClient.invalidateQueries({ queryKey: ['learnerPackages', learnerId] });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
-      message.success(t('success.created'));
+      const title = createdPackage?.title || variables?.title;
+      const baseMessage = variables?.status === 'draft'
+        ? t('forms.packageWizard.createdDraft', { title })
+        : t('forms.packageWizard.createdActive', { title });
+      const lessonCount = variables?.lesson_dates?.length ?? 0;
+      notificationApi.success({
+        message: baseMessage,
+        description: lessonCount > 0
+          ? t('forms.packageWizard.createdLessonsSuffix', { count: lessonCount })
+          : undefined,
+        placement: 'topRight',
+      });
       setIsPackageModalOpen(false);
     },
     onError: (err: Error) => {
       message.error(t('errors.createFailed', { message: err.message }));
+    },
+  });
+
+  const createPackagePaymentMutation = useMutation({
+    mutationFn: async (values: any) => {
+      if (!paymentPackage) {
+        throw new Error(t('errors.notFound'));
+      }
+      const { data } = await api.post('/payments', {
+        learner_id: learnerId,
+        package_id: paymentPackage.id,
+        amount: values.amount,
+        paid_at: values.paid_at.toISOString(),
+        notes: values.notes || null,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      notificationApi.success({
+        message: t('pages.finance.paymentRecorded'),
+        placement: 'topRight',
+      });
+      queryClient.invalidateQueries({ queryKey: ['learnerFinance', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['learnerPackages', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      queryClient.invalidateQueries({ queryKey: ['package', paymentPackage?.id?.toString()] });
+      setPaymentPackage(null);
+      packagePaymentForm.resetFields();
+    },
+    onError: (err: Error) => {
+      message.error(t('errors.saveFailed', { message: err.message }));
+    },
+  });
+
+  const updatePackageStatusMutation = useMutation({
+    mutationFn: async ({ packageId, status }: { packageId: number; status: 'active' | 'completed' }) => {
+      const { data } = await api.patch(`/packages/${packageId}`, { status });
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      notificationApi.success({
+        message: variables.status === 'active'
+          ? t('packageCard.actions.activatedToast')
+          : t('packageCard.actions.completedToast'),
+        placement: 'topRight',
+      });
+      queryClient.invalidateQueries({ queryKey: ['learnerPackages', learnerId] });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      queryClient.invalidateQueries({ queryKey: ['package', variables.packageId.toString()] });
+      setStatusActionPackage(null);
+    },
+    onError: (err: Error) => {
+      message.error(t('errors.updateFailed', { message: err.message }));
     },
   });
 
@@ -469,6 +537,29 @@ const LearnerProfile: React.FC = () => {
       price: learner?.lesson_rate ?? undefined,
     });
     setIsOneOffLessonModalOpen(true);
+  };
+
+  const handlePackageCardAction = (action: PackageCardAction, pkg: Package) => {
+    if (action === 'payment') {
+      const price = Number(pkg.price || 0);
+      const totalPaid = Number(pkg.total_paid || 0);
+      const remaining = Math.max(0, price - totalPaid);
+      packagePaymentForm.setFieldsValue({
+        amount: remaining > 0 ? remaining : undefined,
+        paid_at: dayjs(),
+      });
+      setPaymentPackage(pkg);
+      return;
+    }
+    if (action === 'activate' || action === 'complete') {
+      setStatusActionPackage({
+        package: pkg,
+        status: action === 'activate' ? 'active' : 'completed',
+      });
+      return;
+    }
+    const actionPath = action === 'open' ? `/packages/${pkg.id}` : `/packages/${pkg.id}?action=${action}`;
+    navigate(actionPath);
   };
 
   const handleCreateOneOffLesson = async () => {
@@ -787,7 +878,9 @@ const LearnerProfile: React.FC = () => {
                             <PackageCard
                               key={pkg.id}
                               package={pkg}
+                              showStatus
                               onClick={() => navigate(`/packages/${pkg.id}`)}
+                              onAction={handlePackageCardAction}
                             />
                           ))}
                         </div>
@@ -1068,6 +1161,87 @@ const LearnerProfile: React.FC = () => {
         mode="create"
         preselectedLearnerId={learnerId}
       />
+
+      <Modal
+        open={!!paymentPackage}
+        title={t('pages.finance.recordPayment')}
+        onCancel={() => {
+          setPaymentPackage(null);
+          packagePaymentForm.resetFields();
+        }}
+        onOk={() => packagePaymentForm.validateFields().then((values) => createPackagePaymentMutation.mutate(values))}
+        okText={t('pages.finance.recordPayment')}
+        cancelText={t('common.cancel')}
+        confirmLoading={createPackagePaymentMutation.isPending}
+      >
+        {paymentPackage && (
+          <Space direction="vertical" size={spacing.md} style={{ width: '100%' }}>
+            <div>
+              <Text strong>{paymentPackage.title}</Text>
+              <div>
+                <Text type="secondary">
+                  {t('pages.finance.price')}: {paymentPackage.price ? formatCurrency(Number(paymentPackage.price)) : '—'}
+                </Text>
+              </div>
+              <div>
+                <Text type="secondary">
+                  {t('pages.finance.outstanding')}: {formatCurrency(Math.max(0, Number(paymentPackage.price || 0) - Number(paymentPackage.total_paid || 0)))}
+                </Text>
+              </div>
+            </div>
+            <Form form={packagePaymentForm} layout="vertical">
+              <Form.Item
+                name="amount"
+                label={t('pages.finance.amount')}
+                rules={[{ required: true, message: t('common.required') }]}
+              >
+                <InputNumber style={{ width: '100%' }} min={1} />
+              </Form.Item>
+              <Form.Item
+                name="paid_at"
+                label={t('pages.finance.date')}
+                rules={[{ required: true, message: t('common.required') }]}
+              >
+                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+              </Form.Item>
+              <Form.Item name="notes" label={t('pages.finance.notes')}>
+                <Input.TextArea rows={2} />
+              </Form.Item>
+            </Form>
+          </Space>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!statusActionPackage}
+        title={
+          statusActionPackage?.status === 'active'
+            ? t('packageCard.actions.activateConfirmTitle')
+            : t('packageCard.actions.completeConfirmTitle')
+        }
+        onCancel={() => setStatusActionPackage(null)}
+        onOk={() => {
+          if (statusActionPackage) {
+            updatePackageStatusMutation.mutate({
+              packageId: statusActionPackage.package.id,
+              status: statusActionPackage.status,
+            });
+          }
+        }}
+        okText={
+          statusActionPackage?.status === 'active'
+            ? t('packageCard.actions.activate')
+            : t('packageCard.actions.complete')
+        }
+        cancelText={t('common.cancel')}
+        confirmLoading={updatePackageStatusMutation.isPending}
+      >
+        <p>
+          {statusActionPackage?.status === 'active'
+            ? t('packageCard.actions.activateConfirmDescription', { title: statusActionPackage.package.title })
+            : t('packageCard.actions.completeConfirmDescription', { title: statusActionPackage?.package.title })}
+        </p>
+      </Modal>
 
       <Modal
         open={isOneOffLessonModalOpen}

@@ -1,19 +1,24 @@
 import React, { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { Tabs, message, Alert, Card } from 'antd';
+import { Tabs, message, Alert, notification, Button, Modal, Form, InputNumber, DatePicker, Input, Typography, Space } from 'antd';
 import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PackageForm from '../components/forms/PackageForm';
 import PageHeader from '../components/common/PageHeader';
 import PackageCard from '../components/cards/PackageCard';
+import type { PackageCardAction } from '../components/cards/PackageCard';
 import PackageGrid from '../components/common/PackageGrid';
 import FloatingActionButton from '../components/common/FloatingActionButton';
 import TenantContextRequired from '../components/common/TenantContextRequired';
-import { useTheme } from '../theme/ThemeProvider';
+import EmptyState from '../components/common/EmptyState';
 import { spacing } from '../theme/tokens';
 import { useAuth } from '../auth/AuthProvider';
+import { useResponsive } from '../hooks/useResponsive';
+import dayjs from 'dayjs';
+
+const { Text } = Typography;
 
 // --- Types --- //
 interface PackageProgress {
@@ -38,6 +43,7 @@ interface Package {
   template_id?: number | null;
   price?: number | null;
   payment_status?: string;
+  total_paid?: number;
   created_at?: string;
   next_lesson_date?: string | null;
 }
@@ -46,6 +52,8 @@ interface PackageListResponse {
   total: number;
   items: Package[];
 }
+
+type PackageStatus = 'active' | 'completed' | 'draft' | 'cancelled';
 
 // --- API Fetchers --- //
 const fetchPackages = async (status: string): Promise<PackageListResponse> => {
@@ -68,13 +76,16 @@ const Packages: React.FC = () => {
   const { t } = useTranslation();
   const navigate = useNavigate();
   const queryClient = useQueryClient();
-  const { resolvedTheme } = useTheme();
+  const { isMobile } = useResponsive();
   const { tenantAccess, tenantId } = useAuth();
+  const [notificationApi, notificationContextHolder] = notification.useNotification();
   const requiresTenantContext = tenantId === null;
-  const isDark = resolvedTheme.colorScheme === 'dark';
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
-  const [activeTab, setActiveTab] = useState<'active' | 'completed' | 'draft' | 'cancelled'>('active');
+  const [activeTab, setActiveTab] = useState<PackageStatus>('active');
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [paymentForm] = Form.useForm();
+  const [paymentPackage, setPaymentPackage] = useState<Package | null>(null);
+  const [statusActionPackage, setStatusActionPackage] = useState<{ package: Package; status: 'active' | 'completed' } | null>(null);
 
   const { data, isLoading, error, isError } = useQuery<PackageListResponse, Error>({
     queryKey: ['packages', activeTab],
@@ -95,13 +106,74 @@ const Packages: React.FC = () => {
 
   const createMutation = useMutation({
     mutationFn: createPackage,
-    onSuccess: () => {
-      message.success(t('success.created'));
+    onSuccess: (createdPackage, variables) => {
+      const title = createdPackage?.title || variables?.title;
+      const baseMessage = variables?.status === 'draft'
+        ? t('forms.packageWizard.createdDraft', { title })
+        : t('forms.packageWizard.createdActive', { title });
+      const lessonCount = variables?.lesson_dates?.length ?? 0;
+      notificationApi.success({
+        message: baseMessage,
+        description: lessonCount > 0
+          ? t('forms.packageWizard.createdLessonsSuffix', { count: lessonCount })
+          : undefined,
+        placement: 'topRight',
+      });
       queryClient.invalidateQueries({ queryKey: ['packages'] });
       setIsModalOpen(false);
     },
     onError: (error: Error) => {
       message.error(t('errors.createFailed', { message: error.message }));
+    },
+  });
+
+  const createPaymentMutation = useMutation({
+    mutationFn: async (values: any) => {
+      if (!paymentPackage?.learner_id) {
+        throw new Error(t('errors.notFound'));
+      }
+      const { data } = await api.post('/payments', {
+        learner_id: paymentPackage.learner_id,
+        package_id: paymentPackage.id,
+        amount: values.amount,
+        paid_at: values.paid_at.toISOString(),
+        notes: values.notes || null,
+      });
+      return data;
+    },
+    onSuccess: () => {
+      notificationApi.success({
+        message: t('pages.finance.paymentRecorded'),
+        placement: 'topRight',
+      });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      queryClient.invalidateQueries({ queryKey: ['package', paymentPackage?.id?.toString()] });
+      setPaymentPackage(null);
+      paymentForm.resetFields();
+    },
+    onError: (error: Error) => {
+      message.error(t('errors.saveFailed', { message: error.message }));
+    },
+  });
+
+  const updatePackageStatusMutation = useMutation({
+    mutationFn: async ({ packageId, status }: { packageId: number; status: 'active' | 'completed' }) => {
+      const { data } = await api.patch(`/packages/${packageId}`, { status });
+      return data;
+    },
+    onSuccess: (_, variables) => {
+      notificationApi.success({
+        message: variables.status === 'active'
+          ? t('packageCard.actions.activatedToast')
+          : t('packageCard.actions.completedToast'),
+        placement: 'topRight',
+      });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      queryClient.invalidateQueries({ queryKey: ['package', variables.packageId.toString()] });
+      setStatusActionPackage(null);
+    },
+    onError: (error: Error) => {
+      message.error(t('errors.updateFailed', { message: error.message }));
     },
   });
 
@@ -122,9 +194,39 @@ const Packages: React.FC = () => {
     { key: 'cancelled', label: t('pages.packages.status.cancelled') },
   ];
 
+  const openCreatePackage = () => {
+    if (canUseFullActions) {
+      setIsModalOpen(true);
+    }
+  };
+
+  const handlePackageAction = (action: PackageCardAction, pkg: Package) => {
+    if (action === 'payment') {
+      const price = Number(pkg.price || 0);
+      const totalPaid = Number(pkg.total_paid || 0);
+      const remaining = Math.max(0, price - totalPaid);
+      paymentForm.setFieldsValue({
+        amount: remaining > 0 ? remaining : undefined,
+        paid_at: dayjs(),
+      });
+      setPaymentPackage(pkg);
+      return;
+    }
+    if (action === 'activate' || action === 'complete') {
+      setStatusActionPackage({
+        package: pkg,
+        status: action === 'activate' ? 'active' : 'completed',
+      });
+      return;
+    }
+    const actionPath = action === 'open' ? `/packages/${pkg.id}` : `/packages/${pkg.id}?action=${action}`;
+    navigate(actionPath);
+  };
+
   if (requiresTenantContext) {
     return (
       <div>
+        {notificationContextHolder}
         <PageHeader
           title={t('pages.packages.title')}
           subtitle={t('pages.packages.subtitle')}
@@ -136,9 +238,15 @@ const Packages: React.FC = () => {
 
   return (
     <div>
+      {notificationContextHolder}
       <PageHeader
         title={t('pages.packages.title')}
         subtitle={t('pages.packages.subtitle')}
+        actions={!isMobile && canUseFullActions ? (
+          <Button type="primary" icon={<PlusOutlined />} onClick={openCreatePackage}>
+            {t('pages.packages.addPackage')}
+          </Button>
+        ) : undefined}
       />
 
       {!canUseFullActions && (
@@ -153,7 +261,7 @@ const Packages: React.FC = () => {
 
       <Tabs
         activeKey={activeTab}
-        onChange={(key) => setActiveTab(key as 'active' | 'completed' | 'draft' | 'cancelled')}
+        onChange={(key) => setActiveTab(key as PackageStatus)}
         items={tabItems}
         style={{ marginBottom: spacing.md }}
       />
@@ -168,43 +276,27 @@ const Packages: React.FC = () => {
         />
       )}
 
-      <PackageGrid loading={isLoading}>
-        {!hasPackages && !isLoading ? (
-          <Card
-            hoverable={canUseFullActions}
-            onClick={() => canUseFullActions && setIsModalOpen(true)}
-            style={{
-              minHeight: 140,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center',
-              border: '2px dashed',
-              borderColor: isDark ? '#3a3a3a' : '#d9d9d9',
-              background: 'transparent',
-              opacity: canUseFullActions ? 1 : 0.5,
-            }}
-            styles={{
-              body: {
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-              },
-            }}
-          >
-            <PlusOutlined style={{ fontSize: 32, color: '#8c8c8c' }} />
-          </Card>
-        ) : (
-          sortedPackages.map((pkg) => (
+      {!hasPackages && !isLoading ? (
+        <EmptyState
+          title={t('pages.packages.noPackages')}
+          description={t('pages.packages.noPackagesDescription')}
+          actionText={canUseFullActions ? t('pages.packages.addPackage') : undefined}
+          onAction={canUseFullActions ? openCreatePackage : undefined}
+        />
+      ) : (
+        <PackageGrid loading={isLoading}>
+          {sortedPackages.map((pkg) => (
             <PackageCard
               key={pkg.id}
               package={pkg}
               onClick={() => navigate(`/packages/${pkg.id}`)}
+              onAction={handlePackageAction}
             />
-          ))
-        )}
-      </PackageGrid>
+          ))}
+        </PackageGrid>
+      )}
 
-      {hasPackages && canUseFullActions && (
+      {hasPackages && canUseFullActions && isMobile && (
         <FloatingActionButton
           icon={<PlusOutlined />}
           onClick={() => setIsModalOpen(true)}
@@ -217,6 +309,87 @@ const Packages: React.FC = () => {
         onFinish={handleFormFinish}
         isLoading={createMutation.isPending}
       />
+
+      <Modal
+        open={!!paymentPackage}
+        title={t('pages.finance.recordPayment')}
+        onCancel={() => {
+          setPaymentPackage(null);
+          paymentForm.resetFields();
+        }}
+        onOk={() => paymentForm.validateFields().then((values) => createPaymentMutation.mutate(values))}
+        okText={t('pages.finance.recordPayment')}
+        cancelText={t('common.cancel')}
+        confirmLoading={createPaymentMutation.isPending}
+      >
+        {paymentPackage && (
+          <Space direction="vertical" size={spacing.md} style={{ width: '100%' }}>
+            <div>
+              <Text strong>{paymentPackage.title}</Text>
+              <div>
+                <Text type="secondary">
+                  {t('pages.finance.price')}: {paymentPackage.price ? new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(Number(paymentPackage.price)) : '—'}
+                </Text>
+              </div>
+              <div>
+                <Text type="secondary">
+                  {t('pages.finance.outstanding')}: {new Intl.NumberFormat('ru-RU', { style: 'currency', currency: 'RUB', maximumFractionDigits: 0 }).format(Math.max(0, Number(paymentPackage.price || 0) - Number(paymentPackage.total_paid || 0)))}
+                </Text>
+              </div>
+            </div>
+            <Form form={paymentForm} layout="vertical">
+              <Form.Item
+                name="amount"
+                label={t('pages.finance.amount')}
+                rules={[{ required: true, message: t('common.required') }]}
+              >
+                <InputNumber style={{ width: '100%' }} min={1} />
+              </Form.Item>
+              <Form.Item
+                name="paid_at"
+                label={t('pages.finance.date')}
+                rules={[{ required: true, message: t('common.required') }]}
+              >
+                <DatePicker style={{ width: '100%' }} format="DD.MM.YYYY" />
+              </Form.Item>
+              <Form.Item name="notes" label={t('pages.finance.notes')}>
+                <Input.TextArea rows={2} />
+              </Form.Item>
+            </Form>
+          </Space>
+        )}
+      </Modal>
+
+      <Modal
+        open={!!statusActionPackage}
+        title={
+          statusActionPackage?.status === 'active'
+            ? t('packageCard.actions.activateConfirmTitle')
+            : t('packageCard.actions.completeConfirmTitle')
+        }
+        onCancel={() => setStatusActionPackage(null)}
+        onOk={() => {
+          if (statusActionPackage) {
+            updatePackageStatusMutation.mutate({
+              packageId: statusActionPackage.package.id,
+              status: statusActionPackage.status,
+            });
+          }
+        }}
+        okText={
+          statusActionPackage?.status === 'active'
+            ? t('packageCard.actions.activate')
+            : t('packageCard.actions.complete')
+        }
+        cancelText={t('common.cancel')}
+        confirmLoading={updatePackageStatusMutation.isPending}
+      >
+        <p>
+          {statusActionPackage?.status === 'active'
+            ? t('packageCard.actions.activateConfirmDescription', { title: statusActionPackage.package.title })
+            : t('packageCard.actions.completeConfirmDescription', { title: statusActionPackage?.package.title })}
+        </p>
+      </Modal>
     </div>
   );
 };

@@ -247,7 +247,7 @@
       "subtitle": "수업 패키지 관리",
       "addPackage": "패키지 추가",
       "noPackages": "아직 패키지가 없습니다",
-      "noPackagesDescription": "위의 버튼을 클릭하여 첫 번째 패키지를 만드세요",
+      "noPackagesDescription": "학생 일정으로 첫 패키지를 만들거나 초안으로 저장하세요.",
       "lessons": "수업",
       "progress": "진행률",
       "status": {
@@ -1155,7 +1155,19 @@
   },
   "packageCard": {
     "noScheduled": "예정된 수업 없음",
-    "nextLesson": "다음: {{date}}"
+    "nextLesson": "다음: {{date}}",
+    "actions": {
+      "menu": "패키지 작업",
+      "open": "열기",
+      "activate": "활성화",
+      "complete": "완료",
+      "activateConfirmTitle": "패키지를 활성화할까요?",
+      "activateConfirmDescription": "패키지 “{{title}}”가 활성 상태로 이동합니다.",
+      "completeConfirmTitle": "패키지를 완료할까요?",
+      "completeConfirmDescription": "패키지 “{{title}}”가 완료로 표시됩니다.",
+      "activatedToast": "패키지가 활성화되었습니다",
+      "completedToast": "패키지가 완료되었습니다"
+    }
   },
   "rescheduleForm": {
     "title": "수업 일정 변경",
@@ -1216,10 +1228,27 @@
       "statusLabel": "상태",
       "startDateLabel": "시작일",
       "startDateRequired": "템플릿 사용 시 시작일이 필요합니다.",
-      "totalLessonsLabel": "총 수업 수 (선택)",
+      "totalLessonsLabel": "총 수업 수",
       "totalLessonsPlaceholder": "예: 20",
+      "totalLessonsRequired": "수업 수를 입력하세요",
       "notesLabel": "메모",
       "notesPlaceholder": "패키지에 대한 추가 메모..."
+    },
+    "packageWizard": {
+      "next": "다음",
+      "createActive": "패키지 생성",
+      "createDraft": "초안으로 생성",
+      "lessons": "수업",
+      "noLessonsWillBeCreated": "수업이 자동으로 생성되지 않습니다",
+      "createdActive": "패키지 “{{title}}”가 활성에 생성되었습니다",
+      "createdDraft": "초안 “{{title}}”이 저장되었습니다",
+      "createdLessonsSuffix": "일정에서 {{count}}개의 수업이 생성되었습니다",
+      "steps": {
+        "learner": "학생",
+        "package": "패키지",
+        "schedule": "일정",
+        "review": "검토"
+      }
     },
     "template": {
       "title": "새 템플릿 생성",
@@ -1308,12 +1337,13 @@
   },
   "schedule": {
     "currentSchedule": "현재 일정",
-    "templateInfoTitle": "정기 일정 템플릿",
-    "templateInfoDescription": "이미 생성된 수업 목록이 아닙니다. 슬롯은 학습자의 일반 일정으로 수업 패키지를 더 빠르게 만드는 데 사용됩니다.",
+    "templateInfoTitle": "학생 정기 일정",
+    "templateInfoDescription": "이 일정은 새 패키지를 만들 때 사용됩니다. 변경해도 이미 생성된 패키지와 수업은 변경되지 않습니다.",
     "addSlot": "슬롯 추가",
     "addSlotTitle": "수업 시간 추가",
     "noSlots": "일정이 설정되지 않음",
     "noSlotsDescription": "정기 수업 요일과 시간을 추가하세요",
+    "noLessonsThisDay": "수업 없음",
     "slotAdded": "슬롯이 추가됨",
     "slotDeleted": "슬롯이 삭제됨",
     "selectDays": "요일 선택",
@@ -1346,7 +1376,10 @@
   },
   "schedulePreview": {
     "title": "수업 미리보기",
-    "clickToEdit": "날짜를 클릭하여 추가/제거",
+    "clickToEdit": "날짜를 클릭하여 수업을 추가하거나 수정하세요",
+    "addLesson": "수업 추가",
+    "editLesson": "수업 편집",
+    "multipleLessons": "{{count}}개 수업",
     "noSchedule": "학습자에게 일정이 없습니다",
     "noScheduleHint": "먼저 학습자 프로필의 일정 탭에서 일정을 설정하세요",
     "generateDates": "날짜 생성",

@@ -3,7 +3,6 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Card,
   Button,
-  List,
   Space,
   Typography,
   message,
@@ -23,6 +22,7 @@ import EmptyState from '../common/EmptyState';
 import { useTheme } from '../../theme/ThemeProvider';
 import { spacing } from '../../theme/tokens';
 import { useAuth } from '../../auth/AuthProvider';
+import ResponsiveModal from '../common/ResponsiveModal';
 
 const { Text } = Typography;
 
@@ -121,15 +121,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
     }
   };
 
-  const getDayLabel = (day: number): string => {
-    const dayInfo = DAYS.find((d) => d.value === day);
-    return dayInfo ? t(dayInfo.labelKey) : '';
-  };
-
-  const formatSlot = (slot: ScheduleSlot): string => {
-    return `${getDayLabel(slot.day)} — ${slot.time} (${slot.duration} ${t('schedule.min')})`;
-  };
-
   const cardStyle = {
     background: colors.bgSecondary,
     borderColor: colors.borderPrimary,
@@ -141,6 +132,13 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
   }
 
   const slots = schedule?.slots || [];
+  const slotsByDay = DAYS.map((day) => ({
+    ...day,
+    slots: slots
+      .map((slot, index) => ({ slot, index }))
+      .filter(({ slot }) => slot.day === day.value)
+      .sort((a, b) => a.slot.time.localeCompare(b.slot.time)),
+  }));
 
   return (
     <div>
@@ -149,7 +147,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
           type="warning"
           showIcon
           message="Grace-период"
-          description="Шаблон расписания временно нельзя менять. Переносите уже созданные уроки на странице занятий."
+          description="Расписание временно нельзя менять. Переносите уже созданные уроки на странице занятий."
           style={{ marginBottom: spacing.md }}
         />
       )}
@@ -162,7 +160,6 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
         style={{ marginBottom: spacing.md }}
       />
 
-      {/* Current Schedule */}
       <Card style={cardStyle}>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: spacing.md }}>
           <Text strong>{t('schedule.currentSchedule')}</Text>
@@ -179,7 +176,7 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
           )}
         </div>
 
-        {slots.length === 0 && !showForm ? (
+        {slots.length === 0 ? (
           <EmptyState
             title={t('schedule.noSlots')}
             description={t('schedule.noSlotsDescription')}
@@ -187,46 +184,86 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
             onAction={canUseFullActions ? () => setShowForm(true) : undefined}
           />
         ) : (
-          <List
-            dataSource={slots}
-            renderItem={(slot, index) => (
-              <List.Item
+          <div
+            style={{
+              display: 'grid',
+              gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))',
+              gap: spacing.sm,
+            }}
+          >
+            {slotsByDay.map((day) => (
+              <div
+                key={day.value}
                 style={{
-                  padding: `${spacing.sm}px ${spacing.md}px`,
-                  background: colors.bgPrimary,
+                  minHeight: 118,
+                  padding: spacing.sm,
+                  border: `1px solid ${colors.borderPrimary}`,
                   borderRadius: 8,
-                  marginBottom: spacing.xs,
+                  background: colors.bgPrimary,
                 }}
-                actions={[
-                  <Button
-                    key="delete"
-                    type="text"
-                    danger
-                    icon={<DeleteOutlined />}
-                    disabled={!canUseFullActions}
-                    onClick={() => deleteSlotMutation.mutate(index)}
-                    loading={deleteSlotMutation.isPending}
-                  />,
-                ]}
               >
-                <Space>
-                  <ClockCircleOutlined style={{ color: colors.accentPrimary }} />
-                  <Text>{formatSlot(slot)}</Text>
-                </Space>
-              </List.Item>
-            )}
-          />
+                <Text strong style={{ display: 'block', marginBottom: spacing.xs }}>
+                  {t(day.labelKey)}
+                </Text>
+                {day.slots.length === 0 ? (
+                  <Text type="secondary" style={{ fontSize: 12 }}>
+                    {t('schedule.noLessonsThisDay')}
+                  </Text>
+                ) : (
+                  <Space direction="vertical" size={spacing.xs} style={{ width: '100%' }}>
+                    {day.slots.map(({ slot, index }) => (
+                      <div
+                        key={`${slot.day}-${slot.time}-${index}`}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          gap: spacing.xs,
+                          padding: `${spacing.xs}px ${spacing.sm}px`,
+                          borderRadius: 8,
+                          background: colors.bgSecondary,
+                        }}
+                      >
+                        <Space size={spacing.xs}>
+                          <ClockCircleOutlined style={{ color: colors.accentPrimary }} />
+                          <Text style={{ fontSize: 13 }}>
+                            {slot.time} · {slot.duration} {t('schedule.min')}
+                          </Text>
+                        </Space>
+                        <Button
+                          type="text"
+                          danger
+                          size="small"
+                          icon={<DeleteOutlined />}
+                          disabled={!canUseFullActions}
+                          onClick={() => deleteSlotMutation.mutate(index)}
+                          loading={deleteSlotMutation.isPending}
+                        />
+                      </div>
+                    ))}
+                  </Space>
+                )}
+              </div>
+            ))}
+          </div>
         )}
       </Card>
 
-      {/* Add Slot Form */}
-      {showForm && (
-        <Card style={cardStyle} title={t('schedule.addSlotTitle')}>
-          <Form
-            form={form}
-            layout="vertical"
-            initialValues={{ duration: 60 }}
-          >
+      <ResponsiveModal
+        open={showForm}
+        title={t('schedule.addSlotTitle')}
+        onCancel={() => { setShowForm(false); form.resetFields(); }}
+        onOk={handleAddSlots}
+        okText={t('common.add')}
+        cancelText={t('common.cancel')}
+        confirmLoading={addSlotsMutation.isPending}
+        destroyOnHidden
+      >
+        <Form
+          form={form}
+          layout="vertical"
+          initialValues={{ duration: 60 }}
+        >
             <Form.Item
               name="days"
               label={t('schedule.selectDays')}
@@ -278,21 +315,8 @@ const ScheduleTab: React.FC<ScheduleTabProps> = ({ learnerId }) => {
               </Col>
             </Row>
 
-            <Space>
-              <Button
-                type="primary"
-                onClick={handleAddSlots}
-                loading={addSlotsMutation.isPending}
-              >
-                {t('common.add')}
-              </Button>
-              <Button onClick={() => { setShowForm(false); form.resetFields(); }}>
-                {t('common.cancel')}
-              </Button>
-            </Space>
-          </Form>
-        </Card>
-      )}
+        </Form>
+      </ResponsiveModal>
     </div>
   );
 };

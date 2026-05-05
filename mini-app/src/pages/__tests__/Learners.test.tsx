@@ -97,6 +97,7 @@ describe('Learners', () => {
       isLoading: false,
       user: { id: 1, display_name: 'Admin', role: 'admin', tenant_id: 1 },
       tenantId: 1,
+      billing: null,
       isSuperAdmin: false,
       canSwitchTenant: false,
       tenantAccess: {
@@ -107,7 +108,9 @@ describe('Learners', () => {
         is_lifetime: false,
       },
       isTenantAccessLoading: false,
+      isBillingLoading: false,
       refreshTenantAccess: jest.fn(),
+      refreshBilling: jest.fn(),
       switchTenant: jest.fn(),
       registerTutor: jest.fn(),
       registerStudent: jest.fn(),

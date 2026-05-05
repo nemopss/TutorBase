@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import React, { useEffect, useRef, useState } from 'react';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import {
   Spin,
@@ -106,6 +106,16 @@ const deletePackage = async (id: number) => {
   await api.delete(`/packages/${id}`);
 };
 
+type PackageRouteAction = 'edit' | 'payment' | 'delete' | 'activate' | 'complete';
+
+const isPackageRouteAction = (value: string | null): value is PackageRouteAction => (
+  value === 'edit' ||
+  value === 'payment' ||
+  value === 'delete' ||
+  value === 'activate' ||
+  value === 'complete'
+);
+
 // --- Helper functions --- //
 const formatCurrency = (value: number): string => {
   return new Intl.NumberFormat('ru-RU', {
@@ -134,6 +144,7 @@ const PackageDetail: React.FC = () => {
   const { t } = useTranslation();
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const queryClient = useQueryClient();
   const { resolvedTheme } = useTheme();
   const { tenantAccess, tenantId } = useAuth();
@@ -142,6 +153,7 @@ const PackageDetail: React.FC = () => {
   const isDark = resolvedTheme.colorScheme === 'dark';
   const canUseFullActions = !tenantAccess || tenantAccess.mode === 'full' || tenantAccess.bypass_access_restrictions;
   const [paymentForm] = Form.useForm();
+  const handledRouteActionRef = useRef<string | null>(null);
 
   // Modal states
   const [isPaymentModalOpen, setIsPaymentModalOpen] = useState(false);
@@ -250,6 +262,12 @@ const PackageDetail: React.FC = () => {
     },
   });
 
+  const clearRouteAction = () => {
+    if (location.search.includes('action=')) {
+      navigate(`/packages/${id}`, { replace: true });
+    }
+  };
+
   const updatePackageMutation = useMutation({
     mutationFn: async (values: any) => {
       const { data } = await api.patch(`/packages/${id}`, values);
@@ -258,12 +276,23 @@ const PackageDetail: React.FC = () => {
     onSuccess: () => {
       message.success(t('success.updated'));
       queryClient.invalidateQueries({ queryKey: ['package', id] });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
       setIsEditModalOpen(false);
+      clearRouteAction();
     },
     onError: (error: Error) => {
       message.error(t('errors.updateFailed', { message: error.message }));
     },
   });
+
+  const updatePackageStatus = (nextStatus: 'active' | 'completed') => {
+    if (!canUseFullActions) {
+      message.warning('Во время льготного периода нельзя менять статус пакета.');
+      clearRouteAction();
+      return;
+    }
+    updatePackageMutation.mutate({ status: nextStatus });
+  };
 
   // Handlers
   const openPaymentModal = () => {
@@ -385,6 +414,56 @@ const PackageDetail: React.FC = () => {
       deletePackageMutation.mutate(parseInt(id));
     }
   };
+
+  useEffect(() => {
+    if (!id || !packageData) {
+      return;
+    }
+
+    const action = new URLSearchParams(location.search).get('action');
+    if (!isPackageRouteAction(action)) {
+      return;
+    }
+
+    const actionKey = `${id}:${action}:${location.search}`;
+    if (handledRouteActionRef.current === actionKey) {
+      return;
+    }
+    handledRouteActionRef.current = actionKey;
+
+    if (action === 'payment') {
+      openPaymentModal();
+      clearRouteAction();
+      return;
+    }
+
+    if (!canUseFullActions) {
+      message.warning('Во время льготного периода это действие с пакетом недоступно.');
+      clearRouteAction();
+      return;
+    }
+
+    if (action === 'edit') {
+      setIsEditModalOpen(true);
+      clearRouteAction();
+      return;
+    }
+
+    if (action === 'delete') {
+      setIsDeletePackageModalOpen(true);
+      clearRouteAction();
+      return;
+    }
+
+    if (action === 'activate') {
+      updatePackageStatus('active');
+      return;
+    }
+
+    if (action === 'complete') {
+      updatePackageStatus('completed');
+    }
+  }, [canUseFullActions, id, location.search, packageData]);
 
   if (requiresTenantContext) {
     return <TenantContextRequired sectionLabel={t('pages.packages.title')} />;

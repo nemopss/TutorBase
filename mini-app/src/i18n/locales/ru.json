@@ -249,7 +249,7 @@
       "subtitle": "Управление пакетами уроков",
       "addPackage": "Добавить пакет",
       "noPackages": "Пока нет пакетов",
-      "noPackagesDescription": "Создайте первый пакет, нажав кнопку выше",
+      "noPackagesDescription": "Создайте первый пакет по расписанию ученика или сохраните его как черновик.",
       "lessons": "уроков",
       "progress": "Прогресс",
       "status": {
@@ -1157,7 +1157,19 @@
   },
   "packageCard": {
     "noScheduled": "Нет запланированных",
-    "nextLesson": "Следующий: {{date}}"
+    "nextLesson": "Следующий: {{date}}",
+    "actions": {
+      "menu": "Действия с пакетом",
+      "open": "Открыть",
+      "activate": "Активировать",
+      "complete": "Завершить",
+      "activateConfirmTitle": "Активировать пакет?",
+      "activateConfirmDescription": "Пакет «{{title}}» перейдёт в активные.",
+      "completeConfirmTitle": "Завершить пакет?",
+      "completeConfirmDescription": "Пакет «{{title}}» будет отмечен как завершённый.",
+      "activatedToast": "Пакет активирован",
+      "completedToast": "Пакет завершён"
+    }
   },
   "rescheduleForm": {
     "title": "Перенести урок",
@@ -1218,10 +1230,27 @@
       "statusLabel": "Статус",
       "startDateLabel": "Дата начала",
       "startDateRequired": "Дата начала обязательна при использовании шаблона.",
-      "totalLessonsLabel": "Всего уроков (необязательно)",
+      "totalLessonsLabel": "Всего уроков",
       "totalLessonsPlaceholder": "например, 20",
+      "totalLessonsRequired": "Укажите количество уроков",
       "notesLabel": "Заметки",
       "notesPlaceholder": "Дополнительные заметки о пакете..."
+    },
+    "packageWizard": {
+      "next": "Далее",
+      "createActive": "Создать пакет",
+      "createDraft": "Создать как черновик",
+      "lessons": "Уроки",
+      "noLessonsWillBeCreated": "Уроки не будут созданы автоматически",
+      "createdActive": "Пакет «{{title}}» создан в Активных",
+      "createdDraft": "Черновик «{{title}}» сохранён",
+      "createdLessonsSuffix": "Создано {{count}} уроков по расписанию",
+      "steps": {
+        "learner": "Ученик",
+        "package": "Пакет",
+        "schedule": "Расписание",
+        "review": "Проверка"
+      }
     },
     "template": {
       "title": "Создать шаблон",
@@ -1310,12 +1339,13 @@
   },
   "schedule": {
     "currentSchedule": "Текущее расписание",
-    "templateInfoTitle": "Шаблон регулярного расписания",
-    "templateInfoDescription": "Это не список уже созданных уроков. Слоты используются, чтобы быстрее собирать пакеты занятий по привычному расписанию ученика.",
+    "templateInfoTitle": "Регулярное расписание ученика",
+    "templateInfoDescription": "Это расписание используется для создания новых пакетов. Если изменить его, уже созданные пакеты и уроки останутся без изменений.",
     "addSlot": "Добавить слот",
     "addSlotTitle": "Добавить время занятий",
     "noSlots": "Расписание не задано",
     "noSlotsDescription": "Добавьте дни и время регулярных занятий",
+    "noLessonsThisDay": "Нет занятий",
     "slotAdded": "Слот добавлен",
     "slotDeleted": "Слот удалён",
     "selectDays": "Выберите дни",
@@ -1348,7 +1378,10 @@
   },
   "schedulePreview": {
     "title": "Превью уроков",
-    "clickToEdit": "Нажмите на дату для добавления/удаления",
+    "clickToEdit": "Нажмите на дату, чтобы добавить или изменить урок",
+    "addLesson": "Добавить урок",
+    "editLesson": "Редактировать урок",
+    "multipleLessons": "{{count}} ур.",
     "noSchedule": "У ученика нет расписания",
     "noScheduleHint": "Сначала настройте расписание во вкладке «Расписание» профиля ученика",
     "generateDates": "Сгенерировать даты",

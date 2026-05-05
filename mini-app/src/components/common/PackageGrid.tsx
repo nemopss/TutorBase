@@ -1,7 +1,8 @@
 import React from 'react';
-import { Skeleton, Card } from 'antd';
+import { Skeleton } from 'antd';
 import { useResponsive } from '../../hooks/useResponsive';
 import { spacing } from '../../theme/tokens';
+import { useTheme } from '../../theme/ThemeProvider';
 
 interface PackageGridProps {
   /** Grid content */
@@ -24,27 +25,38 @@ const PackageGrid: React.FC<PackageGridProps> = ({
   skeletonCount = 6,
 }) => {
   const { isMobile, isTablet } = useResponsive();
+  const { resolvedTheme } = useTheme();
+  const colors = resolvedTheme.colors;
 
   const getColumns = () => {
-    if (isMobile) return 2;
-    if (isTablet) return 3;
-    return 4;
+    if (isMobile) return 1;
+    if (isTablet) return 2;
+    return 3;
   };
 
   const gridStyle: React.CSSProperties = {
     display: 'grid',
     gridTemplateColumns: `repeat(${getColumns()}, minmax(0, 1fr))`,
     gap: spacing.md,
-    overflow: 'hidden',
+    overflow: 'visible',
   };
 
   if (loading) {
     return (
       <div style={gridStyle}>
         {Array.from({ length: skeletonCount }).map((_, index) => (
-          <Card key={index} style={{ minHeight: 140 }}>
+          <div
+            key={index}
+            style={{
+              minHeight: 132,
+              padding: spacing.md,
+              borderRadius: 10,
+              background: colors.bgSecondary,
+              border: `1px solid ${colors.borderPrimary}`,
+            }}
+          >
             <Skeleton active paragraph={{ rows: 2 }} />
-          </Card>
+          </div>
         ))}
       </div>
     );

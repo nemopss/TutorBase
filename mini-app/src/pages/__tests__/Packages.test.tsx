@@ -57,10 +57,13 @@ describe('Packages', () => {
       user: { id: 1, display_name: 'Admin', role: 'admin', tenant_id: 1 },
       tenantId: 1,
       tenantAccess: null,
+      billing: null,
       isTenantAccessLoading: false,
+      isBillingLoading: false,
       isSuperAdmin: false,
       canSwitchTenant: false,
       refreshTenantAccess: jest.fn(),
+      refreshBilling: jest.fn(),
       switchTenant: jest.fn(),
       registerTutor: jest.fn(),
       registerStudent: jest.fn(),
@@ -110,11 +113,11 @@ describe('Packages', () => {
     expect(await screen.findByRole('tab', { name: 'DRAFT' })).toBeInTheDocument();
   });
 
-  it('shows package status tags', async () => {
+  it('does not duplicate package statuses inside cards', async () => {
     renderComponent();
 
-    expect((await screen.findAllByText('ACTIVE')).length).toBeGreaterThanOrEqual(2);
-    expect((await screen.findAllByText('DRAFT')).length).toBeGreaterThanOrEqual(2);
+    expect((await screen.findAllByText('ACTIVE')).length).toBe(1);
+    expect((await screen.findAllByText('DRAFT')).length).toBe(1);
   });
 
   it('shows progress information', async () => {

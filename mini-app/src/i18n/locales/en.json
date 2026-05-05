@@ -248,7 +248,7 @@
       "subtitle": "Manage lesson packages",
       "addPackage": "Add Package",
       "noPackages": "No packages yet",
-      "noPackagesDescription": "Create your first package by clicking the button above",
+      "noPackagesDescription": "Create the first package from the learner schedule or save it as a draft.",
       "lessons": "lessons",
       "progress": "Progress",
       "status": {
@@ -1156,7 +1156,19 @@
   },
   "packageCard": {
     "noScheduled": "No scheduled lessons",
-    "nextLesson": "Next: {{date}}"
+    "nextLesson": "Next: {{date}}",
+    "actions": {
+      "menu": "Package actions",
+      "open": "Open",
+      "activate": "Activate",
+      "complete": "Complete",
+      "activateConfirmTitle": "Activate package?",
+      "activateConfirmDescription": "Package “{{title}}” will move to Active.",
+      "completeConfirmTitle": "Complete package?",
+      "completeConfirmDescription": "Package “{{title}}” will be marked as completed.",
+      "activatedToast": "Package activated",
+      "completedToast": "Package completed"
+    }
   },
   "rescheduleForm": {
     "title": "Reschedule Lesson",
@@ -1217,10 +1229,27 @@
       "statusLabel": "Status",
       "startDateLabel": "Start Date",
       "startDateRequired": "Start date is required when using a template.",
-      "totalLessonsLabel": "Total Lessons (optional)",
+      "totalLessonsLabel": "Total lessons",
       "totalLessonsPlaceholder": "e.g., 20",
+      "totalLessonsRequired": "Enter lesson count",
       "notesLabel": "Notes",
       "notesPlaceholder": "Additional notes about this package..."
+    },
+    "packageWizard": {
+      "next": "Next",
+      "createActive": "Create package",
+      "createDraft": "Create as draft",
+      "lessons": "Lessons",
+      "noLessonsWillBeCreated": "Lessons will not be created automatically",
+      "createdActive": "Package “{{title}}” created in Active",
+      "createdDraft": "Draft “{{title}}” saved",
+      "createdLessonsSuffix": "{{count}} lessons created from the schedule",
+      "steps": {
+        "learner": "Learner",
+        "package": "Package",
+        "schedule": "Schedule",
+        "review": "Review"
+      }
     },
     "template": {
       "title": "Create New Template",
@@ -1309,12 +1338,13 @@
   },
   "schedule": {
     "currentSchedule": "Current Schedule",
-    "templateInfoTitle": "Regular schedule template",
-    "templateInfoDescription": "This is not the list of already created lessons. Slots help create lesson packages faster from the learner's usual schedule.",
+    "templateInfoTitle": "Learner regular schedule",
+    "templateInfoDescription": "This schedule is used to create new packages. Changing it will not modify packages and lessons that already exist.",
     "addSlot": "Add Slot",
     "addSlotTitle": "Add Lesson Time",
     "noSlots": "No schedule set",
     "noSlotsDescription": "Add days and times for regular lessons",
+    "noLessonsThisDay": "No lessons",
     "slotAdded": "Slot added",
     "slotDeleted": "Slot deleted",
     "selectDays": "Select Days",
@@ -1347,7 +1377,10 @@
   },
   "schedulePreview": {
     "title": "Lesson Preview",
-    "clickToEdit": "Click on a date to add/remove",
+    "clickToEdit": "Click a date to add or edit a lesson",
+    "addLesson": "Add lesson",
+    "editLesson": "Edit lesson",
+    "multipleLessons": "{{count}} lessons",
     "noSchedule": "Learner has no schedule",
     "noScheduleHint": "First set up a schedule in the learner's profile Schedule tab",
     "generateDates": "Generate Dates",
