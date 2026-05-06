@@ -1073,7 +1073,10 @@
       "tutorBadge": "Free up to 3 learners",
       "studentTitle": "I'm a Student",
       "studentDescription": "Open your lesson access with a tutor invite code",
-      "studentBadge": "By invitation"
+      "studentBadge": "By invitation",
+      "existingTitle": "I already have an account",
+      "existingDescription": "Link this Telegram to a workspace created in the browser",
+      "existingBadge": "Email and password"
     },
     "tutorRegistration": {
       "badge": "Free up to 3 active learners",
@@ -1087,6 +1090,14 @@
       "schoolNameMinLength": "Workspace name must be at least 2 characters",
       "yourNameLabel": "Your Name (optional)",
       "yourNamePlaceholder": "Leave empty to use your Telegram name",
+      "emailLabel": "Login Email",
+      "emailPlaceholder": "name@example.com",
+      "emailRequired": "Please enter your email",
+      "emailInvalid": "Enter a valid email",
+      "passwordLabel": "Password",
+      "passwordPlaceholder": "At least 8 characters",
+      "passwordRequired": "Please enter a password",
+      "passwordMinLength": "Password must be at least 8 characters",
       "termsText": "By creating an account, you agree to our",
       "termsOfService": "Terms of Service",
       "and": "and",

@@ -14,6 +14,7 @@ import {
   loadAccessDeniedPage,
   loadAnalyticsPage,
   loadDashboardPage,
+  loadExistingAccountLinkFormPage,
   loadFinanceDashboardPage,
   loadGroupsPage,
   loadIncomeReportsPage,
@@ -62,6 +63,7 @@ const AccessDenied = lazy(loadAccessDeniedPage);
 const TenantAccessBlocked = lazy(loadTenantAccessBlockedPage);
 const TenantAccessPreview = lazy(loadTenantAccessPreviewPage);
 const RoleSelectionScreen = lazy(loadRoleSelectionScreenPage);
+const ExistingAccountLinkForm = lazy(loadExistingAccountLinkFormPage);
 const TutorRegistrationForm = lazy(loadTutorRegistrationFormPage);
 const StudentRegistrationForm = lazy(loadStudentRegistrationFormPage);
 const StudentDashboard = lazy(loadStudentDashboardPage);
@@ -130,6 +132,7 @@ function App() {
         <Suspense fallback={<PageLoader />}>
           <Routes>
             <Route path="/" element={<RoleSelectionScreen />} />
+            <Route path="/login/existing" element={<ExistingAccountLinkForm />} />
             <Route path="/register/tutor" element={<TutorRegistrationForm />} />
             <Route path="/register/student" element={<StudentRegistrationForm />} />
             <Route path="*" element={<Navigate to="/" replace />} />

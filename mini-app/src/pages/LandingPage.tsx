@@ -23,6 +23,18 @@ const SELLER_NAME = 'Гладилин Алексей Алексеевич';
 const SELLER_INN = '621305194552';
 const SUPPORT_EMAIL = 'tutorbase@mail.ru';
 const TELEGRAM_BOT_URL = 'https://t.me/tutorbaserobot';
+const APP_REGISTER_URL = 'https://app.tutorbase.su/register/tutor';
+
+const getRegisterUrl = () => {
+  if (typeof window === 'undefined') {
+    return APP_REGISTER_URL;
+  }
+  const { hostname } = window.location;
+  if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname.startsWith('app.')) {
+    return '/register/tutor';
+  }
+  return APP_REGISTER_URL;
+};
 
 const pricingPlans = [
   {
@@ -425,6 +437,7 @@ const OverviewGraphic = () => (
 const LandingPage: React.FC = () => {
   const { resolvedTheme, setThemeId } = useTheme();
   const isDark = resolvedTheme.colorScheme === 'dark';
+  const registerUrl = getRegisterUrl();
   const [scrolled, setScrolled] = useState(false);
   const firstSectionRef = useRef<HTMLElement | null>(null);
 
@@ -497,7 +510,7 @@ const LandingPage: React.FC = () => {
             >
               {isDark ? <SunOutlined /> : <MoonOutlined />}
             </button>
-            <Button type="primary" href={TELEGRAM_BOT_URL}>
+            <Button type="primary" href={registerUrl}>
               {CTA_TEXT}
             </Button>
           </div>
@@ -520,7 +533,7 @@ const LandingPage: React.FC = () => {
                   <Button
                     type="primary"
                     size="large"
-                    href={TELEGRAM_BOT_URL}
+                    href={registerUrl}
                     icon={<ArrowRightOutlined />}
                     className="landing-content-cta"
                   >
@@ -528,6 +541,9 @@ const LandingPage: React.FC = () => {
                   </Button>
                   <Button size="large" onClick={handleScrollToProduct} className="landing-hero-secondary">
                     Посмотреть возможности
+                  </Button>
+                  <Button size="large" href={TELEGRAM_BOT_URL} className="landing-hero-secondary">
+                    Открыть в Telegram
                   </Button>
                 </div>
                 <p className="landing-hero-note">
@@ -707,7 +723,7 @@ const LandingPage: React.FC = () => {
                       <li><CheckCircleOutlined /> Напоминания и финансовый учёт доступны в кабинете</li>
                       <li><CheckCircleOutlined /> Ученики подключаются бесплатно по приглашению</li>
                     </ul>
-                    <Button type="primary" size="large" href={TELEGRAM_BOT_URL} className="landing-content-cta">
+                    <Button type="primary" size="large" href={registerUrl} className="landing-content-cta">
                       {CTA_TEXT}
                     </Button>
                   </div>
@@ -781,7 +797,7 @@ const LandingPage: React.FC = () => {
                 <Button
                   type="primary"
                   size="large"
-                  href={TELEGRAM_BOT_URL}
+                  href={registerUrl}
                   icon={<ArrowRightOutlined />}
                   className="landing-content-cta"
                 >

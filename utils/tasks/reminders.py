@@ -18,6 +18,7 @@ from typing import Optional
 
 from utils.celery_app import celery_app
 from database.engine import async_session
+from services.exceptions import NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -85,6 +86,25 @@ def regenerate_package_reminders_task(self, package_id: int, tenant_id: Optional
         
         return result
         
+    except (NotFoundError, ValueError) as exc:
+        if "not found" not in str(exc).lower():
+            raise
+
+        logger.warning(
+            f"Reminder regeneration skipped for missing package {package_id}: {exc}",
+            extra={
+                'package_id': package_id,
+                'tenant_id': tenant_id,
+                'task_id': self.request.id,
+            },
+        )
+        return {
+            'status': 'skipped',
+            'reason': 'package_not_found',
+            'package_id': package_id,
+            'tenant_id': tenant_id,
+        }
+
     except Exception as exc:
         logger.error(
             f"Reminder regeneration failed for package {package_id}: {exc}",
@@ -144,7 +164,7 @@ async def _regenerate_reminders_async(package_id: int, tenant_id: Optional[int])
             # Get package
             package = await crud.get_lesson_package(session, current_tenant, package_id)
             if not package:
-                raise ValueError(f"Package {package_id} not found")
+                raise NotFoundError(f"Package {package_id} not found")
             
             # Regenerate reminders
             await regenerate_package_reminders(session, current_tenant, package)

@@ -308,6 +308,12 @@ async def get_user_by_telegram_id(session: AsyncSession, telegram_id: int) -> Us
     return (await session.execute(stmt)).scalar_one_or_none()
 
 
+async def get_user_by_email_normalized(session: AsyncSession, email_normalized: str) -> User | None:
+    """Get user by normalized email."""
+    stmt = select(User).where(User.email_normalized == email_normalized)
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
 async def create_user(
     session: AsyncSession,
     current_tenant: CurrentTenant,
@@ -317,6 +323,9 @@ async def create_user(
     display_name: str,
     role: str = "viewer",
     tenant_id: Optional[int] = None,
+    email: str | None = None,
+    email_normalized: str | None = None,
+    password_hash: str | None = None,
 ) -> User:
     """Create new system user.
     
@@ -351,6 +360,9 @@ async def create_user(
         telegram_id=telegram_id,
         username=username,
         display_name=display_name,
+        email=email,
+        email_normalized=email_normalized,
+        password_hash=password_hash,
         role=role,
         created_at=now,
         updated_at=now,

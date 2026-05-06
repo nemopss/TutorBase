@@ -9,6 +9,8 @@ from typing import Callable
 from fastapi import Request, Response
 from starlette.middleware.base import BaseHTTPMiddleware
 
+from api.log_sanitizer import redact_query_params
+
 logger = logging.getLogger("slow_query")
 
 
@@ -74,7 +76,7 @@ class SlowQueryLoggerMiddleware(BaseHTTPMiddleware):
                     "is_super_admin": is_super_admin,
                     "method": request.method,
                     "path": request.url.path,
-                    "query_params": str(request.query_params),
+                    "query_params": redact_query_params(request.query_params),
                     "status_code": response.status_code,
                     "client_ip": request.client.host if request.client else None,
                 }

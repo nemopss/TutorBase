@@ -46,7 +46,7 @@
             "handlers": [
                 "access"
             ],
-            "level": "INFO",
+            "level": "WARNING",
             "propagate": false
         },
         "fastapi": {

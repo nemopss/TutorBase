@@ -24,6 +24,8 @@ async def test_register_tutor_success(client: AsyncClient, db_session: AsyncSess
     registration_data = {
         "school_name": "Test Tutoring School",
         "tutor_name": "John Doe",
+        "email": "john@example.com",
+        "password": "password123",
         "offer_accepted": True,
         "privacy_accepted": True,
     }
@@ -51,6 +53,7 @@ async def test_register_tutor_success(client: AsyncClient, db_session: AsyncSess
     user_data = data["user"]
     assert user_data["role"] == "teacher"
     assert user_data["display_name"] == "John Doe"
+    assert user_data["email"] == "john@example.com"
     
     # Check tenant data
     tenant_data = data["tenant"]
@@ -81,6 +84,15 @@ async def test_register_tutor_success(client: AsyncClient, db_session: AsyncSess
     ).scalar_one()
     assert acceptance.offer_version == "2026-04-29"
     assert acceptance.privacy_version == "2026-04-29"
+
+    user = (
+        await db_session.execute(
+            select(User).where(User.id == user_data["id"])
+        )
+    ).scalar_one()
+    assert user.email_normalized == "john@example.com"
+    assert user.password_hash
+    assert user.password_hash != "password123"
 
 
 @pytest.mark.asyncio

@@ -1,7 +1,7 @@
 import React from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Typography } from 'antd';
-import { RightOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
+import { LoginOutlined, RightOutlined, TeamOutlined, UserOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useResponsive } from '../hooks/useResponsive';
 import { useTheme } from '../theme/ThemeProvider';
@@ -164,6 +164,14 @@ const RoleSelectionScreen: React.FC = () => {
                         description={t('pages.roleSelection.studentDescription')}
                         badge={t('pages.roleSelection.studentBadge')}
                         onClick={() => navigate('/register/student')}
+                    />
+
+                    <RoleCard
+                        icon={<LoginOutlined />}
+                        title={t('pages.roleSelection.existingTitle')}
+                        description={t('pages.roleSelection.existingDescription')}
+                        badge={t('pages.roleSelection.existingBadge')}
+                        onClick={() => navigate('/login/existing')}
                     />
                 </div>
             </section>

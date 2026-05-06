@@ -37,6 +37,8 @@ from typing import Any, Dict
 from urllib.parse import parse_qsl
 
 import jwt
+from argon2 import PasswordHasher
+from argon2.exceptions import VerifyMismatchError, VerificationError
 
 from config import config
 
@@ -68,6 +70,24 @@ class InitDataVerificationError(Exception):
 
 class TelegramLoginVerificationError(Exception):
     """Raised when Telegram Login Widget verification fails."""
+
+
+_password_hasher = PasswordHasher()
+
+
+def hash_password(password: str) -> str:
+    """Hash a user password with Argon2id."""
+    return _password_hasher.hash(password)
+
+
+def verify_password(password: str, password_hash: str | None) -> bool:
+    """Verify a password against a stored Argon2 hash."""
+    if not password_hash:
+        return False
+    try:
+        return _password_hasher.verify(password_hash, password)
+    except (VerifyMismatchError, VerificationError, ValueError, TypeError):
+        return False
 
 
 def _parse_init_data(init_data: str) -> Dict[str, str]:

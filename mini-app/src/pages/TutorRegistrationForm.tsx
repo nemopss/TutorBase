@@ -20,9 +20,15 @@ const { Text } = Typography;
 interface FormData {
     school_name: string;
     tutor_name?: string;
+    email: string;
+    password: string;
     offer_accepted: boolean;
     privacy_accepted: boolean;
 }
+
+const getApiDetail = (error: unknown): unknown => (
+    (error as { response?: { data?: { detail?: unknown } } } | undefined)?.response?.data?.detail
+);
 
 const TutorRegistrationForm: React.FC = () => {
     const { t } = useTranslation();
@@ -44,12 +50,15 @@ const TutorRegistrationForm: React.FC = () => {
             await registerTutor({
                 school_name: values.school_name.trim(),
                 tutor_name: values.tutor_name?.trim() || undefined,
+                email: values.email.trim(),
+                password: values.password,
                 offer_accepted: values.offer_accepted,
                 privacy_accepted: values.privacy_accepted,
             });
-        } catch (err: any) {
+        } catch (err: unknown) {
             devError('Registration failed:', err);
-            setError(err.response?.data?.detail || t('pages.tutorRegistration.genericError'));
+            const detail = getApiDetail(err);
+            setError(typeof detail === 'string' ? detail : t('pages.tutorRegistration.genericError'));
         } finally {
             setLoading(false);
         }
@@ -205,6 +214,39 @@ const TutorRegistrationForm: React.FC = () => {
                             >
                                 <Input
                                     placeholder={t('pages.tutorRegistration.yourNamePlaceholder')}
+                                    size="large"
+                                    variant="filled"
+                                />
+                            </Form.Item>
+
+                            <Form.Item
+                                label={t('pages.tutorRegistration.emailLabel')}
+                                name="email"
+                                rules={[
+                                    { required: true, message: t('pages.tutorRegistration.emailRequired') },
+                                    { type: 'email', message: t('pages.tutorRegistration.emailInvalid') },
+                                ]}
+                            >
+                                <Input
+                                    type="email"
+                                    autoComplete="email"
+                                    placeholder={t('pages.tutorRegistration.emailPlaceholder')}
+                                    size="large"
+                                    variant="filled"
+                                />
+                            </Form.Item>
+
+                            <Form.Item
+                                label={t('pages.tutorRegistration.passwordLabel')}
+                                name="password"
+                                rules={[
+                                    { required: true, message: t('pages.tutorRegistration.passwordRequired') },
+                                    { min: 8, message: t('pages.tutorRegistration.passwordMinLength') },
+                                ]}
+                            >
+                                <Input.Password
+                                    autoComplete="new-password"
+                                    placeholder={t('pages.tutorRegistration.passwordPlaceholder')}
                                     size="large"
                                     variant="filled"
                                 />

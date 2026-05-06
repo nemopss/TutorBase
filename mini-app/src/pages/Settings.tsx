@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Avatar, Button, Card, Typography, message } from 'antd';
+import { Avatar, Button, Card, Form, Input, Typography, message } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { useAuth } from '../auth/AuthProvider';
 import PageIntro from '../components/common/PageIntro';
@@ -29,11 +29,15 @@ type CheckoutPreview = {
   message: string;
 };
 
+const getApiDetail = (error: unknown): unknown => (
+  (error as { response?: { data?: { detail?: unknown } } } | undefined)?.response?.data?.detail
+);
+
 const planOrderByCode = Object.fromEntries(PAID_PLAN_OPTIONS.map((plan) => [plan.value, plan.order]));
 
 const Settings: React.FC = () => {
   const { t, i18n } = useTranslation();
-  const { user, tenantAccess, billing, logout } = useAuth();
+  const { user, tenantAccess, billing, logout, setEmailPassword } = useAuth();
   const { resolvedTheme } = useTheme();
   const colors = resolvedTheme.colors;
   const isStaff = user?.role === 'teacher' || user?.is_platform_admin;
@@ -52,6 +56,8 @@ const Settings: React.FC = () => {
   const [checkoutPreview, setCheckoutPreview] = useState<CheckoutPreview | null>(null);
   const [isPreviewLoading, setIsPreviewLoading] = useState(false);
   const [checkoutPreviewError, setCheckoutPreviewError] = useState<string | null>(null);
+  const [emailForm] = Form.useForm();
+  const [isEmailSaving, setIsEmailSaving] = useState(false);
 
   const formatDate = (value?: string | null) => {
     if (!value) return null;
@@ -225,9 +231,9 @@ const Settings: React.FC = () => {
       .then((response) => {
         if (!cancelled) setCheckoutPreview(response.data);
       })
-      .catch((error: any) => {
+      .catch((error: unknown) => {
         if (!cancelled) {
-          const detail = error?.response?.data?.detail;
+          const detail = getApiDetail(error);
           setCheckoutPreview(null);
           setCheckoutPreviewError(typeof detail === 'string' ? detail : 'Не удалось рассчитать оплату');
         }
@@ -267,11 +273,28 @@ const Settings: React.FC = () => {
         billing_period: 'month',
       });
       window.location.assign(response.data.confirmation_url);
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
+    } catch (error: unknown) {
+      const detail = getApiDetail(error);
       message.error(typeof detail === 'string' ? detail : 'Не удалось создать платёж');
     } finally {
       setIsCheckoutLoading(false);
+    }
+  };
+
+  const handleEmailPasswordSubmit = async (values: { email: string; password: string }) => {
+    setIsEmailSaving(true);
+    try {
+      await setEmailPassword({
+        email: values.email.trim(),
+        password: values.password,
+      });
+      emailForm.resetFields(['password']);
+      message.success('Email и пароль сохранены');
+    } catch (error: unknown) {
+      const detail = getApiDetail(error);
+      message.error(typeof detail === 'string' ? detail : 'Не удалось сохранить email и пароль');
+    } finally {
+      setIsEmailSaving(false);
     }
   };
 
@@ -306,6 +329,50 @@ const Settings: React.FC = () => {
             {t('pages.settings.profileSyncNote')}
           </Text>
         </Card>
+
+        {isStaff && (
+          <Card bordered={false} style={tileStyle} styles={{ header: cardHeaderStyle }}>
+            <Title level={4} style={{ marginTop: 0, color: colors.textPrimary }}>
+              Email для входа
+            </Title>
+            <Text type="secondary" style={{ display: 'block', marginBottom: spacing.md }}>
+              {user?.email
+                ? `Подключён: ${user.email}${user.email_verified_at ? '' : ' · ожидает будущей верификации'}`
+                : 'Добавьте email и пароль, чтобы входить в браузерный кабинет без Telegram.'}
+            </Text>
+            <Form
+              form={emailForm}
+              layout="vertical"
+              requiredMark={false}
+              initialValues={{ email: user?.email ?? '' }}
+              onFinish={handleEmailPasswordSubmit}
+            >
+              <Form.Item
+                label="Email"
+                name="email"
+                rules={[
+                  { required: true, message: 'Введите email' },
+                  { type: 'email', message: 'Введите корректный email' },
+                ]}
+              >
+                <Input type="email" autoComplete="email" size="large" variant="filled" />
+              </Form.Item>
+              <Form.Item
+                label="Новый пароль"
+                name="password"
+                rules={[
+                  { required: true, message: 'Введите пароль' },
+                  { min: 8, message: 'Пароль должен быть не короче 8 символов' },
+                ]}
+              >
+                <Input.Password autoComplete="new-password" size="large" variant="filled" />
+              </Form.Item>
+              <Button type="primary" htmlType="submit" loading={isEmailSaving}>
+                Сохранить email и пароль
+              </Button>
+            </Form>
+          </Card>
+        )}
 
         {isStaff && (accessStatusConfig || billing) && (
           <Card bordered={false} style={tileStyle} styles={{ header: cardHeaderStyle }}>

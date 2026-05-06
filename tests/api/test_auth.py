@@ -7,7 +7,7 @@ import pytest
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.security import create_refresh_token
+from api.security import create_refresh_token, hash_password
 from api.routes import auth as auth_routes
 from config import config
 from database import crud
@@ -77,6 +77,9 @@ async def test_login_dev_mode_success(client: AsyncClient, db_session: AsyncSess
     assert data["user"]["display_name"] == "Dev Tester"
     assert data["access_token"]
     assert data["refresh_token"]
+    assert config.BROWSER_REFRESH_COOKIE_NAME in response.headers["set-cookie"]
+    assert "HttpOnly" in response.headers["set-cookie"]
+    assert "Path=/api/v1/auth" in response.headers["set-cookie"]
 
     user = await crud.get_user(db_session, data["user"]["id"])
     assert user is not None
@@ -133,6 +136,28 @@ async def test_refresh_returns_new_tokens(client: AsyncClient, db_session: Async
     refreshed = response.json()
     assert refreshed["user"]["id"] == tokens["user"]["id"]
     assert refreshed["access_token"]
+    assert config.BROWSER_REFRESH_COOKIE_NAME in response.headers["set-cookie"]
+    assert "Path=/api/v1/auth" in response.headers["set-cookie"]
+
+
+@pytest.mark.asyncio
+async def test_session_cookie_refresh_returns_access_token_without_body_refresh(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch,
+):
+    monkeypatch.setattr(config, "BROWSER_REFRESH_COOKIE_SECURE", False)
+    login_response = await _perform_login(client, db_session, monkeypatch=monkeypatch)
+    assert login_response.status_code == 200
+
+    response = await client.post("/api/v1/auth/session/refresh")
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["access_token"]
+    assert "refresh_token" not in data
+    assert config.BROWSER_REFRESH_COOKIE_NAME in response.headers["set-cookie"]
+    assert "Path=/api/v1/auth" in response.headers["set-cookie"]
 
 
 @pytest.mark.asyncio
@@ -307,3 +332,102 @@ async def test_browser_refresh_missing_cookie_returns_401(client: AsyncClient, m
 
     assert response.status_code == 401
     assert response.json()["detail"] == "Missing refresh token"
+
+
+@pytest.mark.asyncio
+async def test_browser_email_registration_sets_cookie_and_hashes_password(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    monkeypatch,
+):
+    _configure_browser_auth(monkeypatch)
+
+    response = await client.post(
+        "/api/v1/auth/browser/register-tutor-email",
+        json={
+            "school_name": "Browser School",
+            "tutor_name": "Browser Tutor",
+            "email": "Tutor@Example.COM",
+            "password": "password123",
+            "offer_accepted": True,
+            "privacy_accepted": True,
+        },
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["access_token"]
+    assert "refresh_token" not in data
+    assert data["user"]["email"] == "Tutor@Example.COM"
+    assert config.BROWSER_REFRESH_COOKIE_NAME in response.headers["set-cookie"]
+
+    user = await crud.get_user_by_email_normalized(db_session, "tutor@example.com")
+    assert user is not None
+    assert user.telegram_id is None
+    assert user.password_hash
+    assert user.password_hash != "password123"
+
+
+@pytest.mark.asyncio
+async def test_browser_email_login_success(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tenant_1,
+    monkeypatch,
+):
+    _configure_browser_auth(monkeypatch)
+    await factories.create_user(
+        db_session,
+        role="teacher",
+        tenant_id=tenant_1.id,
+        email="login@example.com",
+        email_normalized="login@example.com",
+        password_hash=hash_password("password123"),
+    )
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/v1/auth/browser/login-email",
+        json={"email": " LOGIN@example.com ", "password": "password123"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["access_token"]
+    assert config.BROWSER_REFRESH_COOKIE_NAME in response.headers["set-cookie"]
+
+
+@pytest.mark.asyncio
+async def test_telegram_link_email_account_attaches_current_telegram(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tenant_1,
+    monkeypatch,
+):
+    monkeypatch.setattr(config, "DEV_MODE", True)
+    monkeypatch.setattr(config, "DEV_INIT_DATA", "dev")
+    monkeypatch.setattr(config, "DEV_TELEGRAM_ID", 909090)
+    monkeypatch.setattr(config, "DEV_USERNAME", "linked_user")
+    monkeypatch.setattr(config, "DEV_DISPLAY_NAME", "Linked User")
+
+    user = await factories.create_user(
+        db_session,
+        role="teacher",
+        tenant_id=tenant_1.id,
+        email="browser@example.com",
+        email_normalized="browser@example.com",
+        password_hash=hash_password("password123"),
+    )
+    user.telegram_id = None
+    db_session.add(user)
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/v1/auth/telegram/link-email-account",
+        json={"email": "browser@example.com", "password": "password123"},
+        headers={"X-Telegram-Init-Data": "dev"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["refresh_token"]
+    await db_session.refresh(user)
+    assert user.telegram_id == 909090

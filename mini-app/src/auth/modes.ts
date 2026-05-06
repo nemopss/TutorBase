@@ -8,7 +8,7 @@ export const detectAuthMode = (): AuthMode => {
   }
 
   const webApp = window.Telegram?.WebApp;
-  if (webApp) {
+  if (webApp?.initData && webApp.initData.length > 0) {
     return 'telegram-webapp';
   }
 

@@ -7,9 +7,21 @@ from pydantic import BaseModel, Field, validator
 import re
 
 
+def validate_email_format(value: str) -> str:
+    email = value.strip()
+    if not email:
+        raise ValueError('Email cannot be empty')
+    email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
+    if not re.match(email_pattern, email):
+        raise ValueError('Invalid email format')
+    return email
+
+
 class TutorRegistrationRequest(BaseModel):
     """Request schema for tutor registration."""
     school_name: str = Field(..., min_length=2, max_length=100, description="Name of the school or tutoring business")
+    email: str = Field(..., min_length=3, max_length=320, description="Email for browser login")
+    password: str = Field(..., min_length=8, max_length=256, description="Password for browser login")
     contact_email: Optional[str] = Field(None, description="Optional contact email for the tutor/school")
     tutor_name: Optional[str] = Field(None, max_length=100, description="Tutor's display name (optional, will use Telegram name if not provided)")
     offer_accepted: bool = Field(False, description="User accepted the public offer")
@@ -25,14 +37,21 @@ class TutorRegistrationRequest(BaseModel):
     def validate_email(cls, v):
         if v is None:
             return None
-        email = v.strip()
-        if not email:
+        if not v.strip():
             return None
-        # Simple email validation
-        email_pattern = r'^[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}$'
-        if not re.match(email_pattern, email):
-            raise ValueError('Invalid email format')
-        return email
+        return validate_email_format(v)
+
+    @validator('email')
+    def validate_login_email(cls, v):
+        return validate_email_format(v)
+
+    @validator('password')
+    def validate_password(cls, v):
+        if not v or not v.strip():
+            raise ValueError('Password cannot be empty')
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        return v
 
     @validator('offer_accepted')
     def validate_offer_accepted(cls, v):

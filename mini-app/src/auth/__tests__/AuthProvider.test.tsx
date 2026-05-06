@@ -112,7 +112,12 @@ const renderComponent = () => {
 describe('AuthProvider', () => {
   beforeEach(() => {
     jest.clearAllMocks();
-    postMock.mockImplementation(() => Promise.resolve(defaultAuthResponse));
+    postMock.mockImplementation((url: string) => {
+      if (url === '/auth/session/refresh') {
+        return Promise.reject({ response: { status: 401 } });
+      }
+      return Promise.resolve(defaultAuthResponse);
+    });
     setBrowserRefreshHandler.mockImplementation(() => undefined);
     localStorageMock.getItem.mockReturnValue(null);
     sessionStorageMock.getItem.mockReturnValue(null);
@@ -134,13 +139,16 @@ describe('AuthProvider', () => {
     });
   });
 
-  it('stores tokens in localStorage', async () => {
+  it('does not store new telegram session tokens in localStorage', async () => {
     renderComponent();
     
     await waitFor(() => {
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('accessToken', validAccessToken);
-      expect(localStorageMock.setItem).toHaveBeenCalledWith('refreshToken', 'test-refresh-token');
+      expect(screen.getByText('Welcome, Test User!')).toBeInTheDocument();
     });
+
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('accessToken', expect.anything());
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('refreshToken', expect.anything());
+    expect(sessionStorageMock.setItem).not.toHaveBeenCalledWith('authUser', expect.any(String));
   });
 
   it('sets authorization header', async () => {
@@ -169,6 +177,56 @@ describe('AuthProvider', () => {
     expect(localStorageMock.setItem).not.toHaveBeenCalledWith('authUser', expect.any(String));
     expect(sessionStorageMock.setItem).toHaveBeenCalledWith('authUser', expect.any(String));
     expect(api.defaults.headers.common['Authorization']).toBe(`Bearer ${validAccessToken}`);
+  });
+
+  it('restores telegram sessions from cookie before legacy localStorage', async () => {
+    postMock.mockImplementation((url: string) => {
+      if (url === '/auth/session/refresh') {
+        return Promise.resolve(defaultAuthResponse);
+      }
+      return Promise.resolve(defaultAuthResponse);
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText('Welcome, Test User!')).toBeInTheDocument();
+    });
+
+    expect(postMock).toHaveBeenCalledWith('/auth/session/refresh', undefined, {
+      withCredentials: true,
+    });
+    expect(postMock).not.toHaveBeenCalledWith(
+      '/auth/login',
+      expect.anything(),
+      expect.anything()
+    );
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('accessToken', expect.anything());
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('refreshToken', expect.anything());
+  });
+
+  it('migrates legacy telegram localStorage refresh into cookie session', async () => {
+    localStorageMock.getItem.mockImplementation((key: string) => {
+      if (key === 'accessToken') return validAccessToken;
+      if (key === 'refreshToken') return 'legacy-refresh-token';
+      return null;
+    });
+
+    renderComponent();
+
+    await waitFor(() => {
+      expect(screen.getByText('Welcome, Test User!')).toBeInTheDocument();
+    });
+
+    expect(postMock).toHaveBeenCalledWith('/auth/refresh', {
+      refresh_token: 'legacy-refresh-token',
+    }, {
+      withCredentials: true,
+    });
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('accessToken');
+    expect(localStorageMock.removeItem).toHaveBeenCalledWith('refreshToken');
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('accessToken', expect.anything());
+    expect(localStorageMock.setItem).not.toHaveBeenCalledWith('refreshToken', expect.anything());
   });
 });
 

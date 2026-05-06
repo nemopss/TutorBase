@@ -24,6 +24,8 @@ def _to_response(user) -> UserResponse:
     return UserResponse(
         id=user.id,
         telegram_id=user.telegram_id,
+        email=user.email,
+        email_verified_at=user.email_verified_at,
         username=user.username,
         display_name=user.display_name,
         role=user.role,

@@ -1072,7 +1072,10 @@
       "tutorBadge": "학생 3명까지 무료",
       "studentTitle": "저는 학생입니다",
       "studentDescription": "선생님에게 받은 초대 코드로 입장하세요",
-      "studentBadge": "초대 필요"
+      "studentBadge": "초대 필요",
+      "existingTitle": "이미 계정이 있습니다",
+      "existingDescription": "브라우저에서 만든 공간에 이 텔레그램을 연결하세요",
+      "existingBadge": "이메일과 비밀번호"
     },
     "tutorRegistration": {
       "badge": "활성 학생 3명까지 무료",
@@ -1086,6 +1089,14 @@
       "schoolNameMinLength": "공간 이름은 최소 2자 이상이어야 합니다",
       "yourNameLabel": "이름 (선택)",
       "yourNamePlaceholder": "비워두면 텔레그램 이름을 사용합니다",
+      "emailLabel": "로그인 이메일",
+      "emailPlaceholder": "name@example.com",
+      "emailRequired": "이메일을 입력해주세요",
+      "emailInvalid": "올바른 이메일을 입력해주세요",
+      "passwordLabel": "비밀번호",
+      "passwordPlaceholder": "최소 8자",
+      "passwordRequired": "비밀번호를 입력해주세요",
+      "passwordMinLength": "비밀번호는 최소 8자 이상이어야 합니다",
       "termsText": "계정을 만들면 다음에 동의하는 것입니다",
       "termsOfService": "서비스 약관",
       "and": "및",

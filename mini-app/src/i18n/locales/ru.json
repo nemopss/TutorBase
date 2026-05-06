@@ -1074,7 +1074,10 @@
       "tutorBadge": "Бесплатно до 3 учеников",
       "studentTitle": "Я ученик",
       "studentDescription": "Открыть доступ к занятиям по коду от преподавателя",
-      "studentBadge": "По приглашению"
+      "studentBadge": "По приглашению",
+      "existingTitle": "У меня уже есть аккаунт",
+      "existingDescription": "Привязать этот Telegram к кабинету, созданному в браузере",
+      "existingBadge": "Email и пароль"
     },
     "tutorRegistration": {
       "badge": "Бесплатно до 3 активных учеников",
@@ -1088,6 +1091,14 @@
       "schoolNameMinLength": "Название должно быть не менее 2 символов",
       "yourNameLabel": "Ваше имя (необязательно)",
       "yourNamePlaceholder": "Оставьте пустым, чтобы использовать имя из Telegram",
+      "emailLabel": "Email для входа",
+      "emailPlaceholder": "name@example.com",
+      "emailRequired": "Пожалуйста, введите email",
+      "emailInvalid": "Введите корректный email",
+      "passwordLabel": "Пароль",
+      "passwordPlaceholder": "Минимум 8 символов",
+      "passwordRequired": "Пожалуйста, введите пароль",
+      "passwordMinLength": "Пароль должен быть не короче 8 символов",
       "termsText": "Создавая аккаунт, вы соглашаетесь с",
       "termsOfService": "Условиями использования",
       "and": "и",

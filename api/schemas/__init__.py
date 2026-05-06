@@ -32,6 +32,8 @@ from api.schemas.base import (
 from api.schemas.pagination import PaginationParams, PaginatedResponse
 from api.schemas.common import MessageResponse
 from api.schemas.auth import (
+    BrowserTutorRegistrationRequest,
+    EmailPasswordRequest,
     WebAppLoginRequest,
     RefreshRequest,
     SwitchTenantRequest,
@@ -188,6 +190,8 @@ __all__ = [
     # Common
     'MessageResponse',
     # Auth
+    'BrowserTutorRegistrationRequest',
+    'EmailPasswordRequest',
     'WebAppLoginRequest',
     'RefreshRequest',
     'SwitchTenantRequest',

@@ -16,7 +16,9 @@ from api.dependencies import (
 )
 from database.models import LegalAcceptance, Tenant, User
 from api.schemas import (
+    BrowserTutorRegistrationRequest,
     BrowserTokenResponse,
+    EmailPasswordRequest,
     RefreshRequest,
     RegistrationResponse,
     StudentRegistrationRequest,
@@ -35,16 +37,20 @@ from api.security import (
     create_access_token,
     create_refresh_token,
     decode_token,
+    hash_password,
     verify_telegram_init_data,
     verify_telegram_login_widget,
+    verify_password,
 )
 from config import config
 from database import crud
 from services import billing_service, notification_bootstrap_service, tenant_access_service
+from utils.cache import invalidate_cache
 
 router = APIRouter()
 limiter = Limiter(key_func=get_remote_address)
-BROWSER_REFRESH_COOKIE_PATH = "/api/v1/auth/browser"
+AUTH_REFRESH_COOKIE_PATH = "/api/v1/auth"
+LEGACY_BROWSER_REFRESH_COOKIE_PATH = "/api/v1/auth/browser"
 _TOKEN_TENANT_UNSET = object()
 OFFER_VERSION = "2026-04-29"
 PRIVACY_VERSION = "2026-04-29"
@@ -111,6 +117,8 @@ def _build_user_payload(user: User) -> UserPayload:
         display_name=user.display_name,
         username=user.username,
         telegram_id=user.telegram_id,
+        email=user.email,
+        email_verified_at=user.email_verified_at,
         last_login_at=user.last_login_at,
     )
 
@@ -132,6 +140,12 @@ def _build_token_payload(
 
 
 def _set_browser_refresh_cookie(response: Response, refresh_token: str) -> None:
+    response.delete_cookie(
+        key=config.BROWSER_REFRESH_COOKIE_NAME,
+        secure=config.BROWSER_REFRESH_COOKIE_SECURE,
+        samesite=config.BROWSER_REFRESH_COOKIE_SAMESITE,
+        path=LEGACY_BROWSER_REFRESH_COOKIE_PATH,
+    )
     response.set_cookie(
         key=config.BROWSER_REFRESH_COOKIE_NAME,
         value=refresh_token,
@@ -139,17 +153,18 @@ def _set_browser_refresh_cookie(response: Response, refresh_token: str) -> None:
         httponly=True,
         secure=config.BROWSER_REFRESH_COOKIE_SECURE,
         samesite=config.BROWSER_REFRESH_COOKIE_SAMESITE,
-        path=BROWSER_REFRESH_COOKIE_PATH,
+        path=AUTH_REFRESH_COOKIE_PATH,
     )
 
 
 def _clear_browser_refresh_cookie(response: Response) -> None:
-    response.delete_cookie(
-        key=config.BROWSER_REFRESH_COOKIE_NAME,
-        secure=config.BROWSER_REFRESH_COOKIE_SECURE,
-        samesite=config.BROWSER_REFRESH_COOKIE_SAMESITE,
-        path=BROWSER_REFRESH_COOKIE_PATH,
-    )
+    for path in (AUTH_REFRESH_COOKIE_PATH, LEGACY_BROWSER_REFRESH_COOKIE_PATH):
+        response.delete_cookie(
+            key=config.BROWSER_REFRESH_COOKIE_NAME,
+            secure=config.BROWSER_REFRESH_COOKIE_SECURE,
+            samesite=config.BROWSER_REFRESH_COOKIE_SAMESITE,
+            path=path,
+        )
 
 
 def _browser_access_denied(code: str, message: str) -> HTTPException:
@@ -157,6 +172,125 @@ def _browser_access_denied(code: str, message: str) -> HTTPException:
         status_code=status.HTTP_403_FORBIDDEN,
         detail={"code": code, "message": message},
     )
+
+
+def _normalize_email(email: str) -> str:
+    return email.strip().lower()
+
+
+async def _ensure_email_available(
+    session: AsyncSession,
+    email_normalized: str,
+    *,
+    current_user_id: int | None = None,
+) -> None:
+    existing = await crud.get_user_by_email_normalized(session, email_normalized)
+    if existing is not None and existing.id != current_user_id:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Email is already registered",
+        )
+
+
+def _build_auth_response(user: User) -> BrowserTokenResponse:
+    token_payload = _build_token_payload(user)
+    return BrowserTokenResponse(
+        access_token=create_access_token(token_payload),
+        expires_in=config.JWT_ACCESS_EXPIRES_SECONDS,
+        user=_build_user_payload(user),
+    )
+
+
+async def _create_tutor_account(
+    session: AsyncSession,
+    request: Request,
+    *,
+    school_name: str,
+    tutor_name: str | None,
+    email: str,
+    password: str,
+    telegram_user: Dict[str, object] | None,
+    contact_email: str | None = None,
+) -> tuple[User, Tenant]:
+    import logging
+    import re
+    import uuid
+    from sqlalchemy import select
+
+    logger = logging.getLogger(__name__)
+    request_id = str(uuid.uuid4())[:8]
+
+    email = email.strip()
+    email_normalized = _normalize_email(email)
+    await _ensure_email_available(session, email_normalized)
+
+    telegram_id = int(telegram_user["id"]) if telegram_user is not None else None
+    if telegram_id is not None:
+        existing_telegram_user = await crud.get_user_by_telegram_id(session, telegram_id)
+        if existing_telegram_user is not None:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already registered")
+
+    logger.info(f"[{request_id}] Tutor registration attempt")
+
+    slug = re.sub(r'[^a-zA-Z0-9-]', '-', school_name.lower()).strip('-')
+    slug = re.sub(r'-+', '-', slug) or "tenant"
+    base_slug = slug
+    counter = 1
+    max_slug_attempts = 100
+
+    while counter < max_slug_attempts:
+        existing_slug = await session.execute(select(Tenant).where(Tenant.slug == slug))
+        if not existing_slug.scalar_one_or_none():
+            break
+        slug = f"{base_slug}-{counter}"
+        counter += 1
+    else:
+        logger.error(f"[{request_id}] Failed to generate unique slug after {max_slug_attempts} attempts")
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Failed to generate unique school identifier. Please try a different school name.",
+        )
+
+    tenant = Tenant(
+        name=school_name,
+        slug=slug,
+        contact_email=contact_email or email,
+        is_active=True,
+    )
+    session.add(tenant)
+    await session.flush()
+    await tenant_access_service.create_default_free_access(session, tenant.id)
+    await billing_service.ensure_subscription(
+        session,
+        tenant.id,
+        notes="Created during tutor registration",
+    )
+    await notification_bootstrap_service.ensure_recommended_notification_rules(session, tenant.id)
+
+    display_name = tutor_name
+    username = None
+    if telegram_user is not None:
+        username = telegram_user.get("username")
+        display_name = display_name or _build_display_name(telegram_user)
+    display_name = display_name or email.split("@", 1)[0]
+
+    user = User(
+        telegram_id=telegram_id,
+        username=username,
+        email=email,
+        email_normalized=email_normalized,
+        password_hash=hash_password(password),
+        email_verified_at=None,
+        display_name=display_name,
+        role="teacher",
+        tenant_id=tenant.id,
+        last_login_at=datetime.now(timezone.utc),
+    )
+    session.add(user)
+    await session.flush()
+    _record_legal_acceptance(session, request, user=user, tenant_id=tenant.id)
+    logger.info(f"[{request_id}] Tutor registration successful: user_id={user.id}, tenant_id={tenant.id}")
+    return user, tenant
 
 
 async def _persist_user(session: AsyncSession, current_tenant: CurrentTenant, user_data: Dict[str, object]):
@@ -206,6 +340,7 @@ async def _viewer_has_active_learner(session: AsyncSession, user: User) -> bool:
 @rate_limit("5/minute")  # Protect against brute force (disabled in dev mode)
 async def login(
     request: Request,
+    response: Response,
     payload: WebAppLoginRequest,
     session: AsyncSession = Depends(get_session),
 ) -> TokenPairResponse:    # This endpoint is special: it creates the user, so tenant context doesn't exist yet.
@@ -260,6 +395,7 @@ async def login(
 
     access_token = create_access_token(token_payload)
     refresh_token = create_refresh_token(token_payload)
+    _set_browser_refresh_cookie(response, refresh_token)
 
     user_response = _build_user_payload(user)
 
@@ -275,6 +411,7 @@ async def login(
 @rate_limit("10/minute")  # Allow more refreshes than login attempts (disabled in dev mode)
 async def refresh(
     request: Request,
+    response: Response,
     payload: RefreshRequest,
     session: AsyncSession = Depends(get_session),
 ) -> TokenPairResponse:
@@ -295,6 +432,7 @@ async def refresh(
 
     access_token = create_access_token(reference_payload)
     refresh_token = create_refresh_token(reference_payload)
+    _set_browser_refresh_cookie(response, refresh_token)
 
     user_response = _build_user_payload(user)
 
@@ -304,6 +442,54 @@ async def refresh(
         expires_in=config.JWT_ACCESS_EXPIRES_SECONDS,
         user=user_response,
     )
+
+
+@router.post("/session/refresh", response_model=BrowserTokenResponse)
+@rate_limit("10/minute")
+async def session_cookie_refresh(
+    request: Request,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+) -> BrowserTokenResponse:
+    refresh_token = request.cookies.get(config.BROWSER_REFRESH_COOKIE_NAME)
+    if not refresh_token:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Missing refresh token")
+
+    try:
+        token_data = decode_token(refresh_token, TokenType.REFRESH)
+    except TokenVerificationError as exc:
+        _clear_browser_refresh_cookie(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token") from exc
+
+    user_id = token_data.get("sub")
+    if user_id is None:
+        _clear_browser_refresh_cookie(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid refresh token")
+
+    user = await crud.get_user(session, int(user_id))
+    if not user:
+        _clear_browser_refresh_cookie(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    if user.role == "viewer" and not await _viewer_has_active_learner(session, user):
+        _clear_browser_refresh_cookie(response)
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Student account is not linked")
+
+    token_payload = _build_token_payload(user)
+    access_token = create_access_token(token_payload)
+    next_refresh_token = create_refresh_token(token_payload)
+    _set_browser_refresh_cookie(response, next_refresh_token)
+
+    return BrowserTokenResponse(
+        access_token=access_token,
+        expires_in=config.JWT_ACCESS_EXPIRES_SECONDS,
+        user=_build_user_payload(user),
+    )
+
+
+@router.post("/session/logout", status_code=status.HTTP_204_NO_CONTENT)
+async def session_cookie_logout(response: Response) -> None:
+    _clear_browser_refresh_cookie(response)
 
 
 @router.post("/browser/telegram", response_model=BrowserTokenResponse)
@@ -410,10 +596,152 @@ async def browser_logout(response: Response) -> None:
     _clear_browser_refresh_cookie(response)
 
 
+@router.post("/browser/login-email", response_model=BrowserTokenResponse)
+@rate_limit("5/minute")
+async def browser_email_login(
+    request: Request,
+    payload: EmailPasswordRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+) -> BrowserTokenResponse:
+    user = await crud.get_user_by_email_normalized(session, _normalize_email(payload.email))
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
+    if user.role != "teacher" and not is_platform_admin(user):
+        raise _browser_access_denied(
+            "BROWSER_ACCESS_NOT_ALLOWED",
+            "Browser access is currently available only for teachers and admins.",
+        )
+
+    user.last_login_at = datetime.now(timezone.utc)
+    session.add(user)
+    await session.flush()
+
+    token_payload = _build_token_payload(user)
+    refresh_token = create_refresh_token(token_payload)
+    _set_browser_refresh_cookie(response, refresh_token)
+    return _build_auth_response(user)
+
+
+@router.post("/browser/register-tutor-email", response_model=BrowserTokenResponse)
+@rate_limit("3/minute")
+async def browser_register_tutor_email(
+    request: Request,
+    payload: BrowserTutorRegistrationRequest,
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+) -> BrowserTokenResponse:
+    try:
+        user, _tenant = await _create_tutor_account(
+            session,
+            request,
+            school_name=payload.school_name,
+            tutor_name=payload.tutor_name,
+            email=payload.email,
+            password=payload.password,
+            contact_email=None,
+            telegram_user=None,
+        )
+        await session.commit()
+    except Exception as exc:
+        await session.rollback()
+        from sqlalchemy.exc import IntegrityError
+
+        if isinstance(exc, HTTPException):
+            raise exc
+        if isinstance(exc, IntegrityError):
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Email or school name is already registered",
+            ) from exc
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail="Registration failed. Please try again.",
+        ) from exc
+
+    token_payload = _build_token_payload(user)
+    _set_browser_refresh_cookie(response, create_refresh_token(token_payload))
+    return _build_auth_response(user)
+
+
+@router.post("/telegram/link-email-account", response_model=TokenPairResponse)
+@rate_limit("5/minute")
+async def telegram_link_email_account(
+    request: Request,
+    response: Response,
+    payload: EmailPasswordRequest,
+    session: AsyncSession = Depends(get_session),
+) -> TokenPairResponse:
+    from api.utils import validate_telegram_user
+
+    telegram_user = validate_telegram_user(request.headers.get("X-Telegram-Init-Data"))
+    telegram_id = int(telegram_user["id"])
+
+    user = await crud.get_user_by_email_normalized(session, _normalize_email(payload.email))
+    if user is None or not verify_password(payload.password, user.password_hash):
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
+
+    if user.role != "teacher" and not is_platform_admin(user):
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Telegram linking is available only for teachers")
+
+    existing_telegram_user = await crud.get_user_by_telegram_id(session, telegram_id)
+    if existing_telegram_user is not None and existing_telegram_user.id != user.id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Telegram account is already linked")
+
+    if user.telegram_id is not None and int(user.telegram_id) != telegram_id:
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Account is already linked to another Telegram user")
+
+    user.telegram_id = telegram_id
+    user.username = telegram_user.get("username")
+    user.last_login_at = datetime.now(timezone.utc)
+    session.add(user)
+    await session.flush()
+    await invalidate_cache("users:_get_user_cached:*")
+
+    token_payload = _build_token_payload(user)
+    refresh_token = create_refresh_token(token_payload)
+    _set_browser_refresh_cookie(response, refresh_token)
+    return TokenPairResponse(
+        access_token=create_access_token(token_payload),
+        refresh_token=refresh_token,
+        expires_in=config.JWT_ACCESS_EXPIRES_SECONDS,
+        user=_build_user_payload(user),
+    )
+
+
+@router.post("/email-password", response_model=UserPayload)
+@rate_limit("5/minute")
+async def set_email_password(
+    request: Request,
+    payload: EmailPasswordRequest,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> UserPayload:
+    email = payload.email.strip()
+    email_normalized = _normalize_email(email)
+    await _ensure_email_available(session, email_normalized, current_user_id=current_user.id)
+
+    db_user = await session.get(User, current_user.id)
+    if db_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+
+    db_user.email = email
+    db_user.email_normalized = email_normalized
+    db_user.password_hash = hash_password(payload.password)
+    db_user.email_verified_at = None
+    db_user.updated_at = datetime.now(timezone.utc)
+    session.add(db_user)
+    await session.flush()
+    await invalidate_cache("users:_get_user_cached:*")
+    return _build_user_payload(db_user)
+
+
 @router.post("/switch-tenant", response_model=TokenPairResponse)
 @rate_limit("10/minute")  # Prevent abuse of tenant switching (disabled in dev mode)
 async def switch_tenant(
     request: Request,
+    response: Response,
     payload: SwitchTenantRequest,
     session: AsyncSession = Depends(get_session),
     current_user: User = Depends(get_current_user),
@@ -450,6 +778,7 @@ async def switch_tenant(
     
     access_token = create_access_token(token_payload)
     refresh_token = create_refresh_token(token_payload)
+    _set_browser_refresh_cookie(response, refresh_token)
     
     user_response = _build_user_payload(current_user)
     
@@ -465,129 +794,67 @@ async def switch_tenant(
 @rate_limit("3/minute")  # Prevent registration abuse
 async def register_tutor(
     request: Request,
+    response: Response,
     registration_data: TutorRegistrationRequest,
     session: AsyncSession = Depends(get_session),
 ) -> RegistrationResponse:
     """Register a new tutor and create their tenant (school)."""
-    from api.utils import validate_telegram_user, build_display_name
-    import logging
-    import uuid
-    
-    logger = logging.getLogger(__name__)
-    request_id = str(uuid.uuid4())[:8]  # Short ID for logs
-    
-    # Validate Telegram init data
+    from api.utils import validate_telegram_user
+
     init_data = request.headers.get("X-Telegram-Init-Data")
     user_block = validate_telegram_user(init_data)
-    
-    telegram_id = int(user_block["id"])
-    username = user_block.get("username")
-    telegram_display_name = build_display_name(user_block)
-    
-    logger.info(f"[{request_id}] Tutor registration attempt")
-    
-    # Generate slug for tenant
-    import re
-    slug = re.sub(r'[^a-zA-Z0-9-]', '-', registration_data.school_name.lower()).strip('-')
-    slug = re.sub(r'-+', '-', slug)  # Remove multiple consecutive dashes
-    
-    # Ensure slug is unique by appending counter if needed
-    from sqlalchemy import select
-    base_slug = slug
-    counter = 1
-    MAX_SLUG_ATTEMPTS = 100
-    
-    while counter < MAX_SLUG_ATTEMPTS:
-        existing_slug = await session.execute(
-            select(Tenant).where(Tenant.slug == slug)
-        )
-        if not existing_slug.scalar_one_or_none():
-            break
-        slug = f"{base_slug}-{counter}"
-        counter += 1
-    else:
-        logger.error(f"[{request_id}] Failed to generate unique slug after {MAX_SLUG_ATTEMPTS} attempts")
-        raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="Failed to generate unique school identifier. Please try a different school name."
-        )
-    
-    # Create tenant and user - let database constraints handle uniqueness
-    tenant = Tenant(
-        name=registration_data.school_name,
-        slug=slug,
-        contact_email=registration_data.contact_email,
-        is_active=True,
-    )
-    session.add(tenant)
-    await session.flush()  # Get tenant.id
-    await tenant_access_service.create_default_free_access(session, tenant.id)
-    await billing_service.ensure_subscription(
-        session,
-        tenant.id,
-        notes="Created during tutor registration",
-    )
-    await notification_bootstrap_service.ensure_recommended_notification_rules(session, tenant.id)
-    
-    # Create user with teacher role
-    display_name = registration_data.tutor_name or telegram_display_name
-    
-    user = User(
-        telegram_id=telegram_id,
-        username=username,
-        display_name=display_name,
-        role="teacher",
-        tenant_id=tenant.id,
-        last_login_at=datetime.now(timezone.utc),
-    )
-    session.add(user)
-    await session.flush()
-    _record_legal_acceptance(session, request, user=user, tenant_id=tenant.id)
-    
+
     try:
+        user, tenant = await _create_tutor_account(
+            session,
+            request,
+            school_name=registration_data.school_name,
+            tutor_name=registration_data.tutor_name,
+            email=registration_data.email,
+            password=registration_data.password,
+            contact_email=registration_data.contact_email,
+            telegram_user=user_block,
+        )
         await session.commit()
-        logger.info(f"[{request_id}] Tutor registration successful: user_id={user.id}, tenant_id={tenant.id}")
     except Exception as e:
         await session.rollback()
-        logger.error(f"[{request_id}] Tutor registration failed during commit: {type(e).__name__}")
-        
-        # Handle specific constraint violations
         from sqlalchemy.exc import IntegrityError
+
+        if isinstance(e, HTTPException):
+            raise e
         if isinstance(e, IntegrityError):
             error_msg = str(e.orig) if hasattr(e, 'orig') else str(e)
-            
-            # Check which constraint was violated
             if 'tenants_name_key' in error_msg or 'tenants.name' in error_msg:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="School name already taken"
                 )
-            elif 'users_telegram_id_key' in error_msg or 'users.telegram_id' in error_msg:
+            if 'users_telegram_id_key' in error_msg or 'users.telegram_id' in error_msg:
                 raise HTTPException(
                     status_code=status.HTTP_409_CONFLICT,
                     detail="User already registered"
                 )
-        
-        # Generic error for other cases
+            if 'email' in error_msg:
+                raise HTTPException(
+                    status_code=status.HTTP_409_CONFLICT,
+                    detail="Email is already registered",
+                )
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail="Registration failed. Please try again."
         )
-    
-    # Create JWT tokens
+
     token_payload = _build_token_payload(user)
-    
     access_token = create_access_token(token_payload)
     refresh_token = create_refresh_token(token_payload)
-    
+    _set_browser_refresh_cookie(response, refresh_token)
     user_response = _build_user_payload(user)
-    
     tenant_response = {
         "id": tenant.id,
         "name": tenant.name,
         "slug": tenant.slug,
     }
-    
+
     return RegistrationResponse(
         access_token=access_token,
         refresh_token=refresh_token,
@@ -602,6 +869,7 @@ async def register_tutor(
 @rate_limit("5/minute")  # Allow more attempts for students (they might mistype codes)
 async def register_student(
     request: Request,
+    response: Response,
     registration_data: StudentRegistrationRequest,
     session: AsyncSession = Depends(get_session),
 ) -> RegistrationResponse:
@@ -799,6 +1067,7 @@ async def register_student(
     
     access_token = create_access_token(token_payload)
     refresh_token = create_refresh_token(token_payload)
+    _set_browser_refresh_cookie(response, refresh_token)
     
     user_response = _build_user_payload(user)
     

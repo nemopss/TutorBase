@@ -1,9 +1,32 @@
 import { appEnv } from '../env';
 
+interface LoggableAxiosConfig {
+  data?: unknown;
+  method?: string;
+  url?: string;
+  params?: unknown;
+}
+
+interface LoggableAxiosResponse {
+  status?: number;
+  data?: unknown;
+}
+
+type LoggableAxiosError = {
+  isAxiosError?: boolean;
+  message?: string;
+} & (
+  | { isAxiosError: boolean; config?: LoggableAxiosConfig; response?: LoggableAxiosResponse }
+  | { config: LoggableAxiosConfig; isAxiosError?: boolean; response?: LoggableAxiosResponse }
+  | { response: LoggableAxiosResponse; isAxiosError?: boolean; config?: LoggableAxiosConfig }
+);
+
 const SENSITIVE_KEY_PARTS = [
   'authorization',
   'cookie',
   'token',
+  'refresh',
+  'access',
   'init_data',
   'initdata',
   'telegram-init-data',
@@ -17,6 +40,55 @@ const SENSITIVE_KEY_PARTS = [
 const isSensitiveKey = (key: string) => {
   const normalized = key.toLowerCase().replace(/[-\s]/g, '_');
   return SENSITIVE_KEY_PARTS.some((part) => normalized.includes(part));
+};
+
+const JWT_PATTERN = /^[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}\.[A-Za-z0-9_-]{20,}$/;
+const URL_SCHEME_PATTERN = /^[a-z][a-z\d+\-.]*:/i;
+
+const redactSearchParams = (params: URLSearchParams) => {
+  const redacted = new URLSearchParams();
+
+  params.forEach((item, key) => {
+    redacted.append(key, isSensitiveKey(key) ? '[redacted]' : item);
+  });
+
+  return redacted.toString();
+};
+
+export const sanitizeUrl = (value: string): string => {
+  const isAbsolute = URL_SCHEME_PATTERN.test(value);
+
+  if (!isAbsolute && !value.startsWith('/') && !value.includes('?')) {
+    if (!value.includes('=')) {
+      return value;
+    }
+
+    const params = new URLSearchParams(value);
+    return redactSearchParams(params);
+  }
+
+  try {
+    const url = new URL(value, 'http://tutorbase.local');
+    const query = redactSearchParams(url.searchParams);
+    const hash = url.hash ? '#[redacted]' : '';
+
+    if (isAbsolute) {
+      url.search = query;
+      url.hash = hash;
+      return url.toString();
+    }
+
+    return `${url.pathname}${query ? `?${query}` : ''}${hash}`;
+  } catch {
+    if (!value.includes('=')) {
+      return value;
+    }
+
+    const query = value.startsWith('?') ? value.slice(1) : value;
+    const params = new URLSearchParams(query);
+    const redacted = redactSearchParams(params);
+    return value.startsWith('?') ? `?${redacted}` : redacted;
+  }
 };
 
 const tryParseJson = (value: string): unknown => {
@@ -33,7 +105,12 @@ export const redactSensitive = (value: unknown, depth = 0, seen = new WeakSet<ob
   }
 
   if (typeof value === 'string') {
-    return value.length > 512 ? `${value.slice(0, 512)}...[truncated]` : value;
+    if (JWT_PATTERN.test(value)) {
+      return '[redacted]';
+    }
+
+    const sanitized = value.includes('?') || value.includes('=') ? sanitizeUrl(value) : value;
+    return sanitized.length > 512 ? `${sanitized.slice(0, 512)}...[truncated]` : sanitized;
   }
 
   if (typeof value !== 'object') {
@@ -62,7 +139,16 @@ export const redactSensitive = (value: unknown, depth = 0, seen = new WeakSet<ob
   );
 };
 
-const sanitizeAxiosError = (error: any) => {
+const isLoggableAxiosError = (value: unknown): value is LoggableAxiosError => {
+  if (typeof value !== 'object' || value === null) {
+    return false;
+  }
+
+  const candidate = value as Partial<LoggableAxiosError>;
+  return Boolean(candidate.isAxiosError || candidate.config || candidate.response);
+};
+
+const sanitizeAxiosError = (error: LoggableAxiosError) => {
   const data = typeof error?.config?.data === 'string'
     ? tryParseJson(error.config.data)
     : error?.config?.data;
@@ -71,7 +157,8 @@ const sanitizeAxiosError = (error: any) => {
     message: error?.message,
     status: error?.response?.status,
     method: error?.config?.method,
-    url: error?.config?.url,
+    url: typeof error?.config?.url === 'string' ? sanitizeUrl(error.config.url) : error?.config?.url,
+    params: error?.config?.params,
     request_data: data,
     response_data: error?.response?.data,
   });
@@ -79,18 +166,14 @@ const sanitizeAxiosError = (error: any) => {
 
 const sanitizeArg = (arg: unknown): unknown => {
   if (arg instanceof Error) {
-    const maybeAxiosError = arg as any;
-    if (maybeAxiosError.isAxiosError || maybeAxiosError.config || maybeAxiosError.response) {
-      return sanitizeAxiosError(maybeAxiosError);
+    if (isLoggableAxiosError(arg)) {
+      return sanitizeAxiosError(arg);
     }
     return { name: arg.name, message: arg.message };
   }
 
-  if (typeof arg === 'object' && arg !== null) {
-    const maybeAxiosError = arg as any;
-    if (maybeAxiosError.isAxiosError || maybeAxiosError.config || maybeAxiosError.response) {
-      return sanitizeAxiosError(maybeAxiosError);
-    }
+  if (isLoggableAxiosError(arg)) {
+    return sanitizeAxiosError(arg);
   }
 
   return redactSensitive(arg);

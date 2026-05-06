@@ -5,11 +5,19 @@ import api from '../services/api';
 import { setBrowserRefreshHandler } from '../services/api';
 import { BrowserLoginScreen } from './BrowserLoginScreen';
 import {
+  loginWithEmail,
   loginWithTelegramWidget,
   logoutBrowserSession,
+  logoutCookieSession,
   refreshBrowserSession,
+  refreshCookieSession,
+  registerTutorWithEmail,
 } from './browserSession';
-import type { TelegramLoginWidgetPayload } from './browserSession';
+import type {
+  BrowserTutorRegistrationPayload,
+  EmailPasswordPayload,
+  TelegramLoginWidgetPayload,
+} from './browserSession';
 import { detectAuthMode, prepareTelegramWebApp } from './modes';
 import type { AuthMode } from './modes';
 import { parseJwt } from './token';
@@ -23,6 +31,10 @@ const AUTH_BOOTSTRAP_TIMEOUT_MS = appEnv.isDev
   ? Math.max(appEnv.apiTimeoutMs, 45000)
   : appEnv.apiTimeoutMs;
 
+const prefersCookieSession = (mode: AuthMode) => (
+  mode === 'dev' || mode === 'telegram-webapp' || mode === 'browser'
+);
+
 // Предполагаемые типы для данных пользователя и ответа от API
 interface User {
   id: number;
@@ -30,6 +42,8 @@ interface User {
   role: string;
   is_platform_admin?: boolean;
   telegram_id?: number;
+  email?: string | null;
+  email_verified_at?: string | null;
   tenant_id?: number | null;
   last_login_at?: string;
 }
@@ -79,6 +93,8 @@ interface AuthResponse {
 interface TutorRegistrationData {
   school_name: string;
   tutor_name?: string;
+  email: string;
+  password: string;
   offer_accepted: boolean;
   privacy_accepted: boolean;
 }
@@ -106,10 +122,33 @@ interface AuthContextType {
   switchTenant: (tenantId: number | null) => Promise<void>;
   registerTutor: (data: TutorRegistrationData) => Promise<void>;
   registerStudent: (data: StudentRegistrationData) => Promise<void>;
+  linkExistingEmailAccount: (data: EmailPasswordPayload) => Promise<void>;
+  setEmailPassword: (data: EmailPasswordPayload) => Promise<void>;
   logout: () => void;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
+
+type ApiErrorShape = {
+  response?: {
+    data?: {
+      detail?: unknown;
+    };
+  };
+  message?: string;
+};
+
+const getApiDetail = (error: unknown): unknown => (
+  (error as ApiErrorShape | undefined)?.response?.data?.detail
+);
+
+const getApiMessage = (error: unknown, fallback: string): string => {
+  const detail = getApiDetail(error);
+  if (typeof detail === 'string') {
+    return detail;
+  }
+  return (error as ApiErrorShape | undefined)?.message || fallback;
+};
 
 // Хук для доступа к контексту
 export const useAuth = () => {
@@ -120,7 +159,7 @@ export const useAuth = () => {
   return context;
 };
 
-export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
+export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
   const [user, setUser] = useState<User | null>(null);
   const [tenantId, setTenantId] = useState<number | null>(null);
   const [tenantAccess, setTenantAccess] = useState<TenantAccess | null>(null);
@@ -208,6 +247,9 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     if (options.persistLegacyTokens && refresh_token) {
       localStorage.setItem('accessToken', access_token);
       localStorage.setItem('refreshToken', refresh_token);
+    } else {
+      localStorage.removeItem('accessToken');
+      localStorage.removeItem('refreshToken');
     }
     cacheUser(nextUser, mode);
 
@@ -228,6 +270,40 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     void loadTenantAccess(extractedTenantId);
     setIsLoading(false);
     setupTokenRefresh(access_token, mode);
+  };
+
+  const refreshLegacySession = async (
+    mode: AuthMode,
+    options: { persistLegacyTokens: boolean }
+  ): Promise<AuthResponse | null> => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    if (!refreshToken) {
+      return null;
+    }
+
+    const response = await api.post<AuthResponse>('/auth/refresh', {
+      refresh_token: refreshToken,
+    }, {
+      withCredentials: true,
+    });
+
+    applyAuthenticatedSession(response.data, mode, options);
+    return response.data;
+  };
+
+  const refreshSessionWithCookieFallback = async (mode: AuthMode): Promise<string | null> => {
+    try {
+      const refreshed = await refreshCookieSession();
+      applyAuthenticatedSession(refreshed, mode, { persistLegacyTokens: false });
+      return refreshed.access_token;
+    } catch (cookieError) {
+      devLog('[AuthProvider] Cookie refresh unavailable, trying legacy refresh:', cookieError);
+    }
+
+    const refreshed = await refreshLegacySession(mode, {
+      persistLegacyTokens: !prefersCookieSession(mode),
+    });
+    return refreshed?.access_token ?? null;
   };
 
   useEffect(() => {
@@ -253,11 +329,35 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
           return;
         }
 
-        setBrowserRefreshHandler(null);
+        setBrowserRefreshHandler(async () => refreshSessionWithCookieFallback(currentAuthMode));
+
+        if (prefersCookieSession(currentAuthMode)) {
+          try {
+            const cookieSession = await refreshCookieSession();
+            applyAuthenticatedSession(cookieSession, currentAuthMode, { persistLegacyTokens: false });
+            return;
+          } catch {
+            // No cookie yet or cookies unsupported. Continue with legacy tokens or Telegram initData.
+          }
+        }
 
         // Check if we already have a valid token in localStorage
         const existingToken = localStorage.getItem('accessToken');
         const existingRefreshToken = localStorage.getItem('refreshToken');
+
+        if (existingToken && existingRefreshToken && prefersCookieSession(currentAuthMode)) {
+          try {
+            const migratedSession = await refreshLegacySession(currentAuthMode, { persistLegacyTokens: false });
+            if (migratedSession) {
+              return;
+            }
+          } catch (err) {
+            devLog('[AuthProvider] Legacy token migration failed, will re-login:', err);
+            localStorage.removeItem('accessToken');
+            localStorage.removeItem('refreshToken');
+            clearCachedUser();
+          }
+        }
 
         if (existingToken && existingRefreshToken) {
           devLog('[AuthProvider] Found existing token, checking validity...');
@@ -362,45 +462,23 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
           }
         }
 
-        const response = await api.post<AuthResponse>('/auth/login', { init_data: initData }, {
-          timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
+        const response = await api.post<AuthResponse>(
+          '/auth/login',
+          { init_data: initData },
+          {
+            timeout: AUTH_BOOTSTRAP_TIMEOUT_MS,
+            withCredentials: true,
+          }
+        );
+
+        applyAuthenticatedSession(response.data, currentAuthMode, {
+          persistLegacyTokens: !prefersCookieSession(currentAuthMode),
         });
-
-        const { access_token, refresh_token, user } = response.data;
-
-        // Сохраняем токены (например, в localStorage)
-        localStorage.setItem('accessToken', access_token);
-        if (refresh_token) {
-          localStorage.setItem('refreshToken', refresh_token);
-        }
-        cacheUser(user, currentAuthMode);
-
-        // Настраиваем заголовок по умолчанию для всех запросов
-        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-
-        // Extract tenant_id from JWT
-        const payload = parseJwt(access_token);
-        const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
-
-        devLog('[AuthProvider] Login successful:', {
-          user: user.display_name,
-          role: user.role,
-          tenant_id: extractedTenantId,
-          jwt_payload: payload
-        });
-
-        setUser(user);
-        setTenantId(extractedTenantId);
-        void loadTenantAccess(extractedTenantId);
-        setIsLoading(false);
-
-        // Setup auto-refresh 5 minutes before expiration
-        setupTokenRefresh(access_token, currentAuthMode);
-      } catch (err: any) {
+      } catch (err: unknown) {
         devError('Authentication failed:', err);
 
         // Check if this is a "user not registered" error (404)
-        if (err?.response?.status === 404) {
+        if ((err as { response?: { status?: number } })?.response?.status === 404) {
           devLog('[AuthProvider] User not registered, showing registration flow');
           // User needs to register - don't show error, just set loading to false
           setUser(null);
@@ -409,7 +487,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         }
 
         // For other errors, show error message
-        const errorMsg = err?.response?.data?.detail || err?.message || 'Authentication failed';
+        const errorMsg = getApiMessage(err, 'Authentication failed');
         setError('❌ Authentication Error\n\n' + errorMsg);
         setUser(null);
         // Очищаем токены в случае ошибки
@@ -455,38 +533,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
           return;
         }
 
-        const refreshToken = localStorage.getItem('refreshToken');
-        if (!refreshToken) return;
-
-        const response = await api.post<AuthResponse>('/auth/refresh', {
-          refresh_token: refreshToken
-        });
-
-        const { access_token, refresh_token: newRefreshToken, user: updatedUser } = response.data;
-
-        localStorage.setItem('accessToken', access_token);
-        if (newRefreshToken) {
-          localStorage.setItem('refreshToken', newRefreshToken);
-        }
-        cacheUser(updatedUser, mode);
-        api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-
-        // Extract tenant_id from new JWT
-        const payload = parseJwt(access_token);
-        const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
-
-        devLog('[AuthProvider] Token refreshed:', {
-          user: updatedUser.display_name,
-          tenant_id: extractedTenantId,
-          jwt_payload: payload
-        });
-
-        setUser(updatedUser);
-        setTenantId(extractedTenantId);
-        void loadTenantAccess(extractedTenantId);
-
-        // Schedule next refresh
-        setupTokenRefresh(access_token, mode);
+        await refreshSessionWithCookieFallback(mode);
       } catch (err) {
         devError('Auto-refresh failed:', err);
         // On failure, user will be logged out on next 401
@@ -505,38 +552,16 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     try {
       const response = await api.post<AuthResponse>('/auth/switch-tenant', {
         tenant_id: targetTenantId
+      }, {
+        withCredentials: true,
       });
 
-      const { access_token, refresh_token: newRefreshToken, user: updatedUser } = response.data;
-
-      // Extract tenant_id from new JWT BEFORE updating state
-      const payload = parseJwt(access_token);
-      const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
-
-      devLog('[AuthProvider] Tenant switch successful:', {
-        requested: targetTenantId,
-        jwt_tenant_id: extractedTenantId,
-        jwt_payload: payload,
-        user: updatedUser.display_name
+      applyAuthenticatedSession(response.data, authMode, {
+        persistLegacyTokens: !prefersCookieSession(authMode),
       });
-
-      // Update tokens
-      localStorage.setItem('accessToken', access_token);
-      if (newRefreshToken) {
-        localStorage.setItem('refreshToken', newRefreshToken);
-      }
-      cacheUser(updatedUser, authMode);
-      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-
-      setUser(updatedUser);
-      setTenantId(extractedTenantId);
-      void loadTenantAccess(extractedTenantId);
-
-      // Setup new refresh timer
-      setupTokenRefresh(access_token, authMode);
-    } catch (err: any) {
+    } catch (err: unknown) {
       devError('[AuthProvider] Tenant switch failed:', err);
-      throw new Error(err?.response?.data?.detail || 'Failed to switch tenant');
+      throw new Error(getApiMessage(err, 'Failed to switch tenant'));
     }
   };
 
@@ -561,38 +586,16 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         headers: {
           'X-Telegram-Init-Data': initData,
         },
+        withCredentials: true,
       });
 
-      const { access_token, refresh_token, user: registeredUser } = response.data;
-
-      // Save tokens
-      localStorage.setItem('accessToken', access_token);
-      if (refresh_token) {
-        localStorage.setItem('refreshToken', refresh_token);
-      }
-      cacheUser(registeredUser, authMode);
-      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-
-      // Extract tenant_id from JWT
-      const payload = parseJwt(access_token);
-      const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
-
-      devLog('[AuthProvider] Tutor registration successful:', {
-        user: registeredUser.display_name,
-        role: registeredUser.role,
-        tenant_id: extractedTenantId,
+      applyAuthenticatedSession(response.data, authMode, {
+        persistLegacyTokens: !prefersCookieSession(authMode),
       });
-
-      setUser(registeredUser);
-      setTenantId(extractedTenantId);
-      void loadTenantAccess(extractedTenantId);
-
-      // Setup auto-refresh
-      setupTokenRefresh(access_token, authMode);
 
       // Reload to apply new context
       window.location.href = '/';
-    } catch (error: any) {
+    } catch (error: unknown) {
       devError('[AuthProvider] Tutor registration failed:', error);
       throw error;
     }
@@ -619,55 +622,43 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
         headers: {
           'X-Telegram-Init-Data': initData,
         },
+        withCredentials: true,
       });
 
-      const { access_token, refresh_token, user: registeredUser } = response.data;
-
-      // Save tokens
-      localStorage.setItem('accessToken', access_token);
-      if (refresh_token) {
-        localStorage.setItem('refreshToken', refresh_token);
-      }
-      cacheUser(registeredUser, authMode);
-      api.defaults.headers.common['Authorization'] = `Bearer ${access_token}`;
-
-      // Extract tenant_id from JWT
-      const payload = parseJwt(access_token);
-      const extractedTenantId = payload?.tenant_id !== undefined ? payload.tenant_id : null;
-
-      devLog('[AuthProvider] Student registration successful:', {
-        user: registeredUser.display_name,
-        role: registeredUser.role,
-        tenant_id: extractedTenantId,
+      applyAuthenticatedSession(response.data, authMode, {
+        persistLegacyTokens: !prefersCookieSession(authMode),
       });
-
-      setUser(registeredUser);
-      setTenantId(extractedTenantId);
-      void loadTenantAccess(extractedTenantId);
-
-      // Setup auto-refresh
-      setupTokenRefresh(access_token, authMode);
 
       // Reload to apply new context
       window.location.href = '/';
-    } catch (error: any) {
+    } catch (error: unknown) {
       devError('[AuthProvider] Student registration failed:', error);
       throw error;
     }
   };
 
-  const getBrowserErrorMessage = (err: any): string => {
-    const detail = err?.response?.data?.detail;
-    if (detail?.code === 'USER_NOT_REGISTERED') {
+  const getBrowserErrorMessage = (err: unknown): string => {
+    const detail = getApiDetail(err);
+    if (
+      typeof detail === 'object'
+      && detail !== null
+      && 'code' in detail
+      && detail.code === 'USER_NOT_REGISTERED'
+    ) {
       return 'Пользователь не зарегистрирован. Сначала откройте Mini App в Telegram и завершите регистрацию.';
     }
-    if (detail?.code === 'BROWSER_ACCESS_NOT_ALLOWED') {
+    if (
+      typeof detail === 'object'
+      && detail !== null
+      && 'code' in detail
+      && detail.code === 'BROWSER_ACCESS_NOT_ALLOWED'
+    ) {
       return 'Браузерный кабинет пока доступен только преподавателям и администраторам.';
     }
     if (typeof detail === 'string') {
       return detail;
     }
-    return err?.message || 'Не удалось войти через Telegram';
+    return (err as ApiErrorShape | undefined)?.message || 'Не удалось войти через Telegram';
   };
 
   const handleBrowserTelegramAuth = async (payload: TelegramLoginWidgetPayload) => {
@@ -677,13 +668,76 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     try {
       const authResponse = await loginWithTelegramWidget(payload);
       applyAuthenticatedSession(authResponse, 'browser', { persistLegacyTokens: false });
-    } catch (err: any) {
+    } catch (err: unknown) {
       devError('[AuthProvider] Browser Telegram login failed:', err);
       setBrowserLoginError(getBrowserErrorMessage(err));
       clearAuthState();
     } finally {
       setIsBrowserLoginLoading(false);
     }
+  };
+
+  const handleBrowserEmailLogin = async (payload: EmailPasswordPayload) => {
+    setBrowserLoginError(null);
+    setIsBrowserLoginLoading(true);
+
+    try {
+      const authResponse = await loginWithEmail(payload);
+      applyAuthenticatedSession(authResponse, 'browser', { persistLegacyTokens: false });
+    } catch (err: unknown) {
+      devError('[AuthProvider] Browser email login failed:', err);
+      setBrowserLoginError(getBrowserErrorMessage(err));
+      clearAuthState();
+    } finally {
+      setIsBrowserLoginLoading(false);
+    }
+  };
+
+  const handleBrowserEmailRegister = async (payload: BrowserTutorRegistrationPayload) => {
+    setBrowserLoginError(null);
+    setIsBrowserLoginLoading(true);
+
+    try {
+      const authResponse = await registerTutorWithEmail(payload);
+      applyAuthenticatedSession(authResponse, 'browser', { persistLegacyTokens: false });
+    } catch (err: unknown) {
+      devError('[AuthProvider] Browser email registration failed:', err);
+      setBrowserLoginError(getBrowserErrorMessage(err));
+      clearAuthState();
+    } finally {
+      setIsBrowserLoginLoading(false);
+    }
+  };
+
+  const linkExistingEmailAccount = async (data: EmailPasswordPayload) => {
+    let initData: string | undefined = undefined;
+
+    if (DEV_MODE) {
+      initData = DEV_INIT_DATA;
+    } else {
+      initData = window.Telegram?.WebApp?.initData;
+      if (!initData || initData.length === 0) {
+        throw new Error('Telegram init data not available');
+      }
+    }
+
+    const response = await api.post<AuthResponse>('/auth/telegram/link-email-account', data, {
+      headers: {
+        'X-Telegram-Init-Data': initData,
+      },
+      withCredentials: true,
+    });
+    applyAuthenticatedSession(response.data, authMode, {
+      persistLegacyTokens: !prefersCookieSession(authMode),
+    });
+    window.location.href = '/';
+  };
+
+  const setEmailPassword = async (data: EmailPasswordPayload) => {
+    const response = await api.post<User>('/auth/email-password', data);
+    const updatedUser = response.data;
+    cacheUser(updatedUser, authMode);
+    setUser(updatedUser);
   };
 
   // Logout function
@@ -707,7 +761,7 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
       return;
     }
 
-    finishLogout();
+    logoutCookieSession().finally(finishLogout);
   };
 
   const isSuperAdmin = !!user?.is_platform_admin;
@@ -729,6 +783,8 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     switchTenant,
     registerTutor,
     registerStudent,
+    linkExistingEmailAccount,
+    setEmailPassword,
     logout,
   };
 
@@ -784,7 +840,10 @@ export const AuthProvider: React.FC<PropsWithChildren<{}>> = ({ children }) => {
     return (
       <BrowserLoginScreen
         error={browserLoginError}
+        initialView={window.location.pathname.startsWith('/register') ? 'register' : 'login'}
         isSubmitting={isBrowserLoginLoading}
+        onEmailLogin={handleBrowserEmailLogin}
+        onEmailRegister={handleBrowserEmailRegister}
         onTelegramAuth={handleBrowserTelegramAuth}
       />
     );

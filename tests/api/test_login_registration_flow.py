@@ -37,6 +37,8 @@ async def test_login_existing_user_success(
         json={
             "school_name": "Existing School",
             "contact_email": "existing@example.com",
+            "email": "existing@example.com",
+            "password": "password123",
             "offer_accepted": True,
             "privacy_accepted": True,
         },
@@ -79,6 +81,8 @@ async def test_full_registration_then_login_flow(
         json={
             "school_name": "Test School",
             "contact_email": "test@example.com",
+            "email": "test@example.com",
+            "password": "password123",
             "offer_accepted": True,
             "privacy_accepted": True,
         },

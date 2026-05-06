@@ -19,6 +19,7 @@ from typing import List, Optional
 
 from utils.celery_app import celery_app
 from database.engine import async_session
+from services.exceptions import NotFoundError
 
 logger = logging.getLogger(__name__)
 
@@ -80,6 +81,22 @@ def sync_package_metrics_task(self, package_id: int, tenant_id: Optional[int] = 
         
         return result
         
+    except NotFoundError as exc:
+        logger.warning(
+            f"Metrics sync skipped for missing package {package_id}: {exc}",
+            extra={
+                'package_id': package_id,
+                'tenant_id': tenant_id,
+                'task_id': self.request.id,
+            },
+        )
+        return {
+            'status': 'skipped',
+            'reason': 'package_not_found',
+            'package_id': package_id,
+            'tenant_id': tenant_id,
+        }
+
     except Exception as exc:
         logger.error(
             f"Metrics sync failed for package {package_id}: {exc}",
@@ -168,6 +185,22 @@ def bulk_sync_package_metrics_task(
         
         return result
         
+    except NotFoundError as exc:
+        logger.warning(
+            f"Bulk metrics sync skipped because a package was missing: {exc}",
+            extra={
+                'package_count': len(package_ids),
+                'tenant_id': tenant_id,
+                'task_id': self.request.id,
+            },
+        )
+        return {
+            'status': 'skipped',
+            'reason': 'package_not_found',
+            'package_ids': package_ids,
+            'tenant_id': tenant_id,
+        }
+
     except Exception as exc:
         logger.error(
             f"Bulk metrics sync failed: {exc}",

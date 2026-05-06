@@ -261,12 +261,18 @@ async def create_user(
     display_name: Optional[str] = None,
     role: str = "viewer",
     tenant_id: Optional[int] = None,
+    email: Optional[str] = None,
+    email_normalized: Optional[str] = None,
+    password_hash: Optional[str] = None,
 ) -> User:
     suffix = _next_suffix()
     now = _utc_now()
     user = User(
         telegram_id=telegram_id or (100_000 + suffix),
         username=username or f"user{suffix}",
+        email=email,
+        email_normalized=email_normalized,
+        password_hash=password_hash,
         display_name=display_name or f"User {suffix}",
         role=role,
         tenant_id=tenant_id,

@@ -1,7 +1,7 @@
 import axios, { type AxiosRequestConfig } from "axios";
 import { clearCachedUser } from "../auth/userCache";
 import { appEnv } from "../env";
-import { devError, devLog, redactSensitive } from "../utils/safeLogging";
+import { devError, devLog, redactSensitive, sanitizeUrl } from "../utils/safeLogging";
 
 type RetryableRequestConfig = AxiosRequestConfig & {
   _retry?: boolean;
@@ -9,6 +9,11 @@ type RetryableRequestConfig = AxiosRequestConfig & {
 
 type RefreshSubscriber = (token: string | null) => void;
 type BrowserRefreshHandler = () => Promise<string | null>;
+const NON_RETRYABLE_REFRESH_URLS = new Set([
+  "/auth/refresh",
+  "/auth/browser/refresh",
+  "/auth/session/refresh",
+]);
 
 const api = axios.create({
   baseURL: appEnv.apiBaseUrl,
@@ -87,10 +92,12 @@ api.interceptors.request.use(
   (config) => {
     if (appEnv.isDev) {
       devLog(
-        `API Request: ${config.method?.toUpperCase()} ${config.url}`,
+        `API Request: ${config.method?.toUpperCase()} ${
+          typeof config.url === "string" ? sanitizeUrl(config.url) : config.url
+        }`,
         {
           headers: redactHeaders(config.headers),
-          params: config.params,
+          params: redactSensitive(config.params),
         }
       );
     }
@@ -112,8 +119,7 @@ api.interceptors.response.use(
       error.response &&
       error.response.status === 401 &&
       !originalRequest._retry &&
-      originalRequest.url !== "/auth/refresh" &&
-      originalRequest.url !== "/auth/browser/refresh"
+      !NON_RETRYABLE_REFRESH_URLS.has(originalRequest.url ?? "")
     ) {
       originalRequest._retry = true;
 
