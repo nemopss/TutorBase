@@ -37,6 +37,16 @@ export const BrowserLoginScreen = ({
   const [offerAccepted, setOfferAccepted] = useState(false);
   const [privacyAccepted, setPrivacyAccepted] = useState(false);
   const botUsername = getTelegramBotUsername();
+  const viewTitle = {
+    login: 'Войти в TutorBase',
+    register: 'Создать кабинет',
+    telegram: 'Войти через Telegram',
+  }[view];
+  const viewDescription = {
+    login: 'Email для браузера, Telegram для уже подключённых аккаунтов.',
+    register: 'Регистрация преподавателя по email и паролю.',
+    telegram: 'Подходит для аккаунтов, уже привязанных к Telegram.',
+  }[view];
 
   useEffect(() => {
     if (view !== 'telegram') {
@@ -105,8 +115,8 @@ export const BrowserLoginScreen = ({
       <section className="browser-auth__panel" aria-labelledby="browser-auth-title">
         <div className="browser-auth__intro">
           <p className="browser-auth__eyebrow">Кабинет преподавателя</p>
-          <h1 id="browser-auth-title">TutorBase</h1>
-          <p>Вход по email работает в браузере, Telegram остаётся доступен для подключённых аккаунтов.</p>
+          <h1 id="browser-auth-title">{viewTitle}</h1>
+          <p>{viewDescription}</p>
         </div>
 
         <div className="browser-auth__tabs" role="tablist" aria-label="Способ входа">
@@ -233,9 +243,6 @@ export const BrowserLoginScreen = ({
 
         {view === 'telegram' && (
           <div className="browser-auth__telegram">
-            <p>
-              Подходит для аккаунтов, уже привязанных к Telegram.
-            </p>
             {!botUsername ? (
               <p className="browser-auth__error" role="alert">
                 Не задан VITE_TELEGRAM_BOT_USERNAME для Telegram Login Widget.

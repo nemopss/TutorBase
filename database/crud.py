@@ -38,6 +38,7 @@ from database.models import (
     Student,
     BotUser,
     DashboardAttentionDismissal,
+    EmailVerificationToken,
     InviteToken,
     Learner,
     LearnerAccountLink,
@@ -312,6 +313,57 @@ async def get_user_by_email_normalized(session: AsyncSession, email_normalized: 
     """Get user by normalized email."""
     stmt = select(User).where(User.email_normalized == email_normalized)
     return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def create_email_verification_token(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    email_normalized: str,
+    token_hash: str,
+    expires_at: datetime,
+) -> EmailVerificationToken:
+    """Create a one-time email verification token."""
+    token = EmailVerificationToken(
+        user_id=user_id,
+        email_normalized=email_normalized,
+        token_hash=token_hash,
+        expires_at=expires_at,
+        created_at=datetime.now(timezone.utc),
+    )
+    session.add(token)
+    return token
+
+
+async def get_email_verification_token_by_hash(
+    session: AsyncSession,
+    token_hash: str,
+) -> EmailVerificationToken | None:
+    """Get an email verification token with its user."""
+    stmt = (
+        select(EmailVerificationToken)
+        .options(selectinload(EmailVerificationToken.user))
+        .where(EmailVerificationToken.token_hash == token_hash)
+    )
+    return (await session.execute(stmt)).scalar_one_or_none()
+
+
+async def mark_unused_email_verification_tokens_used(
+    session: AsyncSession,
+    *,
+    user_id: int,
+    used_at: datetime,
+) -> None:
+    """Invalidate pending email verification tokens for a user."""
+    stmt = (
+        update(EmailVerificationToken)
+        .where(
+            EmailVerificationToken.user_id == user_id,
+            EmailVerificationToken.used_at.is_(None),
+        )
+        .values(used_at=used_at)
+    )
+    await session.execute(stmt)
 
 
 async def create_user(

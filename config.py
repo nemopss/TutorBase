@@ -34,6 +34,15 @@ class Settings(BaseSettings):
     BROWSER_REFRESH_COOKIE_SAMESITE: str = "lax"
     CORS_ORIGINS: list[str] = ["http://localhost:5173", "http://127.0.0.1:5173"]
     MINI_APP_URL: str = "https://app.tutorbase.su/"
+    SMTP_HOST: Optional[str] = None
+    SMTP_PORT: int = 465
+    SMTP_USERNAME: Optional[str] = None
+    SMTP_PASSWORD: Optional[str] = None
+    SMTP_FROM_EMAIL: str = "tutorbase@mail.ru"
+    SMTP_FROM_NAME: str = "TutorBase"
+    SMTP_USE_SSL: bool = True
+    SMTP_TIMEOUT_SECONDS: float = 15.0
+    EMAIL_VERIFICATION_EXPIRES_SECONDS: int = 86400
 
     YOOKASSA_SHOP_ID: Optional[str] = None
     YOOKASSA_SECRET_KEY: Optional[str] = None
@@ -108,6 +117,8 @@ class Settings(BaseSettings):
         "TENANT_ACCESS_SYNC_INTERVAL_SECONDS",
         "TELEGRAM_REQUEST_TIMEOUT_SECONDS",
         "YOOKASSA_TIMEOUT_SECONDS",
+        "SMTP_TIMEOUT_SECONDS",
+        "EMAIL_VERIFICATION_EXPIRES_SECONDS",
     )
     @classmethod
     def validate_positive_interval(cls, value):
@@ -128,10 +139,13 @@ class Settings(BaseSettings):
         "TELEGRAM_PROXY_PORT",
         "TELEGRAM_PROXY_USERNAME",
         "TELEGRAM_PROXY_PASSWORD",
+        "SMTP_HOST",
+        "SMTP_USERNAME",
+        "SMTP_PASSWORD",
         mode="before",
     )
     @classmethod
-    def empty_telegram_proxy_value_is_none(cls, value):
+    def empty_optional_value_is_none(cls, value):
         if value == "":
             return None
         return value

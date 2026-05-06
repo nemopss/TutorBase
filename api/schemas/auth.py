@@ -49,6 +49,19 @@ class EmailPasswordRequest(BaseModel):
         return value
 
 
+class EmailVerificationSendResponse(BaseModel):
+    email: str
+    expires_in: int
+
+
+class EmailVerificationConfirmRequest(BaseModel):
+    token: str = Field(..., min_length=20, max_length=256, description="Raw email verification token")
+
+
+class EmailVerificationConfirmResponse(BaseModel):
+    email: str
+
+
 class BrowserTutorRegistrationRequest(EmailPasswordRequest):
     school_name: str = Field(..., min_length=2, max_length=100, description="Name of the school or tutoring business")
     tutor_name: Optional[str] = Field(None, max_length=100, description="Tutor's display name")

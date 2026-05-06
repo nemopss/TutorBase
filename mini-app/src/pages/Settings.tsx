@@ -58,6 +58,7 @@ const Settings: React.FC = () => {
   const [checkoutPreviewError, setCheckoutPreviewError] = useState<string | null>(null);
   const [emailForm] = Form.useForm();
   const [isEmailSaving, setIsEmailSaving] = useState(false);
+  const [isVerificationSending, setIsVerificationSending] = useState(false);
 
   const formatDate = (value?: string | null) => {
     if (!value) return null;
@@ -289,7 +290,7 @@ const Settings: React.FC = () => {
         password: values.password,
       });
       emailForm.resetFields(['password']);
-      message.success('Email и пароль сохранены');
+      message.success('Email и пароль сохранены. Теперь подтвердите email письмом.');
     } catch (error: unknown) {
       const detail = getApiDetail(error);
       message.error(typeof detail === 'string' ? detail : 'Не удалось сохранить email и пароль');
@@ -297,6 +298,35 @@ const Settings: React.FC = () => {
       setIsEmailSaving(false);
     }
   };
+
+  const handleSendEmailVerification = async () => {
+    setIsVerificationSending(true);
+    try {
+      await api.post('/auth/email/verification/send');
+      message.success('Письмо для подтверждения отправлено');
+    } catch (error: unknown) {
+      const detail = getApiDetail(error);
+      message.error(typeof detail === 'string' ? detail : 'Не удалось отправить письмо');
+    } finally {
+      setIsVerificationSending(false);
+    }
+  };
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const verificationResult = params.get('email_verified');
+    if (!verificationResult) {
+      return;
+    }
+    if (verificationResult === '1') {
+      message.success('Email подтверждён');
+    } else {
+      message.error('Не удалось подтвердить email. Запросите новое письмо.');
+    }
+    params.delete('email_verified');
+    const query = params.toString();
+    window.history.replaceState(null, '', `${window.location.pathname}${query ? `?${query}` : ''}`);
+  }, []);
 
   return (
     <div>
@@ -337,9 +367,29 @@ const Settings: React.FC = () => {
             </Title>
             <Text type="secondary" style={{ display: 'block', marginBottom: spacing.md }}>
               {user?.email
-                ? `Подключён: ${user.email}${user.email_verified_at ? '' : ' · ожидает будущей верификации'}`
+                ? `Подключён: ${user.email}${user.email_verified_at ? ' · подтверждён' : ' · не подтверждён'}`
                 : 'Добавьте email и пароль, чтобы входить в браузерный кабинет без Telegram.'}
             </Text>
+            {user?.email && !user.email_verified_at && (
+              <div style={{
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'space-between',
+                gap: spacing.md,
+                flexWrap: 'wrap',
+                padding: spacing.md,
+                borderRadius: tileRadius,
+                background: colors.bgTertiary,
+                marginBottom: spacing.md,
+              }}>
+                <Text style={{ color: colors.textPrimary }}>
+                  Подтвердите email, чтобы позже восстановить доступ к аккаунту.
+                </Text>
+                <Button loading={isVerificationSending} onClick={handleSendEmailVerification}>
+                  Отправить письмо
+                </Button>
+              </div>
+            )}
             <Form
               form={emailForm}
               layout="vertical"

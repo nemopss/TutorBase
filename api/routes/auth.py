@@ -1,5 +1,7 @@
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
+import hashlib
 import logging
+import secrets
 from typing import Dict
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
@@ -19,6 +21,9 @@ from api.schemas import (
     BrowserTutorRegistrationRequest,
     BrowserTokenResponse,
     EmailPasswordRequest,
+    EmailVerificationConfirmRequest,
+    EmailVerificationConfirmResponse,
+    EmailVerificationSendResponse,
     RefreshRequest,
     RegistrationResponse,
     StudentRegistrationRequest,
@@ -45,6 +50,7 @@ from api.security import (
 from config import config
 from database import crud
 from services import billing_service, notification_bootstrap_service, tenant_access_service
+from services.email_delivery_service import EmailDeliveryNotConfiguredError, send_email_verification
 from utils.cache import invalidate_cache
 
 router = APIRouter()
@@ -178,6 +184,15 @@ def _normalize_email(email: str) -> str:
     return email.strip().lower()
 
 
+def _hash_email_verification_token(token: str) -> str:
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()
+
+
+def _build_email_verification_url(token: str) -> str:
+    base = config.MINI_APP_URL.rstrip("/") or "https://app.tutorbase.su"
+    return f"{base}/verify-email#token={token}"
+
+
 async def _ensure_email_available(
     session: AsyncSession,
     email_normalized: str,
@@ -198,6 +213,54 @@ def _build_auth_response(user: User) -> BrowserTokenResponse:
         access_token=create_access_token(token_payload),
         expires_in=config.JWT_ACCESS_EXPIRES_SECONDS,
         user=_build_user_payload(user),
+    )
+
+
+async def _send_email_verification_for_user(
+    session: AsyncSession,
+    user: User,
+) -> EmailVerificationSendResponse:
+    if not user.email or not user.email_normalized:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Email is not set")
+    if user.email_verified_at is not None:
+        return EmailVerificationSendResponse(
+            email=user.email,
+            expires_in=config.EMAIL_VERIFICATION_EXPIRES_SECONDS,
+        )
+
+    now = datetime.now(timezone.utc)
+    await crud.mark_unused_email_verification_tokens_used(session, user_id=user.id, used_at=now)
+
+    raw_token = secrets.token_urlsafe(32)
+    await crud.create_email_verification_token(
+        session,
+        user_id=user.id,
+        email_normalized=user.email_normalized,
+        token_hash=_hash_email_verification_token(raw_token),
+        expires_at=now + timedelta(seconds=config.EMAIL_VERIFICATION_EXPIRES_SECONDS),
+    )
+    verify_url = _build_email_verification_url(raw_token)
+
+    try:
+        await send_email_verification(
+            to_email=user.email,
+            display_name=user.display_name,
+            verify_url=verify_url,
+        )
+    except EmailDeliveryNotConfiguredError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Email delivery is not configured",
+        ) from exc
+    except Exception as exc:
+        raise HTTPException(
+            status_code=status.HTTP_502_BAD_GATEWAY,
+            detail="Email delivery failed",
+        ) from exc
+
+    return EmailVerificationSendResponse(
+        email=user.email,
+        expires_in=config.EMAIL_VERIFICATION_EXPIRES_SECONDS,
     )
 
 
@@ -731,10 +794,56 @@ async def set_email_password(
     db_user.password_hash = hash_password(payload.password)
     db_user.email_verified_at = None
     db_user.updated_at = datetime.now(timezone.utc)
+    await crud.mark_unused_email_verification_tokens_used(session, user_id=db_user.id, used_at=db_user.updated_at)
     session.add(db_user)
     await session.flush()
     await invalidate_cache("users:_get_user_cached:*")
     return _build_user_payload(db_user)
+
+
+@router.post("/email/verification/send", response_model=EmailVerificationSendResponse)
+@rate_limit("3/minute")
+async def send_email_verification_request(
+    request: Request,
+    session: AsyncSession = Depends(get_session),
+    current_user: User = Depends(get_current_user),
+) -> EmailVerificationSendResponse:
+    db_user = await session.get(User, current_user.id)
+    if db_user is None:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User not found")
+    return await _send_email_verification_for_user(session, db_user)
+
+
+@router.post("/email/verify", response_model=EmailVerificationConfirmResponse)
+@rate_limit("10/minute")
+async def verify_email(
+    request: Request,
+    payload: EmailVerificationConfirmRequest,
+    session: AsyncSession = Depends(get_session),
+) -> EmailVerificationConfirmResponse:
+    token_hash = _hash_email_verification_token(payload.token)
+    verification_token = await crud.get_email_verification_token_by_hash(session, token_hash)
+    now = datetime.now(timezone.utc)
+
+    if (
+        verification_token is None
+        or verification_token.used_at is not None
+        or verification_token.expires_at <= now
+        or verification_token.user is None
+        or verification_token.user.email_normalized != verification_token.email_normalized
+    ):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid or expired verification token")
+
+    user = verification_token.user
+    user.email_verified_at = now
+    user.updated_at = now
+    verification_token.used_at = now
+    session.add(user)
+    session.add(verification_token)
+    await crud.mark_unused_email_verification_tokens_used(session, user_id=user.id, used_at=now)
+    await invalidate_cache("users:_get_user_cached:*")
+
+    return EmailVerificationConfirmResponse(email=user.email or verification_token.email_normalized)
 
 
 @router.post("/switch-tenant", response_model=TokenPairResponse)

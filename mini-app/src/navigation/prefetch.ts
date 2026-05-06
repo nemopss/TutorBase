@@ -64,6 +64,7 @@ export const loadTenantAccessBlockedPage = () => import('../pages/TenantAccessBl
 export const loadTenantAccessPreviewPage = () => import('../pages/TenantAccessPreview');
 export const loadRoleSelectionScreenPage = () => import('../pages/RoleSelectionScreen');
 export const loadExistingAccountLinkFormPage = () => import('../pages/ExistingAccountLinkForm');
+export const loadEmailVerificationPage = () => import('../pages/EmailVerificationPage');
 export const loadTutorRegistrationFormPage = () => import('../pages/TutorRegistrationForm');
 export const loadStudentRegistrationFormPage = () => import('../pages/StudentRegistrationForm');
 export const loadStudentDashboardPage = () => import('../pages/StudentDashboard');

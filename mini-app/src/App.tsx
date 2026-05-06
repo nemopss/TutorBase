@@ -15,6 +15,7 @@ import {
   loadAnalyticsPage,
   loadDashboardPage,
   loadExistingAccountLinkFormPage,
+  loadEmailVerificationPage,
   loadFinanceDashboardPage,
   loadGroupsPage,
   loadIncomeReportsPage,
@@ -64,6 +65,7 @@ const TenantAccessBlocked = lazy(loadTenantAccessBlockedPage);
 const TenantAccessPreview = lazy(loadTenantAccessPreviewPage);
 const RoleSelectionScreen = lazy(loadRoleSelectionScreenPage);
 const ExistingAccountLinkForm = lazy(loadExistingAccountLinkFormPage);
+const EmailVerificationPage = lazy(loadEmailVerificationPage);
 const TutorRegistrationForm = lazy(loadTutorRegistrationFormPage);
 const StudentRegistrationForm = lazy(loadStudentRegistrationFormPage);
 const StudentDashboard = lazy(loadStudentDashboardPage);
@@ -133,6 +135,7 @@ function App() {
           <Routes>
             <Route path="/" element={<RoleSelectionScreen />} />
             <Route path="/login/existing" element={<ExistingAccountLinkForm />} />
+            <Route path="/verify-email" element={<EmailVerificationPage />} />
             <Route path="/register/tutor" element={<TutorRegistrationForm />} />
             <Route path="/register/student" element={<StudentRegistrationForm />} />
             <Route path="*" element={<Navigate to="/" replace />} />
@@ -193,6 +196,7 @@ function App() {
                 <Route path="/" element={<StudentDashboard />} />
                 <Route path="/schedule" element={<Schedule />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/verify-email" element={<EmailVerificationPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </>
             ) : (
@@ -212,6 +216,7 @@ function App() {
                 <Route path="/analytics" element={<Analytics />} />
                 <Route path="/invite-codes" element={<InviteCodes />} />
                 <Route path="/settings" element={<Settings />} />
+                <Route path="/verify-email" element={<EmailVerificationPage />} />
                 {isPlatformAdmin && <Route path="/admin" element={<Navigate to="/platform" replace />} />}
                 <Route path="*" element={<Navigate to="/" replace />} />
               </>

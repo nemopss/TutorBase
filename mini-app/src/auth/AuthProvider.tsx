@@ -836,7 +836,9 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
     );
   }
 
-  if (authMode === 'browser' && !user && !isLoading) {
+  const isPublicEmailVerificationRoute = window.location.pathname.startsWith('/verify-email');
+
+  if (authMode === 'browser' && !user && !isLoading && !isPublicEmailVerificationRoute) {
     return (
       <BrowserLoginScreen
         error={browserLoginError}

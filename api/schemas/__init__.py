@@ -34,6 +34,9 @@ from api.schemas.common import MessageResponse
 from api.schemas.auth import (
     BrowserTutorRegistrationRequest,
     EmailPasswordRequest,
+    EmailVerificationConfirmRequest,
+    EmailVerificationConfirmResponse,
+    EmailVerificationSendResponse,
     WebAppLoginRequest,
     RefreshRequest,
     SwitchTenantRequest,
@@ -192,6 +195,9 @@ __all__ = [
     # Auth
     'BrowserTutorRegistrationRequest',
     'EmailPasswordRequest',
+    'EmailVerificationConfirmRequest',
+    'EmailVerificationConfirmResponse',
+    'EmailVerificationSendResponse',
     'WebAppLoginRequest',
     'RefreshRequest',
     'SwitchTenantRequest',

@@ -186,6 +186,26 @@ class User(Base):
         back_populates='user',
     )
     legal_acceptances = relationship('LegalAcceptance', back_populates='user')
+    email_verification_tokens = relationship('EmailVerificationToken', back_populates='user')
+
+
+class EmailVerificationToken(Base):
+    """One-time token for confirming a user's current email address."""
+    __tablename__ = 'email_verification_tokens'
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey('users.id', ondelete='CASCADE'), nullable=False, index=True)
+    email_normalized = Column(String, nullable=False, index=True)
+    token_hash = Column(String(64), nullable=False, unique=True, index=True)
+    expires_at = Column(DateTime(timezone=True), nullable=False, index=True)
+    used_at = Column(DateTime(timezone=True), nullable=True)
+    created_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
+
+    user = relationship('User', back_populates='email_verification_tokens')
+
+    __table_args__ = (
+        Index('ix_email_verification_tokens_user_unused', 'user_id', 'used_at'),
+    )
 
 
 class LegalAcceptance(Base):

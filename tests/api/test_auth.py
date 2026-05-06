@@ -1,16 +1,19 @@
 import hashlib
 import hmac
 from datetime import datetime, timezone
+from urllib.parse import parse_qs, urlparse
 
 import pytest
 
 from httpx import AsyncClient
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from api.security import create_refresh_token, hash_password
+from api.security import create_access_token, create_refresh_token, hash_password
 from api.routes import auth as auth_routes
 from config import config
 from database import crud
+from database.models import EmailVerificationToken
 from tests import factories
 
 
@@ -431,3 +434,69 @@ async def test_telegram_link_email_account_attaches_current_telegram(
     assert response.json()["refresh_token"]
     await db_session.refresh(user)
     assert user.telegram_id == 909090
+
+
+@pytest.mark.asyncio
+async def test_send_and_verify_email_confirmation(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    tenant_1,
+    monkeypatch,
+):
+    sent_messages: list[dict[str, str]] = []
+
+    async def fake_send_email_verification(*, to_email: str, display_name: str, verify_url: str):
+        sent_messages.append({
+            "to_email": to_email,
+            "display_name": display_name,
+            "verify_url": verify_url,
+        })
+
+    monkeypatch.setattr(auth_routes, "send_email_verification", fake_send_email_verification)
+    monkeypatch.setattr(config, "MINI_APP_URL", "http://app.test")
+
+    user = await factories.create_user(
+        db_session,
+        role="teacher",
+        tenant_id=tenant_1.id,
+        email="Verify@Example.com",
+        email_normalized="verify@example.com",
+        password_hash=hash_password("password123"),
+    )
+    await db_session.commit()
+
+    access_token = create_access_token({
+        "sub": str(user.id),
+        "role": user.role,
+        "telegram_id": user.telegram_id,
+        "tenant_id": user.tenant_id,
+    })
+
+    send_response = await client.post(
+        "/api/v1/auth/email/verification/send",
+        headers={"Authorization": f"Bearer {access_token}"},
+    )
+
+    assert send_response.status_code == 200
+    assert send_response.json()["email"] == "Verify@Example.com"
+    assert sent_messages == [{
+        "to_email": "Verify@Example.com",
+        "display_name": user.display_name,
+        "verify_url": sent_messages[0]["verify_url"],
+    }]
+
+    token_rows = (await db_session.execute(select(EmailVerificationToken))).scalars().all()
+    assert len(token_rows) == 1
+    assert token_rows[0].token_hash not in sent_messages[0]["verify_url"]
+
+    parsed_verify_url = urlparse(sent_messages[0]["verify_url"])
+    assert parsed_verify_url.scheme == "http"
+    assert parsed_verify_url.netloc == "app.test"
+    assert parsed_verify_url.path == "/verify-email"
+    token = parse_qs(parsed_verify_url.fragment)["token"][0]
+    verify_response = await client.post("/api/v1/auth/email/verify", json={"token": token})
+
+    assert verify_response.status_code == 200
+    assert verify_response.json()["email"] == "Verify@Example.com"
+    await db_session.refresh(user)
+    assert user.email_verified_at is not None
