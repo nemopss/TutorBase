@@ -24,6 +24,7 @@ const SELLER_INN = '621305194552';
 const SUPPORT_EMAIL = 'tutorbase@mail.ru';
 const TELEGRAM_BOT_URL = 'https://t.me/tutorbaserobot';
 const APP_REGISTER_URL = 'https://app.tutorbase.su/register/tutor';
+const COOKIE_NOTICE_STORAGE_KEY = 'tutorbase_cookie_notice_seen';
 
 const getRegisterUrl = () => {
   if (typeof window === 'undefined') {
@@ -439,6 +440,12 @@ const LandingPage: React.FC = () => {
   const isDark = resolvedTheme.colorScheme === 'dark';
   const registerUrl = getRegisterUrl();
   const [scrolled, setScrolled] = useState(false);
+  const [showCookieNotice, setShowCookieNotice] = useState(() => {
+    if (typeof window === 'undefined') {
+      return false;
+    }
+    return window.localStorage.getItem(COOKIE_NOTICE_STORAGE_KEY) !== '1';
+  });
   const firstSectionRef = useRef<HTMLElement | null>(null);
 
   useRevealOnScroll();
@@ -479,6 +486,11 @@ const LandingPage: React.FC = () => {
 
     target.scrollIntoView({ behavior: 'smooth', block: 'start' });
     window.history.pushState(null, '', `#${targetId}`);
+  };
+
+  const handleCookieNoticeClose = () => {
+    window.localStorage.setItem(COOKIE_NOTICE_STORAGE_KEY, '1');
+    setShowCookieNotice(false);
   };
 
   return (
@@ -840,6 +852,19 @@ const LandingPage: React.FC = () => {
             <span>2026 TutorBase. Все права защищены.</span>
           </div>
         </footer>
+
+        {showCookieNotice && (
+          <div className="landing-cookie-notice" role="status" aria-live="polite">
+            <p>
+              Мы используем cookie для работы сервиса, авторизации и аналитики.
+              Продолжая пользоваться сайтом, вы соглашаетесь с{' '}
+              <a href="/privacy">политикой обработки персональных данных</a>.
+            </p>
+            <Button type="primary" size="large" onClick={handleCookieNoticeClose}>
+              Хорошо
+            </Button>
+          </div>
+        )}
       </div>
     </ConfigProvider>
   );
