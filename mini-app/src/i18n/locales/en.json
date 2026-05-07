@@ -985,7 +985,7 @@
     },
     "analytics": {
       "title": "Analytics",
-      "subtitle": "Insights and statistics about your lessons",
+      "subtitle": "Workload, revenue, learners, packages, and risks for the selected period",
       "exportCsv": "Export CSV",
       "totalLessonsPeriod": "Total Lessons (Period)",
       "totalRemindersPeriod": "Total Reminders (Period)",
@@ -997,7 +997,160 @@
       "completionRate": "Completion Rate",
       "totalLessons": "Total Lessons",
       "lessons": "Lessons",
-      "reminders": "Reminders"
+      "reminders": "Reminders",
+      "units": {
+        "hoursShort": "h"
+      },
+      "presets": {
+        "ariaLabel": "Analytics period presets",
+        "sevenDays": "Last 7 days",
+        "thirtyDays": "Last 30 days",
+        "month": "Current month",
+        "nextSevenDays": "Next 7 days",
+        "customRange": "Custom period"
+      },
+      "weekdays": {
+        "mon": "Mon",
+        "tue": "Tue",
+        "wed": "Wed",
+        "thu": "Thu",
+        "fri": "Fri",
+        "sat": "Sat",
+        "sun": "Sun"
+      },
+      "comparison": {
+        "noData": "No comparison",
+        "newPeriod": "new period",
+        "summary": "{{delta}} · {{percent}}"
+      },
+      "kpi": {
+        "completedHours": "Completed hours",
+        "completedLessons": "{{count}} completed lessons",
+        "plannedLoad": "Planned load",
+        "plannedLessons": "{{count}} planned lessons",
+        "money": "Money",
+        "moneyHelper": "{{earned}} earned · {{planned}} planned",
+        "risks": "Risks",
+        "risksHelper": "{{cancellations}} cancellations · {{delivery}} delivery"
+      },
+      "sections": {
+        "attention": "Needs attention",
+        "workloadMoney": "Workload and money",
+        "weeklyRhythm": "Weekly rhythm",
+        "focusLearners": "Learners in focus",
+        "focusPackages": "Packages in focus",
+        "moneyNotificationsByDay": "Money and notifications by day"
+      },
+      "chart": {
+        "completedHours": "Completed hours",
+        "plannedHours": "Planned hours",
+        "completed": "Completed",
+        "planned": "Planned",
+        "cashRevenue": "Paid",
+        "earnedRevenue": "Earned",
+        "failedReminders": "Notification failures",
+        "weekdayTooltip": "{{day}} across selected period"
+      },
+      "empty": {
+        "noLearnerRisks": "No active learner risks",
+        "noPackageRisks": "No active package risks"
+      },
+      "focus": {
+        "learnerLine": "{{completed}} completed · {{cancelled}} cancelled · {{debt}} debt",
+        "packageLine": "{{learner}} · {{remaining}} remaining"
+      },
+      "details": {
+        "title": "Details",
+        "subtitle": "advanced analytics",
+        "activeLearners": "Active learners",
+        "outstanding": "Outstanding",
+        "notificationDelivery": "Notification delivery",
+        "cancellations": "Cancellations",
+        "earnedPerHour": "Earned per hour",
+        "earnedPerLesson": "Earned per lesson",
+        "cashPerActiveLearner": "Paid per active learner",
+        "plannedToEarned": "Planned to earned"
+      },
+      "tables": {
+        "learners": "Learners",
+        "learner": "Learner",
+        "completed": "Completed",
+        "planned": "Planned",
+        "cancelled": "Cancelled",
+        "cancellationRate": "Cancellation rate",
+        "hours": "Hours",
+        "cash": "Paid",
+        "earned": "Earned",
+        "plannedRevenue": "Planned revenue",
+        "debt": "Debt",
+        "risks": "Risks",
+        "packages": "Packages",
+        "package": "Package",
+        "status": "Status",
+        "progress": "Progress",
+        "remaining": "Remaining",
+        "nextLesson": "Next lesson",
+        "lastLesson": "Last lesson",
+        "lessonProgress": "{{completed}} completed · {{cancelled}} cancelled · {{total}} total"
+      },
+      "actions": {
+        "openLearner": "Profile",
+        "openSchedule": "Schedule",
+        "openPackage": "Package",
+        "openFinance": "Finance"
+      },
+      "insightItems": {
+        "highCancellation": "{{rate}} cancelled · {{cancelled}} cancelled · {{completed}} completed",
+        "noFuture": "{{completed}} completed · {{planned}} planned in period",
+        "endingPackage": "{{learner}} · {{remaining}} remaining",
+        "debt": "{{debt}} due",
+        "noTelegram": "No linked Telegram account",
+        "more": "{{count}} more in the detailed list below"
+      },
+      "riskFlags": {
+        "no_future_lessons": "No future lessons",
+        "high_cancellation_rate": "High cancellations",
+        "outstanding_balance": "Debt",
+        "no_telegram": "No Telegram",
+        "ending_soon": "Ending soon",
+        "payment_open": "Open payment"
+      },
+      "insights": {
+        "no_future_learners": {
+          "title": "Learners without future lessons",
+          "detail": "{{count}} active learners have no future lessons.",
+          "action": "Open learners"
+        },
+        "high_cancellation_rate": {
+          "title": "High cancellation rate",
+          "detail": "{{count}} learners have a cancellation rate of 20% or higher for the selected period.",
+          "action": "Review learners"
+        },
+        "ending_packages": {
+          "title": "Packages ending in the next 3 days",
+          "detail": "{{count}} active packages are close to their final lesson.",
+          "action": "Open packages"
+        },
+        "outstanding_balance": {
+          "title": "Outstanding balance",
+          "detail": "{{count}} learners have an open balance.",
+          "action": "Open finance"
+        },
+        "notification_failures": {
+          "title": "Notification failures",
+          "detail": "{{count}} notifications failed during the selected period.",
+          "action": "Open notifications"
+        },
+        "no_telegram_learners": {
+          "title": "Some learners are not connected to Telegram",
+          "detail": "{{count}} active learners have no Telegram link.",
+          "action": "Open learners"
+        },
+        "no_critical_issues": {
+          "title": "No critical issues",
+          "detail": "No notable schedule, payment, or notification risks were found for the selected period."
+        }
+      }
     },
     "inviteCodes": {
       "title": "Invite Codes",

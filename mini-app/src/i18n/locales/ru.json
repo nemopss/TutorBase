@@ -986,7 +986,7 @@
     },
     "analytics": {
       "title": "Аналитика",
-      "subtitle": "Статистика и аналитика по урокам",
+      "subtitle": "Нагрузка, деньги, ученики, пакеты и риски за выбранный период",
       "exportCsv": "Экспорт CSV",
       "totalLessonsPeriod": "Всего уроков (период)",
       "totalRemindersPeriod": "Всего напоминаний (период)",
@@ -998,7 +998,160 @@
       "completionRate": "Процент завершения",
       "totalLessons": "Всего уроков",
       "lessons": "Уроки",
-      "reminders": "Напоминания"
+      "reminders": "Напоминания",
+      "units": {
+        "hoursShort": "ч"
+      },
+      "presets": {
+        "ariaLabel": "Быстрый выбор периода аналитики",
+        "sevenDays": "Последние 7 дней",
+        "thirtyDays": "Последние 30 дней",
+        "month": "Текущий месяц",
+        "nextSevenDays": "Неделя вперёд",
+        "customRange": "Свой период"
+      },
+      "weekdays": {
+        "mon": "Пн",
+        "tue": "Вт",
+        "wed": "Ср",
+        "thu": "Чт",
+        "fri": "Пт",
+        "sat": "Сб",
+        "sun": "Вс"
+      },
+      "comparison": {
+        "noData": "Нет сравнения",
+        "newPeriod": "новый период",
+        "summary": "{{delta}} · {{percent}}"
+      },
+      "kpi": {
+        "completedHours": "Проведённые часы",
+        "completedLessons": "{{count}} проведённых уроков",
+        "plannedLoad": "Плановая нагрузка",
+        "plannedLessons": "{{count}} запланированных уроков",
+        "money": "Деньги",
+        "moneyHelper": "{{earned}} начислено · {{planned}} план",
+        "risks": "Риски",
+        "risksHelper": "{{cancellations}} отмен · {{delivery}} доставка"
+      },
+      "sections": {
+        "attention": "Что требует внимания",
+        "workloadMoney": "Нагрузка и деньги",
+        "weeklyRhythm": "Ритм недели",
+        "focusLearners": "Ученики в фокусе",
+        "focusPackages": "Пакеты в фокусе",
+        "moneyNotificationsByDay": "Деньги и уведомления по дням"
+      },
+      "chart": {
+        "completedHours": "Проведённые часы",
+        "plannedHours": "Плановые часы",
+        "completed": "Проведено",
+        "planned": "План",
+        "cashRevenue": "Оплачено",
+        "earnedRevenue": "Начислено",
+        "failedReminders": "Ошибки уведомлений",
+        "weekdayTooltip": "{{day}} по выбранному периоду"
+      },
+      "empty": {
+        "noLearnerRisks": "Нет активных рисков по ученикам",
+        "noPackageRisks": "Нет активных рисков по пакетам"
+      },
+      "focus": {
+        "learnerLine": "{{completed}} проведено · {{cancelled}} отмен · {{debt}} долг",
+        "packageLine": "{{learner}} · осталось {{remaining}}"
+      },
+      "details": {
+        "title": "Подробно",
+        "subtitle": "профессиональное полотно",
+        "activeLearners": "Активные ученики",
+        "outstanding": "Задолженность",
+        "notificationDelivery": "Доставка уведомлений",
+        "cancellations": "Отмены",
+        "earnedPerHour": "Начислено за час",
+        "earnedPerLesson": "Начислено за урок",
+        "cashPerActiveLearner": "Оплачено на ученика",
+        "plannedToEarned": "План к начисленному"
+      },
+      "tables": {
+        "learners": "Ученики",
+        "learner": "Ученик",
+        "completed": "Проведено",
+        "planned": "План",
+        "cancelled": "Отмены",
+        "cancellationRate": "Доля отмен",
+        "hours": "Часы",
+        "cash": "Оплачено",
+        "earned": "Начислено",
+        "plannedRevenue": "План денег",
+        "debt": "Долг",
+        "risks": "Риски",
+        "packages": "Пакеты",
+        "package": "Пакет",
+        "status": "Статус",
+        "progress": "Прогресс",
+        "remaining": "Осталось",
+        "nextLesson": "Следующий урок",
+        "lastLesson": "Последний урок",
+        "lessonProgress": "{{completed}} проведено · {{cancelled}} отмен · {{total}} всего"
+      },
+      "actions": {
+        "openLearner": "Профиль",
+        "openSchedule": "Расписание",
+        "openPackage": "Пакет",
+        "openFinance": "Финансы"
+      },
+      "insightItems": {
+        "highCancellation": "{{rate}} отмен · {{cancelled}} отменено · {{completed}} проведено",
+        "noFuture": "{{completed}} проведено · {{planned}} в плане за период",
+        "endingPackage": "{{learner}} · осталось {{remaining}}",
+        "debt": "{{debt}} к оплате",
+        "noTelegram": "Нет связанного Telegram-аккаунта",
+        "more": "Ещё {{count}} в подробном списке ниже"
+      },
+      "riskFlags": {
+        "no_future_lessons": "Нет будущих уроков",
+        "high_cancellation_rate": "Много отмен",
+        "outstanding_balance": "Долг",
+        "no_telegram": "Нет Telegram",
+        "ending_soon": "Заканчивается",
+        "payment_open": "Оплата открыта"
+      },
+      "insights": {
+        "no_future_learners": {
+          "title": "Ученики без будущих уроков",
+          "detail": "{{count}} активных учеников не имеют будущих занятий.",
+          "action": "Открыть учеников"
+        },
+        "high_cancellation_rate": {
+          "title": "Высокая доля отмен",
+          "detail": "{{count}} учеников имеют долю отмен 20% или выше за период.",
+          "action": "Проверить учеников"
+        },
+        "ending_packages": {
+          "title": "Пакеты заканчиваются в ближайшие 3 дня",
+          "detail": "{{count}} активных пакетов скоро дойдут до последнего урока.",
+          "action": "Открыть пакеты"
+        },
+        "outstanding_balance": {
+          "title": "Есть задолженность",
+          "detail": "{{count}} учеников имеют открытый баланс.",
+          "action": "Открыть финансы"
+        },
+        "notification_failures": {
+          "title": "Ошибки уведомлений",
+          "detail": "{{count}} уведомлений завершились ошибкой за выбранный период.",
+          "action": "Открыть уведомления"
+        },
+        "no_telegram_learners": {
+          "title": "Не все ученики подключены к Telegram",
+          "detail": "{{count}} активных учеников не имеют Telegram-связки.",
+          "action": "Открыть учеников"
+        },
+        "no_critical_issues": {
+          "title": "Критичных отклонений нет",
+          "detail": "За выбранный период нет заметных рисков по расписанию, оплатам или уведомлениям."
+        }
+      }
     },
     "inviteCodes": {
       "title": "Инвайт-коды",

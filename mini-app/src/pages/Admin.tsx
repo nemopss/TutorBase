@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Card, Typography, Tag, Select, Space, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
+import { isAxiosError } from 'axios';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import { useAuth } from '../auth/AuthProvider';
@@ -22,13 +23,37 @@ interface UserRecord {
   lastLoginAt: string | null;
 }
 
+interface ApiUser {
+  id: number;
+  display_name: string;
+  username: string | null;
+  telegram_id: number | null;
+  role: UserRole;
+  is_platform_admin?: boolean;
+  created_at: string;
+  updated_at: string;
+  last_login_at: string | null;
+}
+
+interface UserListResponse {
+  items: ApiUser[];
+}
+
 const roleColors: Record<UserRole, string> = {
   admin: 'magenta',
   teacher: 'blue',
   viewer: 'default',
 };
 
-const mapUser = (user: any): UserRecord => ({
+const getApiErrorDetail = (error: unknown): string | null => {
+  if (!isAxiosError<{ detail?: unknown }>(error)) {
+    return null;
+  }
+  const detail = error.response?.data?.detail;
+  return typeof detail === 'string' ? detail : null;
+};
+
+const mapUser = (user: ApiUser): UserRecord => ({
   id: user.id,
   displayName: user.display_name,
   username: user.username,
@@ -65,29 +90,28 @@ const Admin = () => {
   const [updatingUserId, setUpdatingUserId] = useState<number | null>(null);
   const { isMobile } = useResponsive();
   
-  const roleLabels: Record<UserRole, string> = {
+  const roleLabels: Record<UserRole, string> = useMemo(() => ({
     admin: t('pages.admin.roles.admin'),
     teacher: t('pages.admin.roles.teacher'),
     viewer: t('pages.admin.roles.viewer'),
-  };
+  }), [t]);
 
-  const roleOptions = [
+  const roleOptions = useMemo(() => [
     { value: 'viewer', label: roleLabels.viewer },
     { value: 'teacher', label: roleLabels.teacher },
-  ];
+  ], [roleLabels]);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const response = await api.get('/users');
+      const response = await api.get<UserListResponse>('/users');
       setData(response.data.items.map(mapUser));
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(detail ?? t('pages.admin.loadError'));
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? t('pages.admin.loadError'));
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [t]);
 
   useEffect(() => {
     fetchUsers();
@@ -97,18 +121,17 @@ const Admin = () => {
     async (userId: number, role: UserRole) => {
       setUpdatingUserId(userId);
       try {
-        const response = await api.patch(`/users/${userId}/role`, { role });
+        const response = await api.patch<ApiUser>(`/users/${userId}/role`, { role });
         const updated = mapUser(response.data);
         setData((prev) => prev.map((item) => (item.id === userId ? updated : item)));
         message.success(t('pages.admin.roleUpdated', { name: updated.displayName, role: roleLabels[updated.role] }));
-      } catch (error: any) {
-        const detail = error?.response?.data?.detail;
-        message.error(detail ?? t('pages.admin.roleUpdateError'));
+      } catch (error: unknown) {
+        message.error(getApiErrorDetail(error) ?? t('pages.admin.roleUpdateError'));
       } finally {
         setUpdatingUserId(null);
       }
     },
-    [],
+    [roleLabels, t],
   );
 
   const columns: ColumnsType<UserRecord> = useMemo(() => {
@@ -172,7 +195,7 @@ const Admin = () => {
               loading={updatingUserId === record.id}
               disabled={updatingUserId === record.id || record.id === user?.id || record.isPlatformAdmin}
               style={{ minWidth: isMobile ? 140 : 160 }}
-              dropdownMatchSelectWidth={false}
+              popupMatchSelectWidth={false}
             />
           </Space>
         ),

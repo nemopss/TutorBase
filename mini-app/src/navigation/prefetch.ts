@@ -265,48 +265,14 @@ const fetchPackagesForReminders = async () => {
   return { items: allItems, total: allItems.length };
 };
 
-const fetchAnalyticsLessons = async (fromDate: string, toDate: string) => {
-  const { data } = await api.get('/metrics/lessons/daily', {
+const fetchAnalyticsOverview = async (fromDate: string, toDate: string) => {
+  const { data } = await api.get('/analytics/overview', {
     params: {
       from_date: fromDate,
       to_date: toDate,
     },
   });
   return data;
-};
-
-const fetchAnalyticsReminders = async (fromDate: string, toDate: string) => {
-  const { data } = await api.get('/metrics/reminders/daily', {
-    params: {
-      from_date: fromDate,
-      to_date: toDate,
-    },
-  });
-  return data;
-};
-
-const fetchAnalyticsPackages = async () => {
-  let allItems: unknown[] = [];
-  let offset = 0;
-  let hasMore = true;
-
-  while (hasMore) {
-    const { data } = await api.get<PackageListResponse>('/packages', {
-      params: { limit: PACKAGES_PAGE_LIMIT, offset },
-    });
-    allItems = [...allItems, ...data.items];
-    hasMore = !!data.has_more;
-    offset += PACKAGES_PAGE_LIMIT;
-
-    if (offset > 10000) {
-      break;
-    }
-  }
-
-  return {
-    total: allItems.length,
-    items: allItems,
-  };
 };
 
 const prefetchDashboardData = async (queryClient: QueryClient) => {
@@ -406,25 +372,15 @@ const prefetchRemindersData = async (queryClient: QueryClient) => {
 };
 
 const prefetchAnalyticsData = async (queryClient: QueryClient) => {
-  const endDate = dayjs();
-  const startDate = endDate.subtract(30, 'days');
+  const endDate = dayjs().endOf('day');
+  const startDate = dayjs().subtract(29, 'day').startOf('day');
   const fromDate = startDate.toISOString();
   const toDate = endDate.toISOString();
 
-  await Promise.allSettled([
-    queryClient.prefetchQuery({
-      queryKey: ['analyticsLessons', fromDate, toDate],
-      queryFn: () => fetchAnalyticsLessons(fromDate, toDate),
-    }),
-    queryClient.prefetchQuery({
-      queryKey: ['analyticsReminders', fromDate, toDate],
-      queryFn: () => fetchAnalyticsReminders(fromDate, toDate),
-    }),
-    queryClient.prefetchQuery({
-      queryKey: ['analyticsPackages'],
-      queryFn: fetchAnalyticsPackages,
-    }),
-  ]);
+  await queryClient.prefetchQuery({
+    queryKey: ['analyticsOverview', fromDate, toDate],
+    queryFn: () => fetchAnalyticsOverview(fromDate, toDate),
+  });
 };
 
 const routeDataPrefetchers: Partial<Record<string, (queryClient: QueryClient) => Promise<void>>> = {

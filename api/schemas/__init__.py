@@ -180,6 +180,17 @@ from api.schemas.metrics import (
     DailyPoint,
     DailyMetricsResponse,
 )
+from api.schemas.analytics import (
+    AnalyticsInsight,
+    AnalyticsLearnerBreakdown,
+    AnalyticsMetricComparison,
+    AnalyticsNotifications,
+    AnalyticsOverviewResponse,
+    AnalyticsPackageBreakdown,
+    AnalyticsSummary,
+    AnalyticsTimePoint,
+    AnalyticsWeekdayPoint,
+)
 
 __all__ = [
     # Base
@@ -205,6 +216,16 @@ __all__ = [
     'UserPayload',
     'BrowserTokenResponse',
     'TokenPairResponse',
+    # Analytics
+    'AnalyticsInsight',
+    'AnalyticsLearnerBreakdown',
+    'AnalyticsMetricComparison',
+    'AnalyticsNotifications',
+    'AnalyticsOverviewResponse',
+    'AnalyticsPackageBreakdown',
+    'AnalyticsSummary',
+    'AnalyticsTimePoint',
+    'AnalyticsWeekdayPoint',
     # Billing
     'BillingCheckoutRequest',
     'BillingCheckoutPreviewResponse',

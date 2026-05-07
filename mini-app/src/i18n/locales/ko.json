@@ -984,7 +984,7 @@
     },
     "analytics": {
       "title": "분석",
-      "subtitle": "수업에 대한 통계 및 분석",
+      "subtitle": "선택한 기간의 수업량, 매출, 학생, 패키지와 위험",
       "exportCsv": "CSV 내보내기",
       "totalLessonsPeriod": "총 수업 (기간)",
       "totalRemindersPeriod": "총 알림 (기간)",
@@ -996,7 +996,160 @@
       "completionRate": "완료율",
       "totalLessons": "총 수업",
       "lessons": "수업",
-      "reminders": "알림"
+      "reminders": "알림",
+      "units": {
+        "hoursShort": "시간"
+      },
+      "presets": {
+        "ariaLabel": "분석 기간 빠른 선택",
+        "sevenDays": "최근 7일",
+        "thirtyDays": "최근 30일",
+        "month": "이번 달",
+        "nextSevenDays": "다음 7일",
+        "customRange": "사용자 지정 기간"
+      },
+      "weekdays": {
+        "mon": "월",
+        "tue": "화",
+        "wed": "수",
+        "thu": "목",
+        "fri": "금",
+        "sat": "토",
+        "sun": "일"
+      },
+      "comparison": {
+        "noData": "비교 없음",
+        "newPeriod": "새 기간",
+        "summary": "{{delta}} · {{percent}}"
+      },
+      "kpi": {
+        "completedHours": "진행한 시간",
+        "completedLessons": "진행한 수업 {{count}}개",
+        "plannedLoad": "예정 수업량",
+        "plannedLessons": "예정 수업 {{count}}개",
+        "money": "금액",
+        "moneyHelper": "{{earned}} 발생 · {{planned}} 예정",
+        "risks": "위험",
+        "risksHelper": "취소 {{cancellations}} · 전달 {{delivery}}"
+      },
+      "sections": {
+        "attention": "확인이 필요한 항목",
+        "workloadMoney": "수업량과 금액",
+        "weeklyRhythm": "주간 리듬",
+        "focusLearners": "주의 학생",
+        "focusPackages": "주의 패키지",
+        "moneyNotificationsByDay": "일별 금액 및 알림"
+      },
+      "chart": {
+        "completedHours": "진행한 시간",
+        "plannedHours": "예정 시간",
+        "completed": "진행",
+        "planned": "예정",
+        "cashRevenue": "수납",
+        "earnedRevenue": "발생",
+        "failedReminders": "알림 오류",
+        "weekdayTooltip": "선택 기간의 {{day}}"
+      },
+      "empty": {
+        "noLearnerRisks": "활성 학생 위험이 없습니다",
+        "noPackageRisks": "활성 패키지 위험이 없습니다"
+      },
+      "focus": {
+        "learnerLine": "진행 {{completed}} · 취소 {{cancelled}} · 미수 {{debt}}",
+        "packageLine": "{{learner}} · {{remaining}}개 남음"
+      },
+      "details": {
+        "title": "상세",
+        "subtitle": "고급 분석",
+        "activeLearners": "활성 학생",
+        "outstanding": "미수금",
+        "notificationDelivery": "알림 전달",
+        "cancellations": "취소",
+        "earnedPerHour": "시간당 발생액",
+        "earnedPerLesson": "수업당 발생액",
+        "cashPerActiveLearner": "활성 학생당 수납액",
+        "plannedToEarned": "예정/발생 비율"
+      },
+      "tables": {
+        "learners": "학생",
+        "learner": "학생",
+        "completed": "진행",
+        "planned": "예정",
+        "cancelled": "취소",
+        "cancellationRate": "취소율",
+        "hours": "시간",
+        "cash": "수납",
+        "earned": "발생",
+        "plannedRevenue": "예정 금액",
+        "debt": "미수",
+        "risks": "위험",
+        "packages": "패키지",
+        "package": "패키지",
+        "status": "상태",
+        "progress": "진행률",
+        "remaining": "남음",
+        "nextLesson": "다음 수업",
+        "lastLesson": "마지막 수업",
+        "lessonProgress": "진행 {{completed}} · 취소 {{cancelled}} · 총 {{total}}"
+      },
+      "actions": {
+        "openLearner": "프로필",
+        "openSchedule": "일정",
+        "openPackage": "패키지",
+        "openFinance": "재무"
+      },
+      "insightItems": {
+        "highCancellation": "취소율 {{rate}} · 취소 {{cancelled}} · 진행 {{completed}}",
+        "noFuture": "진행 {{completed}} · 기간 내 예정 {{planned}}",
+        "endingPackage": "{{learner}} · {{remaining}}개 남음",
+        "debt": "{{debt}} 미수",
+        "noTelegram": "연결된 Telegram 계정 없음",
+        "more": "아래 상세 목록에 {{count}}개 더 있음"
+      },
+      "riskFlags": {
+        "no_future_lessons": "예정 수업 없음",
+        "high_cancellation_rate": "취소 많음",
+        "outstanding_balance": "미수",
+        "no_telegram": "Telegram 없음",
+        "ending_soon": "곧 종료",
+        "payment_open": "결제 미완료"
+      },
+      "insights": {
+        "no_future_learners": {
+          "title": "예정 수업이 없는 학생",
+          "detail": "활성 학생 {{count}}명에게 예정 수업이 없습니다.",
+          "action": "학생 열기"
+        },
+        "high_cancellation_rate": {
+          "title": "높은 취소율",
+          "detail": "학생 {{count}}명의 선택 기간 취소율이 20% 이상입니다.",
+          "action": "학생 확인"
+        },
+        "ending_packages": {
+          "title": "3일 내 종료되는 패키지",
+          "detail": "활성 패키지 {{count}}개가 마지막 수업에 가까워졌습니다.",
+          "action": "패키지 열기"
+        },
+        "outstanding_balance": {
+          "title": "미수금 있음",
+          "detail": "학생 {{count}}명에게 미수금이 있습니다.",
+          "action": "재무 열기"
+        },
+        "notification_failures": {
+          "title": "알림 오류",
+          "detail": "선택 기간에 알림 {{count}}개가 실패했습니다.",
+          "action": "알림 열기"
+        },
+        "no_telegram_learners": {
+          "title": "일부 학생이 Telegram에 연결되지 않음",
+          "detail": "활성 학생 {{count}}명에게 Telegram 연결이 없습니다.",
+          "action": "학생 열기"
+        },
+        "no_critical_issues": {
+          "title": "중요한 문제가 없습니다",
+          "detail": "선택 기간에 일정, 결제 또는 알림 관련 주요 위험이 없습니다."
+        }
+      }
     },
     "inviteCodes": {
       "title": "초대 코드",

@@ -36,8 +36,10 @@ const EmptyState: React.FC<EmptyStateProps> = ({
     }}>
       <Empty
         image={icon || Empty.PRESENTED_IMAGE_SIMPLE}
-        imageStyle={{
-          height: isMobile ? 80 : 120,
+        styles={{
+          image: {
+            height: isMobile ? 80 : 120,
+          },
         }}
         description={
           <div>

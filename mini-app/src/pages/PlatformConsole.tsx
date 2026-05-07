@@ -29,6 +29,7 @@ import {
   SettingOutlined,
 } from '@ant-design/icons';
 import { Link } from 'react-router-dom';
+import { isAxiosError } from 'axios';
 import api from '../services/api';
 import { useAuth } from '../auth/AuthProvider';
 import { useTheme } from '../theme/ThemeProvider';
@@ -200,6 +201,14 @@ interface TenantActionConfig {
 
 type ConsoleSection = 'broadcasts' | 'tenants' | 'users';
 
+const getApiErrorDetail = (error: unknown): string | null => {
+  if (!isAxiosError<{ detail?: unknown }>(error)) {
+    return null;
+  }
+  const detail = error.response?.data?.detail;
+  return typeof detail === 'string' ? detail : null;
+};
+
 const BILLING_PLAN_OPTIONS = [
   { value: 'start', label: 'Старт · 0-3 ученика' },
   { value: 'basic', label: 'Базовый · 4-10 учеников' },
@@ -327,9 +336,8 @@ const PlatformConsole = () => {
       });
       setTenants(response.data.items);
       setTotal(response.data.total);
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(detail ?? 'Не удалось загрузить кабинеты');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось загрузить кабинеты');
     } finally {
       setLoading(false);
     }
@@ -355,9 +363,8 @@ const PlatformConsole = () => {
         { params: { limit: 8 } },
       );
       setTenantEvents(response.data.items);
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось загрузить историю кабинета');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось загрузить историю кабинета');
     } finally {
       setIsLoadingTenantEvents(false);
     }
@@ -371,9 +378,8 @@ const PlatformConsole = () => {
       });
       setBroadcasts(response.data.items);
       setBroadcastTotal(response.data.total);
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось загрузить рассылки');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось загрузить рассылки');
     } finally {
       setIsLoadingBroadcasts(false);
     }
@@ -386,9 +392,8 @@ const PlatformConsole = () => {
         params: { limit: 100, offset: 0 },
       });
       setBroadcastAudienceUsers(response.data.items);
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось загрузить пользователей бота');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось загрузить пользователей бота');
     } finally {
       setIsLoadingAudienceUsers(false);
     }
@@ -408,18 +413,18 @@ const PlatformConsole = () => {
     fetchTenantEvents(managingTenantId);
   }, [fetchTenantEvents, managingTenantId]);
 
-  const handleSwitchTenant = async (targetTenantId: number | null) => {
+  const handleSwitchTenant = useCallback(async (targetTenantId: number | null) => {
     const switchKey = targetTenantId ?? 'global';
     setSwitchingTenantId(switchKey);
     try {
       await switchTenant(targetTenantId);
       message.success(targetTenantId === null ? 'Контекст сброшен' : 'Контекст кабинета изменён');
       setSwitchingTenantId(null);
-    } catch (error: any) {
-      message.error(error?.message ?? 'Не удалось сменить контекст');
+    } catch (error: unknown) {
+      message.error(error instanceof Error ? error.message : 'Не удалось сменить контекст');
       setSwitchingTenantId(null);
     }
-  };
+  }, [switchTenant]);
 
   const formatAccessDate = (value?: string | null) => {
     if (!value) return null;
@@ -571,9 +576,8 @@ const PlatformConsole = () => {
       )));
       fetchTenantEvents(tenant.id);
       message.success('Доступ обновлён');
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось обновить доступ');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось обновить доступ');
     } finally {
       setAccessActionKey(null);
     }
@@ -612,9 +616,8 @@ const PlatformConsole = () => {
         fetchTenantEvents(tenant.id),
       ]);
       message.success('Снимок кабинета обновлён');
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось обновить кабинет');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось обновить кабинет');
     }
   };
 
@@ -655,9 +658,8 @@ const PlatformConsole = () => {
       )));
       fetchTenantEvents(tenant.id);
       message.success('Подписка обновлена');
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось обновить подписку');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось обновить подписку');
     } finally {
       setBillingActionKey(null);
     }
@@ -676,9 +678,8 @@ const PlatformConsole = () => {
       )));
       fetchTenantEvents(tenant.id);
       message.success('Автопродление отключено');
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось отменить подписку');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось отменить подписку');
     } finally {
       setBillingActionKey(null);
     }
@@ -691,9 +692,8 @@ const PlatformConsole = () => {
       await fetchTenants();
       const { changed, grace_started, expired } = response.data;
       message.success(`Синхронизация завершена: ${changed} изменений, grace: ${grace_started}, expired: ${expired}`);
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось синхронизировать доступы');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось синхронизировать доступы');
     } finally {
       setIsSyncingAccess(false);
     }
@@ -709,9 +709,8 @@ const PlatformConsole = () => {
         sample_limit: 10,
       });
       setBroadcastPreview(response.data);
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось проверить аудиторию');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось проверить аудиторию');
     } finally {
       setIsPreviewingBroadcast(false);
     }
@@ -734,9 +733,8 @@ const PlatformConsole = () => {
       setBroadcastPreview(null);
       setIsBroadcastComposerOpen(false);
       message.success('Черновик рассылки создан');
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось создать рассылку');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось создать рассылку');
     } finally {
       setIsCreatingBroadcast(false);
     }
@@ -755,9 +753,8 @@ const PlatformConsole = () => {
       setSendingBroadcastId(null);
       setSendConfirmation('');
       message.success('Рассылка поставлена в очередь');
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось поставить рассылку в очередь');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось поставить рассылку в очередь');
     }
   };
 
@@ -773,9 +770,8 @@ const PlatformConsole = () => {
       );
       setBroadcastRecipients(response.data.items);
       setBroadcastRecipientTotal(response.data.total);
-    } catch (error: any) {
-      const detail = error?.response?.data?.detail;
-      message.error(typeof detail === 'string' ? detail : 'Не удалось загрузить получателей');
+    } catch (error: unknown) {
+      message.error(getApiErrorDetail(error) ?? 'Не удалось загрузить получателей');
     } finally {
       setIsLoadingRecipients(false);
     }
@@ -799,7 +795,7 @@ const PlatformConsole = () => {
         onClick: () => setManagingTenantId(tenant.id),
       },
     ];
-  }, [canSwitchTenant, switchingTenantId, tenantId]);
+  }, [canSwitchTenant, handleSwitchTenant, switchingTenantId, tenantId]);
 
   const activeBroadcasts = useMemo(
     () => broadcasts.filter((campaign) => campaign.status !== 'completed'),

@@ -126,7 +126,7 @@ const UserCard: React.FC<UserCardProps> = ({
             loading={isUpdating}
             disabled={isUpdating || isCurrentUser || user.isPlatformAdmin}
             style={{ minWidth: 140 }}
-            dropdownMatchSelectWidth={false}
+            popupMatchSelectWidth={false}
             onClick={(e) => e.stopPropagation()}
           />
         </div>
