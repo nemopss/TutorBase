@@ -19,6 +19,7 @@ from notifications.application.settings import (
     GetLearnerNotificationModeUseCase,
     GetNotificationSettingsUseCase,
     ListLearnerNotificationModesUseCase,
+    RebuildLearnerNotificationQueueUseCase,
     SetLearnerNotificationModeUseCase,
     UpdateNotificationSettingsUseCase,
 )
@@ -387,6 +388,77 @@ async def test_setting_learner_mode_to_new_rebuilds_scoped_queue():
     assert instances.upserted[0].learner_id == 10
     assert instances.upserted[0].delivery_enabled is True
     assert uow.committed is True
+
+
+@pytest.mark.asyncio
+async def test_rebuild_learner_notification_queue_uses_existing_effective_mode():
+    future_start = datetime.now(timezone.utc) + timedelta(days=7)
+    rule = NotificationRuleDraft(
+        rule_id=7,
+        name="lesson_confirmation",
+        category=CategoryKey.LESSON_CONFIRMATION,
+        event_type=EventType.LESSON,
+        trigger_type=TriggerType.DAY_OFFSET_AT_TIME,
+        trigger_config={"days": -1, "local_time": "10:00"},
+        priority=Priority.NORMAL,
+        template_body="Привет, {student_name}!",
+        template_key="lesson_confirmation",
+        assignments=(AudienceSelector(scope_type="all_learners"),),
+    )
+    instances = FakeInstanceRepository()
+    repository = FakeSettingsRepository(
+        settings=NotificationSettingsRecord(tenant_id=1, mode=NotificationSystemMode.LEGACY),
+        learner_modes=(
+            LearnerNotificationModeRecord(
+                learner_id=10,
+                display_name="Вика",
+                mode_override=NotificationSystemMode.INHERIT,
+                effective_mode=NotificationSystemMode.NEW,
+            ),
+        ),
+    )
+    uow = FakeUnitOfWork(
+        settings=repository,
+        rules=FakeRuleRepository(rules=(rule,)),
+        instances=instances,
+        audience_resolver=FakeAudienceResolver(
+            recipients=(PreviewRecipient(learner_id=10, display_name="Вика"),)
+        ),
+        events=FakeEventRepository(
+            events=(
+                PreviewEvent(
+                    event_type=EventType.LESSON,
+                    event_id=617,
+                    learner_id=10,
+                    starts_at=future_start,
+                    timezone="UTC",
+                    package_status="active",
+                    lesson_status="scheduled",
+                    has_homework=False,
+                ),
+            )
+        ),
+    )
+
+    rebuilt = await RebuildLearnerNotificationQueueUseCase(uow).execute(
+        learner_id=10,
+        reason="learner_notifications_changed",
+        commit=False,
+    )
+
+    assert rebuilt is not None
+    assert instances.cancel_scoped_calls == [
+        {
+            "rule_ids": (7,),
+            "learner_ids": (10,),
+            "reason": "learner_notifications_changed",
+            "statuses": None,
+        }
+    ]
+    assert len(instances.upserted) == 1
+    assert instances.upserted[0].learner_id == 10
+    assert instances.upserted[0].delivery_enabled is True
+    assert uow.committed is False
 
 
 @pytest.mark.asyncio

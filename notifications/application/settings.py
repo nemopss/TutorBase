@@ -71,14 +71,43 @@ class SetLearnerNotificationModeUseCase:
     ) -> LearnerNotificationModeRecord | None:
         mode = await self._uow.settings.set_learner_mode(learner_id, draft)
         if mode is not None:
-            await _rebuild_queue_for_learner_mode(self._uow, mode)
+            await _rebuild_queue_for_learner_mode(
+                self._uow,
+                mode,
+                reason="learner_notification_mode_changed",
+            )
         await self._uow.commit()
+        return mode
+
+
+class RebuildLearnerNotificationQueueUseCase:
+    def __init__(self, uow: NotificationMaterializationUnitOfWork) -> None:
+        self._uow = uow
+
+    async def execute(
+        self,
+        *,
+        learner_id: int,
+        reason: str,
+        commit: bool = True,
+    ) -> LearnerNotificationModeRecord | None:
+        mode = await self._uow.settings.get_learner_mode(learner_id)
+        if mode is not None:
+            await _rebuild_queue_for_learner_mode(
+                self._uow,
+                mode,
+                reason=reason,
+            )
+        if commit:
+            await self._uow.commit()
         return mode
 
 
 async def _rebuild_queue_for_learner_mode(
     uow: NotificationMaterializationUnitOfWork,
     mode: LearnerNotificationModeRecord,
+    *,
+    reason: str,
 ) -> None:
     rules = await uow.rules.list_active_rules()
     rule_ids = tuple(
@@ -92,7 +121,7 @@ async def _rebuild_queue_for_learner_mode(
         await uow.instances.cancel_future_instances_for_rules_and_learners(
             rule_ids=rule_ids,
             learner_ids=(mode.learner_id,),
-            reason="learner_notification_mode_changed",
+            reason=reason,
         )
 
     if mode.effective_mode == NotificationSystemMode.LEGACY or not rules:

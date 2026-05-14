@@ -671,6 +671,30 @@ async def test_materialize_active_rules_cleans_future_instances_for_paused_rules
 
 
 @pytest.mark.asyncio
+async def test_materialize_active_rules_warns_when_live_candidates_are_past_due():
+    soon_start = datetime.now(timezone.utc) + timedelta(minutes=30)
+    uow = _uow(
+        event=PreviewEvent(
+            event_type=EventType.LESSON,
+            event_id=617,
+            learner_id=10,
+            starts_at=soon_start,
+            timezone="UTC",
+            package_status="active",
+            lesson_status="scheduled",
+            has_homework=True,
+        )
+    )
+    uow.rules = FakeRuleRepository(rules=(_draft(),))
+
+    result = await MaterializeActiveRulesUseCase(uow).execute()
+
+    assert result.materialization.upsert_result.planned_count == 0
+    assert result.materialization.warnings == ("past_due_instances_filtered:1",)
+    assert uow.jobs.summaries[-1]["warnings"] == ["past_due_instances_filtered:1"]
+
+
+@pytest.mark.asyncio
 async def test_run_materialize_active_rules_job_uses_claimed_job_scope():
     rule = _draft()
     uow = _uow()

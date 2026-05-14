@@ -228,6 +228,7 @@ async def _materialize_rules(
         page_size=max(1, limit),
     )
     preview_instances = preview.instances
+    past_due_filtered_count = 0
     if skip_past_due:
         reference_time = datetime.now(timezone.utc)
         preview_instances = tuple(
@@ -235,6 +236,7 @@ async def _materialize_rules(
             for instance in preview.instances
             if instance.effective_scheduled_for >= reference_time
         )
+        past_due_filtered_count = len(preview.instances) - len(preview_instances)
     learner_modes = (
         await uow.settings.list_learner_modes()
         if respect_rollout_modes
@@ -266,6 +268,7 @@ async def _materialize_rules(
         preview_instances=preview_instances,
         planned_instances=planned,
         respect_rollout_modes=respect_rollout_modes,
+        past_due_filtered_count=past_due_filtered_count,
     )
     if not planned:
         return MaterializeRulesResult(
@@ -308,8 +311,11 @@ def _materialization_warnings(
     preview_instances: tuple[PreviewInstance | CombinedPreviewInstance, ...],
     planned_instances: tuple[NotificationInstanceDraft, ...],
     respect_rollout_modes: bool,
+    past_due_filtered_count: int = 0,
 ) -> tuple[str, ...]:
     warnings = list(preview_warnings)
+    if past_due_filtered_count:
+        warnings.append(f"past_due_instances_filtered:{past_due_filtered_count}")
     if respect_rollout_modes and preview_instances and not planned_instances:
         warnings.append("no_rollout_learners_selected")
     return tuple(dict.fromkeys(warnings))

@@ -34,12 +34,13 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import CurrentTenant
 from database import crud
 from database.transaction import transactional
-from database.models import LessonPackage, LessonPackageTemplate
+from database.models import Lesson, LessonPackage, LessonPackageTemplate
 from notifications.domain.enums import EventType
 from services.dto import LessonPackageDTO, PackageProgress
 from services.exceptions import NotFoundError
@@ -63,6 +64,28 @@ PACKAGE_TYPE_PACKAGE = "package"
 PACKAGE_TYPE_ONE_OFF = "one_off"
 PACKAGE_TYPE_ALL = "all"
 VALID_PACKAGE_TYPES = {PACKAGE_TYPE_PACKAGE, PACKAGE_TYPE_ONE_OFF}
+
+
+async def _enqueue_lesson_reconciliation_for_package(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    package_id: int,
+    *,
+    reason: str,
+) -> None:
+    result = await session.execute(
+        select(Lesson.id)
+        .where(Lesson.package_id == package_id)
+        .order_by(Lesson.scheduled_at, Lesson.id)
+    )
+    for lesson_id in result.scalars():
+        await enqueue_notification_event_reconciliation(
+            session,
+            current_tenant,
+            event_type=EventType.LESSON,
+            event_id=lesson_id,
+            reason=reason,
+        )
 
 
 def _get_next_lesson_date(lessons: list) -> Optional[datetime]:
@@ -401,6 +424,12 @@ async def create_one_off_lesson(
     await session.flush()
     await sync_package_metrics(session, current_tenant, package.id)
     await regenerate_package_reminders(session, current_tenant, package)
+    await _enqueue_lesson_reconciliation_for_package(
+        session,
+        current_tenant,
+        package.id,
+        reason="package_lessons_created",
+    )
 
     if packages_created_total:
         packages_created_total.inc()
@@ -501,6 +530,12 @@ async def create_package_with_schedule(
     # Lazy import to avoid circular dependency
     from services.package_scheduler import regenerate_package_reminders
     await regenerate_package_reminders(session, current_tenant, package)
+    await _enqueue_lesson_reconciliation_for_package(
+        session,
+        current_tenant,
+        package.id,
+        reason="package_lessons_created",
+    )
     
     if packages_created_total:
         packages_created_total.inc()
@@ -594,6 +629,12 @@ async def create_package_from_template(
     # Lazy import to avoid circular dependency
     from services.package_scheduler import regenerate_package_reminders
     await regenerate_package_reminders(session, current_tenant, package)
+    await _enqueue_lesson_reconciliation_for_package(
+        session,
+        current_tenant,
+        package.id,
+        reason="package_lessons_created",
+    )
     
     if packages_created_total:
         packages_created_total.inc()

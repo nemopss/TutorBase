@@ -28,6 +28,41 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from api.dependencies import CurrentTenant
 from database import crud
 from database.models import Learner
+from notifications.application.settings import RebuildLearnerNotificationQueueUseCase
+from notifications.infrastructure.repositories import SqlAlchemySessionNotificationUnitOfWork
+
+
+async def refresh_learner_notification_schedules(
+    session: AsyncSession,
+    current_tenant: CurrentTenant,
+    learner: Learner,
+    *,
+    reason: str,
+) -> None:
+    """Refresh both notification systems after learner contact/preference changes."""
+    tenant_id = current_tenant.tenant_id or learner.tenant_id
+    if tenant_id is None:
+        return
+
+    uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
+    await RebuildLearnerNotificationQueueUseCase(uow).execute(
+        learner_id=learner.id,
+        reason=reason,
+        commit=False,
+    )
+
+    if not learner.notifications_enabled or learner.bot_user_id is None:
+        return
+
+    from services.package_scheduler import regenerate_package_reminders
+
+    packages = await crud.fetch_lesson_packages_for_learner(
+        session,
+        current_tenant,
+        learner.id,
+    )
+    for package in packages:
+        await regenerate_package_reminders(session, current_tenant, package)
 
 
 async def get_all_learners(
@@ -116,6 +151,13 @@ async def create_learner_from_chat_id(
     )
     await session.flush()
     await session.refresh(learner, attribute_names=["bot_user"])
+    if learner.bot_user_id is not None:
+        await refresh_learner_notification_schedules(
+            session,
+            current_tenant,
+            learner,
+            reason="learner_contact_linked",
+        )
     return learner
 
 
@@ -152,8 +194,9 @@ async def update_learner(
         return None
     if learner.archived_at is not None and notifications_enabled:
         raise ValueError("Cannot enable notifications for archived learner")
-    
-    return await crud.update_learner(
+
+    previous_notifications_enabled = learner.notifications_enabled
+    updated = await crud.update_learner(
         session,
         current_tenant,
         learner,
@@ -162,6 +205,17 @@ async def update_learner(
         notifications_enabled=notifications_enabled,
         lesson_rate=lesson_rate,
     )
+    if (
+        notifications_enabled is not None
+        and notifications_enabled != previous_notifications_enabled
+    ):
+        await refresh_learner_notification_schedules(
+            session,
+            current_tenant,
+            updated,
+            reason="learner_notifications_changed",
+        )
+    return updated
 
 
 async def update_learner_notifications(
@@ -192,14 +246,23 @@ async def update_learner_notifications(
         return None
     if learner.archived_at is not None and notifications_enabled:
         raise ValueError("Cannot enable notifications for archived learner")
-    
+
+    previous_notifications_enabled = learner.notifications_enabled
     # Then, update it.
-    return await crud.update_learner(
+    updated = await crud.update_learner(
         session,
         current_tenant,
         learner,
         notifications_enabled=notifications_enabled,
     )
+    if notifications_enabled != previous_notifications_enabled:
+        await refresh_learner_notification_schedules(
+            session,
+            current_tenant,
+            updated,
+            reason="learner_notifications_changed",
+        )
+    return updated
 
 
 async def archive_learner(

@@ -49,7 +49,7 @@ from api.security import (
 )
 from config import config
 from database import crud
-from services import billing_service, notification_bootstrap_service, tenant_access_service
+from services import billing_service, learner_service, notification_bootstrap_service, tenant_access_service
 from services.email_delivery_service import EmailDeliveryNotConfiguredError, send_email_verification
 from utils.cache import invalidate_cache
 
@@ -1134,6 +1134,12 @@ async def register_student(
         bot_user_id=bot_user.id,
         user_id=user.id,
         telegram_id=telegram_id,
+    )
+    await learner_service.refresh_learner_notification_schedules(
+        session,
+        CurrentTenant(tenant_id=invite_token.tenant_id, is_super_admin=False),
+        learner,
+        reason="learner_contact_linked",
     )
     _record_legal_acceptance(session, request, user=user, tenant_id=invite_token.tenant_id)
     

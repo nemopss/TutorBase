@@ -7,6 +7,7 @@ import pytest
 
 from api.dependencies import CurrentTenant
 from database import crud
+from notifications.domain.enums import EventType
 from tests import factories
 from utils.timezone import DEFAULT_TZ
 from services import package_service
@@ -14,7 +15,37 @@ from services.exceptions import NotFoundError
 
 
 @pytest.mark.asyncio
-async def test_create_package_from_template_generates_lessons_and_reminders(db_session, current_tenant: CurrentTenant):
+async def test_create_package_from_template_generates_lessons_and_reminders(
+    db_session,
+    current_tenant: CurrentTenant,
+    monkeypatch,
+):
+    reconciliation_calls = []
+
+    async def fake_enqueue(
+        session,
+        tenant,
+        *,
+        event_type,
+        event_id,
+        reason,
+        delivery_enabled=None,
+        shadow=None,
+    ):
+        reconciliation_calls.append(
+            {
+                "event_type": event_type,
+                "event_id": event_id,
+                "reason": reason,
+            }
+        )
+
+    monkeypatch.setattr(
+        package_service,
+        "enqueue_notification_event_reconciliation",
+        fake_enqueue,
+    )
+
     learner = await factories.create_learner(db_session)
     template = await factories.create_template(db_session, lesson_count=3)
     await db_session.flush()
@@ -39,6 +70,68 @@ async def test_create_package_from_template_generates_lessons_and_reminders(db_s
 
     reminder_types = {instance.rule.reminder_type for instance in package.reminder_instances}
     assert reminder_types, "Expected reminder instances to be generated"
+    assert reconciliation_calls == [
+        {
+            "event_type": EventType.LESSON,
+            "event_id": lesson.id,
+            "reason": "package_lessons_created",
+        }
+        for lesson in sorted(package.lessons, key=lambda item: (item.scheduled_at, item.id))
+    ]
+
+
+@pytest.mark.asyncio
+async def test_create_one_off_lesson_enqueues_lesson_reconciliation(
+    db_session,
+    current_tenant: CurrentTenant,
+    monkeypatch,
+):
+    reconciliation_calls = []
+
+    async def fake_enqueue(
+        session,
+        tenant,
+        *,
+        event_type,
+        event_id,
+        reason,
+        delivery_enabled=None,
+        shadow=None,
+    ):
+        reconciliation_calls.append(
+            {
+                "event_type": event_type,
+                "event_id": event_id,
+                "reason": reason,
+            }
+        )
+
+    monkeypatch.setattr(
+        package_service,
+        "enqueue_notification_event_reconciliation",
+        fake_enqueue,
+    )
+    learner = await factories.create_learner(db_session)
+    await db_session.flush()
+
+    dto = await package_service.create_one_off_lesson(
+        db_session,
+        current_tenant,
+        learner_id=learner.id,
+        scheduled_at=datetime(2026, 6, 1, 12, 0, tzinfo=timezone.utc),
+    )
+    package = await crud.get_lesson_package(db_session, current_tenant, dto.id)
+    assert package is not None
+
+    lesson_ids = [lesson.id for lesson in package.lessons]
+    assert len(lesson_ids) == 1
+    assert reconciliation_calls == [
+        {
+            "event_type": EventType.LESSON,
+            "event_id": lesson_ids[0],
+            "reason": "package_lessons_created",
+        }
+    ]
 
 
 @pytest.mark.asyncio
