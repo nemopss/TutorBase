@@ -161,7 +161,7 @@ interface BroadcastRecipientListResponse {
 interface BroadcastFormValues {
   title: string;
   message_text: string;
-  audience: 'platform_admins' | 'selected_bot_users' | 'all_bot_users';
+  audience: 'platform_admins' | 'selected_bot_users' | 'teachers' | 'all_bot_users';
   bot_user_ids?: number[];
   rate_limit_per_second: number;
 }
@@ -210,8 +210,8 @@ const getApiErrorDetail = (error: unknown): string | null => {
 };
 
 const BILLING_PLAN_OPTIONS = [
-  { value: 'start', label: 'Старт · 0-3 ученика' },
-  { value: 'basic', label: 'Базовый · 4-10 учеников' },
+  { value: 'start', label: 'Старт · 0-5 учеников' },
+  { value: 'basic', label: 'Базовый · 6-10 учеников' },
   { value: 'pro', label: 'Про · 11-20 учеников' },
   { value: 'studio', label: 'Бизнес · 21+ учеников' },
 ];
@@ -552,6 +552,7 @@ const PlatformConsole = () => {
     const labels: Record<string, string> = {
       platform_admins: 'Тест: platform admins',
       selected_bot_users: 'Выбранные люди',
+      teachers: 'Только учителя',
       all_bot_users: 'Все пользователи бота',
     };
     return labels[audience] ?? audience;
@@ -830,6 +831,7 @@ const PlatformConsole = () => {
             options={[
               { value: 'platform_admins', label: 'Тест: platform admins' },
               { value: 'selected_bot_users', label: 'Выбранные люди' },
+              { value: 'teachers', label: 'Только учителя' },
               { value: 'all_bot_users', label: 'Все пользователи бота' },
             ]}
             onChange={() => {
@@ -872,6 +874,15 @@ const PlatformConsole = () => {
             style={{ marginBottom: 16 }}
             message="Массовая аудитория"
             description="Эта аудитория собирает всех не-bot пользователей текущего Telegram-бота."
+          />
+        )}
+        {selectedBroadcastAudience === 'teachers' && (
+          <Alert
+            type="info"
+            showIcon
+            style={{ marginBottom: 16 }}
+            message="Аудитория преподавателей"
+            description="Получателями будут только Telegram-пользователи, привязанные к аккаунтам с ролью teacher."
           />
         )}
         <Form.Item

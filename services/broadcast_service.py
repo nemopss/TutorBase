@@ -9,13 +9,14 @@ from sqlalchemy import String, cast, func, or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import config
-from database.models import BotUser, BroadcastCampaign, BroadcastRecipient
+from database.models import BotUser, BroadcastCampaign, BroadcastRecipient, User
 from services.exceptions import NotFoundError, ValidationError
 
 
 BROADCAST_AUDIENCE_ALL_BOT_USERS = "all_bot_users"
 BROADCAST_AUDIENCE_PLATFORM_ADMINS = "platform_admins"
 BROADCAST_AUDIENCE_SELECTED_BOT_USERS = "selected_bot_users"
+BROADCAST_AUDIENCE_TEACHERS = "teachers"
 BROADCAST_STATUS_DRAFT = "draft"
 BROADCAST_STATUS_QUEUED = "queued"
 BROADCAST_STATUS_SENDING = "sending"
@@ -328,6 +329,8 @@ def _recipient_query(*, audience: str, bot_user_ids: list[int] | None = None):
     query = _bot_user_select().where(BotUser.is_bot.is_(False))
     if audience == BROADCAST_AUDIENCE_PLATFORM_ADMINS:
         query = query.where(BotUser.chat_id.in_(_platform_admin_chat_ids()))
+    if audience == BROADCAST_AUDIENCE_TEACHERS:
+        query = query.join(User, User.telegram_id == BotUser.chat_id).where(User.role == "teacher")
     if audience == BROADCAST_AUDIENCE_SELECTED_BOT_USERS:
         query = query.where(BotUser.id.in_(set(bot_user_ids or [])))
     return query.order_by(BotUser.id)
@@ -371,6 +374,7 @@ def _validate_audience(audience: str, *, bot_user_ids: list[int] | None = None) 
         BROADCAST_AUDIENCE_ALL_BOT_USERS,
         BROADCAST_AUDIENCE_PLATFORM_ADMINS,
         BROADCAST_AUDIENCE_SELECTED_BOT_USERS,
+        BROADCAST_AUDIENCE_TEACHERS,
     }:
         raise ValidationError("Unsupported broadcast audience")
     if audience == BROADCAST_AUDIENCE_SELECTED_BOT_USERS and not bot_user_ids:

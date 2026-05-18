@@ -185,7 +185,7 @@ const Settings: React.FC = () => {
       return {
         value: 'Бессрочно',
         hint: billing.plan_code === 'start'
-          ? 'Старт до 3 активных'
+          ? 'Старт до 5 активных'
           : 'Выдано владельцем сервиса',
       };
     }
@@ -200,7 +200,7 @@ const Settings: React.FC = () => {
 
     return {
       value: hasPaidSubscription && periodEndLabel ? `закончился ${periodEndLabel}` : 'Бессрочно',
-      hint: hasPaidSubscription ? 'Сейчас применяются условия Старт' : 'Старт до 3 активных',
+      hint: hasPaidSubscription ? 'Сейчас применяются условия Старт' : 'Старт до 5 активных',
     };
   })();
   const isDowngradeBlocked = Boolean(

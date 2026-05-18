@@ -38,7 +38,7 @@ DEFAULT_PLANS: tuple[dict[str, Any], ...] = (
     {
         "code": PLAN_START,
         "name": "Старт",
-        "active_learners_limit": 3,
+        "active_learners_limit": 5,
         "monthly_price_rub": 0,
         "yearly_price_rub": None,
         "display_order": 10,

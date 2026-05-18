@@ -29,26 +29,26 @@ async def test_billing_current_defaults_to_start_plan(
     body = response.json()
     assert body["plan_code"] == "start"
     assert body["plan_name"] == "Старт"
-    assert body["active_learners_limit"] == 3
+    assert body["active_learners_limit"] == 5
     assert body["active_learners_count"] == 2
     assert body["can_create_learner"] is True
     assert body["notifications_allowed"] is True
 
 
 @pytest.mark.asyncio
-async def test_start_plan_blocks_fourth_active_learner(
+async def test_start_plan_blocks_sixth_active_learner(
     client: AsyncClient,
     db_session: AsyncSession,
     current_tenant: CurrentTenant,
 ):
-    for index in range(3):
+    for index in range(5):
         await factories.create_learner(db_session, display_name=f"Learner {index}")
     await db_session.commit()
     headers, _ = await get_auth_headers(db_session, current_tenant)
 
     response = await client.post(
         "/api/v1/learners",
-        json={"display_name": "Fourth", "notifications_enabled": True},
+        json={"display_name": "Sixth", "notifications_enabled": True},
         headers=headers,
     )
 
@@ -67,7 +67,7 @@ async def test_start_plan_over_limit_disables_notifications(
         current_tenant.tenant_id,
         notes="start plan over limit test",
     )
-    for index in range(4):
+    for index in range(6):
         await factories.create_learner(db_session, display_name=f"Learner {index}")
     await db_session.commit()
     headers, _ = await get_auth_headers(db_session, current_tenant)
@@ -77,8 +77,8 @@ async def test_start_plan_over_limit_disables_notifications(
     assert response.status_code == 200
     body = response.json()
     assert body["plan_code"] == "start"
-    assert body["active_learners_count"] == 4
-    assert body["active_learners_limit"] == 3
+    assert body["active_learners_count"] == 6
+    assert body["active_learners_limit"] == 5
     assert body["notifications_allowed"] is False
 
 
@@ -89,7 +89,7 @@ async def test_expired_paid_subscription_keeps_data_but_disables_notifications_o
     current_tenant: CurrentTenant,
 ):
     now = datetime.now(timezone.utc)
-    for index in range(4):
+    for index in range(6):
         await factories.create_learner(db_session, display_name=f"Learner {index}")
     await billing_service.grant_subscription(
         db_session,
@@ -108,11 +108,11 @@ async def test_expired_paid_subscription_keeps_data_but_disables_notifications_o
     billing_response = await client.get("/api/v1/billing/current", headers=headers)
 
     assert list_response.status_code == 200
-    assert list_response.json()["total"] == 4
+    assert list_response.json()["total"] == 6
     assert billing_response.status_code == 200
     body = billing_response.json()
     assert body["plan_code"] == "start"
-    assert body["active_learners_count"] == 4
+    assert body["active_learners_count"] == 6
     assert body["is_over_limit"] is True
     assert body["can_create_learner"] is False
     assert body["notifications_allowed"] is False
@@ -147,7 +147,7 @@ async def test_expired_paid_subscription_uses_start_without_over_limit_penalty(
     body = response.json()
     assert body["plan_code"] == "start"
     assert body["subscription_plan_code"] == "basic"
-    assert body["active_learners_limit"] == 3
+    assert body["active_learners_limit"] == 5
     assert body["active_learners_count"] == 2
     assert body["can_create_learner"] is True
     assert body["notifications_allowed"] is True
@@ -222,7 +222,7 @@ async def test_past_due_subscription_uses_paid_limit_only_during_grace(
     assert in_grace.plan_code == "pro"
     assert in_grace.active_learners_limit == 20
     assert after_grace.plan_code == "start"
-    assert after_grace.active_learners_limit == 3
+    assert after_grace.active_learners_limit == 5
 
 
 @pytest.mark.asyncio

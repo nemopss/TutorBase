@@ -69,6 +69,32 @@ async def test_broadcast_preview_can_target_platform_admins_only(
 
 
 @pytest.mark.asyncio
+async def test_broadcast_preview_can_target_teachers_only(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    super_admin_user: User,
+):
+    teacher = await factories.create_user(db_session, telegram_id=501_001, role="teacher")
+    await factories.create_user(db_session, telegram_id=501_002, role="viewer")
+    await factories.create_user(db_session, telegram_id=501_003, role="teacher")
+    await factories.create_bot_user(db_session, chat_id=teacher.telegram_id, first_name="Teacher")
+    await factories.create_bot_user(db_session, chat_id=501_002, first_name="Viewer")
+    await factories.create_bot_user(db_session, chat_id=501_004, first_name="Unlinked")
+    await db_session.commit()
+
+    response = await client.post(
+        "/api/v1/platform/broadcasts/preview",
+        json={"audience": "teachers", "sample_limit": 10},
+        headers=auth_headers(super_admin_user),
+    )
+
+    assert response.status_code == 200
+    data = response.json()
+    assert data["total"] == 1
+    assert [item["chat_id"] for item in data["sample"]] == [teacher.telegram_id]
+
+
+@pytest.mark.asyncio
 async def test_broadcast_create_can_target_selected_bot_users(
     client: AsyncClient,
     db_session: AsyncSession,
