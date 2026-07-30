@@ -70,10 +70,16 @@ const translations: Record<string, string> = {
   'pages.notifications.pilotControls.deliverNowConfirmTitle': 'Run real delivery for due notifications?',
   'pages.notifications.pilotControls.deliverNowConfirmDescription': 'This action can send real messages',
   'pages.notifications.technicalList': 'Technical list',
+  'pages.notifications.filters.allStatuses': 'All statuses',
+  'pages.notifications.filters.actionable': 'Queue only',
+  'pages.notifications.filters.allEvents': 'All events',
+  'pages.notifications.filters.allReasons': 'All reasons',
+  'pages.notifications.filters.reset': 'Reset',
   'pages.notifications.queueSections.past_due': 'Needs attention now',
   'pages.notifications.queueSections.today': 'Today',
   'pages.notifications.queueSections.tomorrow': 'Tomorrow',
   'pages.notifications.queueSections.later': 'Later',
+  'pages.notifications.queueSections.history': 'Recent history',
   'pages.notifications.queueTimeline.deliveryLine': '{{event}} · event at {{eventTime}}',
   'pages.notifications.activitySections.attention': 'Needs attention',
   'pages.notifications.activitySections.recent': 'Recent activity',
@@ -221,7 +227,7 @@ const mockPost = jest.fn((url: string, payload?: Record<string, unknown>) => {
 
   return Promise.resolve({ data: {} });
 });
-const mockGet = jest.fn((url: string, _config?: unknown) => {
+const mockGet = jest.fn((url: string, config?: unknown) => {
     if (url === '/notifications/rules') {
       return Promise.resolve({
         data: mockNotificationRules,
@@ -278,8 +284,8 @@ const mockGet = jest.fn((url: string, _config?: unknown) => {
     }
 
     if (url === '/notifications/instances') {
-      return Promise.resolve({
-        data: [
+      const requestParams = (config as { params?: Record<string, unknown> } | undefined)?.params;
+      const instances = [
           {
             id: 1,
             rule_id: 1,
@@ -341,8 +347,14 @@ const mockGet = jest.fn((url: string, _config?: unknown) => {
             components: [],
             latest_attempt: null,
           },
-        ],
-      });
+      ];
+      const queueStatuses = new Set(['shadow', 'scheduled', 'processing']);
+      const data = requestParams?.queue_only
+        ? instances.filter((instance) => queueStatuses.has(instance.status))
+        : requestParams?.history_only
+          ? instances.filter((instance) => !queueStatuses.has(instance.status))
+          : instances;
+      return Promise.resolve({ data });
     }
 
     if (url === '/notifications/instances/1') {
@@ -620,15 +632,31 @@ describe('Notifications', () => {
     fireEvent.click(await screen.findByText('Queue'));
 
     expect(await screen.findByText('Vika')).toBeInTheDocument();
+    expect(screen.queryByText('Masha')).not.toBeInTheDocument();
+    fireEvent.mouseDown(screen.getByText('Queue only'));
+    fireEvent.click(await screen.findByText('All statuses'));
     expect(await screen.findByText('Masha')).toBeInTheDocument();
+    expect(await screen.findByText('Recent history')).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledWith(
       '/notifications/instances',
       expect.objectContaining({
         params: expect.objectContaining({
+          queue_only: true,
           limit: 300,
         }),
       }),
     );
+    expect(mockGet).toHaveBeenCalledWith(
+      '/notifications/instances',
+      expect.objectContaining({
+        params: expect.objectContaining({
+          history_only: true,
+          newest_first: true,
+          limit: 300,
+        }),
+      }),
+    );
+    expect(screen.getAllByText('Send now')).toHaveLength(1);
   });
 
   it('shows human-readable activity details instead of raw response and message ids', async () => {

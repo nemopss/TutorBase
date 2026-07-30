@@ -639,7 +639,8 @@
         "past_due": "Нужно проверить сейчас",
         "today": "Сегодня",
         "tomorrow": "Завтра",
-        "later": "Позже"
+        "later": "Позже",
+        "history": "Недавняя история"
       },
       "queueTimeline": {
         "deliveryLine": "{{event}} · событие {{eventTime}}"

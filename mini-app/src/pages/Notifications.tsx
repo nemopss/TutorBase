@@ -298,8 +298,6 @@ const ACTIVE_QUEUE_INSTANCE_STATUSES = new Set([
   'shadow',
   'scheduled',
   'processing',
-  'skipped',
-  'suppressed',
 ]);
 
 const isQueueInstance = (instance: NotificationInstance): boolean => ACTIVE_QUEUE_INSTANCE_STATUSES.has(instance.status);
@@ -317,8 +315,19 @@ const fetchNotificationTemplates = async (): Promise<NotificationTemplate[]> => 
 };
 
 const fetchNotificationInstances = async (): Promise<NotificationInstance[]> => {
-  const { data } = await api.get('/notifications/instances', { params: { limit: 300 } });
-  return data;
+  const [queueResponse, historyResponse] = await Promise.all([
+    api.get('/notifications/instances', {
+      params: { queue_only: true, limit: 300 },
+    }),
+    api.get('/notifications/instances', {
+      params: { history_only: true, newest_first: true, limit: 300 },
+    }),
+  ]);
+  const instancesById = new Map<number, NotificationInstance>();
+  [...queueResponse.data, ...historyResponse.data].forEach((instance: NotificationInstance) => {
+    instancesById.set(instance.id, instance);
+  });
+  return [...instancesById.values()];
 };
 
 const fetchNotificationInstanceDetail = async (instanceId: number): Promise<NotificationInstance> => {
@@ -785,7 +794,9 @@ const getPilotChecklistStatus = (
   },
 ];
 
-const getQueueSectionKey = (scheduledFor: string): 'past_due' | 'today' | 'tomorrow' | 'later' => {
+type QueueSectionKey = 'past_due' | 'today' | 'tomorrow' | 'later' | 'history';
+
+const getQueueSectionKey = (scheduledFor: string): Exclude<QueueSectionKey, 'history'> => {
   const scheduled = dayjs(scheduledFor);
   const now = dayjs();
 
@@ -804,7 +815,7 @@ const getQueueSectionKey = (scheduledFor: string): 'past_due' | 'today' | 'tomor
   return 'later';
 };
 
-const getQueueSectionOrder: Array<'past_due' | 'today' | 'tomorrow' | 'later'> = ['past_due', 'today', 'tomorrow', 'later'];
+const getQueueSectionOrder: QueueSectionKey[] = ['past_due', 'today', 'tomorrow', 'later', 'history'];
 
 const getActivityAcknowledgementKey = (item: Pick<NotificationActivity, 'activity_type' | 'activity_id'>): string => (
   `${item.activity_type}:${item.activity_id}`
@@ -2390,7 +2401,7 @@ const QueueTab: React.FC<QueueTabProps> = ({
 }) => {
   const { t } = useTranslation();
   const [pendingSendNowInstance, setPendingSendNowInstance] = useState<NotificationInstance | null>(null);
-  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [statusFilter, setStatusFilter] = useState<string>('actionable');
   const [eventFilter, setEventFilter] = useState<string>('all');
   const [reasonFilter, setReasonFilter] = useState<string>('all');
   const [search, setSearch] = useState('');
@@ -2420,15 +2431,19 @@ const QueueTab: React.FC<QueueTabProps> = ({
     sent: instances.filter((instance) => instance.status === 'sent').length,
   }), [instances]);
   const groupedInstances = useMemo(() => {
-    const groups: Record<string, NotificationInstance[]> = {
+    const groups: Record<QueueSectionKey, NotificationInstance[]> = {
       past_due: [],
       today: [],
       tomorrow: [],
       later: [],
+      history: [],
     };
 
     visibleInstances.forEach((instance) => {
-      groups[getQueueSectionKey(instance.effective_scheduled_for)].push(instance);
+      const sectionKey = isQueueInstance(instance)
+        ? getQueueSectionKey(instance.effective_scheduled_for)
+        : 'history';
+      groups[sectionKey].push(instance);
     });
 
     return groups;
@@ -2485,23 +2500,25 @@ const QueueTab: React.FC<QueueTabProps> = ({
           <Button type="link" onClick={() => onOpenDetails(record.id)}>
             {t('pages.notifications.viewDetails')}
           </Button>
-          <Button
-            type="link"
-            disabled={['sent', 'processing', 'shadow'].includes(record.status)}
-            loading={actionPending}
-            onClick={() => handleSendNowClick(record)}
-          >
-            {t('pages.notifications.sendNow')}
-          </Button>
-          <Button
-            type="link"
-            danger
-            disabled={['sent', 'processing'].includes(record.status)}
-            loading={actionPending}
-            onClick={() => onCancel(record.id)}
-          >
-            {t('common.cancel')}
-          </Button>
+          {record.status === 'scheduled' && (
+            <Button
+              type="link"
+              loading={actionPending}
+              onClick={() => handleSendNowClick(record)}
+            >
+              {t('pages.notifications.sendNow')}
+            </Button>
+          )}
+          {['scheduled', 'shadow'].includes(record.status) && (
+            <Button
+              type="link"
+              danger
+              loading={actionPending}
+              onClick={() => onCancel(record.id)}
+            >
+              {t('common.cancel')}
+            </Button>
+          )}
         </Space>
       ),
     },
@@ -2581,7 +2598,7 @@ const QueueTab: React.FC<QueueTabProps> = ({
           />
           {(statusFilter !== 'all' || eventFilter !== 'all' || reasonFilter !== 'all' || search) && (
             <Button onClick={() => {
-              setStatusFilter('all');
+              setStatusFilter('actionable');
               setEventFilter('all');
               setReasonFilter('all');
               setSearch('');
@@ -2669,21 +2686,23 @@ const QueueTab: React.FC<QueueTabProps> = ({
                             <Button size="small" onClick={() => onOpenDetails(instance.id)}>
                               {t('pages.notifications.viewDetails')}
                             </Button>
-                            <Button
-                              size="small"
-                              disabled={['sent', 'processing', 'shadow'].includes(instance.status)}
-                              onClick={() => handleSendNowClick(instance)}
-                            >
-                              {t('pages.notifications.sendNow')}
-                            </Button>
-                            <Button
-                              size="small"
-                              danger
-                              disabled={['sent', 'processing'].includes(instance.status)}
-                              onClick={() => onCancel(instance.id)}
-                            >
-                              {t('common.cancel')}
-                            </Button>
+                            {instance.status === 'scheduled' && (
+                              <Button
+                                size="small"
+                                onClick={() => handleSendNowClick(instance)}
+                              >
+                                {t('pages.notifications.sendNow')}
+                              </Button>
+                            )}
+                            {['scheduled', 'shadow'].includes(instance.status) && (
+                              <Button
+                                size="small"
+                                danger
+                                onClick={() => onCancel(instance.id)}
+                              >
+                                {t('common.cancel')}
+                              </Button>
+                            )}
                           </Space>
                         </Space>
                       </Card>

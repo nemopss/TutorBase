@@ -35,6 +35,7 @@ class FakeInstanceRepository:
         event_type=None,
         scheduled_from=None,
         scheduled_to=None,
+        newest_first=False,
         limit=100,
     ):
         self.last_list_kwargs = {
@@ -44,6 +45,7 @@ class FakeInstanceRepository:
             "event_type": event_type,
             "scheduled_from": scheduled_from,
             "scheduled_to": scheduled_to,
+            "newest_first": newest_first,
             "limit": limit,
         }
         return self.instances[:limit]
@@ -138,6 +140,18 @@ async def test_list_instances_use_case_supports_multiple_statuses():
         InstanceStatus.SCHEDULED.value,
         InstanceStatus.SHADOW.value,
     )
+
+
+@pytest.mark.asyncio
+async def test_list_instances_use_case_supports_newest_first():
+    instance = _instance()
+    repository = FakeInstanceRepository(instances=(instance,), activity=())
+    uow = FakeUnitOfWork(instances=repository)
+
+    listed = await ListNotificationInstancesUseCase(uow).execute(newest_first=True)
+
+    assert listed == (instance,)
+    assert repository.last_list_kwargs["newest_first"] is True
 
 
 @pytest.mark.asyncio
