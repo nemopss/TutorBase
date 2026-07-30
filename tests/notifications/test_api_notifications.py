@@ -2,6 +2,8 @@ from datetime import datetime, timezone
 
 from api.app import create_app
 from api.routes.notifications import (
+    HISTORY_INSTANCE_STATUSES,
+    QUEUE_INSTANCE_STATUSES,
     _activity_response,
     _audit_response,
     _draft_from_request,
@@ -78,6 +80,16 @@ def test_notification_routes_are_registered():
     assert "/api/v1/notifications/templates" in paths
     assert "/api/v1/notifications/templates/{template_id}" in paths
     assert "/api/v1/notifications/templates/{template_id}/archive" in paths
+
+
+def test_notification_instances_route_separates_queue_and_recent_history():
+    app = create_app()
+    operation = app.openapi()["paths"]["/api/v1/notifications/instances"]["get"]
+    parameter_names = {parameter["name"] for parameter in operation["parameters"]}
+
+    assert {"queue_only", "history_only", "newest_first"} <= parameter_names
+    assert set(QUEUE_INSTANCE_STATUSES).isdisjoint(HISTORY_INSTANCE_STATUSES)
+    assert set(QUEUE_INSTANCE_STATUSES) | set(HISTORY_INSTANCE_STATUSES) == set(InstanceStatus)
 
 
 def test_rule_draft_request_maps_to_application_dto():

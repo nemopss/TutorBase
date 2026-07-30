@@ -647,6 +647,21 @@ def test_notification_instances_statement_supports_queue_filters():
     assert "LEFT OUTER JOIN learners" in compiled
 
 
+def test_notification_instances_statement_can_return_newest_history_first():
+    stmt = _notification_instances_stmt(
+        tenant_id=1,
+        statuses=("sent", "cancelled", "failed", "expired"),
+        newest_first=True,
+        limit=50,
+    )
+
+    compiled = str(stmt.compile(dialect=postgresql.dialect()))
+
+    assert "notification_instances.status IN" in compiled
+    assert "notification_instances.effective_scheduled_for DESC" in compiled
+    assert "notification_instances.id DESC" in compiled
+
+
 def test_activity_statements_filter_by_tenant_and_learner():
     delivery_stmt = _delivery_activity_stmt(tenant_id=1, learner_id=10, limit=20)
     response_stmt = _response_activity_stmt(tenant_id=1, learner_id=10, limit=20)

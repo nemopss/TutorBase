@@ -638,7 +638,8 @@
         "past_due": "Needs attention now",
         "today": "Today",
         "tomorrow": "Tomorrow",
-        "later": "Later"
+        "later": "Later",
+        "history": "Recent history"
       },
       "queueTimeline": {
         "deliveryLine": "{{event}} · event at {{eventTime}}"

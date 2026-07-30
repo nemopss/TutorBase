@@ -929,6 +929,7 @@ class SqlAlchemyNotificationInstanceRepository:
         event_type: EventType | None = None,
         scheduled_from: datetime | None = None,
         scheduled_to: datetime | None = None,
+        newest_first: bool = False,
         limit: int = 100,
     ) -> tuple[NotificationInstanceRecord, ...]:
         result = await self._session.execute(
@@ -940,6 +941,7 @@ class SqlAlchemyNotificationInstanceRepository:
                 event_type=event_type,
                 scheduled_from=scheduled_from,
                 scheduled_to=scheduled_to,
+                newest_first=newest_first,
                 limit=limit,
             )
         )
@@ -2391,8 +2393,16 @@ def _notification_instances_stmt(
     event_type: EventType | None = None,
     scheduled_from: datetime | None = None,
     scheduled_to: datetime | None = None,
+    newest_first: bool = False,
     limit: int = 100,
 ):
+    order_columns = (
+        NotificationInstance.effective_scheduled_for.desc(),
+        NotificationInstance.id.desc(),
+    ) if newest_first else (
+        NotificationInstance.effective_scheduled_for,
+        NotificationInstance.id,
+    )
     stmt = (
         select(NotificationInstance, Learner.display_name.label("learner_display_name"))
         .options(
@@ -2407,7 +2417,7 @@ def _notification_instances_stmt(
             & (Learner.tenant_id == NotificationInstance.tenant_id),
         )
         .where(NotificationInstance.tenant_id == tenant_id)
-        .order_by(NotificationInstance.effective_scheduled_for, NotificationInstance.id)
+        .order_by(*order_columns)
         .limit(limit)
     )
     if instance_id is not None:

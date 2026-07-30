@@ -637,7 +637,8 @@
         "past_due": "지금 확인이 필요함",
         "today": "오늘",
         "tomorrow": "내일",
-        "later": "이후"
+        "later": "이후",
+        "history": "최근 기록"
       },
       "queueTimeline": {
         "deliveryLine": "{{event}} · 이벤트 시간 {{eventTime}}"

@@ -96,6 +96,7 @@ class NotificationInstanceRepository(Protocol):
         event_type: EventType | None = None,
         scheduled_from=None,
         scheduled_to=None,
+        newest_first: bool = False,
         limit: int = 100,
     ) -> tuple[NotificationInstanceRecord, ...]:
         ...

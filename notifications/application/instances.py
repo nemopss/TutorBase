@@ -21,6 +21,7 @@ class ListNotificationInstancesUseCase:
         event_type: EventType | None = None,
         scheduled_from: datetime | None = None,
         scheduled_to: datetime | None = None,
+        newest_first: bool = False,
         limit: int = 100,
     ) -> tuple[NotificationInstanceRecord, ...]:
         if status is not None and statuses is not None:
@@ -33,6 +34,7 @@ class ListNotificationInstancesUseCase:
             event_type=event_type,
             scheduled_from=scheduled_from,
             scheduled_to=scheduled_to,
+            newest_first=newest_first,
             limit=limit,
         )
 

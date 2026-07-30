@@ -117,8 +117,9 @@ QUEUE_INSTANCE_STATUSES = (
     InstanceStatus.SHADOW,
     InstanceStatus.SCHEDULED,
     InstanceStatus.PROCESSING,
-    InstanceStatus.SKIPPED,
-    InstanceStatus.SUPPRESSED,
+)
+HISTORY_INSTANCE_STATUSES = tuple(
+    status for status in InstanceStatus if status not in QUEUE_INSTANCE_STATUSES
 )
 
 
@@ -252,24 +253,38 @@ async def set_learner_notification_mode(
 async def list_notification_instances(
     status_filter: InstanceStatus | None = Query(None, alias="status"),
     queue_only: bool = False,
+    history_only: bool = False,
     learner_id: int | None = None,
     event_type: EventType | None = None,
     scheduled_from: datetime | None = None,
     scheduled_to: datetime | None = None,
+    newest_first: bool = False,
     limit: int = Query(100, ge=1, le=500),
     session: AsyncSession = Depends(get_session),
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     _=Depends(admin_or_teacher_required),
 ) -> list[NotificationInstanceResponse]:
     tenant_id = _require_tenant_id(current_tenant)
+    if queue_only and history_only:
+        raise HTTPException(
+            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+            detail="queue_only and history_only cannot be used together",
+        )
+    statuses = None
+    if status_filter is None:
+        if queue_only:
+            statuses = QUEUE_INSTANCE_STATUSES
+        elif history_only:
+            statuses = HISTORY_INSTANCE_STATUSES
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
     instances = await ListNotificationInstancesUseCase(uow).execute(
         status=status_filter,
-        statuses=QUEUE_INSTANCE_STATUSES if queue_only and status_filter is None else None,
+        statuses=statuses,
         learner_id=learner_id,
         event_type=event_type,
         scheduled_from=scheduled_from,
         scheduled_to=scheduled_to,
+        newest_first=newest_first,
         limit=limit,
     )
     return [_instance_response(instance) for instance in instances]
