@@ -159,6 +159,10 @@ jobs:
 
             if [ -n "$services" ]; then
               docker compose pull $services
+              if [ "${{ needs.changes.outputs.api }}" = "true" ]; then
+                echo "Applying database migrations before restarting application services..."
+                docker compose run --rm --no-deps api alembic upgrade head
+              fi
               docker compose up -d $services
             fi
 

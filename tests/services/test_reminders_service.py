@@ -605,7 +605,7 @@ async def test_build_instance_message_package_renewal(
 
     message, keyboard = reminder_scheduler._build_instance_message(instance, "Schedule")
     assert "2024-12-31" in message
-    assert keyboard is None
+    assert keyboard is not None
 
 
 @pytest.mark.asyncio

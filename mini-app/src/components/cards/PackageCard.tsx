@@ -34,6 +34,16 @@ interface Package {
   status: 'active' | 'completed' | 'cancelled' | 'draft';
   progress: PackageProgress;
   next_lesson_date?: string | null;
+  schedule_mode?: 'fixed' | 'flexible' | 'one_off';
+  renewal_enabled?: boolean;
+  balance?: {
+    purchased: number;
+    completed: number;
+    scheduled: number;
+    remaining: number;
+    available_to_schedule: number;
+    amount_due: number;
+  };
 }
 
 interface PackageCardProps {
@@ -44,19 +54,6 @@ interface PackageCardProps {
 }
 
 export type PackageCardAction = 'open' | 'edit' | 'payment' | 'activate' | 'complete' | 'delete';
-
-/**
- * Get badge color for package status
- */
-export const getStatusBadgeColor = (status: string): string => {
-  switch (status) {
-    case 'active': return 'success';
-    case 'completed': return 'primary';
-    case 'draft': return 'warning';
-    case 'cancelled': return 'error';
-    default: return '#8c8c8c';
-  }
-};
 
 const isPackageCardAction = (key: string): key is PackageCardAction => (
   ['open', 'edit', 'payment', 'activate', 'complete', 'delete'].includes(key)
@@ -92,9 +89,10 @@ const PackageCard: React.FC<PackageCardProps> = ({
   const [isHovered, setIsHovered] = useState(false);
 
   const progress = pkg.progress || { total: 0, completed: 0, cancelled: 0 };
-  const done = progress.completed + progress.cancelled;
-  const percent = progress.total > 0
-    ? Math.round((done / progress.total) * 100)
+  const done = pkg.balance?.completed ?? progress.completed;
+  const purchased = pkg.balance?.purchased ?? progress.total;
+  const percent = purchased > 0
+    ? Math.round((done / purchased) * 100)
     : 0;
 
   const isActive = pkg.status === 'active';
@@ -153,7 +151,7 @@ const PackageCard: React.FC<PackageCardProps> = ({
 
   // Format lesson count
   const formatLessonCount = (): string => {
-    return `${done}/${progress.total} ${t('pages.packages.lessons')}`;
+    return `${done}/${purchased} ${t('pages.packages.lessons')}`;
   };
 
   // Format next lesson date
@@ -304,6 +302,26 @@ const PackageCard: React.FC<PackageCardProps> = ({
           </Text>
         )}
       </div>
+
+      {pkg.balance && (
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: spacing.sm }}>
+          <Text type="secondary" style={{ fontSize: 12 }}>
+            {t('packageCard.remainingLessons', { count: pkg.balance.remaining })}
+          </Text>
+          {pkg.balance.available_to_schedule > 0 && (
+            <Text style={{ fontSize: 12, color: colors.accentPrimary }}>
+              · {t('packageCard.availableToSchedule', { count: pkg.balance.available_to_schedule })}
+            </Text>
+          )}
+          {pkg.balance.amount_due > 0 && (
+            <Text style={{ fontSize: 12, color: colors.accentWarning }}>
+              · {t('packageCard.amountDue', {
+                amount: new Intl.NumberFormat('ru-RU', { maximumFractionDigits: 0 }).format(pkg.balance.amount_due),
+              })}
+            </Text>
+          )}
+        </div>
+      )}
     </div>
   );
 };

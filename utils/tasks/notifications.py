@@ -305,7 +305,11 @@ async def _process_jobs_for_tenant(
             )
             await uow.rollback()
             failure_uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
-            await failure_uow.jobs.mark_failed(job.job_id, error=str(exc))
+            await failure_uow.jobs.mark_failed(
+                job.job_id,
+                error=str(exc),
+                retryable=True,
+            )
             await failure_uow.commit()
             failed += 1
 
@@ -350,7 +354,8 @@ async def _deliver_for_tenant(
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
     claim_result = await ClaimDueNotificationsUseCase(uow).execute(
         limit=limit,
-        delivery_grace_seconds=getattr(config, "NOTIFICATIONS_DELIVERY_GRACE_SECONDS", 120),
+        lease_seconds=getattr(config, "NOTIFICATIONS_DELIVERY_LEASE_SECONDS", 300),
+        delivery_grace_seconds=getattr(config, "NOTIFICATIONS_DELIVERY_GRACE_SECONDS", 86400),
     )
     renderer = SqlAlchemyNotificationRenderer(session, tenant_id=tenant_id)
     adapter = TelegramNotificationChannelAdapter(bot)
@@ -362,6 +367,7 @@ async def _deliver_for_tenant(
             uow,
             renderer=renderer,
             channel_adapter=adapter,
+            max_attempts=getattr(config, "NOTIFICATIONS_DELIVERY_MAX_ATTEMPTS", 5),
         ).execute(claimed)
         if result.status.value == "sent":
             sent += 1

@@ -1,4 +1,4 @@
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timedelta, timezone
 
 import pytest
@@ -835,6 +835,29 @@ async def test_execute_claimed_notification_delivery_marks_retryable_failure():
             "failed_at": datetime(2026, 4, 7, 7, 1, tzinfo=timezone.utc),
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_stops_after_max_attempts():
+    uow = _uow()
+    error = NotificationDeliveryError(
+        "Telegram timeout",
+        error_code="telegram_timeout",
+        retryable=True,
+    )
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow,
+        renderer=FakeRenderer(),
+        channel_adapter=FakeChannelAdapter(error=error),
+        max_attempts=5,
+    ).execute(
+        replace(_claimed_instance(), attempt_no=5),
+        now=datetime(2026, 4, 7, 7, 1, tzinfo=timezone.utc),
+    )
+
+    assert result.status == InstanceStatus.FAILED
+    assert uow.instances.failed_calls[0]["retryable"] is False
 
 
 @pytest.mark.asyncio

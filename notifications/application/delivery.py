@@ -58,10 +58,12 @@ class ExecuteClaimedNotificationDeliveryUseCase:
         *,
         renderer: NotificationRenderer,
         channel_adapter: NotificationChannelAdapter,
+        max_attempts: int = 5,
     ) -> None:
         self._uow = uow
         self._renderer = renderer
         self._channel_adapter = channel_adapter
+        self._max_attempts = max(1, max_attempts)
 
     async def execute(
         self,
@@ -77,38 +79,40 @@ class ExecuteClaimedNotificationDeliveryUseCase:
             )
         except NotificationDeliveryError as exc:
             failed_at = now or datetime.now(timezone.utc)
+            should_retry = exc.retryable and instance.attempt_no < self._max_attempts
             await self._uow.instances.mark_delivery_failed(
                 instance_id=instance.instance_id,
                 attempt_id=instance.attempt_id,
                 error_code=exc.error_code,
                 error_message=str(exc),
-                retryable=exc.retryable,
+                retryable=should_retry,
                 failed_at=failed_at,
             )
             await self._uow.commit()
             return ExecuteNotificationDeliveryResult(
                 instance_id=instance.instance_id,
                 attempt_id=instance.attempt_id,
-                status=InstanceStatus.SCHEDULED if exc.retryable else InstanceStatus.FAILED,
+                status=InstanceStatus.SCHEDULED if should_retry else InstanceStatus.FAILED,
                 error_code=exc.error_code,
                 error_message=str(exc),
             )
         except Exception as exc:
             failed_at = now or datetime.now(timezone.utc)
             error_code = exc.__class__.__name__
+            should_retry = instance.attempt_no < self._max_attempts
             await self._uow.instances.mark_delivery_failed(
                 instance_id=instance.instance_id,
                 attempt_id=instance.attempt_id,
                 error_code=error_code,
                 error_message=str(exc),
-                retryable=True,
+                retryable=should_retry,
                 failed_at=failed_at,
             )
             await self._uow.commit()
             return ExecuteNotificationDeliveryResult(
                 instance_id=instance.instance_id,
                 attempt_id=instance.attempt_id,
-                status=InstanceStatus.SCHEDULED,
+                status=InstanceStatus.SCHEDULED if should_retry else InstanceStatus.FAILED,
                 error_code=error_code,
                 error_message=str(exc),
             )

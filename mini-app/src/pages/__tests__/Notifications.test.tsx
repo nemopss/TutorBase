@@ -7,8 +7,6 @@ import { useAuth } from '../../auth/AuthProvider';
 const translations: Record<string, string> = {
   'pages.notifications.title': 'Notifications',
   'pages.notifications.subtitle': 'New notification system',
-  'pages.notifications.pilotNoticeTitle': 'Pilot mode',
-  'pages.notifications.pilotNoticeDescription': 'Testing notification system',
   'pages.notifications.tabs.rules': 'Rules',
   'pages.notifications.tabs.templates': 'Templates',
   'pages.notifications.tabs.queue': 'Queue',
@@ -490,16 +488,21 @@ const setAuthMock = (overrides?: Partial<ReturnType<typeof useAuth>>) => {
     user: { id: 1, display_name: 'Admin', role: 'admin', tenant_id: 1 },
     tenantId: 1,
     tenantAccess: null,
+    billing: null,
     isSuperAdmin: true,
     canSwitchTenant: true,
     isTenantAccessLoading: false,
+    isBillingLoading: false,
     switchTenant: jest.fn(),
     refreshTenantAccess: jest.fn(),
+    refreshBilling: jest.fn(),
     registerTutor: jest.fn(),
     registerStudent: jest.fn(),
+    linkExistingEmailAccount: jest.fn(),
+    setEmailPassword: jest.fn(),
     logout: jest.fn(),
     ...overrides,
-  });
+  } as ReturnType<typeof useAuth>);
 };
 
 describe('Notifications', () => {
@@ -596,7 +599,7 @@ describe('Notifications', () => {
     renderComponent();
 
     fireEvent.click(await screen.findByText('Queue'));
-    fireEvent.click(await screen.findByText('View details'));
+    fireEvent.click((await screen.findAllByText('View details'))[0]);
 
     expect(await screen.findByText('Summary')).toBeInTheDocument();
     expect((await screen.findAllByText('Another active lesson exists in the same slot')).length).toBeGreaterThan(0);
@@ -606,24 +609,23 @@ describe('Notifications', () => {
     renderComponent();
 
     fireEvent.click(await screen.findByText('Queue'));
-    fireEvent.click(await screen.findByText('Send now'));
+    fireEvent.click((await screen.findAllByText('Send now'))[0]);
 
     expect(await screen.findByText('Send this notification outside the normal queue?')).toBeInTheDocument();
   });
 
-  it('requests queue-only instances and hides cancelled rows from the queue', async () => {
+  it('loads notification history so statuses and reasons stay inspectable', async () => {
     renderComponent();
 
     fireEvent.click(await screen.findByText('Queue'));
 
     expect(await screen.findByText('Vika')).toBeInTheDocument();
-    expect(screen.queryByText('Masha')).not.toBeInTheDocument();
+    expect(await screen.findByText('Masha')).toBeInTheDocument();
     expect(mockGet).toHaveBeenCalledWith(
       '/notifications/instances',
       expect.objectContaining({
         params: expect.objectContaining({
-          limit: 100,
-          queue_only: true,
+          limit: 300,
         }),
       }),
     );

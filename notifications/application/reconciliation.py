@@ -50,6 +50,7 @@ class QueueNotificationEventReconciliationUseCase:
                     "limit": limit,
                 },
                 created_by_user_id=created_by_user_id,
+                dedupe_key=f"reconcile_event:{event_type.value}:{event_id}",
             )
         )
         if commit:
@@ -92,6 +93,7 @@ class QueueNotificationGroupMembershipReconciliationUseCase:
                     "limit": limit,
                 },
                 created_by_user_id=created_by_user_id,
+                dedupe_key=f"reconcile_group_membership:{group_id}",
             )
         )
         if commit:

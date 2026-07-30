@@ -31,6 +31,7 @@ from api.schemas.validators import validate_status, validate_timezone, validate_
 # Valid package statuses
 VALID_PACKAGE_STATUSES = ['draft', 'active', 'completed', 'cancelled']
 VALID_PACKAGE_TYPES = ['package', 'one_off']
+VALID_SCHEDULE_MODES = ['fixed', 'flexible', 'one_off']
 
 
 class PackageProgressModel(BaseResponse):
@@ -46,6 +47,20 @@ class PackageProgressModel(BaseResponse):
     total: int = Field(ge=0, description="Total number of lessons")
     completed: int = Field(ge=0, description="Number of completed lessons")
     cancelled: int = Field(ge=0, description="Number of cancelled lessons")
+
+
+class PackageBalanceModel(BaseResponse):
+    """Lesson availability and payment balance."""
+
+    purchased: int = Field(ge=0)
+    completed: int = Field(ge=0)
+    scheduled: int = Field(ge=0)
+    cancelled: int = Field(ge=0)
+    remaining: int = Field(ge=0)
+    available_to_schedule: int = Field(ge=0)
+    amount_total: float = Field(ge=0)
+    amount_paid: float = Field(ge=0)
+    amount_due: float = Field(ge=0)
 
 
 class PackageResponse(BaseResponse, TimestampMixin, TenantMixin):
@@ -78,6 +93,8 @@ class PackageResponse(BaseResponse, TimestampMixin, TenantMixin):
     learner_name: Optional[str] = Field(None, description="Learner display name")
     template_id: Optional[int] = Field(None, gt=0, description="Template ID if created from template")
     package_type: str = Field(default='package', description="Package type (package, one_off)")
+    schedule_mode: str = Field(default='flexible', description="Scheduling mode (fixed, flexible, one_off)")
+    renewal_enabled: bool = Field(default=False, description="Whether renewal notifications are enabled")
     title: str = Field(..., min_length=1, max_length=255, description="Package title")
     status: str = Field(..., description="Package status")
     start_date: Optional[datetime] = Field(None, description="Package start date")
@@ -90,6 +107,7 @@ class PackageResponse(BaseResponse, TimestampMixin, TenantMixin):
     payment_status: str = Field(default='unpaid', description="Payment status (unpaid, partial, paid)")
     total_paid: float = Field(default=0.0, description="Total amount paid for this package")
     next_lesson_date: Optional[datetime] = Field(None, description="Date of next scheduled lesson")
+    balance: PackageBalanceModel = Field(..., description="Lesson and payment balance")
 
 
 class PackageListResponse(BaseResponse):
@@ -149,6 +167,9 @@ class PackageCreateRequest(BaseRequest):
     timezone: Optional[str] = Field(None, description="Timezone for scheduling")
     total_lessons: Optional[int] = Field(None, gt=0, le=1000, description="Total number of lessons")
     lesson_dates: Optional[list[LessonDateItem]] = Field(None, description="Lesson dates from schedule preview")
+    schedule_mode: Optional[str] = Field(None, description="Scheduling mode")
+    renewal_enabled: Optional[bool] = Field(None, description="Enable package renewal notifications")
+    price: Optional[Decimal] = Field(None, ge=0, description="Package price override")
 
     @field_validator('status')
     @classmethod
@@ -184,6 +205,13 @@ class PackageCreateRequest(BaseRequest):
             return v
         return validate_timezone(v)
 
+    @field_validator('schedule_mode')
+    @classmethod
+    def validate_schedule_mode_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return validate_status(v, VALID_SCHEDULE_MODES)
+
     @model_validator(mode='after')
     def validate_template_requires_start_date(self) -> 'PackageCreateRequest':
         """Validate that start_date is provided when using a template.
@@ -196,6 +224,20 @@ class PackageCreateRequest(BaseRequest):
         """
         if self.template_id is not None and self.start_date is None:
             raise ValueError("start_date is required when creating package from template")
+        if self.schedule_mode is None:
+            self.schedule_mode = (
+                'fixed'
+                if self.lesson_dates or self.template_id is not None
+                else 'flexible'
+            )
+        if self.schedule_mode == 'one_off':
+            raise ValueError("Use /packages/one-off for one-off lessons")
+        if self.schedule_mode == 'fixed' and not self.lesson_dates and self.template_id is None:
+            raise ValueError("lesson_dates or template_id are required for fixed schedule mode")
+        if self.schedule_mode == 'flexible' and self.lesson_dates:
+            raise ValueError("lesson_dates are not allowed for flexible schedule mode")
+        if self.renewal_enabled and self.schedule_mode != 'fixed':
+            raise ValueError("renewal notifications are available only for fixed packages")
         return self
 
 
@@ -242,6 +284,9 @@ class PackageUpdateRequest(BaseRequest):
     start_date: Optional[datetime] = Field(None, description="Package start date")
     end_date: Optional[datetime] = Field(None, description="Package end date")
     total_lessons: Optional[int] = Field(None, gt=0, le=1000, description="Total number of lessons")
+    schedule_mode: Optional[str] = Field(None, description="Scheduling mode")
+    renewal_enabled: Optional[bool] = Field(None, description="Enable package renewal notifications")
+    price: Optional[Decimal] = Field(None, ge=0, description="Package price")
 
     @field_validator('status')
     @classmethod
@@ -279,6 +324,13 @@ class PackageUpdateRequest(BaseRequest):
             return v
         return validate_timezone(v)
 
+    @field_validator('schedule_mode')
+    @classmethod
+    def validate_schedule_mode_field(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return v
+        return validate_status(v, VALID_SCHEDULE_MODES)
+
     @model_validator(mode='after')
     def validate_date_range_fields(self) -> 'PackageUpdateRequest':
         """Validate that end_date is after start_date if both provided.
@@ -296,6 +348,7 @@ class PackageUpdateRequest(BaseRequest):
 
 __all__ = [
     'PackageProgressModel',
+    'PackageBalanceModel',
     'PackageResponse',
     'PackageListResponse',
     'PackageCreateRequest',

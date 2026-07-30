@@ -1,0 +1,113 @@
+.package-wizard__heading {
+  margin: 0 0 4px !important;
+}
+
+.package-wizard__intro {
+  display: block;
+  margin-bottom: 20px;
+}
+
+.package-wizard__mode-field {
+  height: 0;
+  margin: 0;
+  overflow: hidden;
+}
+
+.package-mode-card {
+  width: 100%;
+  min-height: 188px;
+  padding: 20px;
+  border: 1px solid var(--ant-color-border);
+  border-radius: 18px;
+  color: inherit;
+  text-align: left;
+  background:
+    radial-gradient(circle at 100% 0, color-mix(in srgb, var(--ant-color-primary) 11%, transparent), transparent 52%),
+    var(--ant-color-bg-container);
+  cursor: pointer;
+  transition: transform 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+
+.package-mode-card:hover {
+  transform: translateY(-2px);
+  border-color: var(--ant-color-primary);
+  box-shadow: 0 12px 28px color-mix(in srgb, var(--ant-color-primary) 14%, transparent);
+}
+
+.package-mode-card:focus-visible {
+  outline: 3px solid color-mix(in srgb, var(--ant-color-primary) 28%, transparent);
+  outline-offset: 2px;
+}
+
+.package-mode-card--selected {
+  border: 2px solid var(--ant-color-primary);
+  box-shadow: 0 12px 30px color-mix(in srgb, var(--ant-color-primary) 18%, transparent);
+}
+
+.package-mode-card__icon {
+  display: grid;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 18px;
+  border-radius: 14px;
+  color: var(--ant-color-primary);
+  font-size: 22px;
+  background: color-mix(in srgb, var(--ant-color-primary) 12%, transparent);
+  place-items: center;
+}
+
+.package-mode-card__title,
+.package-mode-card__description {
+  display: block;
+}
+
+.package-mode-card__title {
+  margin-bottom: 8px;
+  font-size: 16px;
+  font-weight: 700;
+}
+
+.package-mode-card__description {
+  color: var(--ant-color-text-secondary);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.package-wizard__panel,
+.package-wizard__renewal {
+  border-radius: 16px;
+  background: color-mix(in srgb, var(--ant-color-primary) 5%, var(--ant-color-bg-container));
+}
+
+.package-wizard__renewal {
+  margin-top: 16px;
+}
+
+.package-wizard__renewal .ant-space {
+  width: 100%;
+}
+
+.package-wizard__renewal-icon {
+  margin-top: 3px;
+  color: var(--ant-color-primary);
+  font-size: 20px;
+}
+
+.package-wizard__renewal-copy {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+}
+
+@media (max-width: 767px) {
+  .package-mode-card {
+    min-height: 0;
+    padding: 16px;
+  }
+
+  .package-mode-card__icon {
+    width: 40px;
+    height: 40px;
+    margin-bottom: 12px;
+  }
+}

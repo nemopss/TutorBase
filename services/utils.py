@@ -76,11 +76,12 @@ async def sync_package_metrics(
     current_tenant: CurrentTenant,
     package_id: int,
 ) -> tuple[Optional[LessonPackage], list[Lesson]]:
-    """Synchronize package metrics from its lessons.
+    """Synchronize derived package state from its lessons.
 
-    Updates package total_lessons, start_date, and end_date based on current
-    lesson data. Sorts lessons by scheduled time and derives package dates
-    from first and last lessons.
+    ``total_lessons`` is the purchased/planned lesson allowance and package
+    dates are explicit business dates. They must not be derived from the
+    subset of lessons that has already been put on the calendar: flexible
+    packages commonly have only their next lesson scheduled.
 
     Args:
         session: Async database session
@@ -100,20 +101,17 @@ async def sync_package_metrics(
     )
 
     previous_price = package.price
-    package.total_lessons = len(lessons)
-    if lessons:
-        package.start_date = normalize_to_utc(lessons[0].scheduled_at)
-        package.end_date = normalize_to_utc(lessons[-1].scheduled_at)
-    else:
-        package.end_date = None
 
-    # Auto-complete package if all lessons are completed or cancelled
-    if lessons and package.status == 'active':
-        all_done = all(
-            lesson.status in ('completed', 'cancelled')
+    # A package is consumed only after the purchased number of lessons has
+    # actually been completed. Cancelled lessons do not consume the allowance,
+    # and merely completing all currently scheduled lessons is not enough for a
+    # flexible package with unscheduled lessons remaining.
+    if package.status == 'active' and package.total_lessons:
+        completed_lessons = sum(
+            lesson.status == 'completed'
             for lesson in lessons
         )
-        if all_done:
+        if completed_lessons >= package.total_lessons:
             package.status = 'completed'
 
     await session.flush([package])

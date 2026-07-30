@@ -210,7 +210,10 @@ class NotificationJob(Base):
     tenant_id = Column(Integer, ForeignKey("tenants.id", ondelete="CASCADE"), nullable=False, index=True)
     job_type = Column(String(64), nullable=False)
     status = Column(String(32), nullable=False, default="queued")
+    dedupe_key = Column(String(255))
     scope = Column(JSON, nullable=False, default=dict)
+    attempt_count = Column(Integer, nullable=False, default=0)
+    available_at = Column(DateTime(timezone=True), nullable=False, default=_utc_now)
     created_by_user_id = Column(Integer, ForeignKey("users.id", ondelete="SET NULL"))
     started_at = Column(DateTime(timezone=True))
     finished_at = Column(DateTime(timezone=True))
@@ -224,6 +227,17 @@ class NotificationJob(Base):
     __table_args__ = (
         Index("ix_notification_jobs_tenant_status", "tenant_id", "status"),
         Index("ix_notification_jobs_type_status", "job_type", "status"),
+        Index("ix_notification_jobs_tenant_available", "tenant_id", "status", "available_at"),
+        Index(
+            "uq_notification_jobs_active_dedupe",
+            "tenant_id",
+            "dedupe_key",
+            unique=True,
+            postgresql_where=(
+                dedupe_key.is_not(None)
+                & (status == "queued")
+            ),
+        ),
     )
 
 

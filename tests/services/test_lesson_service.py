@@ -1,11 +1,13 @@
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import CurrentTenant
 from services import lesson_service
 from services.exceptions import NotFoundError
+from services.reminder_definitions import REMINDER_TYPE_PACKAGE_RENEWAL
+from database import crud
 from tests import factories
 
 
@@ -46,6 +48,39 @@ async def test_create_lesson_missing_package_raises(db_session: AsyncSession, cu
             package_id=999,
             scheduled_at=scheduled,
         )
+
+
+@pytest.mark.asyncio
+async def test_create_lesson_keeps_flexible_package_allowance_and_does_not_create_renewal(
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session, chat_id=123456)
+    package = await factories.create_package(
+        db_session,
+        learner=learner,
+        status="active",
+        total_lessons=8,
+    )
+    package.end_date = None
+    original_start = package.start_date
+    await db_session.flush()
+
+    await lesson_service.create_lesson(
+        db_session,
+        current_tenant,
+        package_id=package.id,
+        scheduled_at=datetime.now(timezone.utc) + timedelta(days=7),
+    )
+
+    refreshed = await crud.get_lesson_package(db_session, current_tenant, package.id)
+    assert refreshed.total_lessons == 8
+    assert refreshed.start_date == original_start
+    assert refreshed.end_date is None
+    assert refreshed.status == "active"
+    assert REMINDER_TYPE_PACKAGE_RENEWAL not in {
+        rule.reminder_type for rule in refreshed.reminder_rules
+    }
 
 
 @pytest.mark.asyncio

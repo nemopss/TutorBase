@@ -90,6 +90,8 @@ describe('AppLayout', () => {
       switchTenant: jest.fn(),
       registerTutor: jest.fn(),
       registerStudent: jest.fn(),
+      linkExistingEmailAccount: jest.fn(),
+      setEmailPassword: jest.fn(),
       logout: jest.fn(),
     });
   });

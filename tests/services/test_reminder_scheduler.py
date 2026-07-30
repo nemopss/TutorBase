@@ -8,6 +8,7 @@ from aiogram.exceptions import TelegramBadRequest
 
 from services.reminders import ReminderScheduler
 from services.reminder_definitions import REMINDER_TYPE_LESSON_CONFIRM
+from services import billing_service
 from database import crud
 from config import config
 
@@ -40,7 +41,15 @@ def scheduler(monkeypatch):
     async def fake_should_suppress(session, instance):
         return False
 
+    async def fake_notifications_allowed(session, tenant_id):
+        return True
+
     monkeypatch.setattr(sched, "_should_suppress_legacy_instance", fake_should_suppress)
+    monkeypatch.setattr(
+        billing_service,
+        "notifications_allowed_for_tenant",
+        fake_notifications_allowed,
+    )
     return sched
 
 

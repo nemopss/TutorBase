@@ -5,6 +5,7 @@ from datetime import datetime, timezone
 from fastapi import APIRouter, Body, Depends, HTTPException, Query, status
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import config
 from api.dependencies import (
     CurrentTenant,
     admin_or_teacher_required,
@@ -152,7 +153,10 @@ async def update_notification_settings(
 ) -> NotificationSettingsResponse:
     tenant_id = _require_tenant_id(current_tenant)
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
-    settings = await UpdateNotificationSettingsUseCase(uow).execute(
+    settings = await UpdateNotificationSettingsUseCase(
+        uow,
+        automation_enabled=config.NOTIFICATIONS_AUTOMATION_ENABLED,
+    ).execute(
         _settings_update_from_request(payload)
     )
     return _settings_response(settings)

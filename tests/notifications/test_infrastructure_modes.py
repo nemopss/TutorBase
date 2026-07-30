@@ -1,5 +1,6 @@
 import pytest
 
+from config import config
 from notifications.domain.enums import NotificationSystemMode
 from notifications.infrastructure.modes import (
     SqlAlchemyNotificationModeResolver,
@@ -58,8 +59,20 @@ async def test_mode_resolver_uses_tenant_mode_when_learner_inherits():
 
 
 @pytest.mark.asyncio
-async def test_legacy_suppression_only_applies_in_new_mode():
+async def test_legacy_suppression_only_applies_in_new_mode(monkeypatch):
+    monkeypatch.setattr(config, "NOTIFICATIONS_AUTOMATION_ENABLED", True)
     assert await should_suppress_legacy_reminder_for_learner(
+        FakeSession(["new"]),
+        tenant_id=1,
+        learner_id=10,
+    )
+
+
+@pytest.mark.asyncio
+async def test_legacy_is_not_suppressed_when_new_automation_is_disabled(monkeypatch):
+    monkeypatch.setattr(config, "NOTIFICATIONS_AUTOMATION_ENABLED", False)
+
+    assert not await should_suppress_legacy_reminder_for_learner(
         FakeSession(["new"]),
         tenant_id=1,
         learner_id=10,

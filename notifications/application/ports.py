@@ -267,6 +267,7 @@ class NotificationJobRepository(Protocol):
         job_id: int,
         *,
         error: str,
+        retryable: bool = False,
     ) -> NotificationJobRecord:
         ...
 

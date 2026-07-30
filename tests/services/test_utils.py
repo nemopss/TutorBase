@@ -1,5 +1,5 @@
 import pytest
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from zoneinfo import ZoneInfo
 
@@ -38,13 +38,22 @@ def test_lesson_stats():
 @pytest.mark.asyncio
 async def test_sync_package_metrics(db_session: AsyncSession, current_tenant: CurrentTenant):
     learner = await factories.create_learner(db_session)
-    package = await factories.create_package(db_session, learner=learner)
-    lesson1 = await factories.create_lesson(
+    explicit_start = datetime(2024, 1, 1, 10, 0, tzinfo=timezone.utc)
+    explicit_end = datetime(2024, 3, 31, 10, 0, tzinfo=timezone.utc)
+    package = await factories.create_package(
+        db_session,
+        learner=learner,
+        status="active",
+        total_lessons=10,
+    )
+    package.start_date = explicit_start
+    package.end_date = explicit_end
+    await factories.create_lesson(
         db_session,
         package=package,
         scheduled_at=datetime(2024, 1, 10, 10, 0, tzinfo=timezone.utc),
     )
-    lesson2 = await factories.create_lesson(
+    await factories.create_lesson(
         db_session,
         package=package,
         scheduled_at=datetime(2024, 1, 12, 15, 0, tzinfo=timezone.utc),
@@ -52,9 +61,45 @@ async def test_sync_package_metrics(db_session: AsyncSession, current_tenant: Cu
     await db_session.flush()
 
     updated_package, lessons = await utils.sync_package_metrics(db_session, current_tenant, package.id)
-    assert updated_package.start_date == lesson1.scheduled_at
-    assert updated_package.end_date == lesson2.scheduled_at
+    assert updated_package.total_lessons == 10
+    assert updated_package.start_date == explicit_start
+    assert updated_package.end_date == explicit_end
+    assert updated_package.status == "active"
     assert len(lessons) == 2
+
+
+@pytest.mark.asyncio
+async def test_sync_package_metrics_completes_only_after_purchased_allowance_is_used(
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(
+        db_session,
+        learner=learner,
+        status="active",
+        total_lessons=2,
+    )
+    first = await factories.create_lesson(
+        db_session,
+        package=package,
+        status="completed",
+    )
+    await db_session.flush()
+
+    updated_package, _ = await utils.sync_package_metrics(db_session, current_tenant, package.id)
+    assert updated_package.status == "active"
+
+    await factories.create_lesson(
+        db_session,
+        package=package,
+        status="completed",
+        scheduled_at=first.scheduled_at + timedelta(days=1),
+    )
+    await db_session.flush()
+
+    updated_package, _ = await utils.sync_package_metrics(db_session, current_tenant, package.id)
+    assert updated_package.status == "completed"
 
 
 @pytest.mark.asyncio
@@ -64,7 +109,12 @@ async def test_sync_package_metrics_imputes_missing_price_and_recalculates_statu
 ):
     learner = await factories.create_learner(db_session)
     learner.lesson_rate = Decimal("2500.00")
-    package = await factories.create_package(db_session, learner=learner, status="active")
+    package = await factories.create_package(
+        db_session,
+        learner=learner,
+        status="active",
+        total_lessons=6,
+    )
     package.price = None
     package.payment_status = "unpaid"
     for index in range(6):

@@ -83,6 +83,21 @@ class PackageProgress:
 
 
 @dataclass(slots=True)
+class PackageBalance:
+    """Lesson availability and payment balance for a package."""
+
+    purchased: int
+    completed: int
+    scheduled: int
+    cancelled: int
+    remaining: int
+    available_to_schedule: int
+    amount_total: float
+    amount_paid: float
+    amount_due: float
+
+
+@dataclass(slots=True)
 class LessonPackageDTO:
     """Lesson package data transfer object.
     
@@ -112,6 +127,8 @@ class LessonPackageDTO:
     learner_name: Optional[str]
     template_id: Optional[int]
     package_type: str
+    schedule_mode: str
+    renewal_enabled: bool
     title: str
     status: str
     start_date: Optional[datetime]
@@ -124,6 +141,7 @@ class LessonPackageDTO:
     payment_status: str = 'unpaid'
     total_paid: float = 0.0
     next_lesson_date: Optional[datetime] = None
+    balance: Optional[PackageBalance] = None
 
 
 @dataclass(slots=True)
@@ -150,4 +168,3 @@ class TemplateDTO:
     duration_days: Optional[int]
     timezone: str
     default_config: Optional[dict]
-

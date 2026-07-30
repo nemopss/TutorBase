@@ -627,6 +627,8 @@ class LessonPackage(Base):
     learner_id = Column(Integer, ForeignKey('learners.id', ondelete='CASCADE'), nullable=False)
     template_id = Column(Integer, ForeignKey('lesson_package_templates.id', ondelete='SET NULL'))
     package_type = Column(String(32), nullable=False, default='package')
+    schedule_mode = Column(String(32), nullable=False, default='flexible', server_default='flexible')
+    renewal_enabled = Column(Boolean, nullable=False, default=False, server_default='false')
     title = Column(String, nullable=False)
     status = Column(String(32), nullable=False, default='draft')
     start_date = Column(DateTime(timezone=True))
@@ -653,6 +655,7 @@ class LessonPackage(Base):
     __table_args__ = (
         Index('ix_lesson_packages_learner_status', 'learner_id', 'status'),
         Index('ix_lesson_packages_tenant_type_status', 'tenant_id', 'package_type', 'status'),
+        Index('ix_lesson_packages_tenant_schedule_mode', 'tenant_id', 'schedule_mode'),
     )
 
 

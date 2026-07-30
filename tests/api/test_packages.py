@@ -1,4 +1,5 @@
 import pytest
+from datetime import datetime, timedelta, timezone
 from decimal import Decimal
 from httpx import AsyncClient
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -145,6 +146,10 @@ async def test_create_package_success(client: AsyncClient, db_session: AsyncSess
     assert data["title"] == payload["title"]
     assert data["notes"] == payload["notes"]
     assert data["total_lessons"] == payload["total_lessons"]
+    assert data["schedule_mode"] == "flexible"
+    assert data["renewal_enabled"] is False
+    assert data["balance"]["purchased"] == 8
+    assert data["balance"]["available_to_schedule"] == 8
 
     package = await crud.get_lesson_package(db_session, current_tenant, data["id"])
     assert package is not None
@@ -175,6 +180,8 @@ async def test_create_one_off_lesson_creates_hidden_package_and_scheduled_lesson
     assert response.status_code == 201
     data = response.json()
     assert data["package_type"] == "one_off"
+    assert data["schedule_mode"] == "one_off"
+    assert data["renewal_enabled"] is False
     assert data["title"] == "Consultation"
     assert data["status"] == "active"
     assert data["total_lessons"] == 1
@@ -193,6 +200,116 @@ async def test_create_one_off_lesson_creates_hidden_package_and_scheduled_lesson
     finance_response = await client.get(f"/api/v1/learners/{learner.id}/finance", headers=headers)
     assert finance_response.status_code == 200
     assert Decimal(str(finance_response.json()["outstanding_balance"])) == Decimal("2500.0")
+
+
+@pytest.mark.asyncio
+async def test_fixed_package_requires_explicit_schedule_and_controls_renewal(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.post(
+        "/api/v1/packages",
+        json={
+            "learner_id": learner.id,
+            "title": "Fixed package",
+            "status": "active",
+            "schedule_mode": "fixed",
+            "lesson_dates": [
+                {"datetime": "2026-08-04T16:00:00+03:00", "duration": 60},
+                {"datetime": "2026-08-11T16:00:00+03:00", "duration": 60},
+            ],
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 201
+    data = response.json()
+    assert data["schedule_mode"] == "fixed"
+    assert data["renewal_enabled"] is False
+    assert data["balance"]["scheduled"] == 2
+    assert data["balance"]["available_to_schedule"] == 0
+
+
+@pytest.mark.asyncio
+async def test_flexible_package_rejects_precreated_schedule(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.post(
+        "/api/v1/packages",
+        json={
+            "learner_id": learner.id,
+            "title": "Flexible package",
+            "schedule_mode": "flexible",
+            "lesson_dates": [
+                {"datetime": "2026-08-04T16:00:00+03:00", "duration": 60},
+            ],
+        },
+        headers=headers,
+    )
+
+    assert response.status_code == 422
+
+
+@pytest.mark.asyncio
+async def test_package_list_returns_actual_payment_and_lesson_balance(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    learner.lesson_rate = Decimal("1000.00")
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    created = await client.post(
+        "/api/v1/packages",
+        json={
+            "learner_id": learner.id,
+            "title": "Balance package",
+            "status": "active",
+            "schedule_mode": "flexible",
+            "total_lessons": 8,
+        },
+        headers=headers,
+    )
+    package_id = created.json()["id"]
+    payment = await client.post(
+        "/api/v1/payments",
+        json={
+            "learner_id": learner.id,
+            "package_id": package_id,
+            "amount": "2500.00",
+            "paid_at": datetime.now(timezone.utc).isoformat(),
+        },
+        headers=headers,
+    )
+    assert payment.status_code == 201
+
+    response = await client.get("/api/v1/packages", headers=headers)
+    item = next(item for item in response.json()["items"] if item["id"] == package_id)
+    assert item["total_paid"] == 2500.0
+    assert item["balance"] == {
+        "purchased": 8,
+        "completed": 0,
+        "scheduled": 0,
+        "cancelled": 0,
+        "remaining": 8,
+        "available_to_schedule": 8,
+        "amount_total": 8000.0,
+        "amount_paid": 2500.0,
+        "amount_due": 5500.0,
+    }
 
 
 @pytest.mark.asyncio
@@ -238,7 +355,7 @@ async def test_create_package_from_template_generates_lessons(client: AsyncClien
     package = await crud.get_lesson_package(db_session, current_tenant, data["id"])
     assert package is not None
     assert len(package.lessons) == template.lesson_count
-    assert package.reminder_instances
+    assert package.reminder_instances == []
 
 
 @pytest.mark.asyncio
@@ -259,12 +376,40 @@ async def test_update_package(client: AsyncClient, db_session: AsyncSession, cur
     assert response.status_code == 200
     data = response.json()
     assert data["title"] == "Updated"
-    assert data["total_lessons"] == 0
-
+    assert data["total_lessons"] == 12
     refreshed = await crud.get_lesson_package(db_session, current_tenant, package.id)
     assert refreshed is not None
     assert refreshed.status == "active"
     assert refreshed.notes == "Updated notes"
+
+
+@pytest.mark.asyncio
+async def test_update_package_can_clear_end_date(
+    client: AsyncClient,
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(
+        db_session,
+        learner=learner,
+        status="active",
+        total_lessons=8,
+    )
+    package.end_date = datetime.now(timezone.utc) + timedelta(days=30)
+    await db_session.commit()
+    headers, _ = await get_auth_headers(db_session, current_tenant)
+
+    response = await client.patch(
+        f"/api/v1/packages/{package.id}",
+        json={"end_date": None},
+        headers=headers,
+    )
+
+    assert response.status_code == 200
+    assert response.json()["end_date"] is None
+    refreshed = await crud.get_lesson_package(db_session, current_tenant, package.id)
+    assert refreshed.end_date is None
 
 
 @pytest.mark.asyncio

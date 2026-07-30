@@ -29,8 +29,6 @@ from services.dto import LessonDTO
 from database import crud
 from database.models import User
 from services.exceptions import NotFoundError
-from utils.tasks.reminders import regenerate_package_reminders_task
-from utils.tasks import sync_package_metrics_task
 
 router = APIRouter()
 
@@ -146,9 +144,6 @@ async def create_lesson_for_package(
             homework_due_at=payload.homework_due_at,
             sequence_index=sequence_index,
         )
-        # Regenerate reminders and sync metrics in background (non-blocking)
-        regenerate_package_reminders_task.delay(package_id, current_tenant.tenant_id)
-        sync_package_metrics_task.delay(package_id, current_tenant.tenant_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
@@ -190,14 +185,6 @@ async def update_lesson_endpoint(
             teacher_notes=payload.teacher_notes,
             homework_due_at=payload.homework_due_at,
         )
-        # Regenerate reminders only if schedule changed (non-blocking)
-        # Note: status changes are handled inside lesson_service.update_lesson()
-        if payload.scheduled_at is not None:
-            regenerate_package_reminders_task.delay(lesson.package_id, current_tenant.tenant_id)
-        
-        # Sync package metrics if status changed (non-blocking)
-        if payload.status is not None:
-            sync_package_metrics_task.delay(lesson.package_id, current_tenant.tenant_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:
@@ -214,10 +201,7 @@ async def delete_lesson_endpoint(
     __=Depends(require_full_tenant_access),
 ):
     try:
-        package_id = await lesson_service.delete_lesson(session, current_tenant, lesson_id)
-        # Regenerate reminders and sync metrics in background (non-blocking)
-        regenerate_package_reminders_task.delay(package_id, current_tenant.tenant_id)
-        sync_package_metrics_task.delay(package_id, current_tenant.tenant_id)
+        await lesson_service.delete_lesson(session, current_tenant, lesson_id)
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
     except Exception as exc:

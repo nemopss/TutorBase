@@ -26,7 +26,6 @@ Edge cases:
 """
 from __future__ import annotations
 
-import logging
 from datetime import datetime, timezone
 from typing import Optional
 
@@ -147,9 +146,6 @@ async def update_lesson(
     if not lesson:
         raise NotFoundError(f"Lesson {lesson_id} not found")
 
-    # Track old status for reminder handling
-    old_status = lesson.status
-
     if scheduled_at is not None:
         lesson.scheduled_at = scheduled_at
         # Auto-set rescheduled status when time changes (unless explicit status provided)
@@ -168,28 +164,27 @@ async def update_lesson(
     session.add(lesson)
     await session.flush()
     
-    # Handle reminder deactivation/regeneration based on status change
-    if status is not None and status != old_status:
-        if status == 'cancelled' and old_status != 'cancelled':
-            # Lesson was cancelled - deactivate reminders
-            count = await crud.deactivate_reminder_instances_for_lesson(session, lesson_id)
-            logging.info(f"Deactivated {count} reminders for cancelled lesson {lesson_id}")
-        elif old_status == 'cancelled' and status != 'cancelled':
-            # Lesson was uncancelled - regenerate reminders
-            from utils.tasks.reminders import regenerate_package_reminders_task
-            regenerate_package_reminders_task.delay(lesson.package_id, current_tenant.tenant_id)
-            logging.info(f"Triggered reminder regeneration for uncancelled lesson {lesson_id}")
-    
-    await sync_package_metrics(session, current_tenant, lesson.package_id)
+    package, _ = await sync_package_metrics(session, current_tenant, lesson.package_id)
     if any(
         value is not None
         for value in (scheduled_at, duration_minutes, status, homework_due_at)
     ):
+        if package is not None:
+            from services.package_scheduler import regenerate_package_reminders
+
+            await regenerate_package_reminders(session, current_tenant, package)
         await enqueue_notification_event_reconciliation(
             session,
             current_tenant,
             event_type=EventType.LESSON,
             event_id=lesson.id,
+            reason="lesson_updated",
+        )
+        await enqueue_notification_event_reconciliation(
+            session,
+            current_tenant,
+            event_type=EventType.PACKAGE,
+            event_id=lesson.package_id,
             reason="lesson_updated",
         )
     # Transaction will be committed by @transactional decorator
@@ -227,12 +222,23 @@ async def delete_lesson(session: AsyncSession, current_tenant: CurrentTenant, le
     
     delete_stmt = delete(Lesson).where(Lesson.id == lesson_id)
     await session.execute(delete_stmt)
-    await sync_package_metrics(session, current_tenant, package_id)
+    package, _ = await sync_package_metrics(session, current_tenant, package_id)
+    if package is not None:
+        from services.package_scheduler import regenerate_package_reminders
+
+        await regenerate_package_reminders(session, current_tenant, package)
     await enqueue_notification_event_reconciliation(
         session,
         current_tenant,
         event_type=EventType.LESSON,
         event_id=lesson_id,
+        reason="lesson_deleted",
+    )
+    await enqueue_notification_event_reconciliation(
+        session,
+        current_tenant,
+        event_type=EventType.PACKAGE,
+        event_id=package_id,
         reason="lesson_deleted",
     )
     # Transaction will be committed by @transactional decorator
@@ -318,12 +324,23 @@ async def create_lesson(
         session.add(lesson)
         await session.flush()
     
-    await sync_package_metrics(session, current_tenant, package_id)
+    package, _ = await sync_package_metrics(session, current_tenant, package_id)
+    if package is not None:
+        from services.package_scheduler import regenerate_package_reminders
+
+        await regenerate_package_reminders(session, current_tenant, package)
     await enqueue_notification_event_reconciliation(
         session,
         current_tenant,
         event_type=EventType.LESSON,
         event_id=lesson.id,
+        reason="lesson_created",
+    )
+    await enqueue_notification_event_reconciliation(
+        session,
+        current_tenant,
+        event_type=EventType.PACKAGE,
+        event_id=package_id,
         reason="lesson_created",
     )
     # Transaction will be committed by @transactional decorator
