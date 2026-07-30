@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from zoneinfo import ZoneInfo
 
 import pytest
@@ -12,6 +12,8 @@ from tests import factories
 from utils.timezone import DEFAULT_TZ
 from services import package_service
 from services.exceptions import NotFoundError
+from services.package_scheduler import regenerate_package_reminders
+from services.reminder_definitions import REMINDER_TYPE_PACKAGE_RENEWAL
 
 
 @pytest.mark.asyncio
@@ -67,6 +69,7 @@ async def test_create_package_from_template_generates_lessons_and_reminders(
 
     assert dto.total_lessons == template.lesson_count
     assert len(package.lessons) == template.lesson_count
+    assert package.end_date == max(lesson.scheduled_at for lesson in package.lessons)
 
     reminder_types = {instance.rule.reminder_type for instance in package.reminder_instances}
     assert reminder_types, "Expected reminder instances to be generated"
@@ -77,11 +80,17 @@ async def test_create_package_from_template_generates_lessons_and_reminders(
             "reason": "package_lessons_created",
         }
         for lesson in sorted(package.lessons, key=lambda item: (item.scheduled_at, item.id))
+    ] + [
+        {
+            "event_type": EventType.PACKAGE,
+            "event_id": package.id,
+            "reason": "package_lessons_created",
+        }
     ]
 
 
 @pytest.mark.asyncio
-async def test_create_one_off_lesson_enqueues_lesson_reconciliation(
+async def test_create_one_off_lesson_enqueues_reconciliation_without_package_reminders(
     db_session,
     current_tenant: CurrentTenant,
     monkeypatch,
@@ -130,8 +139,17 @@ async def test_create_one_off_lesson_enqueues_lesson_reconciliation(
             "event_type": EventType.LESSON,
             "event_id": lesson_ids[0],
             "reason": "package_lessons_created",
-        }
+        },
+        {
+            "event_type": EventType.PACKAGE,
+            "event_id": package.id,
+            "reason": "package_lessons_created",
+        },
     ]
+    reminder_types = {instance.rule.reminder_type for instance in package.reminder_instances}
+    assert "payment_week" not in reminder_types
+    assert "payment_day" not in reminder_types
+    assert "package_renewal" not in reminder_types
 
 
 @pytest.mark.asyncio
@@ -153,6 +171,50 @@ async def test_update_package_normalizes_dates_to_utc(db_session, current_tenant
     assert dto.status == "active"
     assert dto.notes == "Updated via service"
     assert dto.start_date is not None
+
+
+@pytest.mark.asyncio
+async def test_update_package_can_clear_end_date_and_remove_future_renewal(
+    db_session,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session, chat_id=123456)
+    package = await factories.create_package(
+        db_session,
+        learner=learner,
+        status="active",
+        total_lessons=8,
+        schedule_mode="fixed",
+        renewal_enabled=True,
+    )
+    package.end_date = datetime.now(timezone.utc) + timedelta(days=28)
+    await factories.create_lesson(
+        db_session,
+        package=package,
+        scheduled_at=package.end_date,
+    )
+    await db_session.flush()
+    await regenerate_package_reminders(db_session, current_tenant, package)
+    assert REMINDER_TYPE_PACKAGE_RENEWAL in {
+        rule.reminder_type for rule in package.reminder_rules
+    }
+
+    dto = await package_service.update_package(
+        db_session,
+        current_tenant,
+        package.id,
+        end_date=None,
+        end_date_set=True,
+    )
+
+    assert dto.end_date is None
+    refreshed = await crud.get_lesson_package(db_session, current_tenant, package.id)
+    await db_session.refresh(refreshed, attribute_names=["reminder_instances"])
+    assert not any(
+        instance.active
+        and instance.rule.reminder_type == REMINDER_TYPE_PACKAGE_RENEWAL
+        for instance in refreshed.reminder_instances
+    )
     assert dto.start_date.tzinfo == DEFAULT_TZ
 
     persisted = await crud.get_lesson_package(db_session, current_tenant, package.id)

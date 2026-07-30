@@ -3,6 +3,7 @@ from __future__ import annotations
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from config import config
 from notifications.domain.enums import NotificationSystemMode
 from notifications.infrastructure.models import LearnerNotificationMode, NotificationSystemSetting
 
@@ -44,6 +45,11 @@ async def should_suppress_legacy_reminder_for_learner(
     tenant_id: int,
     learner_id: int,
 ) -> bool:
+    # Keep the proven legacy path alive if the deployment cannot process or
+    # deliver new-system jobs. This also protects tenants that were already in
+    # NEW mode before automation was disabled by configuration.
+    if not config.NOTIFICATIONS_AUTOMATION_ENABLED:
+        return False
     mode = await SqlAlchemyNotificationModeResolver(
         session,
         tenant_id=tenant_id,

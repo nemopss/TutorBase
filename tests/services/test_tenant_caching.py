@@ -115,7 +115,11 @@ class TestCreateTenantInvalidation:
         mock_session = AsyncMock()
         
         with patch("services.tenant_service.crud.create_tenant") as mock_crud, \
-             patch("services.tenant_service.invalidate_cache") as mock_invalidate:
+             patch("services.tenant_service.invalidate_cache") as mock_invalidate, \
+             patch(
+                 "services.tenant_service.notification_bootstrap_service.ensure_recommended_notification_rules",
+                 new_callable=AsyncMock,
+             ) as mock_bootstrap:
             mock_crud.return_value = mock_tenant
             
             result = await tenant_service.create_tenant(
@@ -130,6 +134,7 @@ class TestCreateTenantInvalidation:
             
             # Verify cache invalidation was called
             mock_invalidate.assert_called_once_with("tenants:list_tenants:*")
+            mock_bootstrap.assert_awaited_once_with(mock_session, mock_tenant.id)
 
 
 class TestUpdateTenantInvalidation:

@@ -66,6 +66,10 @@ from utils.validators import validate_chat_identifier
 import logging
 
 
+_MUTABLE_REMINDER_STATUSES = {"scheduled", "pending"}
+_ProtectedReminderKey = tuple[str, Optional[int], datetime]
+
+
 @dataclass
 class _ReminderSchedule:
     """Internal dataclass for reminder scheduling metadata.
@@ -104,7 +108,12 @@ async def regenerate_package_reminders(session: AsyncSession, current_tenant: Cu
     if not package.learner:
         return
 
-    await _clear_existing(session, package)
+    protected_reminders = await _clear_existing(session, package)
+
+    # Draft, completed, and cancelled packages must not retain deliverable
+    # legacy reminders. Terminal instances are kept below as delivery history.
+    if package.status != "active":
+        return
 
     # Get all lessons with schedule (for finding last lesson)
     all_lessons = sorted(
@@ -112,11 +121,9 @@ async def regenerate_package_reminders(session: AsyncSession, current_tenant: Cu
         key=lambda lesson: _normalize_datetime(lesson.scheduled_at),
     )
     
-    # Filter out cancelled lessons for lesson reminders
-    # Payment reminders use all lessons (including cancelled) to find last lesson
     active_lessons = [
         lesson for lesson in all_lessons
-        if lesson.status != 'cancelled'
+        if lesson.status in {"scheduled", "rescheduled"}
     ]
     
     now_utc = datetime.now(timezone.utc)
@@ -125,30 +132,112 @@ async def regenerate_package_reminders(session: AsyncSession, current_tenant: Cu
 
     # Create reminders only for active lessons
     for lesson in active_lessons:
-        await _create_lesson_confirm(session, current_tenant, package, lesson, tz, chat_identifier, now_utc)
-        await _create_lesson_day_before_confirm(session, current_tenant, package, lesson, tz, chat_identifier, now_utc)
-        await _create_homework_reminder(session, current_tenant, package, lesson, tz, chat_identifier, now_utc)
+        await _create_lesson_confirm(
+            session, current_tenant, package, lesson, tz, chat_identifier, now_utc, protected_reminders
+        )
+        await _create_lesson_day_before_confirm(
+            session, current_tenant, package, lesson, tz, chat_identifier, now_utc, protected_reminders
+        )
+        if lesson.has_homework is True or lesson.homework_due_at is not None or lesson.homework_text:
+            await _create_homework_reminder(
+                session, current_tenant, package, lesson, tz, chat_identifier, now_utc, protected_reminders
+            )
 
-    # Use all lessons (including cancelled) to find last lesson for payment reminders
-    if all_lessons:
-        last_lesson = all_lessons[-1]
-        await _create_payment_reminders(session, current_tenant, package, last_lesson, tz, chat_identifier, now_utc)
+    # Flexible packages intentionally have no business end date. The last
+    # currently scheduled lesson is not the end of such a package and must not
+    # trigger payment or renewal notices. One-off lessons never renew.
+    if (
+        package.package_type == "package"
+        and package.schedule_mode == "fixed"
+        and package.end_date is not None
+    ):
+        eligible_payment_lessons = [
+            lesson
+            for lesson in active_lessons
+            if _normalize_datetime(lesson.scheduled_at) <= _normalize_datetime(package.end_date)
+        ]
+        if eligible_payment_lessons:
+            await _create_payment_reminders(
+                session,
+                current_tenant,
+                package,
+                eligible_payment_lessons[-1],
+                tz,
+                chat_identifier,
+                now_utc,
+                protected_reminders,
+            )
+        if package.renewal_enabled:
+            await _create_package_renewal(
+                session,
+                current_tenant,
+                package,
+                (),
+                tz,
+                chat_identifier,
+                now_utc,
+                protected_reminders,
+            )
 
-    await _create_package_renewal(session, current_tenant, package, all_lessons, tz, chat_identifier, now_utc)
 
-
-async def _clear_existing(session: AsyncSession, package: LessonPackage) -> None:
-    """Delete all existing reminder rules and instances for package.
+async def _clear_existing(
+    session: AsyncSession,
+    package: LessonPackage,
+) -> set[_ProtectedReminderKey]:
+    """Remove only mutable reminders while preserving delivery history.
 
     Args:
         session: Async database session
         package: Package to clear reminders from
     """
-    for rule in list(package.reminder_rules or []):
-        await session.delete(rule)
+    protected: set[_ProtectedReminderKey] = set()
+    protected_rule_ids: set[int] = set()
     for instance in list(package.reminder_instances or []):
-        await session.delete(instance)
+        validation_failed = (
+            instance.status == "failed"
+            and bool((instance.payload or {}).get("validation_error"))
+        )
+        if instance.status in _MUTABLE_REMINDER_STATUSES or validation_failed:
+            await session.delete(instance)
+            continue
+        reminder_type = instance.rule.reminder_type if instance.rule else ""
+        protected.add(
+            _reminder_key(
+                reminder_type,
+                instance.lesson_id,
+                instance.scheduled_for,
+            )
+        )
+        protected_rule_ids.add(instance.rule_id)
     await session.flush()
+    for rule in list(package.reminder_rules or []):
+        if rule.id not in protected_rule_ids:
+            await session.delete(rule)
+        else:
+            rule.active = False
+            session.add(rule)
+    await session.flush()
+    return protected
+
+
+def _reminder_key(
+    reminder_type: str,
+    lesson_id: Optional[int],
+    scheduled_for: datetime,
+) -> _ProtectedReminderKey:
+    return reminder_type, lesson_id, _normalize_datetime(scheduled_for)
+
+
+def _was_already_finalized(
+    protected_reminders: set[_ProtectedReminderKey],
+    *,
+    reminder_type: str,
+    lesson_id: Optional[int],
+    scheduled_for: Optional[datetime],
+) -> bool:
+    if scheduled_for is None:
+        return False
+    return _reminder_key(reminder_type, lesson_id, scheduled_for) in protected_reminders
 
 
 def _package_tz(package: LessonPackage) -> ZoneInfo:
@@ -181,7 +270,7 @@ def _preferred_chat_identifier(package: LessonPackage) -> Optional[str]:
         return None
     if learner.bot_user and learner.bot_user.chat_id:
         return pack_chat_identifier(learner.display_name, str(learner.bot_user.chat_id))
-    return pack_chat_identifier(learner.display_name, learner.display_name)
+    return None
 
 
 async def _create_lesson_confirm(
@@ -192,6 +281,7 @@ async def _create_lesson_confirm(
     tz: ZoneInfo,
     chat_identifier: Optional[str],
     now_utc: datetime,
+    protected_reminders: set[_ProtectedReminderKey],
 ) -> None:
     """Create lesson confirmation reminder (sent before lesson).
 
@@ -204,6 +294,15 @@ async def _create_lesson_confirm(
         chat_identifier: Chat identifier for delivery
         now_utc: Current UTC time for status determination
     """
+    scheduled = _compute_lesson_offset(lesson, tz, minutes=-DEFAULT_LESSON_CONFIRM_LEAD_MINUTES)
+    if _was_already_finalized(
+        protected_reminders,
+        reminder_type=REMINDER_TYPE_LESSON_CONFIRM,
+        lesson_id=lesson.id,
+        scheduled_for=scheduled,
+    ):
+        return
+
     rule = await crud.create_reminder_rule(
         session,
         current_tenant,
@@ -213,7 +312,6 @@ async def _create_lesson_confirm(
         config={'offset_minutes': DEFAULT_LESSON_CONFIRM_LEAD_MINUTES},
     )
 
-    scheduled = _compute_lesson_offset(lesson, tz, minutes=-DEFAULT_LESSON_CONFIRM_LEAD_MINUTES)
     schedule_meta, validation_error = _validate_and_resolve_schedule(
         chat_identifier, scheduled, now_utc, package.id
     )
@@ -249,6 +347,7 @@ async def _create_lesson_day_before_confirm(
     tz: ZoneInfo,
     chat_identifier: Optional[str],
     now_utc: datetime,
+    protected_reminders: set[_ProtectedReminderKey],
 ) -> None:
     """Create day-before lesson confirmation reminder.
 
@@ -261,6 +360,15 @@ async def _create_lesson_day_before_confirm(
         chat_identifier: Chat identifier for delivery
         now_utc: Current UTC time for status determination
     """
+    scheduled = _compute_day_before_confirm_time(lesson, tz)
+    if _was_already_finalized(
+        protected_reminders,
+        reminder_type=REMINDER_TYPE_LESSON_DAY_BEFORE,
+        lesson_id=lesson.id,
+        scheduled_for=scheduled,
+    ):
+        return
+
     rule = await crud.create_reminder_rule(
         session,
         current_tenant,
@@ -273,14 +381,17 @@ async def _create_lesson_day_before_confirm(
         },
     )
 
-    scheduled = _compute_day_before_confirm_time(lesson, tz)
-    schedule_meta = _resolve_schedule_state(scheduled, now_utc)
+    schedule_meta, validation_error = _validate_and_resolve_schedule(
+        chat_identifier, scheduled, now_utc, package.id
+    )
     payload = {
         'student_name': package.learner.display_name,
         'lesson_id': lesson.id,
         'sequence_index': lesson.sequence_index,
         'lead_minutes': LESSON_DAY_BEFORE_LEAD_DAYS * 24 * 60,
     }
+    if validation_error:
+        payload['validation_error'] = validation_error
 
     await crud.create_reminder_instance(
         session,
@@ -305,6 +416,7 @@ async def _create_homework_reminder(
     tz: ZoneInfo,
     chat_identifier: Optional[str],
     now_utc: datetime,
+    protected_reminders: set[_ProtectedReminderKey],
 ) -> None:
     """Create homework reminder (sent day before next lesson).
 
@@ -317,6 +429,15 @@ async def _create_homework_reminder(
         chat_identifier: Chat identifier for delivery
         now_utc: Current UTC time for status determination
     """
+    scheduled = _compute_homework_time(lesson, tz)
+    if _was_already_finalized(
+        protected_reminders,
+        reminder_type=REMINDER_TYPE_HOMEWORK,
+        lesson_id=lesson.id,
+        scheduled_for=scheduled,
+    ):
+        return
+
     rule = await crud.create_reminder_rule(
         session,
         current_tenant,
@@ -329,14 +450,17 @@ async def _create_homework_reminder(
         },
     )
 
-    scheduled = _compute_homework_time(lesson, tz)
-    schedule_meta = _resolve_schedule_state(scheduled, now_utc)
+    schedule_meta, validation_error = _validate_and_resolve_schedule(
+        chat_identifier, scheduled, now_utc, package.id
+    )
     payload = {
         'student_name': package.learner.display_name,
         'lesson_id': lesson.id,
         'sequence_index': lesson.sequence_index,
         'lead_minutes': HOMEWORK_LEAD_DAYS * 24 * 60,
     }
+    if validation_error:
+        payload['validation_error'] = validation_error
 
     await crud.create_reminder_instance(
         session,
@@ -361,6 +485,7 @@ async def _create_payment_reminders(
     tz: ZoneInfo,
     chat_identifier: Optional[str],
     now_utc: datetime,
+    protected_reminders: set[_ProtectedReminderKey],
 ) -> None:
     """Create payment reminders (week and day before last lesson).
 
@@ -380,6 +505,15 @@ async def _create_payment_reminders(
         (REMINDER_TYPE_PAYMENT_WEEK, timedelta(weeks=1)),
         (REMINDER_TYPE_PAYMENT_DAY, timedelta(days=1)),
     ):
+        scheduled = _compute_payment_time(last_lesson, tz, delta)
+        if _was_already_finalized(
+            protected_reminders,
+            reminder_type=reminder_type,
+            lesson_id=last_lesson.id,
+            scheduled_for=scheduled,
+        ):
+            continue
+
         rule = await crud.create_reminder_rule(
             session,
             current_tenant,
@@ -389,13 +523,16 @@ async def _create_payment_reminders(
             config={},
         )
 
-        scheduled = _compute_payment_time(last_lesson, tz, delta)
-        schedule_meta = _resolve_schedule_state(scheduled, now_utc)
+        schedule_meta, validation_error = _validate_and_resolve_schedule(
+            chat_identifier, scheduled, now_utc, package.id
+        )
         payload = {
             'student_name': package.learner.display_name,
             'lesson_id': last_lesson.id,
             'last_lesson_date': last_lesson_date,  # NEW: Add formatted date
         }
+        if validation_error:
+            payload['validation_error'] = validation_error
 
         await crud.create_reminder_instance(
             session,
@@ -420,6 +557,7 @@ async def _create_package_renewal(
     tz: ZoneInfo,
     chat_identifier: Optional[str],
     now_utc: datetime,
+    protected_reminders: set[_ProtectedReminderKey],
 ) -> None:
     """Create package renewal reminder (14 days before end).
 
@@ -432,12 +570,25 @@ async def _create_package_renewal(
         chat_identifier: Chat identifier for delivery
         now_utc: Current UTC time for status determination
     """
+    if (
+        package.package_type != "package"
+        or package.schedule_mode != "fixed"
+        or not package.renewal_enabled
+        or package.status != "active"
+    ):
+        return
+
     reference = package.end_date
     if not reference:
-        lessons = list(lessons)
-        if lessons:
-            reference = lessons[-1].scheduled_at
-    if not reference:
+        return
+
+    scheduled = _compute_package_renewal_time(reference, tz)
+    if _was_already_finalized(
+        protected_reminders,
+        reminder_type=REMINDER_TYPE_PACKAGE_RENEWAL,
+        lesson_id=None,
+        scheduled_for=scheduled,
+    ):
         return
 
     rule = await crud.create_reminder_rule(
@@ -449,12 +600,15 @@ async def _create_package_renewal(
         config={'lead_days': PACKAGE_RENEWAL_LEAD_DAYS},
     )
 
-    scheduled = _compute_package_renewal_time(reference, tz)
-    schedule_meta = _resolve_schedule_state(scheduled, now_utc)
+    schedule_meta, validation_error = _validate_and_resolve_schedule(
+        chat_identifier, scheduled, now_utc, package.id
+    )
     payload = {
         'student_name': package.learner.display_name,
         'package_end': _format_local(reference, tz),
     }
+    if validation_error:
+        payload['validation_error'] = validation_error
 
     await crud.create_reminder_instance(
         session,
@@ -608,7 +762,7 @@ def _validate_and_resolve_schedule(
         # Create failed schedule
         return (
             _ReminderSchedule(
-                scheduled_for=now_utc,
+                scheduled_for=scheduled_for or now_utc,
                 status='failed',
                 active=False
             ),

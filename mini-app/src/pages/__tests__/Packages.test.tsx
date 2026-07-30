@@ -67,6 +67,8 @@ describe('Packages', () => {
       switchTenant: jest.fn(),
       registerTutor: jest.fn(),
       registerStudent: jest.fn(),
+      linkExistingEmailAccount: jest.fn(),
+      setEmailPassword: jest.fn(),
       logout: jest.fn(),
     });
   });
@@ -124,6 +126,6 @@ describe('Packages', () => {
     renderComponent();
     
     expect(await screen.findByText('5/10 lessons')).toBeInTheDocument();
-    expect(await screen.findByText('1/8 lessons')).toBeInTheDocument();
+    expect(await screen.findByText('0/8 lessons')).toBeInTheDocument();
   });
 });

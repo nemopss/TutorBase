@@ -373,7 +373,9 @@ class ReminderScheduler:
                     exc,
                     reason,
                 )
-                comment = f"Retry {retry_count}/{MAX_RETRY_ATTEMPTS}: {exc}"[:1000]
+                comment = (
+                    f"Temporary failure, retry {retry_count}/{MAX_RETRY_ATTEMPTS}: {exc}"
+                )[:1000]
                 await crud.set_reminder_instance_status(
                     session,
                     instance,

@@ -229,6 +229,7 @@ class NotificationJobDraft:
     job_type: str
     scope: dict[str, Any] = field(default_factory=dict)
     created_by_user_id: int | None = None
+    dedupe_key: str | None = None
 
 
 @dataclass(frozen=True)
@@ -237,6 +238,7 @@ class NotificationJobRecord:
     job_type: str
     status: str
     scope: dict[str, Any] = field(default_factory=dict)
+    attempt_count: int = 0
 
 
 @dataclass(frozen=True)

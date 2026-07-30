@@ -5,9 +5,11 @@ import pytest
 from notifications.application.dto import (
     AudienceSelector,
     NotificationAuditLogDraft,
+    NotificationJobDraft,
     NotificationRuleCreateDraft,
     NotificationRuleRecord,
     NotificationRuleUpdateDraft,
+    NotificationSettingsRecord,
 )
 from notifications.application.rules import (
     ActivateNotificationRuleUseCase,
@@ -22,6 +24,7 @@ from notifications.domain.enums import (
     CapMode,
     CategoryKey,
     EventType,
+    NotificationSystemMode,
     Priority,
     QuietHoursMode,
     RuleStatus,
@@ -74,7 +77,11 @@ class FakeRuleRepository:
 
     async def update_rule(self, rule_id, draft):
         self.updated.append((rule_id, draft))
-        return _record(rule_id=rule_id, status=draft.status or RuleStatus.DRAFT)
+        existing = await self.get_rule(rule_id)
+        return _record(
+            rule_id=rule_id,
+            status=draft.status or (existing.status if existing else RuleStatus.DRAFT),
+        )
 
     async def set_rule_status(self, rule_id, status):
         self.statuses.append((rule_id, status))
@@ -100,10 +107,29 @@ class FakeInstanceRepository:
 
 
 @dataclass
+class FakeJobRepository:
+    created: list[NotificationJobDraft] = field(default_factory=list)
+
+    async def create_job(self, draft):
+        self.created.append(draft)
+        return None
+
+
+@dataclass
+class FakeSettingsRepository:
+    mode: NotificationSystemMode = NotificationSystemMode.NEW
+
+    async def get_settings(self):
+        return NotificationSettingsRecord(tenant_id=1, mode=self.mode)
+
+
+@dataclass
 class FakeUnitOfWork:
     rules: FakeRuleRepository
     instances: FakeInstanceRepository = field(default_factory=FakeInstanceRepository)
     audit_log: FakeAuditLogRepository = field(default_factory=FakeAuditLogRepository)
+    jobs: FakeJobRepository = field(default_factory=FakeJobRepository)
+    settings: FakeSettingsRepository = field(default_factory=FakeSettingsRepository)
     committed: bool = False
 
     async def commit(self):
@@ -167,6 +193,9 @@ async def test_status_use_cases_commit_status_transition():
         (1, "paused"),
         (1, "archived"),
     ]
+    assert [draft.scope["reason"] for draft in uow.jobs.created] == ["rule_activated"]
+    assert uow.jobs.created[0].scope["delivery_enabled"] is True
+    assert uow.jobs.created[0].scope["shadow"] is False
     assert uow.instances.cancel_rule_calls == [
         {"rule_ids": (1,), "reason": "rule_not_active"},
         {"rule_ids": (1,), "reason": "rule_not_active"},
@@ -192,3 +221,20 @@ async def test_update_rule_cancels_future_instances_when_status_becomes_inactive
     assert uow.instances.cancel_rule_calls == [
         {"rule_ids": (1,), "reason": "rule_not_active"}
     ]
+
+
+@pytest.mark.asyncio
+async def test_update_active_rule_cancels_old_schedule_and_queues_rebuild():
+    repository = FakeRuleRepository(rules=(_record(rule_id=1, status=RuleStatus.ACTIVE),))
+    uow = FakeUnitOfWork(rules=repository)
+
+    updated = await UpdateNotificationRuleUseCase(uow).execute(
+        rule_id=1,
+        draft=NotificationRuleUpdateDraft(trigger_config={"days": -2, "local_time": "10:00"}),
+    )
+
+    assert updated is not None and updated.status == RuleStatus.ACTIVE
+    assert uow.instances.cancel_rule_calls == [
+        {"rule_ids": (1,), "reason": "rule_updated"}
+    ]
+    assert [draft.scope["reason"] for draft in uow.jobs.created] == ["rule_updated"]

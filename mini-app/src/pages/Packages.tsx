@@ -6,6 +6,7 @@ import { PlusOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import api from '../services/api';
 import PackageForm from '../components/forms/PackageForm';
+import type { PackageSubmitValues } from '../components/forms/PackageForm';
 import PageHeader from '../components/common/PageHeader';
 import PackageCard from '../components/cards/PackageCard';
 import type { PackageCardAction } from '../components/cards/PackageCard';
@@ -66,8 +67,18 @@ const fetchPackages = async (status: string): Promise<PackageListResponse> => {
   return data;
 };
 
-const createPackage = async (values: any) => {
-  const { data } = await api.post('/packages', values);
+interface PaymentFormValues {
+  amount: number;
+  paid_at: dayjs.Dayjs;
+  notes?: string;
+}
+
+const createPackage = async (values: PackageSubmitValues) => {
+  const { _creation_kind: creationKind, ...payload } = values;
+  const { data } = await api.post(
+    creationKind === 'one_off' ? '/packages/one-off' : '/packages',
+    payload,
+  );
   return data;
 };
 
@@ -93,7 +104,7 @@ const Packages: React.FC = () => {
     enabled: !requiresTenantContext,
   });
 
-  const packagesData = data?.items ?? [];
+  const packagesData = useMemo(() => data?.items ?? [], [data?.items]);
 
   // Sort by creation date (newest first)
   const sortedPackages = useMemo(() => {
@@ -128,7 +139,7 @@ const Packages: React.FC = () => {
   });
 
   const createPaymentMutation = useMutation({
-    mutationFn: async (values: any) => {
+    mutationFn: async (values: PaymentFormValues) => {
       if (!paymentPackage?.learner_id) {
         throw new Error(t('errors.notFound'));
       }
@@ -177,7 +188,7 @@ const Packages: React.FC = () => {
     },
   });
 
-  const handleFormFinish = (values: any) => {
+  const handleFormFinish = (values: PackageSubmitValues) => {
     if (!canUseFullActions) {
       message.warning('Создание пакетов недоступно в grace-периоде.');
       return;

@@ -71,6 +71,20 @@ interface PackageDetails {
   price?: number | null;
   payment_status?: string;
   total_paid?: number;
+  package_type?: 'package' | 'one_off';
+  schedule_mode?: 'fixed' | 'flexible' | 'one_off';
+  renewal_enabled?: boolean;
+  balance?: {
+    purchased: number;
+    completed: number;
+    scheduled: number;
+    cancelled: number;
+    remaining: number;
+    available_to_schedule: number;
+    amount_total: number;
+    amount_paid: number;
+    amount_due: number;
+  };
 }
 
 interface Lesson {
@@ -501,10 +515,11 @@ const PackageDetail: React.FC = () => {
   }
 
   const progress = packageData?.progress || { total: 0, completed: 0, cancelled: 0 };
-  const remaining = progress.total - progress.completed - progress.cancelled;
-  const completedOrClosed = progress.completed + progress.cancelled;
-  const progressPercent = progress.total > 0
-    ? Math.round((completedOrClosed / progress.total) * 100)
+  const purchasedLessons = packageData?.balance?.purchased ?? packageData?.total_lessons ?? progress.total;
+  const remaining = packageData?.balance?.remaining ?? Math.max(purchasedLessons - progress.completed, 0);
+  const completedOrClosed = packageData?.balance?.completed ?? progress.completed;
+  const progressPercent = purchasedLessons > 0
+    ? Math.round((completedOrClosed / purchasedLessons) * 100)
     : 0;
   const price = Number(packageData?.price || 0);
   const totalPaid = Number(packageData?.total_paid || 0);
@@ -782,7 +797,7 @@ const PackageDetail: React.FC = () => {
             <div style={{ marginBottom: spacing.sm }}>
               <div style={{ display: 'flex', justifyContent: 'space-between', gap: spacing.sm, marginBottom: 6 }}>
                 <Text type="secondary">{t('pages.packages.progress')}</Text>
-                <Text strong>{completedOrClosed}/{progress.total}</Text>
+                <Text strong>{completedOrClosed}/{purchasedLessons}</Text>
               </div>
               <Progress
                 percent={progressPercent}
@@ -793,6 +808,32 @@ const PackageDetail: React.FC = () => {
               />
               <Text type="secondary" style={{ display: 'block', fontSize: 12, marginTop: spacing.xs }}>
                 {progress.completed} {t('pages.finance.completed')} · {progress.cancelled} {t('pages.finance.cancelled')} · {remaining} {t('pages.finance.remaining')}
+              </Text>
+            </div>
+            {packageData?.balance && (
+              <div style={{ ...innerSurfaceStyle, marginBottom: spacing.sm }}>
+                <div style={valueRowStyle}>
+                  <Text type="secondary">{t('packageDetail.availableToSchedule')}</Text>
+                  <Text strong>{packageData.balance.available_to_schedule}</Text>
+                </div>
+                <div style={valueRowStyle}>
+                  <Text type="secondary">{t('packageDetail.scheduledLessons')}</Text>
+                  <Text>{packageData.balance.scheduled}</Text>
+                </div>
+              </div>
+            )}
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('forms.packageWizard.modeLabel')}</Text>
+              <Text>
+                {t(`forms.packageWizard.${packageData?.schedule_mode === 'one_off' ? 'oneOffTitle' : `${packageData?.schedule_mode || 'flexible'}Title`}`)}
+              </Text>
+            </div>
+            <div style={valueRowStyle}>
+              <Text type="secondary">{t('forms.packageWizard.renewalTitle')}</Text>
+              <Text type={packageData?.renewal_enabled ? undefined : 'secondary'}>
+                {packageData?.renewal_enabled
+                  ? t('forms.packageWizard.renewalOnReview')
+                  : t('forms.packageWizard.renewalOffReview')}
               </Text>
             </div>
             <div style={valueRowStyle}>

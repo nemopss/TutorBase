@@ -203,6 +203,28 @@ async def test_update_settings_requires_explicit_confirmation_for_global_new():
 
 
 @pytest.mark.asyncio
+async def test_update_settings_rejects_global_new_when_automation_is_disabled():
+    repository = FakeSettingsRepository(
+        settings=NotificationSettingsRecord(tenant_id=1, mode=NotificationSystemMode.SHADOW)
+    )
+    uow = FakeUnitOfWork(settings=repository)
+
+    with pytest.raises(ValueError, match="automation is disabled"):
+        await UpdateNotificationSettingsUseCase(
+            uow,
+            automation_enabled=False,
+        ).execute(
+            NotificationSettingsUpdateDraft(
+                mode=NotificationSystemMode.NEW,
+                confirm_global_new=True,
+            )
+        )
+
+    assert repository.updated_settings is None
+    assert uow.committed is False
+
+
+@pytest.mark.asyncio
 async def test_update_settings_to_new_clears_overrides_and_rebuilds_future_queue():
     now = datetime.now(timezone.utc)
     rule = NotificationRuleDraft(

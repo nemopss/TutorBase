@@ -21,6 +21,7 @@ from api.schemas.packages import (
     PackageListResponse,
     PackageResponse,
     PackageUpdateRequest,
+    PackageBalanceModel,
     PackageProgressModel,
 )
 from api.schemas import MessageResponse, PaginatedResponse, PaginationParams
@@ -56,6 +57,8 @@ def _to_response(dto: LessonPackageDTO, *, include_private: bool = True) -> Pack
         learner_name=dto.learner_name,
         template_id=dto.template_id,
         package_type=dto.package_type,
+        schedule_mode=dto.schedule_mode,
+        renewal_enabled=dto.renewal_enabled,
         title=dto.title if include_private else _student_safe_package_title(dto),
         status=dto.status,
         start_date=dto.start_date,
@@ -68,6 +71,17 @@ def _to_response(dto: LessonPackageDTO, *, include_private: bool = True) -> Pack
         payment_status=dto.payment_status if include_private else "hidden",
         total_paid=dto.total_paid if include_private else 0.0,
         next_lesson_date=dto.next_lesson_date,
+        balance=PackageBalanceModel(
+            purchased=dto.balance.purchased if dto.balance else 0,
+            completed=dto.balance.completed if dto.balance else 0,
+            scheduled=dto.balance.scheduled if dto.balance else 0,
+            cancelled=dto.balance.cancelled if dto.balance else 0,
+            remaining=dto.balance.remaining if dto.balance else 0,
+            available_to_schedule=dto.balance.available_to_schedule if dto.balance else 0,
+            amount_total=dto.balance.amount_total if dto.balance and include_private else 0,
+            amount_paid=dto.balance.amount_paid if dto.balance and include_private else 0,
+            amount_due=dto.balance.amount_due if dto.balance and include_private else 0,
+        ),
     )
 
 
@@ -192,6 +206,8 @@ async def create_package_endpoint(
                 notes=payload.notes,
                 status=payload.status or 'draft',
                 lesson_dates=lesson_dates,
+                renewal_enabled=payload.renewal_enabled if payload.renewal_enabled is not None else False,
+                price=payload.price,
             )
         elif payload.template_id is not None:
             await template_service.get_template(session, current_tenant, payload.template_id)
@@ -204,6 +220,8 @@ async def create_package_endpoint(
                 notes=payload.notes,
                 start_local=start_local,
                 status=payload.status or 'draft',
+                renewal_enabled=payload.renewal_enabled if payload.renewal_enabled is not None else False,
+                price=payload.price,
             )
         else:
             package = await package_service.create_package(
@@ -215,6 +233,9 @@ async def create_package_endpoint(
                 status=payload.status,
                 start_date=start_local,
                 total_lessons=payload.total_lessons,
+                schedule_mode=payload.schedule_mode,
+                renewal_enabled=payload.renewal_enabled or False,
+                price=payload.price,
             )
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
@@ -243,6 +264,12 @@ async def update_package_endpoint(
             start_date=normalize_to_timezone(payload.start_date) if payload.start_date is not None else None,
             end_date=normalize_to_timezone(payload.end_date) if payload.end_date is not None else None,
             total_lessons=payload.total_lessons,
+            schedule_mode=payload.schedule_mode,
+            renewal_enabled=payload.renewal_enabled,
+            price=payload.price,
+            start_date_set="start_date" in payload.model_fields_set,
+            end_date_set="end_date" in payload.model_fields_set,
+            price_set="price" in payload.model_fields_set,
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

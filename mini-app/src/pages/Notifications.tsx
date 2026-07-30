@@ -317,7 +317,7 @@ const fetchNotificationTemplates = async (): Promise<NotificationTemplate[]> => 
 };
 
 const fetchNotificationInstances = async (): Promise<NotificationInstance[]> => {
-  const { data } = await api.get('/notifications/instances', { params: { limit: 100, queue_only: true } });
+  const { data } = await api.get('/notifications/instances', { params: { limit: 300 } });
   return data;
 };
 
@@ -1435,16 +1435,6 @@ const Notifications: React.FC = () => {
         actions={isOwnerDebug ? <Tag color="green">{t('navigation.newBadge')}</Tag> : undefined}
       />
 
-      {isOwnerDebug && (
-        <Alert
-          type="info"
-          showIcon
-          message={t('pages.notifications.pilotNoticeTitle')}
-          description={t('pages.notifications.pilotNoticeDescription')}
-          style={{ marginBottom: 16 }}
-        />
-      )}
-
       {!notificationsAllowed && (
         <Alert
           type="warning"
@@ -2400,10 +2390,35 @@ const QueueTab: React.FC<QueueTabProps> = ({
 }) => {
   const { t } = useTranslation();
   const [pendingSendNowInstance, setPendingSendNowInstance] = useState<NotificationInstance | null>(null);
-  const visibleInstances = useMemo(
-    () => instances.filter(isQueueInstance),
+  const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [eventFilter, setEventFilter] = useState<string>('all');
+  const [reasonFilter, setReasonFilter] = useState<string>('all');
+  const [search, setSearch] = useState('');
+  const reasonOptions = useMemo(
+    () => [...new Set(instances.map((instance) => instance.status_reason).filter(Boolean) as string[])].sort(),
     [instances],
   );
+  const visibleInstances = useMemo(
+    () => instances.filter((instance) => {
+      if (statusFilter === 'actionable' && !isQueueInstance(instance)) return false;
+      if (statusFilter !== 'all' && statusFilter !== 'actionable' && instance.status !== statusFilter) return false;
+      if (eventFilter !== 'all' && instance.event_type !== eventFilter) return false;
+      if (reasonFilter !== 'all' && instance.status_reason !== reasonFilter) return false;
+      const normalizedSearch = search.trim().toLocaleLowerCase();
+      if (
+        normalizedSearch
+        && !(instance.learner_display_name || '').toLocaleLowerCase().includes(normalizedSearch)
+        && !String(instance.recipient_id).includes(normalizedSearch)
+      ) return false;
+      return true;
+    }),
+    [eventFilter, instances, reasonFilter, search, statusFilter],
+  );
+  const counters = useMemo(() => ({
+    planned: instances.filter((instance) => ['scheduled', 'processing'].includes(instance.status)).length,
+    needsAttention: instances.filter((instance) => ['failed', 'skipped', 'suppressed'].includes(instance.status)).length,
+    sent: instances.filter((instance) => instance.status === 'sent').length,
+  }), [instances]);
   const groupedInstances = useMemo(() => {
     const groups: Record<string, NotificationInstance[]> = {
       past_due: [],
@@ -2500,6 +2515,82 @@ const QueueTab: React.FC<QueueTabProps> = ({
         message={t('pages.notifications.queueHelpTitle')}
         description={t('pages.notifications.queueHelpDescription')}
       />
+      <Row gutter={[12, 12]}>
+        {([
+          ['planned', counters.planned, 'blue'],
+          ['needsAttention', counters.needsAttention, 'orange'],
+          ['sent', counters.sent, 'green'],
+        ] as const).map(([key, value, color]) => (
+          <Col xs={24} sm={8} key={key}>
+            <Card size="small">
+              <Space direction="vertical" size={0}>
+                <Typography.Text type="secondary">
+                  {t(`pages.notifications.centerCounters.${key}`)}
+                </Typography.Text>
+                <Typography.Title level={3} style={{ margin: 0 }}>
+                  <Tag color={color}>{value}</Tag>
+                </Typography.Title>
+              </Space>
+            </Card>
+          </Col>
+        ))}
+      </Row>
+      <Card size="small">
+        <Space wrap style={{ width: '100%' }}>
+          <Input.Search
+            allowClear
+            value={search}
+            onChange={(event) => setSearch(event.target.value)}
+            placeholder={t('pages.notifications.filters.searchLearner')}
+            style={{ width: 220 }}
+          />
+          <Select
+            value={statusFilter}
+            onChange={setStatusFilter}
+            style={{ minWidth: 180 }}
+            options={[
+              { value: 'all', label: t('pages.notifications.filters.allStatuses') },
+              { value: 'actionable', label: t('pages.notifications.filters.actionable') },
+              ...['scheduled', 'processing', 'sent', 'failed', 'skipped', 'suppressed', 'cancelled', 'shadow', 'expired']
+                .map((status) => ({ value: status, label: getInstanceStatusLabel(status, t) })),
+            ]}
+          />
+          <Select
+            value={eventFilter}
+            onChange={setEventFilter}
+            style={{ minWidth: 170 }}
+            options={[
+              { value: 'all', label: t('pages.notifications.filters.allEvents') },
+              ...['lesson', 'package', 'custom_date'].map((eventType) => ({
+                value: eventType,
+                label: t(`pages.notifications.eventTypes.${eventType}`),
+              })),
+            ]}
+          />
+          <Select
+            value={reasonFilter}
+            onChange={setReasonFilter}
+            style={{ minWidth: 210 }}
+            options={[
+              { value: 'all', label: t('pages.notifications.filters.allReasons') },
+              ...reasonOptions.map((reason) => ({
+                value: reason,
+                label: getStatusReasonLabel(reason, t),
+              })),
+            ]}
+          />
+          {(statusFilter !== 'all' || eventFilter !== 'all' || reasonFilter !== 'all' || search) && (
+            <Button onClick={() => {
+              setStatusFilter('all');
+              setEventFilter('all');
+              setReasonFilter('all');
+              setSearch('');
+            }}>
+              {t('pages.notifications.filters.reset')}
+            </Button>
+          )}
+        </Space>
+      </Card>
       <NoticeError error={error} />
       {loading ? (
         <Card loading />
@@ -2563,6 +2654,15 @@ const QueueTab: React.FC<QueueTabProps> = ({
                                 </Tag>
                               ))}
                             </Space>
+                          )}
+
+                          {instance.status_reason && (
+                            <Alert
+                              type={['failed', 'skipped', 'suppressed'].includes(instance.status) ? 'warning' : 'info'}
+                              showIcon
+                              message={getStatusReasonLabel(instance.status_reason, t)}
+                              description={instance.latest_attempt?.error_message || undefined}
+                            />
                           )}
 
                           <Space wrap>

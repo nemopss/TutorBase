@@ -3,6 +3,10 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
 import Templates from '../Templates';
 
+jest.mock('../../auth/AuthProvider', () => ({
+  useAuth: () => ({ tenantId: 1 }),
+}));
+
 // Mock the api module
 jest.mock('../../services/api', () => ({
   get: jest.fn(() => Promise.resolve({ 

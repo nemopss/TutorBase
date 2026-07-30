@@ -3,6 +3,7 @@ from __future__ import annotations
 from collections.abc import Callable
 from datetime import datetime, time, timedelta, timezone
 
+from config import config
 from database.models import BotUser, Learner, Lesson, LessonPackage
 from sqlalchemy import delete, exists, func, insert, or_, select, tuple_, update
 from sqlalchemy.orm import aliased, joinedload, selectinload
@@ -649,11 +650,35 @@ class SqlAlchemyNotificationJobRepository:
 
     async def create_job(self, draft: NotificationJobDraft) -> NotificationJobRecord:
         now = self._now_factory()
+        if draft.dedupe_key:
+            existing_result = await self._session.execute(
+                select(NotificationJob)
+                .where(
+                    NotificationJob.tenant_id == self._tenant_id,
+                    NotificationJob.dedupe_key == draft.dedupe_key,
+                    NotificationJob.status == "queued",
+                )
+                .order_by(NotificationJob.id.desc())
+                .limit(1)
+                .with_for_update()
+            )
+            existing = existing_result.scalar_one_or_none()
+            if existing is not None:
+                existing.scope = draft.scope
+                existing.updated_at = now
+                existing.error = None
+                if existing.status == "queued":
+                    existing.available_at = now
+                await self._session.flush()
+                return _job_record_from_model(existing)
         job = NotificationJob(
             tenant_id=self._tenant_id,
             job_type=draft.job_type,
             status="queued",
+            dedupe_key=draft.dedupe_key,
             scope=draft.scope,
+            attempt_count=0,
+            available_at=now,
             created_by_user_id=draft.created_by_user_id,
             created_at=now,
             updated_at=now,
@@ -668,18 +693,28 @@ class SqlAlchemyNotificationJobRepository:
         job_type: str,
         limit: int,
     ) -> tuple[NotificationJobRecord, ...]:
+        now = self._now_factory()
+        lease_seconds = max(
+            1,
+            int(getattr(config, "NOTIFICATIONS_JOB_LEASE_SECONDS", 900)),
+        )
         result = await self._session.execute(
             _queued_jobs_for_claim_stmt(
                 tenant_id=self._tenant_id,
                 job_type=job_type,
                 limit=limit,
+                stale_before=now - timedelta(seconds=lease_seconds),
+                now=now,
             )
         )
         jobs = tuple(result.scalars().all())
-        now = self._now_factory()
         for job in jobs:
             job.status = "running"
-            job.started_at = job.started_at or now
+            job.attempt_count = (getattr(job, "attempt_count", 0) or 0) + 1
+            job.started_at = now
+            job.finished_at = None
+            job.result_summary = None
+            job.error = None
             job.updated_at = now
         await self._session.flush()
         return tuple(_job_record_from_model(job) for job in jobs)
@@ -713,11 +748,43 @@ class SqlAlchemyNotificationJobRepository:
         job_id: int,
         *,
         error: str,
+        retryable: bool = False,
     ) -> NotificationJobRecord:
         job = await self._get_job(job_id)
         now = self._now_factory()
-        job.status = "failed"
-        job.finished_at = now
+        max_attempts = max(
+            1,
+            int(getattr(config, "NOTIFICATIONS_JOB_MAX_ATTEMPTS", 5)),
+        )
+        queued_successor = None
+        dedupe_key = getattr(job, "dedupe_key", None)
+        if retryable and dedupe_key:
+            queued_successor_result = await self._session.execute(
+                select(NotificationJob.id)
+                .where(
+                    NotificationJob.tenant_id == self._tenant_id,
+                    NotificationJob.dedupe_key == dedupe_key,
+                    NotificationJob.status == "queued",
+                    NotificationJob.id != job.id,
+                )
+                .limit(1)
+            )
+            queued_successor = queued_successor_result.scalar_one_or_none()
+        attempt_count = getattr(job, "attempt_count", 0) or 0
+        if retryable and attempt_count < max_attempts and queued_successor is None:
+            base_seconds = max(
+                1,
+                int(getattr(config, "NOTIFICATIONS_JOB_RETRY_BASE_SECONDS", 30)),
+            )
+            job.status = "queued"
+            job.available_at = now + timedelta(
+                seconds=base_seconds * (2 ** max((attempt_count or 1) - 1, 0))
+            )
+            job.started_at = None
+            job.finished_at = None
+        else:
+            job.status = "failed"
+            job.finished_at = now
         job.error = error
         job.updated_at = now
         await self._session.flush()
@@ -1114,6 +1181,7 @@ class SqlAlchemyNotificationInstanceRepository:
         lease_seconds: int,
         delivery_grace_seconds: int = 0,
     ) -> ClaimDueNotificationsResult:
+        await self._requeue_expired_processing_instances(now=now)
         await self._expire_stale_due_instances(
             now=now,
             delivery_grace_seconds=max(0, delivery_grace_seconds),
@@ -1164,6 +1232,42 @@ class SqlAlchemyNotificationInstanceRepository:
                 for instance, attempt in zip(instances, attempts)
             )
         )
+
+    async def _requeue_expired_processing_instances(self, *, now: datetime) -> int:
+        expired_instance_ids = select(NotificationInstance.id).where(
+            NotificationInstance.tenant_id == self._tenant_id,
+            NotificationInstance.status == InstanceStatus.PROCESSING.value,
+            NotificationInstance.processing_expires_at.is_not(None),
+            NotificationInstance.processing_expires_at <= now,
+        )
+        await self._session.execute(
+            update(NotificationDeliveryAttempt)
+            .where(
+                NotificationDeliveryAttempt.tenant_id == self._tenant_id,
+                NotificationDeliveryAttempt.status == "processing",
+                NotificationDeliveryAttempt.notification_instance_id.in_(expired_instance_ids),
+            )
+            .values(
+                status="failed_retryable",
+                error_code="processing_lease_expired",
+                error_message="Delivery worker lease expired before completion",
+                finished_at=now,
+            )
+        )
+        result = await self._session.execute(
+            update(NotificationInstance)
+            .where(NotificationInstance.id.in_(expired_instance_ids))
+            .values(
+                status=InstanceStatus.SCHEDULED.value,
+                status_reason="processing_lease_expired",
+                delivery_enabled=True,
+                effective_scheduled_for=now,
+                processing_started_at=None,
+                processing_expires_at=None,
+                updated_at=now,
+            )
+        )
+        return int(result.rowcount or 0)
 
     async def _expire_stale_due_instances(
         self,
@@ -1256,6 +1360,9 @@ class SqlAlchemyNotificationInstanceRepository:
         instance.status = InstanceStatus.SCHEDULED.value if retryable else InstanceStatus.FAILED.value
         instance.status_reason = error_code
         instance.delivery_enabled = retryable
+        if retryable:
+            retry_delay_seconds = min(60 * (2 ** max(0, attempt.attempt_no - 1)), 3600)
+            instance.effective_scheduled_for = failed_at + timedelta(seconds=retry_delay_seconds)
         instance.processing_started_at = None
         instance.processing_expires_at = None
         instance.updated_at = failed_at
@@ -2219,13 +2326,32 @@ def _notification_rules_stmt(tenant_id: int, *, include_archived: bool):
     return stmt
 
 
-def _queued_jobs_for_claim_stmt(tenant_id: int, *, job_type: str, limit: int):
+def _queued_jobs_for_claim_stmt(
+    tenant_id: int,
+    *,
+    job_type: str,
+    limit: int,
+    stale_before: datetime | None = None,
+    now: datetime | None = None,
+):
+    claim_at = now or datetime.now(timezone.utc)
+    claimable_status = NotificationJob.status == "queued"
+    if stale_before is not None:
+        claimable_status = or_(
+            claimable_status,
+            (
+                (NotificationJob.status == "running")
+                & (NotificationJob.started_at.is_not(None))
+                & (NotificationJob.started_at <= stale_before)
+            ),
+        )
     return (
         select(NotificationJob)
         .where(
             NotificationJob.tenant_id == tenant_id,
             NotificationJob.job_type == job_type,
-            NotificationJob.status == "queued",
+            NotificationJob.available_at <= claim_at,
+            claimable_status,
         )
         .order_by(NotificationJob.created_at, NotificationJob.id)
         .limit(limit)
@@ -2458,7 +2584,7 @@ def _learner_recipients_stmt(tenant_id: int, learner_ids: tuple[int, ...]):
             Learner.notifications_enabled,
             BotUser.chat_id,
         )
-        .join(BotUser, BotUser.id == Learner.bot_user_id)
+        .outerjoin(BotUser, BotUser.id == Learner.bot_user_id)
         .where(
             Learner.tenant_id == tenant_id,
             Learner.id.in_(learner_ids),
@@ -2599,6 +2725,10 @@ def _package_events_stmt(
         .where(
             LessonPackage.tenant_id == tenant_id,
             LessonPackage.learner_id.in_(learner_ids),
+            LessonPackage.package_type == "package",
+            LessonPackage.schedule_mode == "fixed",
+            LessonPackage.renewal_enabled.is_(True),
+            LessonPackage.status == "active",
             LessonPackage.end_date.is_not(None),
             LessonPackage.end_date >= starts_at,
             LessonPackage.end_date < ends_at,
@@ -2622,6 +2752,10 @@ def _package_event_by_id_stmt(tenant_id: int, event_id: int):
         .where(
             LessonPackage.tenant_id == tenant_id,
             LessonPackage.id == event_id,
+            LessonPackage.package_type == "package",
+            LessonPackage.schedule_mode == "fixed",
+            LessonPackage.renewal_enabled.is_(True),
+            LessonPackage.status == "active",
             LessonPackage.end_date.is_not(None),
         )
     )
@@ -2711,6 +2845,7 @@ def _job_record_from_model(job: NotificationJob) -> NotificationJobRecord:
         job_type=job.job_type,
         status=job.status,
         scope=job.scope or {},
+        attempt_count=getattr(job, "attempt_count", 0) or 0,
     )
 
 

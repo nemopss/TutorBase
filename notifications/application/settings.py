@@ -28,13 +28,23 @@ class GetNotificationSettingsUseCase:
 
 
 class UpdateNotificationSettingsUseCase:
-    def __init__(self, uow: NotificationMaterializationUnitOfWork) -> None:
+    def __init__(
+        self,
+        uow: NotificationMaterializationUnitOfWork,
+        *,
+        automation_enabled: bool = True,
+    ) -> None:
         self._uow = uow
+        self._automation_enabled = automation_enabled
 
     async def execute(self, draft: NotificationSettingsUpdateDraft) -> NotificationSettingsRecord:
         current_settings = await self._uow.settings.get_settings()
         if draft.mode == NotificationSystemMode.NEW and not draft.confirm_global_new:
             raise ValueError("Enabling the new notification system globally requires explicit confirmation")
+        if draft.mode == NotificationSystemMode.NEW and not self._automation_enabled:
+            raise ValueError(
+                "The new notification system cannot be enabled while notification automation is disabled"
+            )
         settings = await self._uow.settings.update_settings(draft)
         if draft.mode == NotificationSystemMode.NEW and current_settings.mode != NotificationSystemMode.NEW:
             await self._uow.settings.clear_learner_modes()

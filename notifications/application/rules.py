@@ -1,13 +1,14 @@
 from __future__ import annotations
 
 from notifications.application.dto import (
+    NotificationJobDraft,
     NotificationRuleCreateDraft,
     NotificationRuleRecord,
     NotificationRuleUpdateDraft,
 )
 from notifications.application.audit import record_notification_audit
 from notifications.application.ports import NotificationMaterializationUnitOfWork
-from notifications.domain.enums import RuleStatus
+from notifications.domain.enums import NotificationSystemMode, RuleStatus
 
 
 class ListNotificationRulesUseCase:
@@ -40,6 +41,12 @@ class CreateNotificationRuleUseCase:
             actor_user_id=draft.created_by_user_id,
             after=rule,
         )
+        if rule.status == RuleStatus.ACTIVE:
+            await _queue_active_rules_rebuild(
+                self._uow,
+                reason="rule_created_active",
+                created_by_user_id=draft.created_by_user_id,
+            )
         await self._uow.commit()
         return rule
 
@@ -63,6 +70,16 @@ class UpdateNotificationRuleUseCase:
                 rule_id=rule.rule_id,
                 status=draft.status,
             )
+            if rule.status == RuleStatus.ACTIVE:
+                await self._uow.instances.cancel_future_instances_for_rules(
+                    rule_ids=(rule.rule_id,),
+                    reason="rule_updated",
+                )
+                await _queue_active_rules_rebuild(
+                    self._uow,
+                    reason="rule_updated",
+                    created_by_user_id=actor_user_id,
+                )
             await record_notification_audit(
                 self._uow,
                 entity_type="notification_rule",
@@ -89,6 +106,11 @@ class ActivateNotificationRuleUseCase:
         before = await self._uow.rules.get_rule(rule_id)
         rule = await self._uow.rules.set_rule_status(rule_id, RuleStatus.ACTIVE.value)
         if rule is not None:
+            await _queue_active_rules_rebuild(
+                self._uow,
+                reason="rule_activated",
+                created_by_user_id=actor_user_id,
+            )
             await record_notification_audit(
                 self._uow,
                 entity_type="notification_rule",
@@ -176,4 +198,28 @@ async def _cancel_future_instances_for_inactive_rule(
     await uow.instances.cancel_future_instances_for_rules(
         rule_ids=(rule_id,),
         reason="rule_not_active",
+    )
+
+
+async def _queue_active_rules_rebuild(
+    uow: NotificationMaterializationUnitOfWork,
+    *,
+    reason: str,
+    created_by_user_id: int | None,
+) -> None:
+    settings = await uow.settings.get_settings()
+    delivery_enabled = settings.mode == NotificationSystemMode.NEW
+    await uow.jobs.create_job(
+        NotificationJobDraft(
+            job_type="materialize_active_rules",
+            scope={
+                "reason": reason,
+                "horizon_days": 30,
+                "limit": 100,
+                "delivery_enabled": delivery_enabled,
+                "shadow": not delivery_enabled,
+            },
+            created_by_user_id=created_by_user_id,
+            dedupe_key="materialize_active_rules",
+        )
     )

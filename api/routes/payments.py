@@ -25,7 +25,9 @@ from api.dependencies import (
 from api.schemas.finance import PaymentCreate, PaymentResponse, PaymentUpdateRequest
 from api.schemas import PaginatedResponse, PaginationParams
 from database.models import Payment, Learner, Lesson, LessonPackage, User
+from notifications.domain.enums import EventType
 from services import finance_service
+from services.notification_reconciliation import enqueue_notification_event_reconciliation
 
 router = APIRouter()
 
@@ -95,6 +97,14 @@ async def create_payment(
             notes=request.notes,
             actor_user_id=current_user.id,
         )
+        if effective_package_id is not None:
+            await enqueue_notification_event_reconciliation(
+                session,
+                current_tenant,
+                event_type=EventType.PACKAGE,
+                event_id=effective_package_id,
+                reason="payment_recorded",
+            )
         await session.commit()
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -150,6 +160,14 @@ async def update_payment(
             notes=request.notes,
             actor_user_id=current_user.id,
         )
+        if payment.package_id is not None:
+            await enqueue_notification_event_reconciliation(
+                session,
+                current_tenant,
+                event_type=EventType.PACKAGE,
+                event_id=payment.package_id,
+                reason="payment_updated",
+            )
         await session.commit()
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))
@@ -273,4 +291,12 @@ async def delete_payment(
         actor_user_id=current_user.id,
         reason="Voided via DELETE /payments/{payment_id}",
     )
+    if payment.package_id is not None:
+        await enqueue_notification_event_reconciliation(
+            session,
+            current_tenant,
+            event_type=EventType.PACKAGE,
+            event_id=payment.package_id,
+            reason="payment_voided",
+        )
     await session.commit()

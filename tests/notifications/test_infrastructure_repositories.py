@@ -32,10 +32,12 @@ from notifications.infrastructure.repositories import (
     _delivery_activity_stmt,
     _due_instances_for_claim_stmt,
     _instance_record_from_row,
+    _learner_recipients_stmt,
     _lesson_event_by_id_stmt,
     _notification_audit_log_stmt,
     _notification_instances_stmt,
     _package_event_by_id_stmt,
+    _package_events_stmt,
     _queued_jobs_for_claim_stmt,
     _response_activity_from_row,
     _response_activity_stmt,
@@ -148,23 +150,46 @@ class FakeAsyncSession:
 
 
 class FakeClaimSession:
-    def __init__(self, instances, *, stale_instances=()):
+    def __init__(
+        self,
+        instances,
+        *,
+        stale_instances=(),
+        expired_processing_instances=(),
+        expired_processing_attempts=(),
+    ):
         self.instances = instances
         self.stale_instances = list(stale_instances)
+        self.expired_processing_instances = list(expired_processing_instances)
+        self.expired_processing_attempts = list(expired_processing_attempts)
         self.calls = []
         self.added = []
 
     async def execute(self, statement, params=None):
         self.calls.append((statement, params))
         if len(self.calls) == 1:
+            for attempt in self.expired_processing_attempts:
+                attempt.status = "failed_retryable"
+                attempt.error_code = "processing_lease_expired"
+            return FakeResult([])
+        if len(self.calls) == 2:
+            for instance in self.expired_processing_instances:
+                instance.status = "scheduled"
+                instance.status_reason = "processing_lease_expired"
+                instance.delivery_enabled = True
+                instance.effective_scheduled_for = instance.processing_expires_at
+                instance.processing_started_at = None
+                instance.processing_expires_at = None
+            return FakeResult([])
+        if len(self.calls) == 3:
             for instance in self.stale_instances:
                 instance.status = "expired"
                 instance.status_reason = "delivery_window_exceeded"
                 instance.delivery_enabled = False
             return FakeResult([])
-        if len(self.calls) == 2:
+        if len(self.calls) == 4:
             return FakeResult(self.instances)
-        if len(self.calls) <= 2 + len(self.instances):
+        if len(self.calls) <= 4 + len(self.instances):
             return FakeResult([1])
         return FakeResult([SimpleNamespace(id=10, chat_id="5390064156")])
 
@@ -438,6 +463,37 @@ async def test_job_repository_claims_queued_jobs_with_processing_lock():
 
 
 @pytest.mark.asyncio
+async def test_job_repository_reclaims_job_after_running_lease_expires():
+    now = datetime(2026, 4, 8, 7, 0, tzinfo=timezone.utc)
+    job = SimpleNamespace(
+        id=1,
+        tenant_id=1,
+        job_type="reconcile_event",
+        status="running",
+        scope={"event_type": "lesson", "event_id": 617},
+        started_at=now - timedelta(hours=1),
+        finished_at=now - timedelta(minutes=30),
+        result_summary={"partial": True},
+        error="worker_lost",
+        updated_at=now - timedelta(hours=1),
+    )
+    session = FakeQueuedJobSession([job])
+    repository = SqlAlchemyNotificationJobRepository(
+        session,
+        tenant_id=1,
+        now_factory=lambda: now,
+    )
+
+    claimed = await repository.claim_queued_jobs(job_type="reconcile_event", limit=10)
+
+    assert claimed[0].status == "running"
+    assert job.started_at == now
+    assert job.finished_at is None
+    assert job.result_summary is None
+    assert job.error is None
+
+
+@pytest.mark.asyncio
 async def test_audit_log_repository_records_actor_and_entity_snapshot():
     now = datetime(2026, 4, 8, 7, 0, tzinfo=timezone.utc)
     session = FakeJobSession()
@@ -476,10 +532,13 @@ def test_queued_jobs_claim_statement_uses_postgresql_skip_locked():
         tenant_id=1,
         job_type="materialize_active_rules",
         limit=20,
+        stale_before=datetime(2026, 4, 8, 6, 45, tzinfo=timezone.utc),
     )
 
     compiled = str(stmt.compile(dialect=postgresql.dialect()))
     assert "FOR UPDATE SKIP LOCKED" in compiled
+    assert "notification_jobs.status =" in compiled
+    assert "notification_jobs.started_at <=" in compiled
 
 
 def test_due_instances_claim_statement_skips_answered_instances():
@@ -539,6 +598,31 @@ def test_event_lookup_statements_are_scoped_to_tenant_and_event_id():
     assert "lesson_packages.tenant_id =" in compiled_package
     assert "lesson_packages.id =" in compiled_package
     assert "lesson_packages.end_date IS NOT NULL" in compiled_package
+    assert "lesson_packages.package_type =" in compiled_package
+    assert "lesson_packages.status =" in compiled_package
+
+
+def test_audience_query_keeps_learners_without_bot_contact_for_observability():
+    stmt = _learner_recipients_stmt(tenant_id=1, learner_ids=(10, 11))
+
+    compiled = str(stmt.compile(dialect=postgresql.dialect()))
+
+    assert "LEFT OUTER JOIN bot_users" in compiled
+
+
+def test_package_materialization_excludes_one_off_and_inactive_packages():
+    stmt = _package_events_stmt(
+        tenant_id=1,
+        learner_ids=(10,),
+        starts_at=datetime(2026, 4, 1, tzinfo=timezone.utc),
+        ends_at=datetime(2026, 5, 1, tzinfo=timezone.utc),
+        limit=100,
+    )
+
+    compiled = str(stmt.compile(dialect=postgresql.dialect()))
+
+    assert "lesson_packages.package_type =" in compiled
+    assert "lesson_packages.status =" in compiled
 
 
 def test_notification_instances_statement_supports_queue_filters():
@@ -956,6 +1040,62 @@ async def test_instance_repository_claims_due_instances_and_creates_processing_a
 
 
 @pytest.mark.asyncio
+async def test_instance_repository_reclaims_delivery_after_processing_lease_expires():
+    now = datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc)
+    instance = NotificationInstance(
+        id=101,
+        tenant_id=1,
+        rule_id=1,
+        category=NotificationCategory(key="lesson_confirmation", display_name="Подтверждение"),
+        event_type="lesson",
+        event_id=617,
+        event_key="lesson:617",
+        recipient_type="learner",
+        recipient_id=10,
+        learner_id=10,
+        scheduled_for=now - timedelta(minutes=10),
+        effective_scheduled_for=now - timedelta(minutes=10),
+        status="processing",
+        delivery_enabled=True,
+        priority="normal",
+        channel="telegram",
+        dedupe_key="single|lesson_confirmation|x",
+        processing_started_at=now - timedelta(minutes=6),
+        processing_expires_at=now,
+    )
+    abandoned_attempt = NotificationDeliveryAttempt(
+        id=200,
+        tenant_id=1,
+        notification_instance_id=101,
+        attempt_no=1,
+        status="processing",
+        channel="telegram",
+        provider="telegram",
+        started_at=now - timedelta(minutes=6),
+    )
+    session = FakeClaimSession(
+        [instance],
+        expired_processing_instances=(instance,),
+        expired_processing_attempts=(abandoned_attempt,),
+    )
+    repository = SqlAlchemyNotificationInstanceRepository(session, tenant_id=1)
+
+    result = await repository.claim_due_instances(
+        now=now,
+        limit=100,
+        lease_seconds=300,
+        delivery_grace_seconds=120,
+    )
+
+    assert len(result.claimed) == 1
+    assert instance.status == "processing"
+    assert instance.status_reason == "processing_lease_expired"
+    assert abandoned_attempt.status == "failed_retryable"
+    assert abandoned_attempt.error_code == "processing_lease_expired"
+    assert len(session.added) == 1
+
+
+@pytest.mark.asyncio
 async def test_instance_repository_expires_stale_due_instances_before_claiming():
     now = datetime(2026, 4, 7, 7, 5, tzinfo=timezone.utc)
     stale_instance = NotificationInstance(
@@ -1101,6 +1241,7 @@ async def test_instance_repository_marks_retryable_delivery_failure_as_scheduled
     assert instance.status == "scheduled"
     assert instance.delivery_enabled is True
     assert instance.status_reason == "telegram_timeout"
+    assert instance.effective_scheduled_for == now + timedelta(seconds=65)
     assert instance.processing_started_at is None
     assert instance.processing_expires_at is None
     assert attempt.status == "failed_retryable"

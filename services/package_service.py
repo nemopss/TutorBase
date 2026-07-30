@@ -34,15 +34,15 @@ from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Optional
 
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import CurrentTenant
 from database import crud
 from database.transaction import transactional
-from database.models import Lesson, LessonPackage, LessonPackageTemplate
+from database.models import Lesson, LessonPackage, LessonPackageTemplate, Payment
 from notifications.domain.enums import EventType
-from services.dto import LessonPackageDTO, PackageProgress
+from services.dto import LessonPackageDTO, PackageBalance, PackageProgress
 from services.exceptions import NotFoundError
 from services.notification_reconciliation import enqueue_notification_event_reconciliation
 # Removed: from services.package_scheduler import regenerate_package_reminders (circular import)
@@ -64,6 +64,14 @@ PACKAGE_TYPE_PACKAGE = "package"
 PACKAGE_TYPE_ONE_OFF = "one_off"
 PACKAGE_TYPE_ALL = "all"
 VALID_PACKAGE_TYPES = {PACKAGE_TYPE_PACKAGE, PACKAGE_TYPE_ONE_OFF}
+SCHEDULE_MODE_FIXED = "fixed"
+SCHEDULE_MODE_FLEXIBLE = "flexible"
+SCHEDULE_MODE_ONE_OFF = "one_off"
+VALID_SCHEDULE_MODES = {
+    SCHEDULE_MODE_FIXED,
+    SCHEDULE_MODE_FLEXIBLE,
+    SCHEDULE_MODE_ONE_OFF,
+}
 
 
 async def _enqueue_lesson_reconciliation_for_package(
@@ -86,6 +94,13 @@ async def _enqueue_lesson_reconciliation_for_package(
             event_id=lesson_id,
             reason=reason,
         )
+    await enqueue_notification_event_reconciliation(
+        session,
+        current_tenant,
+        event_type=EventType.PACKAGE,
+        event_id=package_id,
+        reason=reason,
+    )
 
 
 def _get_next_lesson_date(lessons: list) -> Optional[datetime]:
@@ -124,6 +139,15 @@ def _build_package_dto(package: LessonPackage, total_paid: float = 0.0) -> Lesso
         LessonPackageDTO with package data and calculated progress
     """
     total, completed, cancelled = lesson_stats(package.lessons or [])
+    scheduled = sum(
+        1
+        for lesson in (package.lessons or [])
+        if lesson.status in ("scheduled", "rescheduled")
+    )
+    purchased = package.total_lessons if package.total_lessons is not None else total
+    purchased = max(int(purchased or 0), 0)
+    price = float(package.price or 0)
+    paid = max(float(total_paid or 0), 0)
     learner_name = package.learner.display_name if package.learner else None
     next_lesson = _get_next_lesson_date(package.lessons)
     
@@ -133,6 +157,12 @@ def _build_package_dto(package: LessonPackage, total_paid: float = 0.0) -> Lesso
         learner_name=learner_name,
         template_id=package.template_id,
         package_type=package.package_type or PACKAGE_TYPE_PACKAGE,
+        schedule_mode=package.schedule_mode or (
+            SCHEDULE_MODE_ONE_OFF
+            if package.package_type == PACKAGE_TYPE_ONE_OFF
+            else SCHEDULE_MODE_FLEXIBLE
+        ),
+        renewal_enabled=bool(package.renewal_enabled),
         title=package.title,
         status=package.status,
         start_date=normalize_to_timezone(package.start_date),
@@ -143,8 +173,19 @@ def _build_package_dto(package: LessonPackage, total_paid: float = 0.0) -> Lesso
         progress=PackageProgress(total=total, completed=completed, cancelled=cancelled),
         price=float(package.price) if package.price else None,
         payment_status=package.payment_status or 'unpaid',
-        total_paid=total_paid,
+        total_paid=paid,
         next_lesson_date=next_lesson,
+        balance=PackageBalance(
+            purchased=purchased,
+            completed=completed,
+            scheduled=scheduled,
+            cancelled=cancelled,
+            remaining=max(purchased - completed, 0),
+            available_to_schedule=max(purchased - completed - scheduled, 0),
+            amount_total=price,
+            amount_paid=paid,
+            amount_due=max(price - paid, 0),
+        ),
     )
 
 
@@ -275,7 +316,29 @@ async def list_packages(
         search=search,
         package_type=package_type_filter,
     )
-    dtos = [_build_package_dto(pkg) for pkg in packages]
+    paid_by_package: dict[int, float] = {}
+    package_ids = [package.id for package in packages]
+    if package_ids:
+        payment_result = await session.execute(
+            select(
+                Payment.package_id,
+                func.coalesce(func.sum(Payment.amount), Decimal("0")),
+            )
+            .where(
+                Payment.tenant_id == current_tenant.tenant_id,
+                Payment.package_id.in_(package_ids),
+                Payment.voided_at.is_(None),
+            )
+            .group_by(Payment.package_id)
+        )
+        paid_by_package = {
+            package_id: float(total_paid or 0)
+            for package_id, total_paid in payment_result.all()
+        }
+    dtos = [
+        _build_package_dto(pkg, total_paid=paid_by_package.get(pkg.id, 0.0))
+        for pkg in packages
+    ]
     return dtos, total
 
 
@@ -291,6 +354,9 @@ async def create_package(
     template_id: Optional[int] = None,
     start_date: Optional[datetime] = None,
     total_lessons: Optional[int] = None,
+    schedule_mode: str = SCHEDULE_MODE_FLEXIBLE,
+    renewal_enabled: bool = False,
+    price: Optional[Decimal] = None,
 ) -> LessonPackageDTO:
     """Create a new lesson package manually (without auto-generating lessons).
 
@@ -333,14 +399,24 @@ async def create_package(
         if not template:
             raise NotFoundError(f"Template {template_id} not found")
 
-    # Calculate price from learner's lesson_rate
-    price = calculate_package_price(learner.lesson_rate, total_lessons)
+    if schedule_mode != SCHEDULE_MODE_FLEXIBLE:
+        from services.exceptions import ValidationError
+
+        raise ValidationError("Manual packages must use flexible schedule mode")
+    if renewal_enabled:
+        from services.exceptions import ValidationError
+
+        raise ValidationError("Renewal notifications require a fixed package")
+
+    resolved_price = price if price is not None else calculate_package_price(learner.lesson_rate, total_lessons)
     
     package = await crud.create_lesson_package(
         session,
         current_tenant,
         learner=learner,
         template=template,
+        schedule_mode=schedule_mode,
+        renewal_enabled=False,
         title=title,
         notes=notes,
         status=status,
@@ -350,7 +426,7 @@ async def create_package(
     )
     
     # Set financial fields
-    package.price = price
+    package.price = resolved_price
     package.payment_status = 'unpaid'
 
     session.add(package)
@@ -359,6 +435,13 @@ async def create_package(
     # Lazy import to avoid circular dependency
     from services.package_scheduler import regenerate_package_reminders
     await regenerate_package_reminders(session, current_tenant, package)
+    await enqueue_notification_event_reconciliation(
+        session,
+        current_tenant,
+        event_type=EventType.PACKAGE,
+        event_id=package.id,
+        reason="package_created",
+    )
     
     if packages_created_total:
         packages_created_total.inc()
@@ -400,6 +483,8 @@ async def create_one_off_lesson(
         learner=learner,
         template=None,
         package_type=PACKAGE_TYPE_ONE_OFF,
+        schedule_mode=SCHEDULE_MODE_ONE_OFF,
+        renewal_enabled=False,
         title=title or "Разовый урок",
         notes=notes,
         status="active",
@@ -447,6 +532,8 @@ async def create_package_with_schedule(
     notes: Optional[str] = None,
     status: str = 'draft',
     lesson_dates: list[dict],  # [{"datetime": "...", "duration": 60}, ...]
+    renewal_enabled: bool = False,
+    price: Optional[Decimal] = None,
 ) -> LessonPackageDTO:
     """Create lesson package with lessons from schedule preview.
 
@@ -482,38 +569,46 @@ async def create_package_with_schedule(
 
     total_lessons = len(lesson_dates)
     
-    # Calculate price from learner's lesson_rate
-    price = calculate_package_price(learner.lesson_rate, total_lessons)
+    resolved_price = price if price is not None else calculate_package_price(learner.lesson_rate, total_lessons)
     
-    # Parse first date for start_date
-    first_date = date_parser.isoparse(lesson_dates[0]["datetime"])
-    start_utc = first_date.astimezone(timezone.utc) if first_date.tzinfo else first_date.replace(tzinfo=timezone.utc)
+    parsed_lesson_dates = [
+        date_parser.isoparse(lesson_data["datetime"])
+        for lesson_data in lesson_dates
+    ]
+    lesson_dates_utc = [
+        lesson_dt.astimezone(timezone.utc)
+        if lesson_dt.tzinfo
+        else lesson_dt.replace(tzinfo=timezone.utc)
+        for lesson_dt in parsed_lesson_dates
+    ]
+    start_utc = min(lesson_dates_utc)
+    end_utc = max(lesson_dates_utc)
     
     package = await crud.create_lesson_package(
         session,
         current_tenant,
         learner=learner,
         template=None,
+        schedule_mode=SCHEDULE_MODE_FIXED,
+        renewal_enabled=renewal_enabled,
         title=title,
         notes=notes,
         status=status,
         start_date=start_utc,
+        end_date=end_utc,
         timezone_name=DEFAULT_TIMEZONE,
         total_lessons=total_lessons,
     )
     
     # Set financial fields
-    package.price = price
+    package.price = resolved_price
     package.payment_status = 'unpaid'
 
     session.add(package)
     await session.flush()  # Flush to get package.id
     
     # Create lessons from dates
-    for idx, lesson_data in enumerate(lesson_dates):
-        lesson_dt = date_parser.isoparse(lesson_data["datetime"])
-        lesson_utc = lesson_dt.astimezone(timezone.utc) if lesson_dt.tzinfo else lesson_dt.replace(tzinfo=timezone.utc)
-        
+    for idx, (lesson_data, lesson_utc) in enumerate(zip(lesson_dates, lesson_dates_utc)):
         lesson = Lesson(
             tenant_id=current_tenant.tenant_id,
             package_id=package.id,
@@ -554,6 +649,8 @@ async def create_package_from_template(
     notes: Optional[str],
     start_local: datetime,
     status: str = 'draft',
+    renewal_enabled: bool = False,
+    price: Optional[Decimal] = None,
 ) -> LessonPackageDTO:
     """Create lesson package from template with automatic lesson generation.
 
@@ -600,14 +697,15 @@ async def create_package_from_template(
 
     start_utc = localized_start.astimezone(timezone.utc)
     
-    # Calculate price from learner's lesson_rate
-    price = calculate_package_price(learner.lesson_rate, template.lesson_count)
+    resolved_price = price if price is not None else calculate_package_price(learner.lesson_rate, template.lesson_count)
     
     package = await crud.create_lesson_package(
         session,
         current_tenant,
         learner=learner,
         template=template,
+        schedule_mode=SCHEDULE_MODE_FIXED,
+        renewal_enabled=renewal_enabled,
         title=title,
         notes=notes,
         status=status,
@@ -617,14 +715,19 @@ async def create_package_from_template(
     )
     
     # Set financial fields
-    package.price = price
+    package.price = resolved_price
     package.payment_status = 'unpaid'
 
     session.add(package)
     await session.flush()  # Flush to get package.id for relationships
     
     await generate_lessons_from_template(session, current_tenant, package, template, localized_start)
-    await sync_package_metrics(session, current_tenant, package.id)
+    package, lessons = await sync_package_metrics(session, current_tenant, package.id)
+    if package is None:
+        raise NotFoundError("Created package disappeared during metric synchronization")
+    if lessons:
+        package.end_date = lessons[-1].scheduled_at
+        await session.flush([package])
     
     # Lazy import to avoid circular dependency
     from services.package_scheduler import regenerate_package_reminders
@@ -655,6 +758,12 @@ async def update_package(
     start_date: Optional[datetime] = None,
     end_date: Optional[datetime] = None,
     total_lessons: Optional[int] = None,
+    schedule_mode: Optional[str] = None,
+    renewal_enabled: Optional[bool] = None,
+    price: Optional[Decimal] = None,
+    start_date_set: bool = False,
+    end_date_set: bool = False,
+    price_set: bool = False,
 ) -> LessonPackageDTO:
     """Update parameters of existing lesson package.
 
@@ -695,11 +804,32 @@ async def update_package(
         package.status = status
     if notes is not None:
         package.notes = notes
+    if schedule_mode is not None:
+        if package.package_type == PACKAGE_TYPE_ONE_OFF and schedule_mode != SCHEDULE_MODE_ONE_OFF:
+            from services.exceptions import ValidationError
+
+            raise ValidationError("One-off lessons cannot be converted to packages")
+        if schedule_mode not in VALID_SCHEDULE_MODES:
+            from services.exceptions import ValidationError
+
+            raise ValidationError("Invalid schedule mode")
+        package.schedule_mode = schedule_mode
+        if schedule_mode != SCHEDULE_MODE_FIXED:
+            package.renewal_enabled = False
+            package.end_date = None
+    if renewal_enabled is not None:
+        if renewal_enabled and package.schedule_mode != SCHEDULE_MODE_FIXED:
+            from services.exceptions import ValidationError
+
+            raise ValidationError("Renewal notifications require a fixed package")
+        package.renewal_enabled = renewal_enabled
     package.timezone = DEFAULT_TIMEZONE
-    if start_date is not None:
-        package.start_date = to_utc(start_date, DEFAULT_TZ)
-    if end_date is not None:
-        package.end_date = to_utc(end_date, DEFAULT_TZ)
+    effective_start_date_set = start_date_set or start_date is not None
+    effective_end_date_set = end_date_set or end_date is not None
+    if effective_start_date_set:
+        package.start_date = to_utc(start_date, DEFAULT_TZ) if start_date is not None else None
+    if effective_end_date_set:
+        package.end_date = to_utc(end_date, DEFAULT_TZ) if end_date is not None else None
     
     # Recalculate price if total_lessons changed and price wasn't manually set
     if total_lessons is not None and total_lessons != package.total_lessons:
@@ -712,11 +842,25 @@ async def update_package(
             package.price = new_price
     elif total_lessons is not None:
         package.total_lessons = total_lessons
+    if price_set:
+        package.price = price
 
     session.add(package)
     await session.flush()
-    await sync_package_metrics(session, current_tenant, package_id)
-    if any(value is not None for value in (title, status, end_date)):
+    package, _ = await sync_package_metrics(session, current_tenant, package_id)
+    if package is None:
+        raise NotFoundError(f"Package {package_id} not found")
+    if any(
+        value is not None
+        for value in (title, status, total_lessons, schedule_mode, renewal_enabled)
+    ) or effective_start_date_set or effective_end_date_set or price_set:
+        from services.package_scheduler import regenerate_package_reminders
+
+        await regenerate_package_reminders(session, current_tenant, package)
+    if (
+        any(value is not None for value in (title, status, schedule_mode, renewal_enabled))
+        or effective_end_date_set
+    ):
         await enqueue_notification_event_reconciliation(
             session,
             current_tenant,
