@@ -362,6 +362,7 @@ async def _deliver_for_tenant(
 
     sent = 0
     failed = 0
+    suppressed = 0
     for claimed in claim_result.claimed:
         result = await ExecuteClaimedNotificationDeliveryUseCase(
             uow,
@@ -378,6 +379,8 @@ async def _deliver_for_tenant(
                 instance_id=claimed.instance_id,
                 provider_message_id=result.provider_message_id,
             )
+        elif result.status.value == "suppressed":
+            suppressed += 1
         else:
             failed += 1
 
@@ -386,6 +389,7 @@ async def _deliver_for_tenant(
         "claimed": len(claim_result.claimed),
         "sent": sent,
         "failed": failed,
+        "suppressed": suppressed,
     }
     _observe_notification_delivery_summary(summary)
     return summary

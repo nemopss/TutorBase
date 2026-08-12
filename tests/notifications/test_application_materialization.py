@@ -60,6 +60,16 @@ class FakeEventRepository:
         )
         return events[offset:offset + limit]
 
+    async def get_event(self, *, event_type, event_id):
+        return next(
+            (
+                event
+                for event in self.events
+                if event.event_type == event_type and event.event_id == event_id
+            ),
+            None,
+        )
+
 
 class FakePreferenceRepository:
     async def get_global_preference(self):
@@ -98,6 +108,7 @@ class FakeInstanceRepository:
     claim_result: ClaimDueNotificationsResult = ClaimDueNotificationsResult(claimed=())
     sent_calls: list[dict] = field(default_factory=list)
     failed_calls: list[dict] = field(default_factory=list)
+    suppressed_calls: list[dict] = field(default_factory=list)
     cancel_rule_calls: list[dict] = field(default_factory=list)
     claim_calls: list[dict] = field(default_factory=list)
 
@@ -125,6 +136,9 @@ class FakeInstanceRepository:
 
     async def mark_delivery_failed(self, **kwargs):
         self.failed_calls.append(kwargs)
+
+    async def mark_delivery_suppressed(self, **kwargs):
+        self.suppressed_calls.append(kwargs)
 
 
 @dataclass
@@ -211,8 +225,10 @@ class FakeRenderer:
 class FakeChannelAdapter:
     result: DeliverySendResult | None = None
     error: Exception | None = None
+    send_count: int = 0
 
     async def send(self, *, instance, rendered):
+        self.send_count += 1
         if self.error is not None:
             raise self.error
         return self.result or DeliverySendResult(
@@ -805,6 +821,57 @@ async def test_execute_claimed_notification_delivery_marks_attempt_sent():
             ),
         }
     ]
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_suppresses_deleted_lesson():
+    uow = _uow()
+    uow.events.events = ()
+    adapter = FakeChannelAdapter()
+    suppressed_at = datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc)
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow,
+        renderer=FakeRenderer(),
+        channel_adapter=adapter,
+    ).execute(_claimed_instance(), now=suppressed_at)
+
+    assert result.status == InstanceStatus.SUPPRESSED
+    assert result.error_code == "delivery_event_not_found"
+    assert adapter.send_count == 0
+    assert uow.instances.sent_calls == []
+    assert uow.instances.suppressed_calls == [
+        {
+            "instance_id": 101,
+            "attempt_id": 201,
+            "reason": "delivery_event_not_found",
+            "suppressed_at": suppressed_at,
+        }
+    ]
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_suppresses_inactive_lesson_package():
+    event = PreviewEvent(
+        event_type=EventType.LESSON,
+        event_id=617,
+        learner_id=10,
+        starts_at=datetime.now(timezone.utc) + timedelta(days=1),
+        package_status="draft",
+        lesson_status="scheduled",
+    )
+    uow = _uow(event=event)
+    adapter = FakeChannelAdapter()
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow,
+        renderer=FakeRenderer(),
+        channel_adapter=adapter,
+    ).execute(_claimed_instance())
+
+    assert result.status == InstanceStatus.SUPPRESSED
+    assert result.error_code == "delivery_package_not_active"
+    assert adapter.send_count == 0
 
 
 @pytest.mark.asyncio

@@ -1370,6 +1370,31 @@ class SqlAlchemyNotificationInstanceRepository:
         instance.updated_at = failed_at
         await self._session.flush()
 
+    async def mark_delivery_suppressed(
+        self,
+        *,
+        instance_id: int,
+        attempt_id: int,
+        reason: str,
+        suppressed_at: datetime,
+    ) -> None:
+        instance, attempt = await self._get_delivery_pair(
+            instance_id=instance_id,
+            attempt_id=attempt_id,
+        )
+        attempt.status = "suppressed"
+        attempt.error_code = reason
+        attempt.error_message = "Notification event is no longer eligible for delivery"
+        attempt.finished_at = suppressed_at
+
+        instance.status = InstanceStatus.SUPPRESSED.value
+        instance.status_reason = reason
+        instance.delivery_enabled = False
+        instance.processing_started_at = None
+        instance.processing_expires_at = None
+        instance.updated_at = suppressed_at
+        await self._session.flush()
+
     async def _get_delivery_pair(
         self,
         *,

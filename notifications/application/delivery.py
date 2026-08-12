@@ -12,7 +12,7 @@ from notifications.application.ports import (
     NotificationMaterializationUnitOfWork,
     NotificationRenderer,
 )
-from notifications.domain.enums import InstanceStatus
+from notifications.domain.enums import EventType, InstanceStatus
 
 
 class NotificationDeliveryError(Exception):
@@ -72,6 +72,23 @@ class ExecuteClaimedNotificationDeliveryUseCase:
         now: datetime | None = None,
     ) -> ExecuteNotificationDeliveryResult:
         try:
+            suppressed_at = now or datetime.now(timezone.utc)
+            suppression_reason = await _delivery_suppression_reason(self._uow, instance)
+            if suppression_reason is not None:
+                await self._uow.instances.mark_delivery_suppressed(
+                    instance_id=instance.instance_id,
+                    attempt_id=instance.attempt_id,
+                    reason=suppression_reason,
+                    suppressed_at=suppressed_at,
+                )
+                await self._uow.commit()
+                return ExecuteNotificationDeliveryResult(
+                    instance_id=instance.instance_id,
+                    attempt_id=instance.attempt_id,
+                    status=InstanceStatus.SUPPRESSED,
+                    error_code=suppression_reason,
+                )
+
             rendered = await self._renderer.render(instance)
             send_result = await self._channel_adapter.send(
                 instance=instance,
@@ -130,3 +147,28 @@ class ExecuteClaimedNotificationDeliveryUseCase:
             status=InstanceStatus.SENT,
             provider_message_id=send_result.provider_message_id,
         )
+
+
+async def _delivery_suppression_reason(
+    uow: NotificationMaterializationUnitOfWork,
+    instance: ClaimedNotificationInstance,
+) -> str | None:
+    if instance.event_type not in {EventType.LESSON, EventType.PACKAGE}:
+        return None
+    if instance.event_id is None:
+        return "delivery_event_missing"
+
+    event = await uow.events.get_event(
+        event_type=instance.event_type,
+        event_id=instance.event_id,
+    )
+    if event is None or event.learner_id != instance.learner_id:
+        return "delivery_event_not_found"
+    if instance.event_type == EventType.LESSON:
+        if event.package_status != "active":
+            return "delivery_package_not_active"
+        if event.lesson_status not in {"scheduled", "rescheduled"}:
+            return "delivery_lesson_not_schedulable"
+    elif event.package_status != "active":
+        return "delivery_package_not_active"
+    return None

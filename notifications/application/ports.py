@@ -197,6 +197,16 @@ class NotificationInstanceRepository(Protocol):
     ) -> None:
         ...
 
+    async def mark_delivery_suppressed(
+        self,
+        *,
+        instance_id: int,
+        attempt_id: int,
+        reason: str,
+        suppressed_at,
+    ) -> None:
+        ...
+
 
 class NotificationRenderer(Protocol):
     async def render(self, instance: ClaimedNotificationInstance) -> RenderedNotification:
