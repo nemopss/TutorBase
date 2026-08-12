@@ -8,6 +8,7 @@ import pytest
 from api.dependencies import CurrentTenant
 from database import crud
 from notifications.domain.enums import EventType
+from notifications.infrastructure.models import NotificationCategory, NotificationInstance
 from tests import factories
 from utils.timezone import DEFAULT_TZ
 from services import package_service
@@ -174,6 +175,82 @@ async def test_update_package_normalizes_dates_to_utc(db_session, current_tenant
 
 
 @pytest.mark.asyncio
+async def test_update_package_to_inactive_cancels_lesson_notifications(
+    db_session,
+    current_tenant: CurrentTenant,
+    monkeypatch,
+):
+    reconciliation_calls = []
+
+    async def fake_enqueue(
+        session,
+        tenant,
+        *,
+        event_type,
+        event_id,
+        reason,
+        delivery_enabled=None,
+        shadow=None,
+    ):
+        reconciliation_calls.append((event_type, event_id, reason))
+
+    monkeypatch.setattr(
+        package_service,
+        "enqueue_notification_event_reconciliation",
+        fake_enqueue,
+    )
+
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(db_session, learner=learner, status="active")
+    lesson = await factories.create_lesson(
+        db_session,
+        package=package,
+        scheduled_at=datetime.now(timezone.utc) + timedelta(days=7),
+    )
+    category = NotificationCategory(
+        key=f"update_package_lesson_{id(package)}",
+        display_name="Lesson reminder",
+    )
+    db_session.add(category)
+    await db_session.flush()
+    instance = NotificationInstance(
+        tenant_id=current_tenant.tenant_id,
+        category_id=category.id,
+        event_type="lesson",
+        event_id=lesson.id,
+        event_key=f"lesson:{lesson.id}",
+        recipient_type="learner",
+        recipient_id=learner.id,
+        learner_id=learner.id,
+        scheduled_for=lesson.scheduled_at - timedelta(hours=1),
+        effective_scheduled_for=lesson.scheduled_at - timedelta(hours=1),
+        status="scheduled",
+        delivery_enabled=True,
+        priority="normal",
+        channel="telegram",
+        dedupe_key=f"update-package-test:{lesson.id}",
+    )
+    db_session.add(instance)
+    await db_session.flush()
+
+    await package_service.update_package(
+        db_session,
+        current_tenant,
+        package.id,
+        status="draft",
+    )
+
+    await db_session.refresh(instance)
+    assert instance.status == "cancelled"
+    assert instance.delivery_enabled is False
+    assert instance.status_reason == "reconciled:package_updated"
+    assert reconciliation_calls == [
+        (EventType.LESSON, lesson.id, "package_updated"),
+        (EventType.PACKAGE, package.id, "package_updated"),
+    ]
+
+
+@pytest.mark.asyncio
 async def test_update_package_can_clear_end_date_and_remove_future_renewal(
     db_session,
     current_tenant: CurrentTenant,
@@ -246,14 +323,80 @@ async def test_get_and_list_packages(db_session, current_tenant: CurrentTenant):
 
 
 @pytest.mark.asyncio
-async def test_delete_package(db_session, current_tenant: CurrentTenant):
-    learner = await factories.create_learner(db_session)
-    package = await factories.create_package(db_session, learner=learner)
-    await db_session.flush()
+async def test_delete_package_cancels_future_notifications_before_removing_lessons(
+    db_session,
+    current_tenant: CurrentTenant,
+    monkeypatch,
+):
+    reconciliation_calls = []
 
-    await package_service.delete_package(db_session, current_tenant, package.id)
+    async def fake_enqueue(
+        session,
+        tenant,
+        *,
+        event_type,
+        event_id,
+        reason,
+        delivery_enabled=None,
+        shadow=None,
+    ):
+        reconciliation_calls.append((event_type, event_id, reason))
+
+    monkeypatch.setattr(
+        package_service,
+        "enqueue_notification_event_reconciliation",
+        fake_enqueue,
+    )
+
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(db_session, learner=learner, status="active")
+    lesson = await factories.create_lesson(
+        db_session,
+        package=package,
+        scheduled_at=datetime.now(timezone.utc) + timedelta(days=7),
+    )
+    category = NotificationCategory(
+        key=f"delete_package_lesson_{id(package)}",
+        display_name="Lesson reminder",
+    )
+    db_session.add(category)
+    await db_session.flush()
+    instance = NotificationInstance(
+        tenant_id=current_tenant.tenant_id,
+        category_id=category.id,
+        event_type="lesson",
+        event_id=lesson.id,
+        event_key=f"lesson:{lesson.id}",
+        recipient_type="learner",
+        recipient_id=learner.id,
+        learner_id=learner.id,
+        scheduled_for=lesson.scheduled_at - timedelta(hours=1),
+        effective_scheduled_for=lesson.scheduled_at - timedelta(hours=1),
+        status="scheduled",
+        delivery_enabled=True,
+        priority="normal",
+        channel="telegram",
+        dedupe_key=f"delete-package-test:{lesson.id}",
+    )
+    db_session.add(instance)
+    await db_session.flush()
+    instance_id = instance.id
+    lesson_id = lesson.id
+    package_id = package.id
+
+    await package_service.delete_package(db_session, current_tenant, package_id)
+
+    persisted_instance = await db_session.get(NotificationInstance, instance_id)
+    await db_session.refresh(persisted_instance)
+    assert persisted_instance.status == "cancelled"
+    assert persisted_instance.delivery_enabled is False
+    assert persisted_instance.status_reason == "reconciled:package_deleted"
+    assert reconciliation_calls == [
+        (EventType.LESSON, lesson_id, "package_deleted"),
+        (EventType.PACKAGE, package_id, "package_deleted"),
+    ]
     with pytest.raises(NotFoundError):
-        await package_service.get_package(db_session, current_tenant, package.id)
+        await package_service.get_package(db_session, current_tenant, package_id)
 
 
 @pytest.mark.asyncio

@@ -42,6 +42,7 @@ from database import crud
 from database.transaction import transactional
 from database.models import Lesson, LessonPackage, LessonPackageTemplate, Payment
 from notifications.domain.enums import EventType
+from notifications.infrastructure.repositories import SqlAlchemySessionNotificationUnitOfWork
 from services.dto import LessonPackageDTO, PackageBalance, PackageProgress
 from services.exceptions import NotFoundError
 from services.notification_reconciliation import enqueue_notification_event_reconciliation
@@ -86,7 +87,20 @@ async def _enqueue_lesson_reconciliation_for_package(
         .where(Lesson.package_id == package_id)
         .order_by(Lesson.scheduled_at, Lesson.id)
     )
-    for lesson_id in result.scalars():
+    lesson_ids = tuple(result.scalars())
+    if current_tenant.tenant_id is None:
+        return
+
+    notification_uow = SqlAlchemySessionNotificationUnitOfWork(
+        session,
+        tenant_id=current_tenant.tenant_id,
+    )
+    for lesson_id in lesson_ids:
+        await notification_uow.instances.cancel_future_instances_for_event(
+            event_type=EventType.LESSON,
+            event_id=lesson_id,
+            reason=f"reconciled:{reason}",
+        )
         await enqueue_notification_event_reconciliation(
             session,
             current_tenant,
@@ -94,6 +108,11 @@ async def _enqueue_lesson_reconciliation_for_package(
             event_id=lesson_id,
             reason=reason,
         )
+    await notification_uow.instances.cancel_future_instances_for_event(
+        event_type=EventType.PACKAGE,
+        event_id=package_id,
+        reason=f"reconciled:{reason}",
+    )
     await enqueue_notification_event_reconciliation(
         session,
         current_tenant,
@@ -861,11 +880,10 @@ async def update_package(
         any(value is not None for value in (title, status, schedule_mode, renewal_enabled))
         or effective_end_date_set
     ):
-        await enqueue_notification_event_reconciliation(
+        await _enqueue_lesson_reconciliation_for_package(
             session,
             current_tenant,
-            event_type=EventType.PACKAGE,
-            event_id=package.id,
+            package.id,
             reason="package_updated",
         )
     
@@ -895,6 +913,12 @@ async def delete_package(session: AsyncSession, current_tenant: CurrentTenant, p
     package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
+    await _enqueue_lesson_reconciliation_for_package(
+        session,
+        current_tenant,
+        package.id,
+        reason="package_deleted",
+    )
     await crud.delete_lesson_package(session, package)
     # Transaction will be committed by @transactional decorator
 

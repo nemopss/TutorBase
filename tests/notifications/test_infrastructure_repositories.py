@@ -1312,6 +1312,59 @@ async def test_instance_repository_marks_permanent_delivery_failure_as_failed():
 
 
 @pytest.mark.asyncio
+async def test_instance_repository_suppresses_invalid_event_before_delivery():
+    now = datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc)
+    instance = NotificationInstance(
+        id=101,
+        tenant_id=1,
+        category=NotificationCategory(key="lesson_reminder", display_name="Напоминание"),
+        event_type="lesson",
+        event_id=617,
+        event_key="lesson:617",
+        recipient_type="learner",
+        recipient_id=10,
+        scheduled_for=now,
+        effective_scheduled_for=now,
+        status="processing",
+        delivery_enabled=True,
+        priority="normal",
+        channel="telegram",
+        dedupe_key="single|lesson_reminder|x",
+        processing_started_at=now,
+        processing_expires_at=now + timedelta(minutes=5),
+    )
+    attempt = NotificationDeliveryAttempt(
+        id=201,
+        tenant_id=1,
+        notification_instance_id=101,
+        attempt_no=1,
+        status="processing",
+        channel="telegram",
+        provider="telegram",
+        started_at=now,
+    )
+    session = FakeDeliverySession(instance, attempt)
+    repository = SqlAlchemyNotificationInstanceRepository(session, tenant_id=1)
+
+    await repository.mark_delivery_suppressed(
+        instance_id=101,
+        attempt_id=201,
+        reason="delivery_event_not_found",
+        suppressed_at=now + timedelta(seconds=1),
+    )
+
+    assert instance.status == "suppressed"
+    assert instance.status_reason == "delivery_event_not_found"
+    assert instance.delivery_enabled is False
+    assert instance.processing_started_at is None
+    assert instance.processing_expires_at is None
+    assert attempt.status == "suppressed"
+    assert attempt.error_code == "delivery_event_not_found"
+    assert attempt.finished_at == now + timedelta(seconds=1)
+    assert session.flush_count == 1
+
+
+@pytest.mark.asyncio
 async def test_response_repository_records_lesson_response_and_upserts_participant_state():
     now = datetime(2026, 4, 7, 7, 0, tzinfo=timezone.utc)
     instance = NotificationInstance(
