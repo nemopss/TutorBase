@@ -4,6 +4,10 @@ on:
   push:
     branches: [master]
 
+concurrency:
+  group: tutorbase-production
+  cancel-in-progress: false
+
 jobs:
   changes:
     runs-on: ubuntu-latest
@@ -65,8 +69,69 @@ jobs:
             monitoring:
               - 'monitoring/**'
 
+  test-backend:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: app
+          POSTGRES_PASSWORD: app
+          POSTGRES_DB: app
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U app -d app"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+    env:
+      BOT_TOKEN: "1234567890:ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghi"
+      ADMIN_CHAT_ID: "1"
+      LOGS_CHAT_ID: "1"
+      CANCELLATION_IMAGE_FILE_ID: "ci-placeholder"
+      ADMINS: "[1]"
+      REDIS_URL: redis://localhost:6379/0
+      REMINDER_NOTIFY_USERNAME: ci
+      JWT_SECRET: ci-placeholder-secret-at-least-32-characters
+      DEV_MODE: "true"
+      POSTGRESQL_HOST: localhost
+      POSTGRESQL_PORT: "5432"
+      POSTGRESQL_USER: app
+      POSTGRESQL_PASSWORD: app
+      POSTGRESQL_DBNAME: app
+      TEST_DATABASE_URL: postgresql+asyncpg://app:app@localhost:5432/app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m pytest -q
+
+  test-frontend:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mini-app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: mini-app/package-lock.json
+      - run: npm ci
+      - run: npm test -- --runInBand
+      - run: npm run build
+
   build:
-    needs: changes
+    needs: [changes, test-backend, test-frontend]
     if: ${{ needs.changes.outputs.bot == 'true' || needs.changes.outputs.api == 'true' || needs.changes.outputs.app == 'true' }}
     runs-on: ubuntu-latest
     permissions:
@@ -89,7 +154,9 @@ jobs:
           context: .
           file: ./Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/tutorbase-bot:latest
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/tutorbase-bot:latest
+            ghcr.io/${{ github.repository_owner }}/tutorbase-bot:sha-${{ github.sha }}
 
       - name: Build and push API image
         if: ${{ needs.changes.outputs.api == 'true' }}
@@ -98,7 +165,9 @@ jobs:
           context: .
           file: ./Dockerfile.api
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/tutorbase-api:latest
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/tutorbase-api:latest
+            ghcr.io/${{ github.repository_owner }}/tutorbase-api:sha-${{ github.sha }}
 
       - name: Build and push App image
         if: ${{ needs.changes.outputs.app == 'true' }}
@@ -107,14 +176,16 @@ jobs:
           context: ./mini-app
           file: ./mini-app/Dockerfile
           push: true
-          tags: ghcr.io/${{ github.repository_owner }}/tutorbase-app:latest
+          tags: |
+            ghcr.io/${{ github.repository_owner }}/tutorbase-app:latest
+            ghcr.io/${{ github.repository_owner }}/tutorbase-app:sha-${{ github.sha }}
           build-args: |
             VITE_TELEGRAM_BOT_USERNAME=tutorbaserobot
 
   deploy:
-    needs: [changes, build]
+    needs: [changes, test-backend, test-frontend, build]
     runs-on: ubuntu-latest
-    if: ${{ always() && github.ref == 'refs/heads/master' && needs.changes.outputs.deploy == 'true' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
+    if: ${{ always() && github.ref == 'refs/heads/master' && needs.changes.outputs.deploy == 'true' && needs.test-backend.result == 'success' && needs.test-frontend.result == 'success' && (needs.build.result == 'success' || needs.build.result == 'skipped') }}
     permissions:
       contents: read
       packages: read
@@ -180,4 +251,10 @@ jobs:
             if [ "${{ needs.changes.outputs.nginx }}" = "true" ] || [ "${{ needs.changes.outputs.api }}" = "true" ] || [ "${{ needs.changes.outputs.app }}" = "true" ] || [ "$compose_changed" = "true" ]; then
               docker compose up -d nginx
               docker compose exec nginx nginx -s reload || true
+            fi
+
+            if [ "${{ needs.changes.outputs.api }}" = "true" ]; then
+              echo "Checking API readiness..."
+              docker compose exec -T api python -c "import urllib.request; urllib.request.urlopen('http://localhost:8001/ready', timeout=10).read()"
+              docker compose exec -T celery_worker celery -A utils.celery_app inspect ping --timeout=10
             fi

@@ -364,6 +364,7 @@ class NotificationResponse(Base):
     instance = relationship("NotificationInstance", back_populates="responses")
 
     __table_args__ = (
+        UniqueConstraint("notification_instance_id", name="uq_notification_response_instance"),
         Index("ix_notification_responses_tenant_event", "tenant_id", "event_type", "event_id"),
         Index("ix_notification_responses_tenant_learner", "tenant_id", "learner_id"),
     )

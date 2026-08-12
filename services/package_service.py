@@ -49,7 +49,7 @@ from services.notification_reconciliation import enqueue_notification_event_reco
 # Removed: from services.package_scheduler import regenerate_package_reminders (circular import)
 # Using lazy import inside functions instead
 from services.utils import generate_lessons_from_template, lesson_stats, sync_package_metrics
-from services.finance_service import calculate_package_price
+from services.finance_service import calculate_package_price, update_payment_status
 from utils.timezone import DEFAULT_TIMEZONE, DEFAULT_TZ, normalize_to_timezone, to_utc
 
 # Prometheus metrics
@@ -783,6 +783,7 @@ async def update_package(
     start_date_set: bool = False,
     end_date_set: bool = False,
     price_set: bool = False,
+    notes_set: bool = False,
 ) -> LessonPackageDTO:
     """Update parameters of existing lesson package.
 
@@ -821,9 +822,13 @@ async def update_package(
         package.title = title
     if status is not None:
         package.status = status
-    if notes is not None:
+    if notes_set or notes is not None:
         package.notes = notes
     if schedule_mode is not None:
+        if schedule_mode == SCHEDULE_MODE_ONE_OFF and package.package_type != PACKAGE_TYPE_ONE_OFF:
+            from services.exceptions import ValidationError
+
+            raise ValidationError("Regular packages cannot use one-off schedule mode")
         if package.package_type == PACKAGE_TYPE_ONE_OFF and schedule_mode != SCHEDULE_MODE_ONE_OFF:
             from services.exceptions import ValidationError
 
@@ -869,6 +874,8 @@ async def update_package(
     package, _ = await sync_package_metrics(session, current_tenant, package_id)
     if package is None:
         raise NotFoundError(f"Package {package_id} not found")
+    if price_set or total_lessons is not None:
+        await update_payment_status(session, package.id)
     if any(
         value is not None
         for value in (title, status, total_lessons, schedule_mode, renewal_enabled)

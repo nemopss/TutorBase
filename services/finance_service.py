@@ -22,7 +22,7 @@ Business logic:
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timedelta
 from decimal import Decimal
 from typing import TYPE_CHECKING, Optional, Any
 
@@ -709,6 +709,16 @@ class IncomeReport:
     change_percent: float
 
 
+def previous_report_period(
+    from_date: datetime,
+    to_date: datetime,
+) -> tuple[datetime, datetime]:
+    """Return the immediately preceding interval with the same duration."""
+    period_length = to_date - from_date
+    previous_to = from_date - timedelta(microseconds=1)
+    return previous_to - period_length, previous_to
+
+
 async def generate_income_report(
     session: AsyncSession,
     current_tenant: "CurrentTenant",
@@ -733,12 +743,8 @@ async def generate_income_report(
     
     **Validates: Requirements 6.1, 6.2, 6.3, 6.4**
     """
-    from dateutil.relativedelta import relativedelta
-    
     # Calculate period length for previous period comparison
-    period_length = to_date - from_date
-    previous_from = from_date - period_length - relativedelta(days=1)
-    previous_to = from_date - relativedelta(days=1)
+    previous_from, previous_to = previous_report_period(from_date, to_date)
     
     # Total income for current period
     total_result = await session.execute(

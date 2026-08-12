@@ -48,7 +48,7 @@ class UpdateNotificationSettingsUseCase:
         settings = await self._uow.settings.update_settings(draft)
         if draft.mode == NotificationSystemMode.NEW and current_settings.mode != NotificationSystemMode.NEW:
             await self._uow.settings.clear_learner_modes()
-            await _rebuild_queue_for_tenant_mode(self._uow, settings)
+        await _rebuild_queue_for_tenant_mode(self._uow, settings)
         await self._uow.commit()
         return settings
 
@@ -154,28 +154,28 @@ async def _rebuild_queue_for_tenant_mode(
     uow: NotificationMaterializationUnitOfWork,
     settings: NotificationSettingsRecord,
 ) -> None:
-    if settings.mode != NotificationSystemMode.NEW:
+    await _cancel_persisted_instances_for_materialization(
+        uow,
+        delivery_enabled=settings.mode == NotificationSystemMode.NEW,
+        shadow=settings.mode == NotificationSystemMode.SHADOW,
+    )
+    if settings.mode == NotificationSystemMode.LEGACY:
         return
 
     rules = await uow.rules.list_active_rules()
     if not rules:
         return
 
-    await _cancel_persisted_instances_for_materialization(
-        uow,
-        delivery_enabled=True,
-        shadow=False,
-    )
     await _materialize_rules(
         uow,
         rules,
         horizon_days=30,
         limit=_TENANT_MODE_REBUILD_PAGE_SIZE,
-        delivery_enabled=True,
-        shadow=False,
+        delivery_enabled=settings.mode == NotificationSystemMode.NEW,
+        shadow=settings.mode == NotificationSystemMode.SHADOW,
         commit=False,
-        respect_rollout_modes=False,
-        skip_past_due=True,
+        respect_rollout_modes=True,
+        skip_past_due=settings.mode == NotificationSystemMode.NEW,
     )
 
 

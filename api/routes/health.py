@@ -1,5 +1,5 @@
-"""Health check endpoint."""
-from fastapi import APIRouter, Depends
+"""Health and deployment probe endpoints."""
+from fastapi import APIRouter, Depends, Response, status
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -16,8 +16,8 @@ redis_client = Redis.from_url(
 )
 
 
-@router.api_route("/health", methods=["GET", "HEAD"])
-async def health_check(session: AsyncSession = Depends(get_session)):
+@router.get("/health")
+async def health_check(response: Response, session: AsyncSession = Depends(get_session)):
     """
     Health check endpoint.
     Returns 200 if all systems are operational.
@@ -31,27 +31,55 @@ async def health_check(session: AsyncSession = Depends(get_session)):
     try:
         await session.execute(text("SELECT 1"))
         health_status["services"]["database"] = "connected"
-    except Exception as e:
+    except Exception:
         health_status["status"] = "unhealthy"
-        health_status["services"]["database"] = f"error: {str(e)}"
+        health_status["services"]["database"] = "error"
     
     # Check Redis (if available)
     try:
         await redis_client.ping()
         health_status["services"]["redis"] = "connected"
     except Exception:
-        # Redis is optional
-        health_status["services"]["redis"] = "not configured"
+        health_status["status"] = "unhealthy"
+        health_status["services"]["redis"] = "error"
+
+    if health_status["status"] != "healthy":
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
     
     return health_status
 
 
+@router.head("/health", include_in_schema=False)
+async def health_check_head(
+    response: Response,
+    session: AsyncSession = Depends(get_session),
+):
+    """HEAD variant used by lightweight load-balancer probes."""
+    return await health_check(response=response, session=session)
+
+
 @router.get("/ready")
-async def readiness_check():
+async def readiness_check(response: Response, session: AsyncSession = Depends(get_session)):
     """
     Readiness check for Kubernetes/Docker healthcheck.
     """
-    return {"status": "ready"}
+    services: dict[str, str] = {}
+    try:
+        await session.execute(text("SELECT 1"))
+        services["database"] = "connected"
+    except Exception:
+        services["database"] = "error"
+
+    try:
+        await redis_client.ping()
+        services["redis"] = "connected"
+    except Exception:
+        services["redis"] = "error"
+
+    ready = all(value == "connected" for value in services.values())
+    if not ready:
+        response.status_code = status.HTTP_503_SERVICE_UNAVAILABLE
+    return {"status": "ready" if ready else "not_ready", "services": services}
 
 
 @router.get("/live")

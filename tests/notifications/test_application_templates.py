@@ -154,3 +154,37 @@ async def test_create_update_and_archive_templates_commit_changes():
     assert updated.version == 2
     assert archived is not None
     assert uow.committed
+
+
+@pytest.mark.asyncio
+async def test_create_template_rejects_unknown_variables_before_writing():
+    repository = FakeTemplateRepository()
+    uow = FakeUnitOfWork(templates=repository)
+
+    with pytest.raises(ValueError, match="unknown_value"):
+        await CreateNotificationTemplateUseCase(uow).execute(
+            NotificationTemplateDraft(
+                category=CategoryKey.HOMEWORK,
+                key="broken",
+                name="Broken",
+                body="Привет, {unknown_value}",
+            )
+        )
+
+    assert repository.created == []
+    assert uow.committed is False
+
+
+@pytest.mark.asyncio
+async def test_update_template_rejects_unknown_variables_before_writing():
+    repository = FakeTemplateRepository()
+    uow = FakeUnitOfWork(templates=repository)
+
+    with pytest.raises(ValueError, match="unknown_value"):
+        await UpdateNotificationTemplateUseCase(uow).execute(
+            template_id=1,
+            draft=NotificationTemplateUpdateDraft(body="{unknown_value}"),
+        )
+
+    assert repository.updated == []
+    assert uow.committed is False

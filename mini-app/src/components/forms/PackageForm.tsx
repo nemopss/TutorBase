@@ -152,7 +152,10 @@ const PackageForm: React.FC<PackageFormProps> = ({
   const oneOffDate = Form.useWatch('scheduled_at', form);
   
   // State for preview dates
-  const [previewDates, setPreviewDates] = useState<PreviewDate[]>([]);
+  const [previewState, setPreviewState] = useState<{ key: string; dates: PreviewDate[] }>({
+    key: '',
+    dates: [],
+  });
   
   // Fetch schedule for selected learner
   const { data: scheduleData } = useQuery<ScheduleData>({
@@ -167,7 +170,12 @@ const PackageForm: React.FC<PackageFormProps> = ({
   const hasSchedule = scheduleData && scheduleData.slots.length > 0;
   
   // Fetch preview dates when learner, start date, and lesson count are set
-  const { data: previewData } = useQuery<PreviewDatesResponse>({
+  const previewRequestKey = [
+    selectedLearnerId ?? '',
+    startDateValue?.format('YYYY-MM-DD') ?? '',
+    totalLessonsValue ?? '',
+  ].join(':');
+  const { data: previewData, isFetching: isPreviewFetching } = useQuery<PreviewDatesResponse & { requestKey: string }>({
     queryKey: ['previewDates', selectedLearnerId, startDateValue?.format('YYYY-MM-DD'), totalLessonsValue],
     queryFn: async () => {
       const { data } = await api.post('/packages/preview-dates', null, {
@@ -177,7 +185,7 @@ const PackageForm: React.FC<PackageFormProps> = ({
           lesson_count: parseInt(totalLessonsValue) || 8,
         },
       });
-      return data;
+      return { ...data, requestKey: previewRequestKey };
     },
     enabled: !!selectedLearnerId && !!startDateValue && !!totalLessonsValue && hasSchedule && isCreateWizard && scheduleMode === 'fixed',
   });
@@ -185,9 +193,11 @@ const PackageForm: React.FC<PackageFormProps> = ({
   // Update preview dates when data changes
   useEffect(() => {
     if (previewData?.dates) {
-      setPreviewDates(previewData.dates);
+      setPreviewState({ key: previewData.requestKey, dates: previewData.dates });
     }
   }, [previewData]);
+
+  const previewDates = previewState.key === previewRequestKey ? previewState.dates : [];
 
   useEffect(() => {
     if (!isCreateWizard) {
@@ -200,7 +210,7 @@ const PackageForm: React.FC<PackageFormProps> = ({
       || !totalLessonsValue
       || !hasSchedule
     ) {
-      setPreviewDates([]);
+      setPreviewState({ key: '', dates: [] });
     }
   }, [hasSchedule, isCreateWizard, scheduleMode, selectedLearnerId, startDateValue, totalLessonsValue]);
 
@@ -224,7 +234,7 @@ const PackageForm: React.FC<PackageFormProps> = ({
         duration_minutes: 60,
       });
       setCurrentStep(0);
-      setPreviewDates([]);
+      setPreviewState({ key: '', dates: [] });
       // Pre-fill learner if provided
       if (preselectedLearnerId) {
         form.setFieldsValue({ learner_id: preselectedLearnerId });
@@ -350,7 +360,12 @@ const PackageForm: React.FC<PackageFormProps> = ({
         {currentStep === 0 ? t('common.cancel') : t('common.back')}
       </Button>
       {currentStep < wizardSteps.length - 1 ? (
-        <Button type="primary" onClick={goNext}>
+        <Button
+          type="primary"
+          onClick={goNext}
+          loading={currentStep === 2 && scheduleMode === 'fixed' && isPreviewFetching}
+          disabled={currentStep === 2 && scheduleMode === 'fixed' && isPreviewFetching}
+        >
           {t('forms.packageWizard.next')}
         </Button>
       ) : (
@@ -452,7 +467,7 @@ const PackageForm: React.FC<PackageFormProps> = ({
 
             if (!isEditing) {
               form.resetFields();
-              setPreviewDates([]);
+              setPreviewState({ key: '', dates: [] });
             }
             handleFinish(formattedValues);
           })
@@ -616,7 +631,7 @@ const PackageForm: React.FC<PackageFormProps> = ({
                   </Text>
                   <LessonPreviewCalendar
                     dates={previewDates}
-                    onDatesChange={setPreviewDates}
+                    onDatesChange={(dates) => setPreviewState({ key: previewRequestKey, dates })}
                     startDate={startDateValue}
                     scheduleSlots={scheduleData?.slots}
                   />

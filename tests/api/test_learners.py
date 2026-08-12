@@ -10,6 +10,7 @@ from tests import factories
 from tests.api.utils import get_auth_headers
 from database import crud
 from api.dependencies import CurrentTenant
+from api.routes import learners as learner_routes
 
 
 @pytest.mark.asyncio
@@ -128,7 +129,18 @@ async def test_create_personal_invite_for_unlinked_learner(
     client: AsyncClient,
     db_session: AsyncSession,
     current_tenant: CurrentTenant,
+    monkeypatch,
 ):
+    refresh_reasons = []
+
+    async def fake_refresh(session, tenant, refreshed_learner, *, reason):
+        refresh_reasons.append((refreshed_learner.id, reason))
+
+    monkeypatch.setattr(
+        learner_routes.learner_service,
+        "refresh_learner_notification_schedules",
+        fake_refresh,
+    )
     learner = await factories.create_learner(db_session, display_name="Linked")
     await db_session.commit()
     headers, _ = await get_auth_headers(db_session, current_tenant)
@@ -138,6 +150,7 @@ async def test_create_personal_invite_for_unlinked_learner(
         headers=headers,
     )
     assert unlink_response.status_code == 200
+    assert refresh_reasons == [(learner.id, "learner_account_unlinked")]
 
     response = await client.post(f"/api/v1/learners/{learner.id}/invite", headers=headers)
 

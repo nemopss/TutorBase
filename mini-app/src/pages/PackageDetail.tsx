@@ -259,6 +259,11 @@ const PackageDetail: React.FC = () => {
     mutationFn: deletePackage,
     onSuccess: () => {
       notificationApi.success({ message: t('success.deleted'), placement: 'topRight' });
+      queryClient.removeQueries({ queryKey: ['package', id] });
+      queryClient.removeQueries({ queryKey: ['packageLessons', id] });
+      queryClient.invalidateQueries({ queryKey: ['packages'] });
+      queryClient.invalidateQueries({ queryKey: ['learnerPackages'] });
+      queryClient.invalidateQueries({ queryKey: ['lessons'] });
       navigate('/packages');
     },
     onError: (error: Error) => {

@@ -7,6 +7,16 @@ from notifications.application.dto import (
 )
 from notifications.application.audit import record_notification_audit
 from notifications.application.ports import NotificationMaterializationUnitOfWork
+from notifications.domain.templates import validate_template_body
+
+
+def _validate_template_or_raise(body: str) -> None:
+    validation = validate_template_body(body)
+    if validation.unknown_variables:
+        raise ValueError(
+            "Unknown template variables: "
+            + ", ".join(validation.unknown_variables)
+        )
 
 
 class ListNotificationTemplatesUseCase:
@@ -22,6 +32,7 @@ class CreateNotificationTemplateUseCase:
         self._uow = uow
 
     async def execute(self, draft: NotificationTemplateDraft) -> NotificationTemplateRecord:
+        _validate_template_or_raise(draft.body)
         template = await self._uow.templates.create_template(draft)
         await record_notification_audit(
             self._uow,
@@ -45,6 +56,8 @@ class UpdateNotificationTemplateUseCase:
         template_id: int,
         draft: NotificationTemplateUpdateDraft,
     ) -> NotificationTemplateRecord | None:
+        if draft.body is not None:
+            _validate_template_or_raise(draft.body)
         before = await self._uow.templates.get_template(template_id)
         template = await self._uow.templates.create_template_version(template_id, draft)
         if template is not None:

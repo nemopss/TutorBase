@@ -1,8 +1,10 @@
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import datetime, time, timedelta, timezone
+from zoneinfo import ZoneInfo
 
 from notifications.application.dto import (
+    AudienceSelector,
     ClaimedNotificationInstance,
     ClaimDueNotificationsResult,
     ExecuteNotificationDeliveryResult,
@@ -12,7 +14,10 @@ from notifications.application.ports import (
     NotificationMaterializationUnitOfWork,
     NotificationRenderer,
 )
-from notifications.domain.enums import EventType, InstanceStatus
+from notifications.domain.eligibility import EligibilityContext, evaluate_eligibility
+from notifications.domain.enums import CapMode, EventType, InstanceStatus
+from notifications.domain.enums import NotificationSystemMode
+from notifications.domain.preferences import resolve_effective_preferences
 
 
 class NotificationDeliveryError(Exception):
@@ -71,9 +76,25 @@ class ExecuteClaimedNotificationDeliveryUseCase:
         *,
         now: datetime | None = None,
     ) -> ExecuteNotificationDeliveryResult:
+        delivery_time = now or datetime.now(timezone.utc)
+        if not await self._uow.instances.is_delivery_claim_current(
+            instance_id=instance.instance_id,
+            attempt_id=instance.attempt_id,
+            now=delivery_time,
+        ):
+            return ExecuteNotificationDeliveryResult(
+                instance_id=instance.instance_id,
+                attempt_id=instance.attempt_id,
+                status=InstanceStatus.SUPPRESSED,
+                error_code="delivery_claim_expired",
+            )
         try:
-            suppressed_at = now or datetime.now(timezone.utc)
-            suppression_reason = await _delivery_suppression_reason(self._uow, instance)
+            suppressed_at = delivery_time
+            suppression_reason = await _delivery_suppression_reason(
+                self._uow,
+                instance,
+                delivery_time=delivery_time,
+            )
             if suppression_reason is not None:
                 await self._uow.instances.mark_delivery_suppressed(
                     instance_id=instance.instance_id,
@@ -152,7 +173,32 @@ class ExecuteClaimedNotificationDeliveryUseCase:
 async def _delivery_suppression_reason(
     uow: NotificationMaterializationUnitOfWork,
     instance: ClaimedNotificationInstance,
+    *,
+    delivery_time: datetime,
 ) -> str | None:
+    if instance.learner_id is None:
+        return "delivery_learner_missing"
+
+    mode = await uow.settings.get_learner_mode(instance.learner_id)
+    if mode is None:
+        return "delivery_learner_not_found"
+    if mode.effective_mode != NotificationSystemMode.NEW:
+        return "delivery_mode_not_new"
+
+    recipients = await uow.audience_resolver.resolve_recipients(
+        (AudienceSelector(scope_type="learner", scope_id=instance.learner_id),)
+    )
+    recipient = next(
+        (item for item in recipients if item.learner_id == instance.learner_id),
+        None,
+    )
+    if recipient is None:
+        return "delivery_learner_not_found"
+    if not recipient.has_contact:
+        return "missing_contact"
+    if not recipient.notifications_enabled:
+        return "learner_notifications_disabled"
+
     if instance.event_type not in {EventType.LESSON, EventType.PACKAGE}:
         return None
     if instance.event_id is None:
@@ -164,11 +210,43 @@ async def _delivery_suppression_reason(
     )
     if event is None or event.learner_id != instance.learner_id:
         return "delivery_event_not_found"
-    if instance.event_type == EventType.LESSON:
-        if event.package_status != "active":
-            return "delivery_package_not_active"
-        if event.lesson_status not in {"scheduled", "rescheduled"}:
-            return "delivery_lesson_not_schedulable"
-    elif event.package_status != "active":
-        return "delivery_package_not_active"
+    effective_preferences = resolve_effective_preferences(
+        await uow.preferences.get_global_preference(),
+        group_preferences=await uow.preferences.get_group_preferences_for_learner(instance.learner_id),
+        learner_preference=await uow.preferences.get_learner_preference(instance.learner_id),
+        default_timezone=recipient.timezone,
+    )
+    eligibility = evaluate_eligibility(
+        EligibilityContext(
+            event_type=event.event_type,
+            category=instance.category,
+            recipient_has_contact=recipient.has_contact,
+            learner_notifications_enabled=recipient.notifications_enabled,
+            preferences=effective_preferences,
+            package_status=event.package_status,
+            lesson_status=event.lesson_status,
+            has_homework=event.has_homework,
+        )
+    )
+    if not eligibility.eligible:
+        return f"delivery_{eligibility.reason}"
+    if effective_preferences.cap_mode == CapMode.ENFORCE:
+        try:
+            learner_timezone = ZoneInfo(effective_preferences.timezone)
+        except Exception:
+            learner_timezone = ZoneInfo("Europe/Moscow")
+        local_date = delivery_time.astimezone(learner_timezone).date()
+        local_start = datetime.combine(local_date, time.min, tzinfo=learner_timezone)
+        local_end = datetime.combine(
+            local_date + timedelta(days=1),
+            time.min,
+            tzinfo=learner_timezone,
+        )
+        sent_today = await uow.instances.count_sent_for_learner_between(
+            learner_id=instance.learner_id,
+            starts_at=local_start.astimezone(timezone.utc),
+            ends_at=local_end.astimezone(timezone.utc),
+        )
+        if sent_today >= max(0, effective_preferences.daily_cap):
+            return "daily_cap_exceeded"
     return None

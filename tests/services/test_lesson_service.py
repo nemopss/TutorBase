@@ -5,7 +5,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from api.dependencies import CurrentTenant
 from services import lesson_service
-from services.exceptions import NotFoundError
+from services.exceptions import NotFoundError, ValidationError
 from services.reminder_definitions import REMINDER_TYPE_PACKAGE_RENEWAL
 from database import crud
 from tests import factories
@@ -106,6 +106,87 @@ async def test_update_lesson(db_session: AsyncSession, current_tenant: CurrentTe
     assert dto.status == "completed"
     assert dto.duration_minutes == 80
     assert dto.teacher_notes == "Done"
+
+
+@pytest.mark.asyncio
+async def test_update_lesson_can_clear_optional_fields(
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(db_session, learner=learner)
+    scheduled_at = datetime(2026, 8, 12, 9, 0, tzinfo=timezone.utc)
+    lesson = await factories.create_lesson(
+        db_session,
+        package=package,
+        scheduled_at=scheduled_at,
+    )
+    lesson.teacher_notes = "Old note"
+    lesson.homework_due_at = scheduled_at + timedelta(days=1)
+    await db_session.flush()
+
+    dto = await lesson_service.update_lesson(
+        db_session,
+        current_tenant,
+        lesson_id=lesson.id,
+        teacher_notes=None,
+        homework_due_at=None,
+        teacher_notes_set=True,
+        homework_due_at_set=True,
+    )
+
+    assert dto.teacher_notes is None
+    assert dto.homework_due_at is None
+
+
+@pytest.mark.asyncio
+async def test_update_lesson_validates_homework_against_merged_schedule(
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(db_session, learner=learner)
+    scheduled_at = datetime(2026, 8, 12, 9, 0, tzinfo=timezone.utc)
+    lesson = await factories.create_lesson(
+        db_session,
+        package=package,
+        scheduled_at=scheduled_at,
+    )
+    lesson.homework_due_at = scheduled_at + timedelta(hours=1)
+    await db_session.flush()
+
+    with pytest.raises(ValidationError, match="Homework due date"):
+        await lesson_service.update_lesson(
+            db_session,
+            current_tenant,
+            lesson_id=lesson.id,
+            scheduled_at=scheduled_at + timedelta(hours=2),
+        )
+
+
+@pytest.mark.asyncio
+async def test_one_off_package_rejects_second_lesson(
+    db_session: AsyncSession,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(
+        db_session,
+        learner=learner,
+        package_type="one_off",
+        schedule_mode="one_off",
+        total_lessons=1,
+    )
+    await factories.create_lesson(db_session, package=package)
+    await db_session.flush()
+
+    with pytest.raises(ValidationError, match="only one lesson"):
+        await lesson_service.create_lesson(
+            db_session,
+            current_tenant,
+            package_id=package.id,
+            scheduled_at=datetime(2026, 8, 13, 9, 0, tzinfo=timezone.utc),
+        )
 
 
 @pytest.mark.asyncio

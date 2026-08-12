@@ -7,6 +7,7 @@ from notifications.infrastructure.models import (
     NotificationAssignment,
     NotificationRule,
     NotificationTemplate,
+    NotificationResponse,
 )
 
 
@@ -36,6 +37,12 @@ def test_notification_tables_are_registered_in_shared_metadata():
 def test_lesson_homework_fields_are_available_for_notification_eligibility():
     assert hasattr(Lesson, "has_homework")
     assert hasattr(Lesson, "homework_text")
+
+
+def test_notification_response_is_unique_per_instance():
+    constraints = {constraint.name for constraint in NotificationResponse.__table__.constraints}
+
+    assert "uq_notification_response_instance" in constraints
 
 
 def test_notification_instance_has_semantic_dedupe_index():

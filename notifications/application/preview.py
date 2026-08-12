@@ -39,9 +39,12 @@ class PreviewRuleUseCase:
             return RulePreviewResult(instances=(), warnings=("empty_audience", *warnings))
 
         recipient_by_id = {recipient.learner_id: recipient for recipient in recipients}
+        included_package_ids, excluded_package_ids = _package_scope(draft.assignments)
         events = await self._uow.events.list_events_for_recipients(
             event_type=draft.event_type,
             learner_ids=tuple(recipient_by_id),
+            included_package_ids=included_package_ids,
+            excluded_package_ids=excluded_package_ids,
             horizon_days=horizon_days,
             limit=limit,
             offset=event_offset,
@@ -54,20 +57,24 @@ class PreviewRuleUseCase:
         preview_instances: list[PreviewInstance] = []
         candidates: list[NotificationCandidate] = []
         instance_by_candidate_key: dict[tuple[object, ...], PreviewInstance] = {}
+        effective_preferences_by_learner = {}
 
         for event in events:
             recipient = recipient_by_id.get(event.learner_id)
             if recipient is None:
                 continue
 
-            learner_preference = await self._uow.preferences.get_learner_preference(recipient.learner_id)
-            group_preferences = await self._uow.preferences.get_group_preferences_for_learner(recipient.learner_id)
-            effective_preferences = resolve_effective_preferences(
-                global_preference,
-                group_preferences=group_preferences,
-                learner_preference=learner_preference,
-                default_timezone=recipient.timezone,
-            )
+            effective_preferences = effective_preferences_by_learner.get(recipient.learner_id)
+            if effective_preferences is None:
+                learner_preference = await self._uow.preferences.get_learner_preference(recipient.learner_id)
+                group_preferences = await self._uow.preferences.get_group_preferences_for_learner(recipient.learner_id)
+                effective_preferences = resolve_effective_preferences(
+                    global_preference,
+                    group_preferences=group_preferences,
+                    learner_preference=learner_preference,
+                    default_timezone=recipient.timezone,
+                )
+                effective_preferences_by_learner[recipient.learner_id] = effective_preferences
 
             eligibility = evaluate_eligibility(
                 EligibilityContext(
@@ -195,6 +202,38 @@ class PreviewRuleUseCase:
             warnings=tuple(warnings),
             has_more=has_more,
         )
+
+
+def _package_scope(
+    assignments,
+) -> tuple[tuple[int, ...] | None, tuple[int, ...]]:
+    """Preserve package-level selectors instead of widening them to a learner."""
+    included_packages = tuple(
+        sorted(
+            assignment.scope_id
+            for assignment in assignments
+            if assignment.scope_type == "package"
+            and assignment.scope_id is not None
+            and not assignment.is_exclusion
+        )
+    )
+    excluded_packages = tuple(
+        sorted(
+            assignment.scope_id
+            for assignment in assignments
+            if assignment.scope_type == "package"
+            and assignment.scope_id is not None
+            and assignment.is_exclusion
+        )
+    )
+    has_non_package_inclusion = any(
+        not assignment.is_exclusion and assignment.scope_type != "package"
+        for assignment in assignments
+    )
+    return (
+        None if has_non_package_inclusion or not included_packages else included_packages,
+        excluded_packages,
+    )
 
 
 class PreviewRulesUseCase:

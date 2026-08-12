@@ -53,6 +53,8 @@ class EventRepository(Protocol):
         *,
         event_type: EventType,
         learner_ids: tuple[int, ...],
+        included_package_ids: tuple[int, ...] | None = None,
+        excluded_package_ids: tuple[int, ...] = (),
         horizon_days: int,
         limit: int,
         offset: int = 0,
@@ -173,6 +175,24 @@ class NotificationInstanceRepository(Protocol):
         lease_seconds: int,
         delivery_grace_seconds: int = 0,
     ) -> ClaimDueNotificationsResult:
+        ...
+
+    async def is_delivery_claim_current(
+        self,
+        *,
+        instance_id: int,
+        attempt_id: int,
+        now,
+    ) -> bool:
+        ...
+
+    async def count_sent_for_learner_between(
+        self,
+        *,
+        learner_id: int,
+        starts_at,
+        ends_at,
+    ) -> int:
         ...
 
     async def mark_delivery_sent(

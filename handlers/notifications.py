@@ -7,10 +7,11 @@ from aiogram.fsm.context import FSMContext
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import CallbackQuery
 from sqlalchemy import and_, select
+from sqlalchemy.exc import IntegrityError
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from config import config
-from database.models import Learner, Lesson, LessonPackage, User
+from database.models import BotUser, Learner, Lesson, LessonPackage, User
 from notifications.application.dto import NotificationResponseDraft
 from notifications.application.responses import RecordNotificationResponseUseCase
 from notifications.infrastructure.models import NotificationInstance, NotificationResponse
@@ -40,6 +41,10 @@ class NotificationResponseAlreadyRecorded(Exception):
     pass
 
 
+class NotificationResponseForbidden(Exception):
+    pass
+
+
 @router.callback_query(F.data.startswith("notif_confirm_lesson_"))
 async def cb_notification_confirm_lesson(query: CallbackQuery, session: AsyncSession):
     instance_id = _parse_instance_id(query.data, prefix="notif_confirm_lesson_")
@@ -53,9 +58,13 @@ async def cb_notification_confirm_lesson(query: CallbackQuery, session: AsyncSes
             instance_id=instance_id,
             action_key="confirm_lesson",
             response_value="confirmed",
+            responder_chat_id=query.from_user.id,
         )
     except NotificationResponseAlreadyRecorded:
         await query.answer("Вы уже ответили на это напоминание", show_alert=True)
+        return
+    except NotificationResponseForbidden:
+        await query.answer("Это уведомление адресовано другому ученику", show_alert=True)
         return
     except Exception as exc:
         await session.rollback()
@@ -80,6 +89,9 @@ async def cb_notification_decline_lesson(query: CallbackQuery, state: FSMContext
     instance_id = _parse_instance_id(query.data, prefix="notif_decline_lesson_")
     if instance_id is None:
         await query.answer("Неверный запрос", show_alert=True)
+        return
+    if not await _response_sender_matches(session, instance_id, query.from_user.id):
+        await query.answer("Это уведомление адресовано другому ученику", show_alert=True)
         return
     if await _has_recorded_response(session, instance_id):
         await query.answer("Вы уже ответили на это напоминание", show_alert=True)
@@ -106,9 +118,13 @@ async def cb_notification_confirm_package(query: CallbackQuery, session: AsyncSe
             instance_id=instance_id,
             action_key="confirm_package_renewal",
             response_value="confirmed",
+            responder_chat_id=query.from_user.id,
         )
     except NotificationResponseAlreadyRecorded:
         await query.answer("Вы уже ответили на это напоминание", show_alert=True)
+        return
+    except NotificationResponseForbidden:
+        await query.answer("Это уведомление адресовано другому ученику", show_alert=True)
         return
     except Exception as exc:
         await session.rollback()
@@ -146,9 +162,13 @@ async def cb_notification_discuss_package(query: CallbackQuery, session: AsyncSe
             instance_id=instance_id,
             action_key="discuss_package_renewal",
             response_value="needs_discussion",
+            responder_chat_id=query.from_user.id,
         )
     except NotificationResponseAlreadyRecorded:
         await query.answer("Вы уже ответили на это напоминание", show_alert=True)
+        return
+    except NotificationResponseForbidden:
+        await query.answer("Это уведомление адресовано другому ученику", show_alert=True)
         return
     except Exception as exc:
         await session.rollback()
@@ -193,10 +213,15 @@ async def state_notification_decline_reason(
             action_key="decline_lesson",
             response_value="declined",
             response_text=reason_text,
+            responder_chat_id=message.from_user.id,
         )
     except NotificationResponseAlreadyRecorded:
         await state.clear()
         await message.answer("Вы уже ответили на это напоминание")
+        return
+    except NotificationResponseForbidden:
+        await state.clear()
+        await message.answer("Это уведомление адресовано другому ученику")
         return
     except Exception as exc:
         await session.rollback()
@@ -222,22 +247,49 @@ async def _record_response(
     action_key: str,
     response_value: str,
     response_text: str | None = None,
+    responder_chat_id: int,
 ) -> None:
     tenant_id = await _tenant_id_for_instance(session, instance_id)
     if tenant_id is None:
         raise ValueError(f"Notification instance {instance_id} not found")
+    if not await _response_sender_matches(session, instance_id, responder_chat_id):
+        raise NotificationResponseForbidden
     if await _has_recorded_response(session, instance_id):
         raise NotificationResponseAlreadyRecorded
     uow = SqlAlchemySessionNotificationUnitOfWork(session, tenant_id=tenant_id)
-    await RecordNotificationResponseUseCase(uow).execute(
-        NotificationResponseDraft(
-            notification_instance_id=instance_id,
-            action_key=action_key,
-            response_value=response_value,
-            response_text=response_text,
-            response_metadata={"recorded_at": datetime.now(timezone.utc).isoformat()},
+    try:
+        await RecordNotificationResponseUseCase(uow).execute(
+            NotificationResponseDraft(
+                notification_instance_id=instance_id,
+                action_key=action_key,
+                response_value=response_value,
+                response_text=response_text,
+                response_metadata={"recorded_at": datetime.now(timezone.utc).isoformat()},
+            )
         )
+    except IntegrityError as exc:
+        await session.rollback()
+        raise NotificationResponseAlreadyRecorded from exc
+
+
+async def _response_sender_matches(
+    session: AsyncSession,
+    instance_id: int,
+    responder_chat_id: int,
+) -> bool:
+    result = await session.execute(
+        select(NotificationInstance.id)
+        .join(Learner, Learner.id == NotificationInstance.learner_id)
+        .join(BotUser, BotUser.id == Learner.bot_user_id)
+        .where(
+            NotificationInstance.id == instance_id,
+            Learner.archived_at.is_(None),
+            Learner.notifications_enabled.is_(True),
+            BotUser.chat_id == responder_chat_id,
+        )
+        .limit(1)
     )
+    return result.scalar_one_or_none() is not None
 
 
 async def _has_recorded_response(session: AsyncSession, instance_id: int) -> bool:

@@ -3,14 +3,13 @@ import { Segmented, Spin, Alert, Typography } from 'antd';
 import { CalendarOutlined, UnorderedListOutlined, AppstoreOutlined } from '@ant-design/icons';
 import { useQuery } from '@tanstack/react-query';
 import { useTranslation } from 'react-i18next';
-import api from '../services/api';
 import MonthCalendar from '../components/common/MonthCalendar';
 import WeekCalendar from '../components/common/WeekCalendar';
 import ListView from '../components/schedule/ListView';
 import LessonDrawer from '../components/schedule/LessonDrawer';
-import type { Lesson as CommonLesson } from '../components/common/calendar-types';
 import type { Lesson as ScheduleLesson, ViewMode } from '../components/schedule/types';
 import { DEFAULT_TIMEZONE } from '../utils/datetime';
+import { fetchAllScheduleLessons } from '../services/scheduleLessons';
 
 const { Title } = Typography;
 
@@ -23,16 +22,7 @@ const Schedule: React.FC = () => {
   // Fetch all lessons for student
   const { data: lessonsData, isLoading, error } = useQuery({
     queryKey: ['lessons', 'schedule'],
-    queryFn: async () => {
-      const { data } = await api.get<{ items: CommonLesson[], total: number }>('/lessons', {
-        params: { 
-          limit: 100, // Max allowed by API validation
-          sort_by: 'scheduled_at',
-          sort_order: 'asc'
-        }
-      });
-      return data;
-    },
+    queryFn: fetchAllScheduleLessons,
   });
 
   const lessons = lessonsData?.items || [];

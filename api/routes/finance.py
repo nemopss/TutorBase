@@ -14,7 +14,6 @@ from io import StringIO
 import csv
 from typing import Optional
 
-from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import StreamingResponse
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -35,6 +34,7 @@ from api.schemas.finance import (
 )
 from api.schemas import PaginatedResponse, PaginationParams
 from services import finance_service
+from utils.timezone import DEFAULT_TZ, to_utc
 
 router = APIRouter()
 
@@ -44,6 +44,40 @@ class ReportPeriod(str, Enum):
     MONTH = "month"
     QUARTER = "quarter"
     CUSTOM = "custom"
+
+
+def _resolve_report_period(
+    period: ReportPeriod,
+    *,
+    from_date: datetime | None,
+    to_date: datetime | None,
+    now: datetime | None = None,
+) -> tuple[datetime, datetime]:
+    now_local = (now or datetime.now(timezone.utc)).astimezone(DEFAULT_TZ)
+    if period == ReportPeriod.MONTH:
+        start_local = now_local.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
+        return start_local.astimezone(timezone.utc), now_local.astimezone(timezone.utc)
+    if period == ReportPeriod.QUARTER:
+        quarter_month = ((now_local.month - 1) // 3) * 3 + 1
+        start_local = now_local.replace(
+            month=quarter_month,
+            day=1,
+            hour=0,
+            minute=0,
+            second=0,
+            microsecond=0,
+        )
+        return start_local.astimezone(timezone.utc), now_local.astimezone(timezone.utc)
+    if not from_date or not to_date:
+        raise HTTPException(
+            status_code=422,
+            detail="from_date and to_date are required for custom period",
+        )
+    start = to_utc(from_date, DEFAULT_TZ)
+    end = to_utc(to_date, DEFAULT_TZ)
+    if start > end:
+        raise HTTPException(status_code=422, detail="from_date must be before to_date")
+    return start, end
 
 
 @router.get("/dashboard", response_model=DashboardMetricsResponse)
@@ -123,31 +157,11 @@ async def get_income_report(
     
     **Validates: Requirements 6.1, 6.2, 6.3, 6.4**
     """
-    now = datetime.now(timezone.utc)
-    
-    if period == ReportPeriod.MONTH:
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif period == ReportPeriod.QUARTER:
-        quarter_month = ((now.month - 1) // 3) * 3 + 1
-        start = now.replace(month=quarter_month, day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif period == ReportPeriod.CUSTOM:
-        if not from_date or not to_date:
-            raise HTTPException(
-                status_code=422,
-                detail="from_date and to_date are required for custom period"
-            )
-        if from_date > to_date:
-            raise HTTPException(
-                status_code=422,
-                detail="from_date must be before to_date"
-            )
-        start = from_date
-        end = to_date
-    else:
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
+    start, end = _resolve_report_period(
+        period,
+        from_date=from_date,
+        to_date=to_date,
+    )
     
     report = await finance_service.generate_income_report(
         session, current_tenant, start, end
@@ -191,26 +205,11 @@ async def export_income_report(
     
     **Validates: Requirements 6.5**
     """
-    now = datetime.now(timezone.utc)
-    
-    if period == ReportPeriod.MONTH:
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif period == ReportPeriod.QUARTER:
-        quarter_month = ((now.month - 1) // 3) * 3 + 1
-        start = now.replace(month=quarter_month, day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
-    elif period == ReportPeriod.CUSTOM:
-        if not from_date or not to_date:
-            raise HTTPException(
-                status_code=422,
-                detail="from_date and to_date are required for custom period"
-            )
-        start = from_date
-        end = to_date
-    else:
-        start = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0)
-        end = now
+    start, end = _resolve_report_period(
+        period,
+        from_date=from_date,
+        to_date=to_date,
+    )
     
     report = await finance_service.generate_income_report(
         session, current_tenant, start, end

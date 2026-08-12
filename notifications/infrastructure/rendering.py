@@ -3,8 +3,8 @@ from __future__ import annotations
 from datetime import datetime, timezone
 from zoneinfo import ZoneInfo
 
-from database.models import Learner, Lesson, LessonPackage
-from sqlalchemy import select
+from database.models import Learner, Lesson, LessonPackage, User
+from sqlalchemy import case, select
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import joinedload, selectinload
 
@@ -59,6 +59,9 @@ class SqlAlchemyNotificationRenderer:
 
     async def _render_context(self, instance: NotificationInstance) -> dict[str, object]:
         context = {key: "" for key in ALLOWED_TEMPLATE_VARIABLE_KEYS}
+        context["custom_note"] = str(
+            (instance.manual_overrides or {}).get("custom_note") or ""
+        )
         if instance.event_type == EventType.LESSON.value and instance.event_id is not None:
             context.update(await self._lesson_context(instance.event_id))
         elif instance.event_type == EventType.PACKAGE.value and instance.event_id is not None:
@@ -79,6 +82,7 @@ class SqlAlchemyNotificationRenderer:
             "lesson_time": lesson_dt.strftime("%H:%M"),
             "lesson_datetime": lesson_dt.strftime("%d.%m.%Y %H:%M"),
             "package_title": row.package_title,
+            "teacher_name": getattr(row, "teacher_name", "") or "",
             "homework_due_at": homework_due_at.strftime("%d.%m.%Y %H:%M") if homework_due_at else "",
         }
 
@@ -93,7 +97,21 @@ class SqlAlchemyNotificationRenderer:
             "student_name": row.learner_name,
             "package_title": row.package_title,
             "package_end": package_end.strftime("%d.%m.%Y") if package_end else "",
+            "teacher_name": getattr(row, "teacher_name", "") or "",
         }
+
+
+def _teacher_name_subquery(tenant_id: int):
+    return (
+        select(User.display_name)
+        .where(
+            User.tenant_id == tenant_id,
+            User.role.in_(("teacher", "admin")),
+        )
+        .order_by(case((User.role == "teacher", 0), else_=1), User.id)
+        .limit(1)
+        .scalar_subquery()
+    )
 
 
 def _instance_for_render_stmt(tenant_id: int, instance_id: int):
@@ -120,6 +138,7 @@ def _lesson_render_context_stmt(tenant_id: int, lesson_id: int):
             LessonPackage.title.label("package_title"),
             LessonPackage.timezone,
             Learner.display_name.label("learner_name"),
+            _teacher_name_subquery(tenant_id).label("teacher_name"),
         )
         .join(LessonPackage, LessonPackage.id == Lesson.package_id)
         .join(Learner, Learner.id == LessonPackage.learner_id)
@@ -137,6 +156,7 @@ def _package_render_context_stmt(tenant_id: int, package_id: int):
             LessonPackage.end_date.label("package_end"),
             LessonPackage.timezone,
             Learner.display_name.label("learner_name"),
+            _teacher_name_subquery(tenant_id).label("teacher_name"),
         )
         .join(Learner, Learner.id == LessonPackage.learner_id)
         .where(

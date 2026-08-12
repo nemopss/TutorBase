@@ -168,6 +168,11 @@ class Settings(BaseSettings):
             host = self.POSTGRESQL_HOST
             port = f":{self.POSTGRESQL_PORT}" if self.POSTGRESQL_PORT else ""
             return f"postgresql+asyncpg://{auth}{host}{port}/{self.POSTGRESQL_DBNAME}"
+        if not self.DEV_MODE:
+            raise ValueError(
+                "PostgreSQL configuration is required outside DEV_MODE; "
+                "refusing to fall back to a local SQLite database"
+            )
         return f"sqlite+aiosqlite:///{self.DB_PATH}"
 
     def build_telegram_proxy_url(self) -> str | None:

@@ -1,8 +1,9 @@
 
 import React, { createContext, useState, useEffect, useContext, useRef } from 'react';
+import { useQueryClient } from '@tanstack/react-query';
 import type { PropsWithChildren } from 'react';
 import api from '../services/api';
-import { setBrowserRefreshHandler } from '../services/api';
+import { setAuthFailureHandler, setBrowserRefreshHandler } from '../services/api';
 import { BrowserLoginScreen } from './BrowserLoginScreen';
 import {
   loginWithEmail,
@@ -160,6 +161,7 @@ export const useAuth = () => {
 };
 
 export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
+  const queryClient = useQueryClient();
   const [user, setUser] = useState<User | null>(null);
   const [tenantId, setTenantId] = useState<number | null>(null);
   const [tenantAccess, setTenantAccess] = useState<TenantAccess | null>(null);
@@ -556,6 +558,8 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
         withCredentials: true,
       });
 
+      await queryClient.cancelQueries();
+      queryClient.clear();
       applyAuthenticatedSession(response.data, authMode, {
         persistLegacyTokens: !prefersCookieSession(authMode),
       });
@@ -564,6 +568,14 @@ export const AuthProvider: React.FC<PropsWithChildren> = ({ children }) => {
       throw new Error(getApiMessage(err, 'Failed to switch tenant'));
     }
   };
+
+  useEffect(() => {
+    setAuthFailureHandler(() => {
+      queryClient.clear();
+      clearAuthState();
+    });
+    return () => setAuthFailureHandler(null);
+  }, [queryClient]);
 
   // Register tutor (creates new school)
   const registerTutor = async (data: TutorRegistrationData) => {

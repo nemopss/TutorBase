@@ -1,11 +1,16 @@
-import { render, screen, waitFor } from '@testing-library/react';
+import { act, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { AuthProvider, useAuth } from '../AuthProvider';
+import apiClient, {
+  setAuthFailureHandler as authFailureHandlerSetter,
+  setBrowserRefreshHandler as browserRefreshHandlerSetter,
+} from '../../services/api';
 
 // Mock the api module
 jest.mock('../../services/api', () => ({
   __esModule: true,
   setBrowserRefreshHandler: jest.fn(),
+  setAuthFailureHandler: jest.fn(),
   default: {
     get: jest.fn(() => Promise.resolve({ data: null })),
     post: jest.fn(),
@@ -17,12 +22,13 @@ jest.mock('../../services/api', () => ({
   },
 }));
 
-const api = require('../../services/api').default as {
+const api = apiClient as unknown as {
   get: jest.Mock;
   post: jest.Mock;
   defaults: { headers: { common: Record<string, string> } };
 };
-const setBrowserRefreshHandler = require('../../services/api').setBrowserRefreshHandler as jest.Mock;
+const setBrowserRefreshHandler = browserRefreshHandlerSetter as jest.Mock;
+const setAuthFailureHandler = authFailureHandlerSetter as jest.Mock;
 
 const postMock = api.post;
 const validAccessToken = 'eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0.eyJleHAiOjQxMDI0NDQ4MDAsInRlbmFudF9pZCI6MSwicm9sZSI6InRlYWNoZXIifQ.sig';
@@ -86,7 +92,7 @@ const queryClient = new QueryClient({
 
 // Test component that uses the auth context
 const TestComponent = () => {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const { isAuthenticated, isLoading, user, switchTenant } = useAuth();
   
   if (isLoading) {
     return <div>Loading...</div>;
@@ -96,7 +102,12 @@ const TestComponent = () => {
     return <div>Not authenticated</div>;
   }
   
-  return <div>Welcome, {user?.display_name}!</div>;
+  return (
+    <div>
+      Welcome, {user?.display_name}!
+      <button type="button" onClick={() => void switchTenant(2)}>Switch tenant</button>
+    </div>
+  );
 };
 
 const renderComponent = () => {
@@ -119,6 +130,8 @@ describe('AuthProvider', () => {
       return Promise.resolve(defaultAuthResponse);
     });
     setBrowserRefreshHandler.mockImplementation(() => undefined);
+    setAuthFailureHandler.mockImplementation(() => undefined);
+    queryClient.clear();
     localStorageMock.getItem.mockReturnValue(null);
     sessionStorageMock.getItem.mockReturnValue(null);
     window.Telegram = { WebApp: mockTelegramWebApp } as any;
@@ -158,6 +171,36 @@ describe('AuthProvider', () => {
     await waitFor(() => {
       expect(api.defaults.headers.common['Authorization']).toBe(`Bearer ${validAccessToken}`);
     });
+  });
+
+  it('clears tenant-scoped query cache when switching tenant', async () => {
+    renderComponent();
+    await screen.findByText('Welcome, Test User!');
+    queryClient.setQueryData(['learners'], { items: [{ id: 1 }] });
+
+    fireEvent.click(screen.getByRole('button', { name: 'Switch tenant' }));
+
+    await waitFor(() => {
+      expect(postMock).toHaveBeenCalledWith(
+        '/auth/switch-tenant',
+        { tenant_id: 2 },
+        { withCredentials: true },
+      );
+      expect(queryClient.getQueryData(['learners'])).toBeUndefined();
+    });
+  });
+
+  it('clears the live authenticated UI after refresh failure', async () => {
+    let authFailureHandler: (() => void) | null = null;
+    setAuthFailureHandler.mockImplementation((handler: (() => void) | null) => {
+      authFailureHandler = handler;
+    });
+    renderComponent();
+    await screen.findByText('Welcome, Test User!');
+
+    act(() => authFailureHandler?.());
+
+    expect(await screen.findByText('Not authenticated')).toBeInTheDocument();
   });
 
   it('restores browser sessions without writing tokens to localStorage', async () => {

@@ -9,6 +9,7 @@ from handlers.notifications import (
     _build_teacher_response_message,
     _notify_about_response,
     _parse_instance_id,
+    _response_sender_matches,
     _tenant_id_for_instance,
 )
 
@@ -58,6 +59,21 @@ async def test_tenant_id_for_instance_reads_tenant_from_notification_instance():
     tenant_id = await _tenant_id_for_instance(session, 101)
 
     assert tenant_id == 1
+    assert session.statements
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(("database_value", "expected"), [(101, True), (None, False)])
+async def test_response_sender_must_match_notification_recipient(database_value, expected):
+    session = FakeSession(database_value)
+
+    matches = await _response_sender_matches(
+        session,
+        instance_id=101,
+        responder_chat_id=777,
+    )
+
+    assert matches is expected
     assert session.statements
 
 
