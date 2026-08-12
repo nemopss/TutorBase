@@ -1,12 +1,14 @@
 from __future__ import annotations
 
 from datetime import datetime, timedelta, timezone
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import pytest
 
 from api.dependencies import CurrentTenant
 from database import crud
+from database.models import Payment
 from notifications.domain.enums import EventType
 from notifications.infrastructure.models import NotificationCategory, NotificationInstance
 from tests import factories
@@ -172,6 +174,39 @@ async def test_update_package_normalizes_dates_to_utc(db_session, current_tenant
     assert dto.status == "active"
     assert dto.notes == "Updated via service"
     assert dto.start_date is not None
+
+
+@pytest.mark.asyncio
+async def test_update_package_price_recalculates_payment_status(
+    db_session,
+    current_tenant: CurrentTenant,
+):
+    learner = await factories.create_learner(db_session)
+    package = await factories.create_package(db_session, learner=learner)
+    package.price = Decimal("1000.00")
+    package.payment_status = "partial"
+    db_session.add(
+        Payment(
+            tenant_id=current_tenant.tenant_id,
+            learner=learner,
+            package=package,
+            amount=Decimal("500.00"),
+            currency="RUB",
+            paid_at=datetime.now(timezone.utc),
+        )
+    )
+    await db_session.flush()
+
+    dto = await package_service.update_package(
+        db_session,
+        current_tenant,
+        package.id,
+        price=Decimal("400.00"),
+        price_set=True,
+    )
+
+    assert dto.price == 400.0
+    assert dto.payment_status == "paid"
 
 
 @pytest.mark.asyncio

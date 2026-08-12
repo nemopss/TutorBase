@@ -139,7 +139,7 @@ const Learners: React.FC = () => {
   // Track which learner is being toggled
   const [togglingLearnerId, setTogglingLearnerId] = useState<number | null>(null);
 
-  const { data, isLoading } = useQuery<LearnerListResponse, Error>({
+  const { data, isLoading, isError, error, refetch } = useQuery<LearnerListResponse, Error>({
     queryKey: ['learners', statusView],
     queryFn: () => fetchLearners(statusView),
     enabled: !requiresTenantContext,
@@ -527,8 +527,23 @@ const Learners: React.FC = () => {
       {/* Loading state */}
       {isLoading && <LearnerGrid loading />}
 
+      {isError && (
+        <Alert
+          type="error"
+          showIcon
+          message={t('errors.loadFailed', { defaultValue: 'Не удалось загрузить учеников' })}
+          description={error.message}
+          action={(
+            <Button size="small" onClick={() => void refetch()}>
+              {t('common.retry', { defaultValue: 'Повторить' })}
+            </Button>
+          )}
+          style={{ marginBottom: spacing.md }}
+        />
+      )}
+
       {/* Empty state - no learners at all */}
-      {!isLoading && !hasLearners && !isArchiveView && (
+      {!isLoading && !isError && !hasLearners && !isArchiveView && (
         <EmptyState
           title={t('pages.learners.noLearners')}
           description={t('pages.learners.noLearnersDescription')}
@@ -537,12 +552,12 @@ const Learners: React.FC = () => {
         />
       )}
 
-      {!isLoading && !hasLearners && isArchiveView && (
+      {!isLoading && !isError && !hasLearners && isArchiveView && (
         <EmptyState title={t('pages.learners.noArchivedLearners', { defaultValue: 'В архиве пока нет учеников' })} />
       )}
 
       {/* Empty search results */}
-      {!isLoading && hasLearners && isSearching && !hasFilteredResults && (
+      {!isLoading && !isError && hasLearners && isSearching && !hasFilteredResults && (
         <EmptyState
           title={t('common.noLearnersFound')}
           actionText={t('common.clearSearch')}
@@ -551,7 +566,7 @@ const Learners: React.FC = () => {
       )}
 
       {/* Learner cards grid */}
-      {!isLoading && hasFilteredResults && (
+      {!isLoading && !isError && hasFilteredResults && (
         <LearnerGrid>
           {filteredLearners.map((learner) => (
             <LearnerCard

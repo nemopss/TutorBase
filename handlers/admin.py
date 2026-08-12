@@ -17,6 +17,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
 
 from config import config
+from api.dependencies import CurrentTenant
 from database import crud
 from database.models import Application, BotUser
 from utils.state import get_bot_started_at
@@ -27,6 +28,7 @@ from keyboards.common import (
     admin_cases_keyboard,
 )
 from utils import texts
+from services import learner_service
 from utils.formatters import (
     escape_html_text,
     format_timestamp_msk,
@@ -975,7 +977,11 @@ async def cb_learner_delete_execute(query: CallbackQuery, session: AsyncSession)
             await _show_learners_menu(query.message, session, page)
             return
 
-        await crud.delete_learner(session, learner)
+        await learner_service.archive_learner(
+            session,
+            CurrentTenant(tenant_id=learner.tenant_id, is_super_admin=True),
+            learner_id=learner.id,
+        )
         await session.commit()
 
         # Log deletion

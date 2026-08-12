@@ -275,7 +275,14 @@ async def archive_learner(
     learner = await crud.get_learner(session, current_tenant, learner_id)
     if not learner:
         return None
-    return await crud.archive_learner(session, current_tenant, learner)
+    archived = await crud.archive_learner(session, current_tenant, learner)
+    await refresh_learner_notification_schedules(
+        session,
+        current_tenant,
+        archived,
+        reason="learner_archived",
+    )
+    return archived
 
 
 async def restore_learner(
@@ -297,10 +304,10 @@ async def delete_learner(
     *,
     learner_id: int,
 ) -> bool:
-    """Delete a learner and all associated data.
+    """Archive a learner while preserving lesson and financial history.
 
-    Deletes the learner record along with all related packages, lessons, and reminders.
-    First verifies that the learner belongs to the current tenant before deletion.
+    Archives the learner and disables notifications while preserving packages,
+    lessons, payments, and audit history.
 
     Args:
         session: Async database session
@@ -308,12 +315,12 @@ async def delete_learner(
         learner_id: ID of learner to delete
 
     Returns:
-        True if learner was deleted, False if learner doesn't exist or doesn't
+        True if learner was archived, False if learner doesn't exist or doesn't
         belong to current tenant
     """
     learner = await crud.get_learner(session, current_tenant, learner_id)
     if not learner:
         return False
     
-    await crud.delete_learner(session, current_tenant, learner)
+    await archive_learner(session, current_tenant, learner_id=learner_id)
     return True

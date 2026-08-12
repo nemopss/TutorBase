@@ -107,7 +107,6 @@ async def test_flexible_package_does_not_create_payment_or_renewal_reminders(
         total_lessons=10,
     )
     package.end_date = datetime.now(timezone.utc) + timedelta(days=7)
-    package.renewal_enabled = True
     await factories.create_lesson(
         db_session,
         package=package,

@@ -37,9 +37,9 @@ from database import crud
 from database.models import Lesson
 from database.transaction import transactional
 from services.dto import LessonDTO
-from services.exceptions import NotFoundError
+from services.exceptions import NotFoundError, ValidationError
 from services.notification_reconciliation import enqueue_notification_event_reconciliation
-from services.utils import sync_package_metrics
+from services.utils import normalize_to_utc, sync_package_metrics
 from notifications.domain.enums import EventType
 from utils.timezone import DEFAULT_TIMEZONE, normalize_to_timezone
 
@@ -114,6 +114,8 @@ async def update_lesson(
     status: Optional[str] = None,
     teacher_notes: Optional[str] = None,
     homework_due_at: Optional[datetime] = None,
+    teacher_notes_set: bool = False,
+    homework_due_at_set: bool = False,
 ) -> LessonDTO:
     """Update parameters of an existing lesson.
 
@@ -146,6 +148,16 @@ async def update_lesson(
     if not lesson:
         raise NotFoundError(f"Lesson {lesson_id} not found")
 
+    effective_scheduled_at = scheduled_at if scheduled_at is not None else lesson.scheduled_at
+    effective_homework_due_at = (
+        homework_due_at if homework_due_at_set or homework_due_at is not None else lesson.homework_due_at
+    )
+    if (
+        effective_homework_due_at is not None
+        and normalize_to_utc(effective_homework_due_at) <= normalize_to_utc(effective_scheduled_at)
+    ):
+        raise ValidationError("Homework due date must be after scheduled lesson time")
+
     if scheduled_at is not None:
         lesson.scheduled_at = scheduled_at
         # Auto-set rescheduled status when time changes (unless explicit status provided)
@@ -156,16 +168,16 @@ async def update_lesson(
     # Explicit status takes precedence over auto-rescheduling
     if status is not None:
         lesson.status = status
-    if teacher_notes is not None:
+    if teacher_notes_set or teacher_notes is not None:
         lesson.teacher_notes = teacher_notes
-    if homework_due_at is not None:
+    if homework_due_at_set or homework_due_at is not None:
         lesson.homework_due_at = homework_due_at
 
     session.add(lesson)
     await session.flush()
     
     package, _ = await sync_package_metrics(session, current_tenant, lesson.package_id)
-    if any(
+    if homework_due_at_set or any(
         value is not None
         for value in (scheduled_at, duration_minutes, status, homework_due_at)
     ):
@@ -298,6 +310,10 @@ async def create_lesson(
     package = await crud.get_lesson_package(session, current_tenant, package_id)
     if not package:
         raise NotFoundError(f"Package {package_id} not found")
+    if package.package_type == "one_off" and package.lessons:
+        raise ValidationError("A one-off package can contain only one lesson")
+    if homework_due_at is not None and normalize_to_utc(homework_due_at) <= normalize_to_utc(scheduled_at):
+        raise ValidationError("Homework due date must be after scheduled lesson time")
 
     # Default price to learner's lesson_rate if not provided
     lesson_price = None

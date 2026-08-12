@@ -1064,12 +1064,15 @@ const Notifications: React.FC = () => {
     queryKey: ['notificationInstances'],
     queryFn: fetchNotificationInstances,
     enabled: !requiresTenantContext && (activeTab === 'queue' || (isOwnerDebug && activeTab === 'settings')),
+    refetchInterval: activeTab === 'queue' ? 15_000 : false,
+    refetchIntervalInBackground: false,
   });
 
   const instanceDetailQuery = useQuery<NotificationInstance, Error>({
     queryKey: ['notificationInstanceDetail', selectedQueueInstanceId],
     queryFn: () => fetchNotificationInstanceDetail(selectedQueueInstanceId as number),
     enabled: !requiresTenantContext && activeTab === 'queue' && selectedQueueInstanceId !== null,
+    refetchInterval: activeTab === 'queue' && selectedQueueInstanceId !== null ? 15_000 : false,
   });
 
   const activityQuery = useQuery<NotificationActivity[], Error>({
@@ -1227,6 +1230,7 @@ const Notifications: React.FC = () => {
   const processJobsMutation = useMutation({
     mutationFn: triggerNotificationJobProcessing,
     onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['notificationInstances'] });
       message.success(t('pages.notifications.pilotControls.processJobsQueued', { taskId: result.task_id }));
     },
     onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),
@@ -1235,6 +1239,8 @@ const Notifications: React.FC = () => {
   const deliverNowMutation = useMutation({
     mutationFn: triggerNotificationDeliveryTick,
     onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['notificationInstances'] });
+      queryClient.invalidateQueries({ queryKey: ['notificationInstanceDetail'] });
       message.success(t('pages.notifications.pilotControls.deliveryQueued', { taskId: result.task_id }));
     },
     onError: (error: Error) => message.error(t('errors.updateFailed', { message: formatApiError(error) })),

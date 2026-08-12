@@ -270,6 +270,7 @@ async def update_package_endpoint(
             start_date_set="start_date" in payload.model_fields_set,
             end_date_set="end_date" in payload.model_fields_set,
             price_set="price" in payload.model_fields_set,
+            notes_set="notes" in payload.model_fields_set,
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc

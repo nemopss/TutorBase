@@ -30,14 +30,21 @@ from notifications.application.materialization import (
     MaterializeRulesUseCase,
     RunMaterializeActiveRulesJobUseCase,
 )
+from notifications.domain.entities import NotificationPreference
 from notifications.domain.enums import (
+    CapMode,
     CategoryKey,
     EventType,
     InstanceStatus,
     NotificationSystemMode,
+    PreferenceScope,
     Priority,
     TriggerType,
 )
+
+
+def _event_package_id(event: PreviewEvent):
+    return event.event_id if event.event_type == EventType.PACKAGE else event.metadata.get("package_id")
 
 
 @dataclass
@@ -52,11 +59,16 @@ class FakeAudienceResolver:
 class FakeEventRepository:
     events: tuple[PreviewEvent, ...]
 
-    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit, offset=0):
+    async def list_events_for_recipients(
+        self, *, event_type, learner_ids, included_package_ids=None,
+        excluded_package_ids=(), horizon_days, limit, offset=0
+    ):
         events = tuple(
             event
             for event in self.events
             if event.event_type == event_type and event.learner_id in learner_ids
+            and _event_package_id(event) not in excluded_package_ids
+            and (included_package_ids is None or _event_package_id(event) in included_package_ids)
         )
         return events[offset:offset + limit]
 
@@ -72,8 +84,10 @@ class FakeEventRepository:
 
 
 class FakePreferenceRepository:
+    global_preference = None
+
     async def get_global_preference(self):
-        return None
+        return self.global_preference
 
     async def get_group_preferences_for_learner(self, learner_id):
         return ()
@@ -87,7 +101,7 @@ class FakeSettingsRepository:
     settings: NotificationSettingsRecord = field(
         default_factory=lambda: NotificationSettingsRecord(
             tenant_id=1,
-            mode=NotificationSystemMode.LEGACY,
+            mode=NotificationSystemMode.NEW,
         )
     )
     learner_modes: tuple[LearnerNotificationModeRecord, ...] = ()
@@ -97,6 +111,17 @@ class FakeSettingsRepository:
 
     async def list_learner_modes(self):
         return self.learner_modes
+
+    async def get_learner_mode(self, learner_id):
+        return next(
+            (mode for mode in self.learner_modes if mode.learner_id == learner_id),
+            LearnerNotificationModeRecord(
+                learner_id=learner_id,
+                display_name="Ученик",
+                mode_override=NotificationSystemMode.INHERIT,
+                effective_mode=self.settings.mode,
+            ),
+        )
 
     async def clear_learner_modes(self):
         self.learner_modes = ()
@@ -111,6 +136,8 @@ class FakeInstanceRepository:
     suppressed_calls: list[dict] = field(default_factory=list)
     cancel_rule_calls: list[dict] = field(default_factory=list)
     claim_calls: list[dict] = field(default_factory=list)
+    claim_is_current: bool = True
+    sent_today: int = 0
 
     async def upsert_planned_instances(self, instances):
         self.upserted = instances
@@ -139,6 +166,12 @@ class FakeInstanceRepository:
 
     async def mark_delivery_suppressed(self, **kwargs):
         self.suppressed_calls.append(kwargs)
+
+    async def is_delivery_claim_current(self, **kwargs):
+        return self.claim_is_current
+
+    async def count_sent_for_learner_between(self, **kwargs):
+        return self.sent_today
 
 
 @dataclass
@@ -871,6 +904,92 @@ async def test_execute_claimed_notification_delivery_suppresses_inactive_lesson_
 
     assert result.status == InstanceStatus.SUPPRESSED
     assert result.error_code == "delivery_package_not_active"
+    assert adapter.send_count == 0
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_rechecks_current_mode():
+    uow = _uow()
+    uow.settings.settings = replace(uow.settings.settings, mode=NotificationSystemMode.LEGACY)
+    adapter = FakeChannelAdapter()
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow, renderer=FakeRenderer(), channel_adapter=adapter
+    ).execute(_claimed_instance())
+
+    assert result.error_code == "delivery_mode_not_new"
+    assert adapter.send_count == 0
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_rechecks_contact():
+    uow = _uow(recipient=PreviewRecipient(learner_id=10, display_name="Вика", has_contact=False))
+    adapter = FakeChannelAdapter()
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow, renderer=FakeRenderer(), channel_adapter=adapter
+    ).execute(_claimed_instance())
+
+    assert result.error_code == "missing_contact"
+    assert adapter.send_count == 0
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_enforces_daily_cap():
+    uow = _uow()
+    uow.preferences.global_preference = NotificationPreference(
+        scope_type=PreferenceScope.GLOBAL,
+        daily_cap=2,
+        cap_mode=CapMode.ENFORCE,
+    )
+    uow.instances.sent_today = 2
+    adapter = FakeChannelAdapter()
+    delivery_time = datetime(2026, 4, 7, 21, 30, tzinfo=timezone.utc)
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow,
+        renderer=FakeRenderer(),
+        channel_adapter=adapter,
+    ).execute(_claimed_instance(), now=delivery_time)
+
+    assert result.status == InstanceStatus.SUPPRESSED
+    assert result.error_code == "daily_cap_exceeded"
+    assert adapter.send_count == 0
+    assert uow.instances.suppressed_calls[0]["reason"] == "daily_cap_exceeded"
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_warn_only_cap_still_sends():
+    uow = _uow()
+    uow.preferences.global_preference = NotificationPreference(
+        scope_type=PreferenceScope.GLOBAL,
+        daily_cap=1,
+        cap_mode=CapMode.WARN_ONLY,
+    )
+    uow.instances.sent_today = 10
+    adapter = FakeChannelAdapter()
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow,
+        renderer=FakeRenderer(),
+        channel_adapter=adapter,
+    ).execute(_claimed_instance())
+
+    assert result.status == InstanceStatus.SENT
+    assert adapter.send_count == 1
+
+
+@pytest.mark.asyncio
+async def test_execute_claimed_notification_delivery_rejects_stale_claim():
+    uow = _uow()
+    uow.instances.claim_is_current = False
+    adapter = FakeChannelAdapter()
+
+    result = await ExecuteClaimedNotificationDeliveryUseCase(
+        uow, renderer=FakeRenderer(), channel_adapter=adapter
+    ).execute(_claimed_instance())
+
+    assert result.error_code == "delivery_claim_expired"
     assert adapter.send_count == 0
 
 

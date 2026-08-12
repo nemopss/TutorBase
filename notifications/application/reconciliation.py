@@ -312,6 +312,8 @@ class _SingleEventRepository:
         *,
         event_type: EventType,
         learner_ids: tuple[int, ...],
+        included_package_ids: tuple[int, ...] | None = None,
+        excluded_package_ids: tuple[int, ...] = (),
         horizon_days: int,
         limit: int,
         offset: int = 0,
@@ -319,6 +321,15 @@ class _SingleEventRepository:
         if event_type != self._event.event_type:
             return ()
         if self._event.learner_id not in set(learner_ids):
+            return ()
+        package_id = (
+            self._event.event_id
+            if self._event.event_type == EventType.PACKAGE
+            else self._event.metadata.get("package_id")
+        )
+        if included_package_ids is not None and package_id not in included_package_ids:
+            return ()
+        if package_id in excluded_package_ids:
             return ()
         if offset > 0:
             return ()

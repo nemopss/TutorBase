@@ -50,6 +50,7 @@ def _lesson_context_row():
         package_title="Вика март",
         timezone="Europe/Moscow",
         learner_name="Вика",
+        teacher_name="Ксюша",
     )
 
 
@@ -120,6 +121,25 @@ async def test_sqlalchemy_renderer_renders_rule_template_with_lesson_context():
             ],
         ]
     }
+
+
+@pytest.mark.asyncio
+async def test_sqlalchemy_renderer_renders_teacher_and_custom_note():
+    instance = _instance(
+        body="{teacher_name}: {student_name}, {custom_note}"
+    )
+    instance.manual_overrides = {"custom_note": "возьми тетрадь"}
+    session = FakeRenderSession(instance, _lesson_context_row())
+
+    rendered = await SqlAlchemyNotificationRenderer(session, tenant_id=1).render(
+        SimpleNamespace(
+            instance_id=101,
+            category=CategoryKey.LESSON_CONFIRMATION,
+            event_type=EventType.LESSON,
+        )
+    )
+
+    assert rendered.text == "Ксюша: Вика, возьми тетрадь"
 
 
 @pytest.mark.asyncio
@@ -231,6 +251,7 @@ async def test_sqlalchemy_renderer_renders_package_renewal_context_and_buttons()
             package_end=datetime(2026, 4, 30, 21, 0, tzinfo=timezone.utc),
             timezone="Europe/Moscow",
             learner_name="Вика",
+            teacher_name="Ксюша",
         ),
     )
 

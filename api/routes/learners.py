@@ -317,6 +317,12 @@ async def unlink_learner_account(
         unlinked_by_user_id=current_user.id,
         reason=request.reason,
     )
+    await learner_service.refresh_learner_notification_schedules(
+        session,
+        current_tenant,
+        learner,
+        reason="learner_account_unlinked",
+    )
     await session.flush()
 
     next_lesson_dates = await _get_next_lesson_dates(
@@ -379,7 +385,7 @@ async def delete_learner(
     current_tenant: CurrentTenant = Depends(get_current_tenant),
     __=Depends(require_full_tenant_access),
 ):
-    """Delete a learner and all associated data (packages, lessons, reminders)."""
+    """Archive a learner while preserving packages, lessons, and payments."""
     deleted = await learner_service.delete_learner(
         session,
         current_tenant,

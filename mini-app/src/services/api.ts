@@ -9,6 +9,7 @@ type RetryableRequestConfig = AxiosRequestConfig & {
 
 type RefreshSubscriber = (token: string | null) => void;
 type BrowserRefreshHandler = () => Promise<string | null>;
+type AuthFailureHandler = () => void;
 const NON_RETRYABLE_REFRESH_URLS = new Set([
   "/auth/refresh",
   "/auth/browser/refresh",
@@ -22,10 +23,15 @@ const api = axios.create({
 
 let refreshTokenRequest: Promise<string | null> | null = null;
 let browserRefreshHandler: BrowserRefreshHandler | null = null;
+let authFailureHandler: AuthFailureHandler | null = null;
 const refreshSubscribers: RefreshSubscriber[] = [];
 
 export const setBrowserRefreshHandler = (handler: BrowserRefreshHandler | null) => {
   browserRefreshHandler = handler;
+};
+
+export const setAuthFailureHandler = (handler: AuthFailureHandler | null) => {
+  authFailureHandler = handler;
 };
 
 const subscribeTokenRefresh = (callback: RefreshSubscriber) => {
@@ -132,6 +138,7 @@ api.interceptors.response.use(
           .catch((refreshError) => {
             notifyRefreshSubscribers(null);
             clearStoredTokens();
+            authFailureHandler?.();
             throw refreshError;
           })
           .finally(() => {

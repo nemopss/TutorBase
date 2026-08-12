@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from datetime import datetime, time, timezone
 from zoneinfo import ZoneInfo
 
@@ -18,6 +18,10 @@ from notifications.domain.enums import CategoryKey, EventType, PreferenceScope, 
 MOSCOW_TZ = ZoneInfo("Europe/Moscow")
 
 
+def _event_package_id(event: PreviewEvent):
+    return event.event_id if event.event_type == EventType.PACKAGE else event.metadata.get("package_id")
+
+
 @dataclass
 class FakeAudienceResolver:
     recipients: tuple[PreviewRecipient, ...]
@@ -30,11 +34,16 @@ class FakeAudienceResolver:
 class FakeEventRepository:
     events: tuple[PreviewEvent, ...]
 
-    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit, offset=0):
+    async def list_events_for_recipients(
+        self, *, event_type, learner_ids, included_package_ids=None,
+        excluded_package_ids=(), horizon_days, limit, offset=0
+    ):
         events = tuple(
             event
             for event in self.events
             if event.event_type == event_type and event.learner_id in learner_ids
+            and _event_package_id(event) not in excluded_package_ids
+            and (included_package_ids is None or _event_package_id(event) in included_package_ids)
         )
         return events[offset:offset + limit]
 
@@ -44,14 +53,18 @@ class FakePreferenceRepository:
     global_preference: NotificationPreference | None = None
     learner_preferences: dict[int, NotificationPreference | None] | None = None
     group_preferences: dict[int, tuple[NotificationPreference, ...]] | None = None
+    learner_calls: int = 0
+    group_calls: int = 0
 
     async def get_global_preference(self):
         return self.global_preference
 
     async def get_group_preferences_for_learner(self, learner_id):
+        self.group_calls += 1
         return (self.group_preferences or {}).get(learner_id, ())
 
     async def get_learner_preference(self, learner_id):
+        self.learner_calls += 1
         return (self.learner_preferences or {}).get(learner_id)
 
 
@@ -118,6 +131,92 @@ async def test_preview_rule_schedules_lesson_notification():
     assert instance.explanation["learner_name"] == "Вика"
     assert instance.explanation["event_starts_at"] == "2026-04-08T20:00:00+03:00"
     assert instance.explanation["event_timezone"] == "Europe/Moscow"
+
+
+@pytest.mark.asyncio
+async def test_preview_rule_package_assignment_does_not_include_other_packages():
+    starts_at = datetime(2026, 4, 8, 20, 0, tzinfo=MOSCOW_TZ)
+    uow = _uow(
+        event=PreviewEvent(
+            event_type=EventType.LESSON,
+            event_id=617,
+            learner_id=10,
+            starts_at=starts_at,
+            package_status="active",
+            lesson_status="scheduled",
+            metadata={"package_id": 101},
+        )
+    )
+    uow.events.events += (
+        PreviewEvent(
+            event_type=EventType.LESSON,
+            event_id=618,
+            learner_id=10,
+            starts_at=starts_at,
+            package_status="active",
+            lesson_status="scheduled",
+            metadata={"package_id": 102},
+        ),
+    )
+    draft = replace(
+        _draft(),
+        assignments=(AudienceSelector(scope_type="package", scope_id=101),),
+    )
+
+    result = await PreviewRuleUseCase(uow).execute(draft)
+
+    assert [instance.event_id for instance in result.instances] == [617]
+
+
+@pytest.mark.asyncio
+async def test_preview_rule_package_exclusion_only_excludes_that_package():
+    starts_at = datetime(2026, 4, 8, 20, 0, tzinfo=MOSCOW_TZ)
+    uow = _uow(
+        event=PreviewEvent(
+            event_type=EventType.LESSON,
+            event_id=617,
+            learner_id=10,
+            starts_at=starts_at,
+            package_status="active",
+            lesson_status="scheduled",
+            metadata={"package_id": 101},
+        )
+    )
+    uow.events.events += (
+        PreviewEvent(
+            event_type=EventType.LESSON,
+            event_id=618,
+            learner_id=10,
+            starts_at=starts_at,
+            package_status="active",
+            lesson_status="scheduled",
+            metadata={"package_id": 102},
+        ),
+    )
+    draft = replace(
+        _draft(),
+        assignments=(
+            AudienceSelector(scope_type="learner", scope_id=10),
+            AudienceSelector(scope_type="package", scope_id=101, is_exclusion=True),
+        ),
+    )
+
+    result = await PreviewRuleUseCase(uow).execute(draft)
+
+    assert [instance.event_id for instance in result.instances] == [618]
+
+
+@pytest.mark.asyncio
+async def test_preview_rule_loads_preferences_once_per_learner():
+    uow = _uow()
+    first = uow.events.events[0]
+    uow.events.events += (replace(first, event_id=618),)
+
+    result = await PreviewRuleUseCase(uow).execute(_draft())
+
+    assert len(result.instances) == 2
+    assert uow.preferences.learner_calls == 1
+    assert uow.preferences.group_calls == 1
 
 
 @pytest.mark.asyncio

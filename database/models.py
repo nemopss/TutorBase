@@ -32,6 +32,7 @@ from sqlalchemy import (
     Index,
     Numeric,
     UniqueConstraint,
+    CheckConstraint,
 )
 from sqlalchemy.orm import declarative_base, relationship
 
@@ -653,6 +654,15 @@ class LessonPackage(Base):
     payments = relationship('Payment', back_populates='package')
 
     __table_args__ = (
+        CheckConstraint(
+            "(package_type = 'one_off' AND schedule_mode = 'one_off' AND renewal_enabled = false) "
+            "OR (package_type = 'package' AND schedule_mode IN ('fixed', 'flexible'))",
+            name='ck_lesson_packages_type_schedule_mode',
+        ),
+        CheckConstraint(
+            "renewal_enabled = false OR (package_type = 'package' AND schedule_mode = 'fixed')",
+            name='ck_lesson_packages_renewal_mode',
+        ),
         Index('ix_lesson_packages_learner_status', 'learner_id', 'status'),
         Index('ix_lesson_packages_tenant_type_status', 'tenant_id', 'package_type', 'status'),
         Index('ix_lesson_packages_tenant_schedule_mode', 'tenant_id', 'schedule_mode'),

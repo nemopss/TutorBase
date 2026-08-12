@@ -180,6 +180,44 @@ async def test_create_and_update_rules_commit_changes():
 
 
 @pytest.mark.asyncio
+async def test_create_rule_rejects_unknown_inline_template_variable():
+    repository = FakeRuleRepository()
+    uow = FakeUnitOfWork(rules=repository)
+    draft = NotificationRuleCreateDraft(
+        category=CategoryKey.HOMEWORK,
+        name="Домашка",
+        event_type=EventType.LESSON,
+        trigger_type=TriggerType.DAY_OFFSET_AT_TIME,
+        trigger_config={"days": -1, "local_time": "10:00"},
+        inline_template_body="Привет, {unknown_value}",
+        assignments=(AudienceSelector(scope_type="group", scope_id=7),),
+    )
+
+    with pytest.raises(ValueError, match="unknown_value"):
+        await CreateNotificationRuleUseCase(uow).execute(draft)
+
+    assert repository.created == []
+    assert uow.committed is False
+
+
+@pytest.mark.asyncio
+async def test_update_rule_rejects_unknown_inline_template_variable():
+    repository = FakeRuleRepository(rules=(_record(rule_id=1),))
+    uow = FakeUnitOfWork(rules=repository)
+
+    with pytest.raises(ValueError, match="unknown_value"):
+        await UpdateNotificationRuleUseCase(uow).execute(
+            rule_id=1,
+            draft=NotificationRuleUpdateDraft(
+                inline_template_body="{unknown_value}",
+                inline_template_body_set=True,
+            ),
+        )
+
+    assert repository.updated == []
+
+
+@pytest.mark.asyncio
 async def test_status_use_cases_commit_status_transition():
     repository = FakeRuleRepository()
     uow = FakeUnitOfWork(rules=repository)

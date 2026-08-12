@@ -30,6 +30,10 @@ from notifications.domain.enums import (
 )
 
 
+def _event_package_id(event: PreviewEvent):
+    return event.event_id if event.event_type == EventType.PACKAGE else event.metadata.get("package_id")
+
+
 @dataclass
 class FakeAudienceResolver:
     recipients: tuple[PreviewRecipient, ...]
@@ -42,10 +46,18 @@ class FakeAudienceResolver:
 class FakeEventRepository:
     event: PreviewEvent | None
 
-    async def list_events_for_recipients(self, *, event_type, learner_ids, horizon_days, limit, offset=0):
+    async def list_events_for_recipients(
+        self, *, event_type, learner_ids, included_package_ids=None,
+        excluded_package_ids=(), horizon_days, limit, offset=0
+    ):
         if self.event is None:
             return ()
         if self.event.event_type != event_type or self.event.learner_id not in set(learner_ids):
+            return ()
+        package_id = _event_package_id(self.event)
+        if included_package_ids is not None and package_id not in included_package_ids:
+            return ()
+        if package_id in excluded_package_ids:
             return ()
         if offset > 0:
             return ()

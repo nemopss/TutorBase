@@ -9,6 +9,18 @@ from notifications.application.dto import (
 from notifications.application.audit import record_notification_audit
 from notifications.application.ports import NotificationMaterializationUnitOfWork
 from notifications.domain.enums import NotificationSystemMode, RuleStatus
+from notifications.domain.templates import validate_template_body
+
+
+def _validate_inline_template_or_raise(body: str | None) -> None:
+    if not body:
+        return
+    validation = validate_template_body(body)
+    if validation.unknown_variables:
+        raise ValueError(
+            "Unknown template variables: "
+            + ", ".join(validation.unknown_variables)
+        )
 
 
 class ListNotificationRulesUseCase:
@@ -32,6 +44,7 @@ class CreateNotificationRuleUseCase:
         self._uow = uow
 
     async def execute(self, draft: NotificationRuleCreateDraft) -> NotificationRuleRecord:
+        _validate_inline_template_or_raise(draft.inline_template_body)
         rule = await self._uow.rules.create_rule(draft)
         await record_notification_audit(
             self._uow,
@@ -62,6 +75,8 @@ class UpdateNotificationRuleUseCase:
         draft: NotificationRuleUpdateDraft,
         actor_user_id: int | None = None,
     ) -> NotificationRuleRecord | None:
+        if draft.inline_template_body_set or draft.inline_template_body is not None:
+            _validate_inline_template_or_raise(draft.inline_template_body)
         before = await self._uow.rules.get_rule(rule_id)
         rule = await self._uow.rules.update_rule(rule_id, draft)
         if rule is not None:
@@ -104,6 +119,8 @@ class ActivateNotificationRuleUseCase:
         actor_user_id: int | None = None,
     ) -> NotificationRuleRecord | None:
         before = await self._uow.rules.get_rule(rule_id)
+        if before is not None:
+            _validate_inline_template_or_raise(before.inline_template_body)
         rule = await self._uow.rules.set_rule_status(rule_id, RuleStatus.ACTIVE.value)
         if rule is not None:
             await _queue_active_rules_rebuild(

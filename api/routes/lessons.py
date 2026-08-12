@@ -28,7 +28,7 @@ from services import lesson_service, package_service
 from services.dto import LessonDTO
 from database import crud
 from database.models import User
-from services.exceptions import NotFoundError
+from services.exceptions import NotFoundError, ValidationError
 
 router = APIRouter()
 
@@ -146,8 +146,8 @@ async def create_lesson_for_package(
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except Exception as exc:
-        raise
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _to_response(lesson)
 
 
@@ -184,11 +184,13 @@ async def update_lesson_endpoint(
             status=payload.status,
             teacher_notes=payload.teacher_notes,
             homework_due_at=payload.homework_due_at,
+            teacher_notes_set="teacher_notes" in payload.model_fields_set,
+            homework_due_at_set="homework_due_at" in payload.model_fields_set,
         )
     except NotFoundError as exc:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(exc)) from exc
-    except Exception as exc:
-        raise
+    except ValidationError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(exc)) from exc
     return _to_response(lesson)
 
 

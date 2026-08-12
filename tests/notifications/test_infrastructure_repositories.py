@@ -896,8 +896,35 @@ async def test_instance_repository_cancels_scheduled_instance():
     assert instance.status == "cancelled"
     assert instance.status_reason == "teacher_cancelled"
     assert instance.delivery_enabled is False
+    assert instance.manual_overrides == {"cancelled": True}
     assert instance.updated_at == now + timedelta(minutes=1)
     assert session.flush_count == 1
+
+
+@pytest.mark.asyncio
+async def test_instance_repository_does_not_rematerialize_manually_cancelled_instance():
+    session = FakeAsyncSession(
+        existing_rows=(
+            SimpleNamespace(
+                id=101,
+                recipient_type="learner",
+                recipient_id=10,
+                event_type="lesson",
+                event_key="lesson:617",
+                dedupe_key="single|lesson_confirmation|x",
+                status="cancelled",
+                status_reason="teacher_cancelled",
+                manual_overrides={"cancelled": True},
+                has_response=False,
+            ),
+        )
+    )
+    repository = SqlAlchemyNotificationInstanceRepository(session, tenant_id=1)
+
+    result = await repository.upsert_planned_instances((_planned_instance(),))
+
+    assert result.updated_count == 0
+    assert result.skipped_count == 1
 
 
 @pytest.mark.asyncio

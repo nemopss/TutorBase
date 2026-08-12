@@ -223,7 +223,11 @@ class SqlAlchemyAudienceResolver:
             tuple(assignment for assignment in assignments if not assignment.is_exclusion)
         )
         excluded_ids = await self._resolve_assignment_ids(
-            tuple(assignment for assignment in assignments if assignment.is_exclusion)
+            tuple(
+                assignment
+                for assignment in assignments
+                if assignment.is_exclusion and assignment.scope_type != "package"
+            )
         )
         learner_ids = tuple(sorted(included_ids - excluded_ids))
         if not learner_ids:
@@ -296,6 +300,8 @@ class SqlAlchemyEventRepository:
         *,
         event_type: EventType,
         learner_ids: tuple[int, ...],
+        included_package_ids: tuple[int, ...] | None = None,
+        excluded_package_ids: tuple[int, ...] = (),
         horizon_days: int,
         limit: int,
         offset: int = 0,
@@ -309,6 +315,8 @@ class SqlAlchemyEventRepository:
                 _lesson_events_stmt(
                     self._tenant_id,
                     learner_ids,
+                    included_package_ids=included_package_ids,
+                    excluded_package_ids=excluded_package_ids,
                     starts_at=starts_at,
                     ends_at=ends_at,
                     limit=limit,
@@ -321,6 +329,8 @@ class SqlAlchemyEventRepository:
                 _package_events_stmt(
                     self._tenant_id,
                     learner_ids,
+                    included_package_ids=included_package_ids,
+                    excluded_package_ids=excluded_package_ids,
                     starts_at=starts_at,
                     ends_at=ends_at,
                     limit=limit,
@@ -374,6 +384,7 @@ class SqlAlchemyPreferenceRepository:
                 GroupMember.learner_id == learner_id,
                 GroupMember.status == "active",
             )
+            .order_by(NotificationPreference.id)
         )
         return tuple(
             preference
@@ -840,6 +851,7 @@ class SqlAlchemyNotificationInstanceRepository:
                 status=existing.status,
                 status_reason=existing.status_reason,
                 has_response=bool(existing.has_response),
+                manual_overrides=getattr(existing, "manual_overrides", None),
             ):
                 continue
             await self._session.execute(
@@ -1005,6 +1017,10 @@ class SqlAlchemyNotificationInstanceRepository:
         instance.status = InstanceStatus.CANCELLED.value
         instance.status_reason = reason or "manual_cancelled"
         instance.delivery_enabled = False
+        instance.manual_overrides = {
+            **(instance.manual_overrides or {}),
+            "cancelled": True,
+        }
         instance.processing_started_at = None
         instance.processing_expires_at = None
         instance.updated_at = now
@@ -1020,10 +1036,9 @@ class SqlAlchemyNotificationInstanceRepository:
         instance = await self._get_instance_model(instance_id)
         if instance is None:
             return None
-        if instance.status in {
-            InstanceStatus.SENT.value,
-            InstanceStatus.PROCESSING.value,
-            InstanceStatus.SHADOW.value,
+        if instance.status not in {
+            InstanceStatus.SCHEDULED.value,
+            InstanceStatus.FAILED.value,
         }:
             raise ValueError(f"Cannot send notification instance now from status {instance.status}")
         instance.status = InstanceStatus.SCHEDULED.value
@@ -1235,6 +1250,61 @@ class SqlAlchemyNotificationInstanceRepository:
             )
         )
 
+    async def is_delivery_claim_current(
+        self,
+        *,
+        instance_id: int,
+        attempt_id: int,
+        now: datetime,
+    ) -> bool:
+        result = await self._session.execute(
+            select(NotificationInstance.id)
+            .join(
+                NotificationDeliveryAttempt,
+                NotificationDeliveryAttempt.notification_instance_id == NotificationInstance.id,
+            )
+            .where(
+                NotificationInstance.tenant_id == self._tenant_id,
+                NotificationInstance.id == instance_id,
+                NotificationInstance.status == InstanceStatus.PROCESSING.value,
+                NotificationInstance.processing_expires_at.is_not(None),
+                NotificationInstance.processing_expires_at > now,
+                NotificationDeliveryAttempt.id == attempt_id,
+                NotificationDeliveryAttempt.tenant_id == self._tenant_id,
+                NotificationDeliveryAttempt.status == "processing",
+            )
+            .limit(1)
+        )
+        return result.scalar_one_or_none() is not None
+
+    async def count_sent_for_learner_between(
+        self,
+        *,
+        learner_id: int,
+        starts_at: datetime,
+        ends_at: datetime,
+    ) -> int:
+        result = await self._session.execute(
+            select(func.count(func.distinct(NotificationInstance.id)))
+            .join(
+                NotificationCategory,
+                NotificationCategory.id == NotificationInstance.category_id,
+            )
+            .join(
+                NotificationDeliveryAttempt,
+                NotificationDeliveryAttempt.notification_instance_id == NotificationInstance.id,
+            )
+            .where(
+                NotificationInstance.tenant_id == self._tenant_id,
+                NotificationInstance.learner_id == learner_id,
+                NotificationCategory.default_counts_towards_daily_cap.is_(True),
+                NotificationDeliveryAttempt.status == "sent",
+                NotificationDeliveryAttempt.sent_at >= starts_at,
+                NotificationDeliveryAttempt.sent_at < ends_at,
+            )
+        )
+        return int(result.scalar_one() or 0)
+
     async def _requeue_expired_processing_instances(self, *, now: datetime) -> int:
         expired_instance_ids = select(NotificationInstance.id).where(
             NotificationInstance.tenant_id == self._tenant_id,
@@ -1411,6 +1481,8 @@ class SqlAlchemyNotificationInstanceRepository:
             or attempt.notification_instance_id != instance_id
         ):
             raise ValueError(f"Notification delivery attempt {attempt_id} not found")
+        if instance.status != InstanceStatus.PROCESSING.value or attempt.status != "processing":
+            raise ValueError(f"Notification delivery attempt {attempt_id} is no longer current")
         return instance, attempt
 
     async def _next_attempt_no(self, instance_id: int) -> int:
@@ -1466,6 +1538,7 @@ class SqlAlchemyNotificationInstanceRepository:
                 NotificationInstance.dedupe_key,
                 NotificationInstance.status,
                 NotificationInstance.status_reason,
+                NotificationInstance.manual_overrides,
                 has_response.label("has_response"),
             ).where(
                 NotificationInstance.tenant_id == self._tenant_id,
@@ -1495,11 +1568,14 @@ class SqlAlchemyNotificationInstanceRepository:
         status: str,
         status_reason: str | None,
         has_response: bool,
+        manual_overrides: dict | None,
     ) -> bool:
         if status in {
             InstanceStatus.SENT.value,
             InstanceStatus.PROCESSING.value,
         }:
+            return False
+        if status == InstanceStatus.CANCELLED.value and (manual_overrides or {}).get("cancelled"):
             return False
         return not has_response or status_reason in _REMATERIALIZATION_STATUS_REASONS
 
@@ -2633,13 +2709,15 @@ def _lesson_events_stmt(
     tenant_id: int,
     learner_ids: tuple[int, ...],
     *,
+    included_package_ids: tuple[int, ...] | None = None,
+    excluded_package_ids: tuple[int, ...] = (),
     starts_at: datetime,
     ends_at: datetime,
     limit: int,
     offset: int = 0,
 ):
     conflict_count, conflict_lesson_ids, conflict_package_ids = _lesson_slot_conflict_columns(tenant_id)
-    return (
+    statement = (
         select(
             Lesson.id.label("event_id"),
             Lesson.scheduled_at.label("starts_at"),
@@ -2664,7 +2742,13 @@ def _lesson_events_stmt(
             Lesson.scheduled_at >= starts_at,
             Lesson.scheduled_at < ends_at,
         )
-        .order_by(Lesson.scheduled_at, Lesson.id)
+    )
+    if included_package_ids is not None:
+        statement = statement.where(Lesson.package_id.in_(included_package_ids))
+    if excluded_package_ids:
+        statement = statement.where(Lesson.package_id.not_in(excluded_package_ids))
+    return (
+        statement.order_by(Lesson.scheduled_at, Lesson.id)
         .offset(offset)
         .limit(limit)
     )
@@ -2743,12 +2827,14 @@ def _package_events_stmt(
     tenant_id: int,
     learner_ids: tuple[int, ...],
     *,
+    included_package_ids: tuple[int, ...] | None = None,
+    excluded_package_ids: tuple[int, ...] = (),
     starts_at: datetime,
     ends_at: datetime,
     limit: int,
     offset: int = 0,
 ):
-    return (
+    statement = (
         select(
             LessonPackage.id.label("event_id"),
             LessonPackage.end_date.label("starts_at"),
@@ -2768,7 +2854,13 @@ def _package_events_stmt(
             LessonPackage.end_date >= starts_at,
             LessonPackage.end_date < ends_at,
         )
-        .order_by(LessonPackage.end_date, LessonPackage.id)
+    )
+    if included_package_ids is not None:
+        statement = statement.where(LessonPackage.id.in_(included_package_ids))
+    if excluded_package_ids:
+        statement = statement.where(LessonPackage.id.not_in(excluded_package_ids))
+    return (
+        statement.order_by(LessonPackage.end_date, LessonPackage.id)
         .offset(offset)
         .limit(limit)
     )
